@@ -37,7 +37,7 @@ def descriptor_loop_body(builder, node):
     return node.content[first+1:last]
 
 
-def _association_proof(analysis, caller, child, node):
+def _association_proof(analysis, caller, child, node, *, allow_contiguous_actual=False):
     spec = _part(child.scope.node, 'Specification_Part')
     procedures = {}
     for declaration in _children(spec):
@@ -66,6 +66,9 @@ def _association_proof(analysis, caller, child, node):
         raise CompilationError('native guarded child requires all original arguments')
     proof = []
     forbidden = {'optional', 'pointer', 'value', 'volatile', 'asynchronous', 'contiguous'}
+    # CONTIGUOUS on the actual does not create a temporary for an ordinary
+    # assumed-shape formal. A CONTIGUOUS formal still needs separate authority.
+    actual_forbidden = forbidden - {'contiguous'} if allow_contiguous_actual else forbidden
     for name in child.arguments:
         actual = values[name]
         formal = child.scope.bindings.get(name)
@@ -78,7 +81,7 @@ def _association_proof(analysis, caller, child, node):
             continue
         binding = analysis._binding(caller.scope, actual)
         if (formal is None or binding is None or formal.signature() != binding.signature()
-                or (formal.attributes | binding.attributes) & forbidden or formal.intent == 'out'
+                or formal.attributes & forbidden or binding.attributes & actual_forbidden or formal.intent == 'out'
                 or hasattr(binding, 'associate_selector')):
             raise CompilationError('native guarded actual association is unproved: ' + name)
         if formal.rank:

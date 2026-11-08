@@ -6,6 +6,7 @@ publishes and closes that context before the unchanged source operation runs.
 No synthetic array dummy remains associated across a native escape.
 """
 
+from contextlib import suppress
 from copy import copy, deepcopy
 from dataclasses import dataclass
 
@@ -181,6 +182,7 @@ class LexicalBoundaryPatch:
     lifecycle: object = None
     completion: object = None
     counted_entry: object = None
+    empty_call: object = None
 
     def validate(self, member, *, require_source=False):
         if not self.originals:
@@ -247,6 +249,13 @@ class LexicalBoundaryPatch:
                 raise CompilationError("native completion cannot replace a joined storage projection")
         elif self.completion is not None:
             raise CompilationError("native completion cannot authorize an unproved boundary lifetime")
+        if self.empty_call is not None:
+            from compiler.frontend.immutable_graph import original_type
+            from compiler.scopes.native_empty import EmptyNativeCall
+            if (original_type(self.empty_call) is not EmptyNativeCall
+                    or type(self.lifecycle) is not SameFamilyNativeCallLifecycle):
+                raise CompilationError("empty native CALL requires its issued whole-call lifetime and descriptor proofs")
+            self.empty_call.validate(member, self.lifecycle)
         if self.counted_entry is not None:
             from compiler.scopes.counted_loops import reached_retirement_entry
             if self.lifecycle is None or self.conditional_guard is not None:
@@ -269,6 +278,8 @@ class LexicalBoundaryPatch:
         if self.conditional_guard is not None:
             return "\n".join(fortran_lines([f"if ({self.conditional_guard}) then", *close,
                                              str(self.originals[0].items[1]), "endif"])) + "\n"
+        if self.empty_call is not None:
+            close = self.empty_call.wrap(close)
         return "\n".join(fortran_lines(close)) + "\n" + self.original_source
 
 
@@ -287,7 +298,8 @@ class LexicalClosedSuffix:
 
     def validate(self, member):
         self.boundary.validate(member, require_source=True)
-        if self.boundary.conditional_guard is not None or self.boundary.counted_entry is not None:
+        if (self.boundary.conditional_guard is not None or self.boundary.counted_entry is not None
+                or self.boundary.empty_call is not None):
             raise CompilationError("closed source suffix requires an unconditional original close")
         graph, selected = member.builder.analysis._selected_source(member.routine.qualified, self.sequence)
         if graph is not member.graph or not selected:
@@ -685,6 +697,12 @@ class LexicalOwner:
         from compiler.scopes.conditional_return import SameFamilyNativeCallLifecycle, boundary_lifecycle
         diagnostic = {} if self is self.owner and hasattr(self, "retention_allowed") else None
         lifecycle, completion = boundary_lifecycle(self, originals, diagnostic=diagnostic)
+        empty_call = None
+        if not force_unconditional and type(lifecycle) is SameFamilyNativeCallLifecycle:
+            from compiler.scopes.native_empty import prove_empty_native_call
+            # The existing complete retirement remains the safe route.
+            with suppress(CompilationError):
+                empty_call = prove_empty_native_call(self, lifecycle)
         counted_entry = None
         if (not force_unconditional and self.builder.config.scope_execution == "graph"
                 and lifecycle is not None and reached_guard is None
@@ -703,9 +721,10 @@ class LexicalOwner:
                                                    "unproved_lifetime_or_escape"}
                                    if hasattr(self, "retention_allowed") else {}),
                                 **({"loop_entry": dict(counted_entry.authority)} if counted_entry is not None else {}),
-                                **({"call_preservation": lifecycle.public()} if type(lifecycle) is SameFamilyNativeCallLifecycle else {})})
+                                **({"call_preservation": lifecycle.public()} if type(lifecycle) is SameFamilyNativeCallLifecycle else {}),
+                                **({"empty_call_guard": empty_call.public()} if empty_call is not None else {})})
         replacement = LexicalBoundaryPatch(originals, first, last, reason, reached_guard,
-                                           self.original(nodes), lifecycle, completion, counted_entry)
+                                           self.original(nodes), lifecycle, completion, counted_entry, empty_call)
         self.patches.append((first, last, replacement))
         if diagnostic is not None and lifecycle is None:
             # The qualified first slice already rejects this WHOLE owner at
@@ -982,7 +1001,7 @@ class LexicalOwner:
             originals = self.builder.inline.original_selection(group if isinstance(group, tuple) else (group,))
             closes = [patch for _first, _last, patch in self.patches[patch_start:]
                       if isinstance(patch, LexicalBoundaryPatch) and patch.conditional_guard is None
-                      and patch.counted_entry is None and len(patch.originals) == len(originals)
+                      and patch.counted_entry is None and patch.empty_call is None and len(patch.originals) == len(originals)
                       and all(left is right for left, right in zip(patch.originals, originals, strict=True))]
             if not closes:
                 continue
