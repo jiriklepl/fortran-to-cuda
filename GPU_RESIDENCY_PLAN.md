@@ -8,6 +8,14 @@ Historical reports and timing controls remain unchanged.
 
 ## Current checkpoint: 2026-11-08
 
+The [AUTO physical-copy RK checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/automatic-copy-rk-20261108/README.md)
+now passes normal regeneration, public build and all four short all-field/output
+controls. Channel's initialization-plus-two-step DMA count falls from 1,038 to
+730, using 28 packed copies and 27 packing-buffer reuses. Payload bytes and
+numerical coverage are unchanged; simple retains direct copies. Natural
+109/2,458-step qualification is in progress. This is physical-copy evidence,
+not a new wall-time gain or automatic computation placement qualification.
+
 The [collective copy-cost correction](benchmarks/reports/gpu-residency-implementation-20261023/collective-copy-owner-20261108/README.md)
 keeps qualified physical-copy costs active when collective computation costs
 are unavailable. Four generated-configuration CUDA controls pass, including
