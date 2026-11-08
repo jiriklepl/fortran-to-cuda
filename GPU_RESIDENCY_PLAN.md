@@ -36,12 +36,16 @@ copy comparison is
 The interrupted first natural attempt remains failed. New reports stay local
 under the existing ignored reports directory; no removed archive is restored.
 
-The descriptor-capture follow-up now keeps complete original OpenMP selections
-through the native-effect consumer. Its ten focused and 414 affected checks
-pass. The first generation, before the consumer fix, changed only a local guard
+The descriptor-capture follow-up keeps complete original OpenMP selections
+through the native-effect consumer. Its first ten focused and 414 affected
+checks passed, but both subsequent ELMM generations declined `SGS_Vreman`.
+Descriptor stability unnecessarily depended on the payload graph's control-depth
+budget. The revised draft first consumes the existing complete joined-storage
+proof; its 11 focused checks pass and full regeneration remains pending.
+The earlier generation, before the consumer fix, changed only a local guard
 name and its manifest: 292 of 294 artifacts were byte-identical. That package
-was not rebuilt or timed. Generation with the consumer fix is still in progress;
-application execution and traffic reduction remain separate gates.
+was not rebuilt or timed. None of these drafts has application execution or
+traffic-reduction qualification.
 
 The effect graph also now recognizes nested conditional worksharing directives
 covered by its authenticated complete original join. It retains both branches'
@@ -54,6 +58,17 @@ storage proofs and source guards. This is source analysis, not GPU execution or
 a transfer reduction. Evidence:
 `/tmp/fortran-nested-directive-integration-20261108-01.xml` and
 `/tmp/fortran-native-group-host-access-diagnosis-20261108-03/result.json`.
+
+Complete native CALLs can also retain ordinary joined-callee receipts through
+the existing transaction contract. Adoption now rebinds finished emission
+metadata without starting another speculative fork of a completed private
+analysis, which previously invalidated its exact registry receipts. An isolated
+snapshot excluding the descriptor draft passes 282 source/reader/transaction
+checks and one compiled hidden-device test covering six field/bounds/swap cases.
+The enabled-CUDA copy-ledger case is pending; neither application qualification
+nor a performance gain follows from these checks. Evidence:
+`/tmp/fortran-native-call-isolated-integration-20261108-01.xml` and
+`/tmp/fortran-ordinary-native-call-hidden-20261108-03/execution.json`.
 
 The baseline maintained campaign has 17,125 unique analysis passes, 15 GPU
 opt-ins outstanding and an unfinished CUDA continuation. Its observed late-veto
