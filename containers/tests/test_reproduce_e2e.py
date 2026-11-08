@@ -557,9 +557,9 @@ def test_generic_policy_alias_requires_authenticated_generated_call(tmp_path, mo
     assert result['offload_decisions']['modes']['native'] == 1
     assert result['runtime_cuda_submissions'] == 0
     assert result['policy_trace_aliases']['artifacts']['generic_label'][0]['sha256'] == runner.digest(kernel)
-    with pytest.raises(ValueError, match='absent from the build manifest'):
+    with pytest.raises(ValueError, match='absent from its inline source manifest'):
         runner.observed_gpu_activity(log.replace('generic_label', 'unknown'), scope_packages=[package])
-    with pytest.raises(ValueError, match='absent from the build manifest'):
+    with pytest.raises(ValueError, match='absent from its inline source manifest'):
         runner.observed_gpu_activity(log, scope_manifest={})
     kernel.write_text('offload::decision_trace("unverified", "native-scoped-scheduled", 0, 1);\n')
     with pytest.raises(ValueError, match='policy trace artifact changed'):

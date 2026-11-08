@@ -13,8 +13,11 @@ now passes normal regeneration, public build and all four short all-field/output
 controls. Channel's initialization-plus-two-step DMA count falls from 1,038 to
 730, using 28 packed copies and 27 packing-buffer reuses. Payload bytes and
 numerical coverage are unchanged; simple retains direct copies. Natural
-109/2,458-step qualification is in progress. This is physical-copy evidence,
-not a new wall-time gain or automatic computation placement qualification.
+109/2,458-step correctness passes with all 20 fields bitwise equal to the direct
+candidate, all outputs and strict tolerances preserved. All 883 native and 310
+benchmark/container tests pass. Analysis/CUDA completion and fresh timings remain
+open. This is physical-copy evidence, not a new wall-time gain or automatic
+computation placement qualification.
 
 The [collective copy-cost correction](benchmarks/reports/gpu-residency-implementation-20261023/collective-copy-owner-20261108/README.md)
 keeps qualified physical-copy costs active when collective computation costs
