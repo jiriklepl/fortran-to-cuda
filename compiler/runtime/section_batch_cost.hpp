@@ -9,7 +9,7 @@
 #include <cstring>
 namespace fort_physical { namespace compact {
 inline bool finite_nonnegative(double x){return std::isfinite(x)&&x>=0;}
-inline bool valid_rate(const fort_scope_copy_rate_v2 &r) {
+inline bool valid_rate(const fort_scope_copy_rate_v3 &r) {
     double sum=0;
     for(auto x:{r.batch_seconds,r.submission_seconds,r.byte_seconds,r.row_seconds,r.descriptor_seconds}) {
         if(!finite_nonnegative(x))return false;
@@ -27,20 +27,20 @@ inline bool valid_rate(const fort_scope_copy_rate_v2 &r) {
         r.maximum_kernel_chunks<=(operation_limit+descriptor_limit-1)/descriptor_limit&&
         r.word_bytes_mask&&!(r.word_bytes_mask&~7u)&&r.layout_combinations_mask&&!(r.layout_combinations_mask&~254u);
 }
-inline bool finite_supported_prediction(const fort_scope_copy_rate_v2 &r,bool direct) {
+inline bool finite_supported_prediction(const fort_scope_copy_rate_v3 &r,bool direct) {
     const auto submissions=direct?r.maximum_operations:r.maximum_kernel_chunks;
     const auto upper=r.batch_seconds+double(submissions)*r.submission_seconds+
         double(r.maximum_payload_bytes)*r.byte_seconds+double(r.maximum_rows)*r.row_seconds+
         double(r.maximum_descriptor_work)*r.descriptor_seconds;
     return std::isfinite(upper)&&upper>0;
 }
-inline bool valid_costs(const fort_scope_copy_costs_v2 &c) {
+inline bool valid_costs(const fort_scope_copy_costs_v3 &c) {
     if(c.version!=FORT_SCOPE_COPY_COST_ABI_VERSION||c.valid!=1||c.minimum_relative_saving!=0.5)return false;
     for(unsigned d=0;d<2;++d)
         if(!valid_rate(c.direct[d])||!valid_rate(c.compact_cold[d])||!valid_rate(c.compact_reuse[d])||
            !finite_supported_prediction(c.direct[d],true)||!finite_supported_prediction(c.compact_cold[d],false)||
            !finite_supported_prediction(c.compact_reuse[d],false)||
-           c.compact_cold[d].minimum_operations<2||c.compact_reuse[d].minimum_operations<2)return false;
+           c.compact_cold[d].minimum_operations<1||c.compact_reuse[d].minimum_operations<1)return false;
     return true;
 }
 inline unsigned layout_mask(const Plan &p) {
@@ -50,7 +50,7 @@ inline unsigned layout_mask(const Plan &p) {
     }
     return mask;
 }
-inline bool supports(const fort_scope_copy_rate_v2 &r,const Plan &p,std::size_t operations) {
+inline bool supports(const fort_scope_copy_rate_v3 &r,const Plan &p,std::size_t operations) {
     const auto word_bit=p.word_bytes==1?1u:p.word_bytes==4?2u:p.word_bytes==8?4u:0u;
     const auto layout=layout_mask(p);
     return word_bit&&(r.word_bytes_mask&word_bit)&&layout&&(r.layout_combinations_mask&(1u<<layout))&&
@@ -61,19 +61,19 @@ inline bool supports(const fort_scope_copy_rate_v2 &r,const Plan &p,std::size_t 
         p.work>=r.minimum_descriptor_work&&p.work<=r.maximum_descriptor_work&&
         p.chunks.size()>=r.minimum_kernel_chunks&&p.chunks.size()<=r.maximum_kernel_chunks;
 }
-inline double predict(const fort_scope_copy_rate_v2 &r,const Plan &p,std::size_t submissions) {
+inline double predict(const fort_scope_copy_rate_v3 &r,const Plan &p,std::size_t submissions) {
     return r.batch_seconds+double(submissions)*r.submission_seconds+double(p.bytes)*r.byte_seconds+
         double(p.rows)*r.row_seconds+double(p.work)*r.descriptor_seconds;
 }
 struct PoolState {std::size_t capacity=0,available_device_bytes=0;bool reused=false,cold_available=true;};
-struct Pricing {fort_scope_copy_costs_v2 copy{};fort_scope_plan_costs base{};};
+struct Pricing {fort_scope_copy_costs_v3 copy{};fort_scope_plan_costs base{};};
 struct Price {
     bool available=false,compact_available=false,selected=false;
     std::size_t capacity=0,operations=0,chunks=0,workspace_bytes=0;
     double direct_seconds=0,compact_seconds=0,compact_path_seconds=0;
     double direct_p90_relative_error=0,compact_p90_relative_error=0;
 };
-inline Price price(const Plan &p,const fort_scope_copy_costs_v2 &c,const fort_scope_plan_costs &base,
+inline Price price(const Plan &p,const fort_scope_copy_costs_v3 &c,const fort_scope_plan_costs &base,
                    bool upload,bool pending,const PoolState &pool) {
     Price out;if(!valid_costs(c)||!p.bytes||p.chunks.empty())return out;
     for(const auto &chunk:p.chunks)out.operations=add(out.operations,chunk.count);
@@ -82,7 +82,7 @@ inline Price price(const Plan &p,const fort_scope_copy_costs_v2 &c,const fort_sc
     out.direct_seconds=predict(direct,p,out.operations);out.direct_p90_relative_error=direct.p90_relative_error;
     if(!std::isfinite(out.direct_seconds)||out.direct_seconds<=0)return Price{};
     out.available=true;
-    if(out.operations<2||(!pool.reused&&!pool.cold_available))return out;
+    if(!out.operations||(!pool.reused&&!pool.cold_available))return out;
     unsigned index=0;while(index<3&&capacities[index]<p.bytes)++index;
     out.capacity=pool.reused?pool.capacity:capacities[index];
     index=0;while(index<4&&capacities[index]!=out.capacity)++index;

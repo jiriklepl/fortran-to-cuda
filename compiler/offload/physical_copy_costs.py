@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 PAYLOADS = (256 * 1024, 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024)
 OPERATION_LIMIT = 256
 PATHS = ("direct", "compact_cold", "compact_reuse")
@@ -43,13 +43,13 @@ def validate_physical_copy_costs(profile):
     if not isinstance(record, dict):
         raise PhysicalCopyCostError("hardware profile has no physical copy calibration")
     if type(record.get("schema_version")) is not int or record["schema_version"] != SCHEMA_VERSION:
-        raise PhysicalCopyCostError(prefix + " requires complete-path schema_version 2; version 1 was removed")
+        raise PhysicalCopyCostError(prefix + " requires complete-path schema_version 3; versions 1 and 2 were removed")
     for name, expected in (("prediction_kind", PREDICTION_KIND), ("fit_method", FIT_METHOD),
                            ("residual_convention", RESIDUAL_CONVENTION)):
         if record.get(name) != expected:
             raise PhysicalCopyCostError(prefix + " " + name + " mismatch")
     if _number(record.get("minimum_relative_saving"), prefix + ".minimum_relative_saving") != MINIMUM_RELATIVE_SAVING:
-        raise PhysicalCopyCostError(prefix + " requires the version2 saving fraction 0.5")
+        raise PhysicalCopyCostError(prefix + " requires the version3 saving fraction 0.5")
     costs = record.get("costs")
     if not isinstance(costs, dict) or set(costs) != set(PATHS):
         raise PhysicalCopyCostError(prefix + " requires direct, cold and reused complete-path costs")
@@ -79,7 +79,6 @@ def validate_physical_copy_costs(profile):
                     or bounds["maximum_span_bytes"] < bounds["maximum_payload_bytes"]
                     or bounds["maximum_operations"] > OPERATION_LIMIT
                     or bounds["maximum_kernel_chunks"] > (OPERATION_LIMIT + 47) // 48
-                    or path != "direct" and bounds["minimum_operations"] < 2
                     or not 1 <= bounds["word_bytes_mask"] <= 7
                     or not 0 < bounds["layout_combinations_mask"] <= 254
                     or bounds["layout_combinations_mask"] & 1):

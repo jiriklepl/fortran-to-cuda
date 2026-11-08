@@ -299,7 +299,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                   *indent(base_cost_lines(config.profile, copy_base_costs)),
                   *indent(physical_copy_cost_lines(physical_copy_costs)),
                   "    const auto profile = " + profile_expression(config.profile) + ";",
-                  "    return fort_scope_set_copy_costs_v2(fort_context, &copy_costs, &costs, scoped_host_compatible(profile));", "}"]
+                  "    return fort_scope_set_copy_costs_v3(fort_context, &copy_costs, &costs, scoped_host_compatible(profile));", "}"]
         copy_setup = [f"    FORT_SHARED_CHECK({copy_configure_name}(fort_context));"]
     if transfer_costs is None or config.scope_transfers in {"direct", "coalesced"}:
         if copy_setup:
@@ -1160,7 +1160,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                    "resource_fallback": "direct before this copy is enqueued; numerical work is never replayed",
                                    "runtime_stats": "fort_scope_transfer_stats_get_v1",
                                    "physical_copy_calibration": {
-                                       "abi_version": 2, "available": physical_copy_costs is not None,
+                                       "abi_version": 3, "available": physical_copy_costs is not None,
                                        "selection": "AUTO selects supported complete Compact predictions below half the direct prediction",
                                        "missing_evidence": "direct physical copies",
                                    },

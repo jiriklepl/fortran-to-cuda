@@ -33,7 +33,8 @@ def geometry(width, height, depth, count, word, mixed=False):
 def observations():
     result = []
     shapes = [(1, 2, 2, 2), (4, 5, 3, 3), (16, 2, 4, 49), (1, 8, 8, 64),
-              (32, 4, 2, 4), (1, 16, 16, 16), (128, 2, 2, 7)]
+              (32, 4, 2, 4), (1, 16, 16, 16), (128, 2, 2, 7),
+              (3, 7, 5, 1), (24, 9, 11, 1)]
     for direction in ("h2d", "d2h"):
         for word in (1, 4, 8):
             for index, (width, height, depth, count) in enumerate(shapes):
@@ -43,7 +44,7 @@ def observations():
                     batch = 2e-6 if path == "direct" else 30e-6 if path == "compact_cold" else 4e-6
                     duration = (batch + submissions * 5e-7 + g["payload_bytes"] * 8e-11
                                 + g["rows"] * 3e-9 + g["descriptor_work"] * 2e-10)
-                    result.append({"kind": "scoped_copy", "version": 2,
+                    result.append({"kind": "scoped_copy", "version": 3,
                         "name": "direct" if path == "direct" else "compact", "direction": direction,
                         "pool_state": "none" if path == "direct" else path.removeprefix("compact_"),
                         **g, "capacity_bytes": 0 if path == "direct" else 256 * 1024, "pending": False,
@@ -64,7 +65,7 @@ def test_complete_paths_fit_without_independent_pack_dma_or_descriptor_costs():
     record = physical_copies_from_measurements(original, p)
     assert original == before
     assert record["measurements"] == original
-    assert record["schema_version"] == 2
+    assert record["schema_version"] == 3
     assert record["minimum_relative_saving"] == .5
     for path, rates in record["costs"].items():
         batch = 2e-6 if path == "direct" else 30e-6 if path == "compact_cold" else 4e-6
@@ -78,6 +79,7 @@ def test_complete_paths_fit_without_independent_pack_dma_or_descriptor_costs():
             assert bounds["word_bytes_mask"] == 7
             assert bounds["layout_combinations_mask"] == (1 << 4) | (1 << 6)
             assert bounds["maximum_operations"] == 64
+            assert bounds["minimum_operations"] == 1
             assert bounds["maximum_kernel_chunks"] == 2
     p["scoped"]["physical_copies"] = record
     assert validate_profile(p) is p
@@ -109,12 +111,14 @@ def test_incomplete_valid_data_stays_explicitly_unavailable(mutation):
     assert all(row in p["scoped"]["measurements"] for row in rows)
 
 
-@pytest.mark.parametrize("mutation", ["version", "layout", "word", "payload", "chunks", "outside", "bool", "samples", "pending", "duplicate", "pool"])
+@pytest.mark.parametrize("mutation", ["version", "version2", "layout", "word", "payload", "chunks", "outside", "bool", "samples", "pending", "duplicate", "pool"])
 def test_malformed_measurements_never_silently_supply_a_model(mutation):
     rows = observations()
     row = rows[1]
     if mutation == "version":
         row["version"] = 1
+    elif mutation == "version2":
+        row["version"] = 2
     elif mutation == "layout":
         row["layout_mask"] = 1
     elif mutation == "word":
@@ -142,13 +146,15 @@ def test_malformed_measurements_never_silently_supply_a_model(mutation):
                                          runtime_id=RUNTIME_ID, cold_startup_seconds=[.1] * 5)
 
 
-@pytest.mark.parametrize("mutation", ["old", "margin", "zero", "negative", "nan", "word", "layout", "support", "errors"])
+@pytest.mark.parametrize("mutation", ["old", "version2", "margin", "zero", "negative", "nan", "word", "layout", "support", "errors"])
 def test_profile_rejects_removed_or_malformed_schema(mutation):
     p = fitted_profile()
     r = p["scoped"]["physical_copies"]
     rate = r["costs"]["direct"][0]
     if mutation == "old":
         r["schema_version"] = 1
+    elif mutation == "version2":
+        r["schema_version"] = 2
     elif mutation == "margin":
         r["minimum_relative_saving"] = .25
     elif mutation == "zero":
@@ -187,7 +193,7 @@ def test_diagnostic_uncertainty_does_not_pretend_to_be_a_profitability_bound():
             rate.update(median_relative_error=5, p90_relative_error=10, maximum_relative_error=20)
     validate_profile(p)
     emitted = "\n".join(physical_copy_cost_lines(p["scoped"]["physical_copies"]))
-    assert "fort_scope_copy_costs_v2" in emitted
+    assert "fort_scope_copy_costs_v3" in emitted
     assert "minimum_relative_saving = 0.5" in emitted
     assert "copy_costs.compact_cold[1].maximum_relative_error = 20.0" in emitted
     assert "copy_costs.compact_reuse[0].layout_combinations_mask = 80U" in emitted
@@ -203,9 +209,11 @@ def test_normal_emitter_configures_complete_model_independently_of_legacy_packin
     if not legacy_transfers:
         del p["scoped"]["transfers"]
     emitted = numerical(tmp_path, mode=mode, profile=p)
-    assert ("fort_scope_set_copy_costs_v2(" in emitted.cuda) is (mode == "auto")
+    assert ("fort_scope_set_copy_costs_v3(" in emitted.cuda) is (mode == "auto")
     assert "fort_scope_set_copy_costs_v1(" not in emitted.cuda
-    assert emitted.report["transfer_configuration"]["physical_copy_calibration"]["available"] is (mode == "auto")
+    physical = emitted.report["transfer_configuration"]["physical_copy_calibration"]
+    assert physical["abi_version"] == 3
+    assert physical["available"] is (mode == "auto")
 
 
 @pytest.mark.parametrize("mode", ["auto", "direct"])
@@ -233,7 +241,7 @@ def test_collective_decline_preserves_independently_valid_copy_costs(tmp_path, m
                               runtime_id=read_scoped_runtime()[1]["runtime_id"])
     expected = matching_runtime and mode == "auto"
     assert emitted.report["transfer_configuration"]["physical_copy_calibration"]["available"] is expected
-    assert ("fort_scope_set_copy_costs_v2(" in emitted.cuda) is expected
+    assert ("fort_scope_set_copy_costs_v3(" in emitted.cuda) is expected
     # Independent copies cannot supply a missing collective placement model.
     assert not emitted.report["planning"]["profile_available"]
     assert not emitted.report["automatic_estimate_available"]

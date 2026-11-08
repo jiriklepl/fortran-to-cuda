@@ -3712,7 +3712,7 @@ extern "C" int fort_scope_transfer_stats_get_v1(fort_scope_t h, fort_scope_trans
         *out = transfer_statistics(c);
     }, Change::None);
 }
-extern "C" int fort_scope_set_copy_costs_v2(fort_scope_t h,const fort_scope_copy_costs_v2 *costs,
+extern "C" int fort_scope_set_copy_costs_v3(fort_scope_t h,const fort_scope_copy_costs_v3 *costs,
         const fort_scope_plan_costs *base,int compatible) {
     return with(h,[&](Context &c) {
         require(compatible==0 || compatible==1,FORT_SCOPE_ARGUMENT,"invalid physical copy calibration compatibility");

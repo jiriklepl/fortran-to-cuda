@@ -41,8 +41,8 @@ void roundtrip(const std::vector<CopyOperation> &ops,size_t bytes,unsigned words
     }
     assert(actual==expected && readback==packed);
 }
-fort_scope_copy_costs_v2 costs() {
-    fort_scope_copy_costs_v2 c{};c.version=2;c.valid=1;c.minimum_relative_saving=.5;
+fort_scope_copy_costs_v3 costs() {
+    fort_scope_copy_costs_v3 c{};c.version=FORT_SCOPE_COPY_COST_ABI_VERSION;c.valid=1;c.minimum_relative_saving=.5;
     for(unsigned d=0;d<2;++d)for(auto *r:{&c.direct[d],&c.compact_cold[d],&c.compact_reuse[d]}) {
         const bool direct=r==&c.direct[d];
         r->submission_seconds=direct?1:0;r->batch_seconds=direct?0:.001;r->byte_seconds=1e-9;
@@ -124,6 +124,17 @@ int main(int argc,char **argv) try {
             assert(!price(p,c,base,true,false,pool).selected);
             pool.capacity=256*1024;pool.reused=true;pool.cold_available=false;
             assert(price(p,c,base,true,false,pool).selected);
+        } else if(mode=="single_operation") {
+            const auto single=make_plan({{8,24,13,7,176,17}},20944,16*1024*1024);
+            roundtrip({{8,24,13,7,176,17}},20944,8,1);
+            // Multi-operation measurements cannot price a new one-op shape.
+            assert(!price(single,c,base,false,false,pool).compact_available);
+            for(auto *r:{&c.compact_cold[1],&c.compact_reuse[1]})r->minimum_operations=1;
+            const auto q=price(single,c,base,false,false,pool);
+            assert(q.available && q.selected && q.operations==1 && q.chunks==1 && q.workspace_bytes==512*1024);
+            pool.available_device_bytes=256*1024;
+            assert(!price(single,c,base,false,false,pool).compact_available);
+            c.version=2;assert(!valid_costs(c));
         } else if(mode=="coverage") {
             c.compact_cold[0].minimum_payload_bytes=17;assert(price(p,c,base,true,false,pool).available && !price(p,c,base,true,false,pool).compact_available);
             c=costs();c.compact_cold[0].maximum_pitch_bytes=7;assert(price(p,c,base,true,false,pool).available && !price(p,c,base,true,false,pool).compact_available);
@@ -322,7 +333,7 @@ def executable(tmp_path_factory):
 
 
 @pytest.mark.parametrize("mode", ["word64", "word32", "byte", "pitched", "chunks", "empty", "reject",
-                                 "price", "cold_reuse", "coverage", "rate_coverage", "invalid_costs", "budget", "dispersion",
+                                 "price", "cold_reuse", "single_operation", "coverage", "rate_coverage", "invalid_costs", "budget", "dispersion",
                                  "margin", "complete_terms", "support_envelope",
                                  "model_wait_accounting", "upload_reader_wait", "complete_compact_wait", "v2_direct_ignores_legacy_price",
                                  "model", "model_budget", "model_direct_price", "model_unknown", "model_oneop", "model_pool", "model_idle"])

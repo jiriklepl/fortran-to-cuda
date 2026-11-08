@@ -193,8 +193,8 @@ def physical_copies_from_measurements(records, profile):
     seen = set()
     for record in records:
         if (not isinstance(record, dict) or record.get("kind") != "scoped_copy"
-                or type(record.get("version")) is not int or record["version"] != 2):
-            raise PhysicalCopyCostError("complete-copy observations require scoped_copy version 2")
+                or type(record.get("version")) is not int or record["version"] != 3):
+            raise PhysicalCopyCostError("complete-copy observations require scoped_copy version 3")
         samples = _samples(record)
         geometry = _geometry(record)
         name, state, direction = record.get("name"), record.get("pool_state"), record.get("direction")
@@ -207,9 +207,9 @@ def physical_copies_from_measurements(records, profile):
         elif name == "compact" and state in {"cold", "reuse"}:
             path = "compact_" + state
             capacity = record.get("capacity_bytes")
-            if (geometry["operations"] < 2 or type(capacity) is not int or capacity not in PAYLOADS
+            if (geometry["operations"] < 1 or type(capacity) is not int or capacity not in PAYLOADS
                     or capacity < geometry["bytes"]):
-                raise PhysicalCopyCostError("complete compact observation requires an admitted slot and multiple operations")
+                raise PhysicalCopyCostError("complete compact observation requires an admitted slot and at least one operation")
         else:
             raise PhysicalCopyCostError("unknown complete-copy backend/pool state")
         key = (path, direction, tuple(tuple(op) for op in record["operations"]),
@@ -236,7 +236,7 @@ def physical_copies_from_measurements(records, profile):
                         maximum_relative_error=max(errors), coverage=_support([g for g, _x, _y in observations]))
             rates.append(rate)
         costs[path] = rates
-    result = {"schema_version": 2, "prediction_kind": PREDICTION_KIND, "fit_method": FIT_METHOD,
+    result = {"schema_version": 3, "prediction_kind": PREDICTION_KIND, "fit_method": FIT_METHOD,
               "residual_convention": RESIDUAL_CONVENTION, "minimum_relative_saving": MINIMUM_RELATIVE_SAVING,
               "costs": costs, "measurements": records}
     return validate_physical_copy_costs({**profile, "scoped": {**profile["scoped"], "physical_copies": result}})

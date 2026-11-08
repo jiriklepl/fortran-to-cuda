@@ -21,7 +21,7 @@ SOURCE = r'''
 using namespace fort_physical;
 using namespace fort_physical::compact;
 Pricing prices() {
-    Pricing p{};p.copy.version=2;p.copy.valid=1;p.copy.minimum_relative_saving=.5;
+    Pricing p{};p.copy.version=FORT_SCOPE_COPY_COST_ABI_VERSION;p.copy.valid=1;p.copy.minimum_relative_saving=.5;
     p.base.version=2;p.base.valid=1;p.base.max_allocation_bytes=1u<<30;
     p.base.cpu_flops=p.base.gpu_flops=p.base.cpu_bandwidth=p.base.gpu_bandwidth=1;
     p.base.h2d_bandwidth=p.base.d2h_bandwidth=1;
@@ -208,7 +208,7 @@ RUNTIME_SOURCE = r'''
 int main(int argc,char **argv) {
     assert(argc==2);const std::string mode=argv[1];fort_scope_t handle=0;
     assert(!fort_scope_create(0,&handle));assert(!fort_scope_set_transfers(handle,FORT_SCOPE_TRANSFERS_AUTO));
-    auto p=prices();assert(!fort_scope_set_copy_costs_v2(handle,&p.copy,&p.base,1));
+    auto p=prices();assert(!fort_scope_set_copy_costs_v3(handle,&p.copy,&p.base,1));
     double host[64];for(auto &x:host)x=-77;
     const size_t extent=64;const int64_t lower=-17;
     fort_scope_layout layout{1,2,8,host,&extent,&lower,1};fort_buffer_t buffer_handle=0;
