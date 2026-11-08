@@ -10,6 +10,7 @@ from fparser.two.parser import ParserFactory
 from fparser.two.utils import Base
 
 from compiler.driver.options import CompilerOptions
+from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 
@@ -41,17 +42,19 @@ end module
 """
 
 
-def generate(tmp_path, source=SOURCE, initialized="none"):
+def fixture(tmp_path, source=SOURCE, initialized="none"):
     path = tmp_path / "source.f90"
     path.write_text(source)
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::" + name: {"storage": "stable", "initialized": initialized if name == "q" else "whole",
                  "escapes": False, "allocation_changes": False} for name in ("a", "q")}}
-    builder = ScopeBuilder([path], "forwarding::advance", facts=facts,
+    return ScopeBuilder([path], "forwarding::advance", facts=facts,
         options=CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph"),
         config=OffloadConfig(policy="sections", scope_execution="graph"))
-    outputs, report = builder.run()
-    return outputs, report
+
+
+def generate(tmp_path, source=SOURCE, initialized="none"):
+    return fixture(tmp_path, source, initialized).run()
 
 
 def test_allocatable_input_companion_retains_exact_original_descriptor_and_none_fact(tmp_path):
@@ -101,12 +104,17 @@ def test_actual_requires_its_independent_original_allocatable_descriptor(tmp_pat
     # Change only the caller declaration. A matching name is never evidence of
     # a legal independent allocatable actual for the new companion.
     source = SOURCE.replace("real(8),allocatable,intent(in)::q(:)", replacement, 1)
+    from compiler.scopes.graph import GraphOwner
+    from compiler.scopes.module_owner import borrow_module
+
+    builder = fixture(tmp_path, source)
+    call, = builder.entry.execution.content
+    with pytest.raises(CompilationError, match="allocatable"):
+        borrow_module(GraphOwner(builder), call)
     _outputs, report = generate(tmp_path, source)
     assert not any(row.get("procedure") == "forwarding::work" and row.get("readonly_allocatable_inputs")
                    for scope in report.get("scopes", ()) for row in scope.get("module_coordinators", ()))
     assert report["scope_count"] == 0
-    assert any("allocatable" in boundary.get("reason", "").lower()
-               for boundary in report["graph_owner_attempt"]["boundaries"]), report
 
 
 @pytest.mark.native
