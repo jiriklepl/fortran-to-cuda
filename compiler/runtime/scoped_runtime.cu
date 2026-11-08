@@ -163,6 +163,8 @@ struct Residency {
     uint64_t scratch_token = 0;
     fort_scope_scratch_stats_v1 scratch_stats{};
     fort_scope_transfer_stats transfer_stats{};
+    // Physical transport remains necessary after the last execution detaches.
+    std::optional<fort_physical::compact::Pricing> copy_costs;
     fort_scope_completion_stats_v1 completion_stats{};
     fort_scope_residency_stats_v1 residency_stats{};
     uint64_t residency_clock = 0;
@@ -192,7 +194,8 @@ struct Context {
           scratch_stats(residency->scratch_stats), transfer_stats(residency->transfer_stats),
           completion_stats(residency->completion_stats), residency_stats(residency->residency_stats),
           residency_clock(residency->residency_clock), unfenced_upload_buffers(residency->unfenced_upload_buffers),
-          completions(residency->completions), tail_completion(residency->tail_completion)
+          completions(residency->completions), tail_completion(residency->tail_completion),
+          copy_costs(residency->copy_costs)
 #ifndef FORT_SCOPE_CPU_TEST
           , completion_events(residency->completion_events), available_completion_events(residency->available_completion_events),
           stream(residency->stream), pool(residency->pool)
@@ -233,7 +236,7 @@ struct Context {
     std::deque<std::shared_ptr<Completion>> &completions;
     std::weak_ptr<Completion> &tail_completion;
     std::optional<fort_scope_batch_costs> transfer_costs;
-    std::optional<fort_physical::compact::Pricing> copy_costs;
+    std::optional<fort_physical::compact::Pricing> &copy_costs;
     std::optional<fort_scope_team_costs> team_costs;
     std::optional<fort_scope_batch_report> batch_report;
     bool batch_active = false;
@@ -3720,7 +3723,7 @@ extern "C" int fort_scope_set_copy_costs_v3(fort_scope_t h,const fort_scope_copy
                 FORT_SCOPE_STATE,"configure physical copy calibration before registration/planning");
         c.copy_costs.reset();
         if(compatible && costs)require(costs->version==FORT_SCOPE_COPY_COST_ABI_VERSION,
-            FORT_SCOPE_ARGUMENT,"unsupported physical-copy cost ABI; expected version2");
+            FORT_SCOPE_ARGUMENT,"unsupported physical-copy cost ABI; expected version3");
         if(!compatible || !costs || !base || !fort_physical::compact::valid_costs(*costs))return;
         try {fort_scoped::planning::detail::validate(fort_scoped::planning::Inputs{},*base);}
         catch(const fort_scoped::planning::detail::Unavailable &) {return;}

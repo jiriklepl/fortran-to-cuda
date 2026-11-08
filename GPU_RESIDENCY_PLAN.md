@@ -2620,3 +2620,53 @@ Retry the bounded pilot on idle hardware before another full campaign. A useful
 result would still require shared planner pricing, domain-lifetime regressions
 and fresh calibration before production acceptance. Coverage expansion remains
 paused while the measured application regressions are unresolved.
+
+
+### Calibration lifetime correction and rejected partition pilot
+
+The [replacement pilot](benchmarks/reports/gpu-residency-copy-v3-speedup-20261108/README.md)
+completes all 24 processes with outputs preserved. One excluded warmup and three
+rotated measurements per variant/case yield these medians:
+
+| Case | Prior candidate | Private partition | be58 | Partition change vs candidate |
+| --- | ---: | ---: | ---: | ---: |
+| simple109 | 13.297212 s | 13.473925 s | 11.585342 s | +1.33% |
+| channel100 | 17.295553 s | 16.563960 s | 12.333101 s | -4.23% |
+
+The private partition wins only 2/3 pairs against the candidate in each case
+and 0/3 against be58. Samples remain variable despite the external-load guard.
+This experiment fails the two-case gate and is not integrated; the original
+interrupted pilot remains recorded. No new application speedup is qualified.
+
+The runtime now fixes the demonstrated lifetime defect alone: `Residency` owns
+physical-copy calibration, and execution contexts borrow it. It survives detach
+and final publication, while incompatible replacement clears it and different
+domains stay isolated. Compute costs and execution plans remain context-local.
+Ten new CPU and five new CUDA cases cover final publication, a later child's
+read, unregister, read-only replicas, replacement, isolation, budget fallback,
+canaries, one producer execution and poisoned failure without replay.
+
+The affected suites pass 71 CPU and 45 CUDA checks. Related checks pass 100 cases;
+one companion-import setup failure passes when rerun with the companion path.
+Focused lint and whitespace checks pass. These overlapping checks do not replace
+the full maintained suite. Runtime identity is
+`d0e179c4821005b8fe9d39eab1f378e4ca4b67a5d4da0ed1c9dffd282b978d52`;
+matching calibration/artifact regeneration and application qualification remain
+required before promotion. The external descriptor edits remain untouched.
+
+The transfer ledger locates 100% of simple downloads and 98.21% of channel
+downloads at domain retirement. This is initialization plus two steps; the last
+procedure attribution is not necessarily the producer of every byte. The next
+performance experiment targets coherent retention across native diffusion and
+velocity-boundary work, keeping exact host effects. Merely packing existing
+transfers leaves their payload volume unchanged.
+
+
+The existing original-native-CALL retention test now passes all three cases
+(source transport, CUDA enabled and device hidden) against the current tree,
+including the external descriptor draft. Its independent six-case oracle checks
+fields, bounds, allocation swaps and the physical-copy ledger around the real
+read-only host CALL. Evidence:
+`/tmp/fortran-native-call-retention-current-20261108-01.xml`.
+This closes that synthetic CUDA gate; actual ELMM boundary retention and traffic
+reduction still require regenerated application evidence.

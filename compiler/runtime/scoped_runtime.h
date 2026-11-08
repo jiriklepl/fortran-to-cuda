@@ -400,8 +400,12 @@ typedef struct fort_scope_batch_report {
  * Missing costs preserve the existing direct placement/transfer behavior. */
 int fort_scope_set_transfer_costs_v1(fort_scope_t context, const fort_scope_batch_costs *costs,
                                     int compatible);
-/* Configuration precedes registration; a matching generated hardware/runtime
- * guard supplies compatible. Missing/invalid costs cannot select compact. */
+/* Configure before registration/planning of a private context, or before
+ * planning in a borrowed context. A matching generated hardware/runtime guard
+ * supplies compatible. The domain owns this physical transport calibration:
+ * it survives context detach and applies to final publication. A later child
+ * may replace it; missing/invalid/incompatible costs clear the domain's model
+ * and cannot select compact. Execution plans and compute costs remain local. */
 int fort_scope_set_copy_costs_v3(fort_scope_t context, const fort_scope_copy_costs_v3 *costs,
                                 const fort_scope_plan_costs *base, int compatible);
 /* One active batch per context; synchronous on return. compatible=-1 previews

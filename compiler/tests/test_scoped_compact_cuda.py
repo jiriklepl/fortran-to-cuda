@@ -1,9 +1,9 @@
 """Real byte/32/64-bit copies through AUTO's calibrated physical backend."""
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -59,9 +59,64 @@ void queued(fort_scope_t c,fort_buffer_t b,unsigned char *device,size_t bytes,un
     // Queued argument bytes are owned by the checked runtime.
     bytes=0;device=nullptr;counter=nullptr;
 }
+
+void domain_test(const std::string &mode) {
+    const size_t x=34,y=9,z=5,bytes=x*y*z*8;
+    std::vector<unsigned char> allocation(bytes+64,0xe7),expected(bytes);
+    auto *host=allocation.data()+32;unsigned char *device=nullptr;unsigned *counter=nullptr;
+    for(size_t i=0;i<bytes;++i)expected[i]=((i/8)%x==0 || (i/8)%x==x-1)?i%251+1:0xa9;
+    fort_scope_domain_t domain=0;fort_scope_t c=0;fort_buffer_t b=0;
+    check(fort_scope_domain_create_v1(0,&domain));check(fort_scope_create_in_domain_v1(domain,&c));
+    configure(c,false,false);
+    if(mode=="domain_budget")check(fort_scope_set_device_budget(c,bytes));
+    const size_t shape[]={x,y,z};const int64_t lower[]={-17,2,-9};
+    const fort_scope_layout layout{3,FORT_SCOPE_REAL64,8,host,shape,lower,1};
+    check(fort_scope_register(c,31,7,&layout,1,&b));
+    int previous=0;void *raw=nullptr;check(fort_scope_gpu_enter(c,&previous,&raw));
+    auto stream=static_cast<cudaStream_t>(raw);assert(stream);
+    ck(cudaMalloc(reinterpret_cast<void**>(&counter),sizeof(unsigned)));ck(cudaMemset(counter,0,sizeof(unsigned)));
+    fort_scope_access overwrite{};overwrite.flags=FORT_SCOPE_WRITE_ALL|FORT_SCOPE_OVERWRITE_ALL;
+    check(fort_scope_device_begin(c,b,&overwrite,reinterpret_cast<void**>(&device)));
+    fill<<<(bytes+255)/256,256,0,stream>>>(device,bytes,counter);ck(cudaGetLastError());
+    check(fort_scope_note_launch(c));check(fort_scope_device_end(c,b));
+    const size_t lo[]={1,0,0},hi[]={x-1,y,z};const fort_scope_section middle{lo,hi};
+    const fort_scope_access write{0,0,nullptr,1,&middle,1,&middle};
+    check(fort_scope_host_begin(c,b,&write));
+    for(size_t i=0;i<bytes;++i)if((i/8)%x>0 && (i/8)%x<x-1)host[i]=0xa9;
+    check(fort_scope_host_end(c,b));
+    check(fort_scope_gpu_leave(c,previous));check(fort_scope_close(c));
+    assert(host[0]==0xe7);
+    check(fort_scope_create_in_domain_v1(domain,&c)); // No repeated calibration.
+    if(mode=="domain_incompatible")check(fort_scope_set_copy_costs_v3(c,nullptr,nullptr,0));
+    if(mode=="domain_child_read") {
+        fort_scope_access read{};read.flags=FORT_SCOPE_READ_ALL;
+        check(fort_scope_host_begin(c,b,&read));check(fort_scope_host_end(c,b));
+        assert(stats(c).downloads==1 && stats(c).download_bytes==2*y*z*8);
+    }
+    check(fort_scope_close(c));
+    if(mode=="domain_failure") {
+        setenv("FORT_SCOPE_TEST_FAIL_COMPACT_SUBMIT","1",1);
+        assert(fort_scope_domain_close_v1(domain)==FORT_SCOPE_EXECUTION);
+        unsetenv("FORT_SCOPE_TEST_FAIL_COMPACT_SUBMIT");
+        assert(fort_scope_domain_close_v1(domain)==FORT_SCOPE_EXECUTION);
+        assert(host[0]==0xe7);
+        check(fort_scope_domain_abandon_v1(domain));
+    } else {
+        check(fort_scope_domain_close_v1(domain));
+        assert(std::memcmp(host,expected.data(),bytes)==0);
+    }
+    unsigned executions=0;ck(cudaMemcpy(&executions,counter,sizeof(unsigned),cudaMemcpyDeviceToHost));
+    assert(executions==1);ck(cudaFree(counter));
+    for(size_t i=0;i<32;++i)assert(allocation[i]==0xe7 && allocation[bytes+32+i]==0xe7);
+    size_t freed=0;ck(fort_staging::trim_cache(freed));
+    assert(!fort_staging::usage().reserved && !fort_staging::usage().device_reserved);
+    std::puts("PASS_DOMAIN_BYTES_CANARIES_ONE_PRODUCER_AND_CLEANUP");
+}
+
 int main(int argc,char **argv) {
     assert(argc==2);const std::string mode=argv[1];int devices=0;
     if(cudaGetDeviceCount(&devices)!=cudaSuccess || !devices)return 77;
+    if(mode.rfind("domain_",0)==0){domain_test(mode);return 0;}
     const size_t element=mode=="bytes"||mode=="single_bytes"?1:mode=="int32"||mode=="single_int32"?4:8;
     const bool single=mode=="oneop"||mode.rfind("single",0)==0;
     const bool queue=mode=="queued"||mode=="single_queued";
@@ -148,7 +203,8 @@ int main(int argc,char **argv) {
 def compact_executable(tmp_path_factory):
     nvcc = shutil.which("nvcc")
     host = shutil.which("g++-14")
-    assert nvcc and host
+    assert nvcc
+    assert host
     directory = tmp_path_factory.mktemp("scoped_compact_cuda")
     client = directory / "client.cu"
     client.write_text(CLIENT)
@@ -190,3 +246,23 @@ def test_exact_compact_transport_order_budget_and_failures(compact_executable, m
         assert "PASS_FATAL_NO_REPLAY_PRIOR_PRODUCER" in result.stdout
     else:
         assert "PASS_COMPLETE_BYTES_CANARIES_REPLICAS_AND_CLEANUP" in result.stdout
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("mode", ["domain_retire", "domain_child_read", "domain_incompatible",
+                                  "domain_budget", "domain_failure"])
+def test_domain_publication_uses_retained_copy_model(compact_executable, mode):
+    result = subprocess.run([str(compact_executable), mode], capture_output=True, text=True,
+                            env={**os.environ, "FORT_RUNTIME_TRACE": "1"}, timeout=30)
+    (compact_executable.parent / (mode+".stdout")).write_text(result.stdout)
+    (compact_executable.parent / (mode+".stderr")).write_text(result.stderr)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "PASS_DOMAIN_BYTES_CANARIES_ONE_PRODUCER_AND_CLEANUP" in result.stdout
+    events = [json.loads(line.split("evidence ", 1)[1]) for line in result.stderr.splitlines()
+              if '"event":"compact_transfer"' in line]
+    if mode in {"domain_retire", "domain_child_read"}:
+        event, = events
+        assert (event["bytes"], event["physical_operations"], event["dma_calls"]) == (720, 2, 1)
+        assert event["domain_role"] == ("storage" if mode == "domain_retire" else "execution")
+    else:
+        assert not events
