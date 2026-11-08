@@ -252,9 +252,14 @@ def test_original_continue_preserves_domain_and_graph_coverage(tmp_path):
 
 
 def test_labelled_continue_cannot_establish_structured_owner_entry(tmp_path):
+    from compiler.scopes.lexical import check_structured_entry
+
     path, builder = fixture(tmp_path, source_fixture(native_call=False).replace("continue", "100 continue", 1))
-    _outputs, report = builder.run()
+    with pytest.raises(CompilationError, match="structured entry"):
+        check_structured_entry(builder.analysis.routines["hierarchical::middle"])
+    outputs, report = builder.run()
     assert path.read_text().count("100 continue") == 1
     assert all(row["procedure"] != "hierarchical::middle"
                for scope in report["scopes"] for row in scope["module_coordinators"])
-    assert "structured entry" in str(report)
+    replacement = outputs[report["sources"][str(path)]["replacement"]]
+    assert "100 continue" in replacement.lower()
