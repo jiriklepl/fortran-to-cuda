@@ -9,7 +9,8 @@ import subprocess
 import pytest
 
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
 from compiler.tests.test_language_cuda import CUDA_RUNTIME
 from compiler.tests.test_sessions import _simulate_cuda

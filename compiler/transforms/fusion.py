@@ -10,13 +10,16 @@ from __future__ import annotations
 
 from dataclasses import fields, is_dataclass, replace
 
-from compiler.analysis import build_execution_plan
+from compiler.analysis import Affine, affine_expression, build_execution_plan
 from compiler.analysis.semantics import constant_integer
 from compiler.driver.options import CompilerOptions
 from compiler.ir import (
     ArrayAccess,
     Assignment,
+    Binary,
     Block,
+    CompilationError,
+    Expr,
     ExecutionPlan,
     FunctionIR,
     If,
@@ -30,12 +33,17 @@ from compiler.ir import (
     statement_reads,
     walk_expr,
 )
+from compiler.ir.integers import INTEGER_MAX
 
 
-def _substitute(value, bindings: dict[Symbol, Symbol]):
-    """Rename bound identities without changing expressions or provenance."""
+def _substitute(value, bindings: dict[Symbol, Symbol | Expr]):
+    """Rename identities or translate reads without putting expressions in declarations."""
+    if isinstance(value, Reference):
+        mapped = bindings.get(value.symbol)
+        return Reference(mapped) if isinstance(mapped, Symbol) else mapped if mapped is not None else value
     if isinstance(value, Symbol):
-        return bindings.get(value, value)
+        mapped = bindings.get(value, value)
+        return mapped if isinstance(mapped, Symbol) else value
     if isinstance(value, tuple):
         return tuple(_substitute(item, bindings) for item in value)
     if is_dataclass(value):
@@ -49,25 +57,43 @@ def _constant_step(loop: Loop) -> int | None:
     return loop.step if isinstance(loop.step, int) else constant_integer(loop.step)
 
 
-def _equal_domains(left: ParallelRegion, right: ParallelRegion) -> bool:
+def _domain_bindings(left: ParallelRegion, right: ParallelRegion) -> dict[Symbol, Expr] | None:
     if len(left.loops) != len(right.loops):
-        return False
-    bindings = {b.iterator: a.iterator for a, b in zip(left.loops, right.loops, strict=True)}
+        return None
+    bindings = {}
     mapped = {loop.iterator for loop in (*left.loops, *right.loops)}
     for a, b in zip(left.loops, right.loops, strict=True):
         stride = _constant_step(a)
         if stride is None or stride == 0 or stride != _constant_step(b):
-            return False
+            return None
         bounds = (a.lower, a.upper, b.lower, b.upper)
         # Header references denote values before iteration starts. Renaming a
         # self-referential lower/upper bound would conflate distinct snapshots.
         if any(referenced_symbols(bound) & mapped for bound in bounds):
-            return False
+            return None
         if any(isinstance(node, ArrayAccess) for bound in bounds for node in walk_expr(bound)):
-            return False
-        if a.lower != _substitute(b.lower, bindings) or a.upper != _substitute(b.upper, bindings):
-            return False
-    return True
+            return None
+        if a.lower == b.lower and a.upper == b.upper:
+            bindings[b.iterator] = Reference(a.iterator)
+            continue
+        # Equal constant-width, ascending intervals may have different origins.
+        # Reconstruct the second iterator through a nonnegative ordinal. Its
+        # subtraction fits INTEGER, and its addition stays inside the original
+        # second loop's interval. Do not form a potentially overflowing delta
+        # between two distant origins or generalize this to runtime trip counts.
+        if stride != 1:
+            return None
+        symbols = set().union(*(referenced_symbols(bound) for bound in bounds))
+        environment = {symbol: Affine(terms=((f"s{symbol.id}", 1),)) for symbol in symbols}
+        try:
+            widths = [affine_expression(loop.upper, environment, {}, loop.location).add(
+                affine_expression(loop.lower, environment, {}, loop.location).scale(-1)) for loop in (a, b)]
+        except CompilationError:
+            return None
+        if widths[0] != widths[1] or widths[0].terms or not 0 <= widths[0].constant <= INTEGER_MAX:
+            return None
+        bindings[b.iterator] = Binary("+", b.lower, Binary("-", Reference(a.iterator), a.lower))
+    return bindings
 
 
 def _can_hoist(assignments: tuple, crossed: Loop) -> bool:
@@ -87,8 +113,7 @@ def _can_hoist(assignments: tuple, crossed: Loop) -> bool:
     return True
 
 
-def _merge(left: ParallelRegion, right: ParallelRegion) -> Loop:
-    bindings = {b.iterator: a.iterator for a, b in zip(left.loops, right.loops, strict=True)}
+def _merge(left: ParallelRegion, right: ParallelRegion, bindings: dict[Symbol, Expr]) -> Loop:
     body = Block((*left.body.statements, *_substitute(right.body, bindings).statements))
     for loop in reversed(left.loops):
         merged = replace(loop, body=body)
@@ -161,7 +186,8 @@ def optimize_function(
             statement = statements[index]
             left, right = regions[id(statement)], regions[id(statements[next_index])]
             label = f"fusion at {statement.location} and {statements[next_index].location}"
-            if not _equal_domains(left, right):
+            bindings = _domain_bindings(left, right)
+            if bindings is None:
                 reports.append(
                     f"{label}: skipped (different domains, runtime strides, or iterator/array-valued bounds)"
                 )
@@ -177,10 +203,15 @@ def optimize_function(
                 continue
             # A scalar value escaping either original body must not become a
             # per-point value merely because two source passes are combined.
-            if block_writes(left.body) & block_reads(right.body) - {s for s in function.symbols if s.rank}:
+            # The original right-region proof already establishes that each
+            # private scalar is defined before every per-iteration read and
+            # has no escaping value. Reusing such a temporary's source name
+            # does not carry a value between passes.
+            if (block_writes(left.body) & block_reads(right.body)
+                    - {s for s in function.symbols if s.rank} - set(right.private_symbols)):
                 reports.append(f"{label}: skipped (scalar lifetime crosses source passes)")
                 continue
-            fused = _merge(left, right)
+            fused = _merge(left, right, bindings)
             candidate_block = Block((*statements[:index], *setup, fused, *statements[next_index + 1 :]))
             candidate = replace(function, body=_replace_host_block(function.body, block, candidate_block))
             try:

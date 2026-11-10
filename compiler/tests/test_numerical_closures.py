@@ -9,7 +9,8 @@ import pytest
 from compiler.analysis import build_execution_plan
 from compiler.frontend import discover_file, lower_file
 from compiler.ir import Assignment, Binary, CompilationError, If, Literal, Loop, Reference, walk_expr
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.tests.test_native import cuda_device as cuda_device
 
 

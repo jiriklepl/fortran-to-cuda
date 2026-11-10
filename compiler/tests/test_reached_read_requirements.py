@@ -15,8 +15,8 @@ from compiler.ir import CompilationError
 from compiler.tests.test_numerical_effects import ENTRY, SOURCE, fixture, resource
 
 
-def issue(directory, source=SOURCE):
-    path, analysis, selection, prepared = fixture(directory, source)
+def issue(directory, source=SOURCE, *, opt_level=1):
+    path, analysis, selection, prepared = fixture(directory, source, opt_level=opt_level)
     proof = prove_reached_read_requirements(analysis, ENTRY, selection, prepared)
     return path, analysis, selection, prepared, proof
 
@@ -41,8 +41,11 @@ def test_exact_unconditional_self_update_and_stencil_union(tmp_path):
 
 def test_read_after_local_write_does_not_invent_entry_definition(tmp_path):
     source = SOURCE.replace("b(i)=a(i)+real(i,8)", "b(i)=1.0_8\nc(i)=b(i)")
-    with pytest.raises(ReachedReadRequirementsUnsupported, match="before writes"):
-        issue(tmp_path, source)
+    path, analysis, selection, prepared, proof = issue(tmp_path, source)
+    assert proof.validate(analysis, ENTRY, selection, prepared) is proof
+    assert not proof.sections.resources
+    assert not proof.public()["prefix_definitions_authorized"]
+    assert path.read_text() == source
 
 
 def test_shifted_self_read_cannot_borrow_previous_iteration_definition(tmp_path):
@@ -120,7 +123,7 @@ enddo
 
 
 def test_independent_joined_nowait_units_use_same_entry_snapshot(tmp_path):
-    _path, _analysis, _selection, _prepared, proof = issue(tmp_path, joined_source("c(i)=c(i)+a(i)"))
+    _path, _analysis, _selection, _prepared, proof = issue(tmp_path, joined_source("c(i)=c(i)+a(i)"), opt_level=0)
     assert len(proof.units) == 2
     assert [{item.resource for item in unit.sections.resources} for unit in proof.units] == [
         {"argument::a", "argument::b"}, {"argument::a", "argument::c"}]
@@ -129,7 +132,7 @@ def test_independent_joined_nowait_units_use_same_entry_snapshot(tmp_path):
 
 def test_cross_unit_read_cannot_borrow_other_units_write(tmp_path):
     with pytest.raises(ReachedReadRequirementsUnsupported, match="group entry"):
-        issue(tmp_path, joined_source("c(i)=b(i)"))
+        issue(tmp_path, joined_source("c(i)=b(i)"), opt_level=0)
 
 
 @pytest.mark.parametrize("mutation", ["units", "sections", "record", "selection", "prepared", "copy", "registry"])

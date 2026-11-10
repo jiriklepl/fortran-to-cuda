@@ -8,15 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import abi_arguments
 from compiler.emission.common.c_family import cpp_type
 from compiler.emission.cuda.offload import generate_offload
 from compiler.frontend import lower_file
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 
 
 def generate(tmp_path, declaration, body, policy="sections"):

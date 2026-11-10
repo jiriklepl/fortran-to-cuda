@@ -58,7 +58,7 @@ def collective_protocol_identity() -> dict:
         ("compiler", ("numerical_contract.py",)),
         ("compiler.scopes", ("collective.py", "collective_roles.py", "source.py")),
         ("compiler.emission.cuda", ("scoped.py", "offload.py")),
-        ("compiler.runtime", ("scoped_team_observer.hpp", "scoped_team_observer.f90")),
+        ("compiler.runtime", ("scoped_team_observer.hpp", "scoped_team_observer.f90", "offload.hpp")),
     ):
         for name in names:
             sources[package + "/" + name] = sha256(files(package).joinpath(name).read_bytes()).hexdigest()
@@ -89,7 +89,9 @@ def compiler_identity(profile: dict) -> dict[str, str | int]:
     toolchain = profile["toolchain"]
     cuda = re.search(r"\bV(\d+\.\d+\.\d+)\b", toolchain["nvcc_version"])
     host_banner = toolchain["host_cxx_version"].splitlines()[0]
-    host = re.search(r"\b(\d+\.\d+\.\d+)\s*$", host_banner)
+    # GCC development packages append an eight-digit snapshot date. Match the
+    # compiler version, not the distribution version inside parentheses.
+    host = re.search(r"\b(\d+\.\d+\.\d+)(?:\s+\d{8})?\s*$", host_banner)
     if not cuda or not host or not re.search(r"(?:g\+\+|gcc|GCC)", host_banner):
         raise ProfileError("hardware profile compiler identity cannot be verified; require NVCC and GCC version triples")
     return {

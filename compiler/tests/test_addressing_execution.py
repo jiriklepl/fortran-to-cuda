@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
 from compiler.tests.test_language import compile_cuda_sources, run_reference_and_cpp
 from compiler.tests.test_language_cuda import CUDA_RUNTIME

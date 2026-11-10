@@ -5,7 +5,8 @@ from dataclasses import replace
 import pytest
 
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.emission.c.sessions import append_cpu_sessions
 from compiler.emission.common.abi import abi_arguments
 from compiler.emission.common.memory import render_memory

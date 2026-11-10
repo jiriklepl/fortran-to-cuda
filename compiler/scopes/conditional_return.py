@@ -645,6 +645,44 @@ def _descriptor_record(analysis, procedure, selected, storage, bindings, owner_e
             "retention_requires_sealed_return_contract": True}
 
 
+def _joined_descriptor_storage(analysis, procedure, graph, selected):
+    """Consume one complete original join, without granting payload effects."""
+    from compiler.frontend.descriptor_teams import _original_group, prove_descriptor_team
+    from compiler.frontend.native_completion import prove_graph_joined_completion
+    from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
+    from compiler.frontend.resource_reachability import prove_native_effect_graph
+
+    originals = tuple(node for identity in selected for node in graph.source_nodes(identity))
+    grouped = grouped_original_sequence(originals, {})
+    if (len(grouped) != 1 or not isinstance(grouped[0], NativeGroupCandidate)
+            or len(grouped[0].original_nodes) != len(originals)
+            or any(a is not b for a, b in zip(grouped[0].original_nodes, originals, strict=True))):
+        return None
+    # Graph identities omit ordinary comments. Recover the complete original
+    # parser selection before asking the exact joined-team issuer; never relax
+    # that issuer's source-object checks or lend a join to a smaller selection.
+    originals = _original_group(analysis._require_original(procedure), originals,
+                                graph_selection=True).original_nodes
+    original_graph, original_selected = analysis._selected_source(procedure, originals)
+    if original_graph is not graph or original_selected != selected:
+        raise CompilationError("conditional descriptor changed its original joined selection")
+    team = prove_descriptor_team(analysis, procedure, originals)
+    if team.selected_node_ids != selected:
+        raise CompilationError("conditional descriptor lost its complete original joined selection")
+    storage = prove_storage_mutation_effects(analysis, procedure, selection=originals, joined_storage=team)
+    if _preserves_record(storage._record):
+        return storage
+    # Only storage that needs the graph's stronger original-call/record
+    # evidence requests payload traversal. Descriptor stability alone must not
+    # depend on the unrelated payload-analysis control-depth budget.
+    native = prove_native_effect_graph(analysis, procedure, originals)
+    completion = prove_graph_joined_completion(analysis, procedure, originals, native)
+    if completion.selected_node_ids != selected or team.selected_node_ids != selected:
+        raise CompilationError("conditional descriptor lost its complete original joined selection")
+    return prove_storage_mutation_effects(analysis, procedure, selection=originals, joined_storage=team,
+        native_graph=native if completion._ordinary_join is not None else None)
+
+
 def descriptor_for(builder, analysis, procedure, selection):
     draft = getattr(builder, "_conditional_return_draft", None)
     if draft is None:
@@ -658,7 +696,15 @@ def descriptor_for(builder, analysis, procedure, selection):
     graph, selected = analysis._selected_source(procedure, selection)
     storage = prove_storage_mutation_effects(analysis, procedure, selection=tuple(selected))
     if not _preserves_record(storage._record):
-        return None
+        # A standalone storage walk cannot discharge OpenMP concurrency or
+        # record-array reads. Use the existing exact joined-group authorities;
+        # an unknown call, missing join or descriptor mutation still declines.
+        try:
+            storage = _joined_descriptor_storage(analysis, procedure, graph, selected)
+        except CompilationError:
+            return None
+        if storage is None or not _preserves_record(storage._record):
+            return None
     bindings = []
     for root in storage._record["resources"]:
         try:

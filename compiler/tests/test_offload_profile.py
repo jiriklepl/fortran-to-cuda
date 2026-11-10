@@ -159,12 +159,16 @@ def test_load_validates_costs_and_accepts_matching_identity(tmp_path):
         load_profile(path)
 
 
-def test_runtime_compiler_identity_uses_explicit_macros_not_banner_equality():
+@pytest.mark.parametrize(("banner", "version"), [
+    ("x86_64-linux-gnu-g++-14 (Debian 14.4.0-2) 14.4.0\nCopyright", "14.4.0"),
+    ("x86_64-linux-gnu-g++-14 (Debian 14.4.0-4) 14.4.1 20261107\nCopyright", "14.4.1"),
+])
+def test_runtime_compiler_identity_uses_explicit_macros_not_banner_equality(banner, version):
     result = profile()
     result["toolchain"]["nvcc_version"] = "nvcc: NVIDIA\nCuda compilation tools, release 13.4, V13.4.92"
-    result["toolchain"]["host_cxx_version"] = "x86_64-linux-gnu-g++-14 (Debian 14.4.0-2) 14.4.0\nCopyright"
+    result["toolchain"]["host_cxx_version"] = banner
     assert compiler_identity(result) == {
-        "cpu_name": "Test CPU", "host_compiler": "14.4.0", "cuda_compiler": "13.4.92",
+        "cpu_name": "Test CPU", "host_compiler": version, "cuda_compiler": "13.4.92",
         "cuda_runtime": 13040, "cuda_driver": 13040,
     }
 
@@ -172,6 +176,7 @@ def test_runtime_compiler_identity_uses_explicit_macros_not_banner_equality():
 @pytest.mark.parametrize(("field", "banner"), [
     ("host_cxx_version", "clang version 14.4.0"),
     ("host_cxx_version", "g++ 14.4"),
+    ("host_cxx_version", "g++ (Debian 14.4.0-4) 14.4.1 unknown"),
     ("nvcc_version", "Cuda compilation tools, release 13.4"),
 ])
 def test_unknown_compiler_identity_cannot_enable_automatic_execution(field, banner):

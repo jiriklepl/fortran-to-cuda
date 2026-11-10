@@ -198,7 +198,7 @@ def test_simulated_cuda_sessions_preserve_values_and_transfer_counts(simulated_c
 @pytest.mark.parametrize("backend", ["serial", "openmp", "cuda-simulated"])
 def test_sessions_preserve_logical_arguments_and_host_conditionals(tmp_path, monkeypatch, backend):
     from compiler.driver.pipeline import prepare_function
-    from compiler.emission import generate_sources
+    from compiler._legacy.emission import generate_sources
     from compiler.tests import test_language as language
     from compiler.tests.test_language_cuda import CUDA_RUNTIME
 

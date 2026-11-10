@@ -1,10 +1,11 @@
-"""Execute the emitted untiled decoder, including wide products, without CUDA."""
+"""Execute emitted coordinates on native simulation and CUDA, including wide products."""
 
 from __future__ import annotations
 
 import ctypes
 import itertools
 import math
+import shutil
 import subprocess
 import sys
 from dataclasses import replace
@@ -108,6 +109,7 @@ def coordinate_program(tmp_path_factory):
         )
         source.append("    const std::size_t fort_internal_point=flat;")
         source.extend(f"    const std::size_t fort_internal_extent{axis}=extents[{axis}];" for axis in range(rank))
+        source.append("    const std::size_t fort_internal_total=" + "*".join(f"extents[{a}]" for a in range(rank)) + ";")
         source.extend(kernel[start:end])
         source.extend(f"    out[{axis}]=fort_internal_ordinal{axis};" for axis in range(rank))
         source.append("}")
@@ -246,3 +248,82 @@ def test_only_the_final_axis_uses_the_quotient_and_launch_policy_is_preserved():
         assert "constexpr unsigned int fort_internal_threads = 256;" in launch
         assert "fort_internal_needed_blocks > 65535 ? 65535" in launch
         assert "Iteration size product overflows size_t" in launch
+
+
+@pytest.mark.cuda
+def test_actual_device_decoder_matches_full_width_divmod(tmp_path):
+    nvcc, host = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++")
+    if not nvcc or not host:
+        pytest.skip("CUDA toolkit required")
+    order = (4, 2, 0, 3, 1)
+    region, _, _ = _case(5, order, False, 0)
+    lines = generate_kernel(region)
+    start = next(i for i, line in enumerate(lines) if "std::size_t fort_internal_index = fort_internal_point;" in line)
+    end = next(i for i in range(start + 1, len(lines)) if "const int " in lines[i])
+    decoder = "\n".join(lines[start:end])
+    declarations = "\n".join(f"const std::size_t fort_internal_extent{a}=r.extents[{a}];" for a in range(5))
+    stores = "\n".join(f"r.actual[{a}]=fort_internal_ordinal{a};" for a in range(5))
+    source = DEVICE_DECODER.replace("// DECLARATIONS", declarations).replace("// DECODER", decoder).replace("// STORES", stores)
+    path = tmp_path / "decoder.cu"
+    path.write_text(source)
+    binary = tmp_path / "decoder"
+    compiled = subprocess.run([nvcc, "-O3", "-std=c++17", "-arch=sm_86", "-ccbin", host, str(path), "-o", str(binary)],
+                              capture_output=True, text=True, timeout=120)
+    assert compiled.returncode == 0, compiled.stdout + compiled.stderr
+    run = subprocess.run([str(binary)], capture_output=True, text=True, timeout=60)
+    if run.returncode == 77:
+        pytest.skip("CUDA device unavailable")
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert "DEVICE_DECODER_PASS" in run.stdout
+
+
+DEVICE_DECODER = r'''
+#include <cuda_runtime.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cassert>
+#include <vector>
+struct Row { std::size_t point,total,extents[5],actual[5]; };
+__global__ void decode(Row *rows,std::size_t count) {
+    for(std::size_t i=blockIdx.x*blockDim.x+threadIdx.x;i<count;i+=gridDim.x*blockDim.x) {
+        auto &r=rows[i];const auto fort_internal_point=r.point,fort_internal_total=r.total;
+        // DECLARATIONS
+        // DECODER
+        // STORES
+    }
+}
+void check(cudaError_t status) { if(status!=cudaSuccess) { std::puts(cudaGetErrorString(status));std::abort(); } }
+int main() {
+    int devices=0;if(cudaGetDeviceCount(&devices)!=cudaSuccess || !devices)return 77;
+    static_assert(sizeof(std::size_t)==8);
+    std::vector<Row> rows;
+    for(int a=0;a<5;++a)for(unsigned bit=0;bit<64;++bit)for(int delta=-1;delta<=1;++delta) {
+        const auto extent=(std::size_t(1)<<bit)+delta;if(!extent)continue;
+        for(auto point:{std::size_t(0),extent/2,extent-1}) {
+            Row r{point,extent,{1,1,1,1,1},{}};r.extents[a]=extent;rows.push_back(r);
+        }
+    }
+    std::uint64_t random=0x87356adfde071d33ULL;
+    for(unsigned i=0;i<131072;++i) {
+        random^=random<<13;random^=random>>7;random^=random<<17;
+        std::size_t a=(random & 0xffffffffULL)|1,b=((random>>32)&0xffffffffULL)|1;
+        if(i%3==0) { a=1+i%127;b=1+i%257; }
+        Row r{random%(a*b),a*b,{1,1,1,1,1},{}};
+        r.extents[i%5]=a;r.extents[(i+2)%5]=b;rows.push_back(r);
+    }
+    Row *device=nullptr;const auto bytes=rows.size()*sizeof(Row);
+    check(cudaMalloc(&device,bytes));check(cudaMemcpy(device,rows.data(),bytes,cudaMemcpyHostToDevice));
+    decode<<<71,128>>>(device,rows.size());check(cudaGetLastError());
+    check(cudaMemcpy(rows.data(),device,bytes,cudaMemcpyDeviceToHost));check(cudaFree(device));
+    for(const auto &r:rows) {
+        auto quotient=r.point;
+        for(int axis:{4,2,0,3,1}) {
+            assert(r.actual[axis]==quotient%r.extents[axis]);quotient/=r.extents[axis];
+        }
+        assert(!quotient);
+    }
+    std::printf("DEVICE_DECODER_PASS %zu rows\n",rows.size());
+}
+'''

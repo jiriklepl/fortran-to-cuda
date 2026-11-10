@@ -9,7 +9,8 @@ import re
 import pytest
 
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
 from compiler.tests.test_memory_runtime import _run, _tool
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import re
 from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import dataclass, field, replace
 
 from fparser.two import Fortran2003 as F
@@ -412,7 +413,9 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
         private_roots = set(private_roots) | set(completion_proof.private_roots)
     original = tuple(node for node in original if _kind(node) != "Comment")
     deferred = analysis.structure(builder.entry.qualified).native_group_for_selection(full_original) if joined else None
-    selection = (full_original if deferred is not None else original) if selected is None else selected
+    # Descriptor stability belongs to the complete joined operation, including
+    # its original directives. A body-only selection cannot borrow that join.
+    selection = (full_original if joined else original) if selected is None else selected
     # Validated capture facts borrow only the reached local descriptor. They
     # neither alter original source authority nor authorize allocation changes.
     analysis._segments = {}
@@ -603,12 +606,13 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     source_reads = None
     if ((getattr(builder, "_selection_activation_binding", None) is not None
             or builder.config.scope_execution == "graph")
-            and selected is None and kind == "native source" and sections.available
+            and selected is None and kind in {"native source", "joined native OpenMP"} and sections.available
             and any(item.reads for item in sections.resources)):
         from compiler.frontend.reached_read_requirements import prove_native_read_requirements
 
-        source_reads = prove_native_read_requirements(analysis, builder.entry.qualified, original,
-                                                      descriptor_window=descriptor)
+        source_reads = prove_native_read_requirements(analysis, builder.entry.qualified,
+            full_original if joined else original, completion=completion_proof if joined else None,
+            descriptor_window=descriptor)
     return Native(tuple(nodes), effects, set(summary["guaranteed_whole_overwrites"]) - set(private_roots),
                   bindings, summary, kind, sections, span, private_bindings, host_metadata,
                   preserve_original=bool(native_environment or clock_proofs or constructor_proofs),
@@ -799,9 +803,6 @@ def native_call_fragment(builder, nodes):
     independent of both earlier and future numerical discovery in the owner.
     """
     from compiler.frontend.native_call_effects import prove_native_call_effects
-    from compiler.frontend.native_sections import NativeSections
-    from compiler.scopes.native_opaque_accesses import readonly_accesses
-
     originals = tuple(builder.inline.original_selection(nodes))
     if (builder.config.scope_execution != "graph" or len(originals) != 1
             or originals[0] is not nodes[0] or _kind(originals[0]) != "Call_Stmt"
@@ -811,6 +812,31 @@ def native_call_fragment(builder, nodes):
         raise CompilationError("complete native CALL requires its original enclosing control region")
     analysis = _native_analysis(builder.analysis)
     proof = prove_native_call_effects(analysis, builder.entry.qualified, originals)
+    return _native_host_fragment(builder, originals, analysis, proof, "complete original native CALL")
+
+
+def native_group_fragment(builder, nodes, *, whole=False):
+    """Retain one whole original team through the same native transaction."""
+    from compiler.frontend.native_call_effects import prove_native_group_effects
+
+    originals = tuple(builder.inline.original_selection(nodes))
+    if (builder.config.scope_execution != "graph" or len(originals) != len(nodes)
+            or any(a is not b for a, b in zip(originals, nodes, strict=True))
+            or any(hasattr(node, "fort_inline_region") for node in originals)):
+        raise CompilationError("complete native group requires original graph execution")
+    builder.analysis._selected_source(builder.entry.qualified, originals)
+    analysis = _native_analysis(builder.analysis, complete_source=originals)
+    analysis._native_metadata = True
+    descriptor = (builder.descriptor_window_for(analysis, builder.entry.qualified, originals)
+                  if hasattr(builder, "descriptor_window_for") else None)
+    proof = prove_native_group_effects(analysis, builder.entry.qualified, originals,
+                                        descriptor_window=descriptor, whole=whole)
+    return _native_host_fragment(builder, originals, analysis, proof, "complete original native group")
+
+
+def _native_host_fragment(builder, originals, analysis, proof, kind):
+    from compiler.scopes.native_opaque_accesses import readonly_accesses
+
     bindings, effects, metadata, constants, readonly = {}, {}, {}, {}, {}
     for binding, role, actions in proof.resources:
         if actions <= {"association"}:
@@ -847,12 +873,16 @@ def native_call_fragment(builder, nodes):
                 # only tracked values without defining untouched cells.
                 builder.capture(binding)
     graph, selected = analysis._selected_source(builder.entry.qualified, originals)
-    summary = {"complete": True, "analysis_identity": graph.authority_identity,
-               "structured_identity": graph.identity, "selected_node_ids": list(selected),
+    consumer_graph, consumer_selected = builder.analysis._selected_source(builder.entry.qualified, originals)
+    if (selected != consumer_selected or analysis._source_session is not builder.analysis._source_session
+            or analysis._require_original(builder.entry.qualified) is not builder.entry):
+        raise CompilationError("native host effects differ from the consumer's original selection")
+    summary = {"complete": True, "analysis_identity": consumer_graph.authority_identity,
+               "structured_identity": consumer_graph.identity, "selected_node_ids": list(selected),
                "summary_identity": proof.identity, "demand_identity": proof.identity,
                "guaranteed_whole_overwrites": [],
                "native_completion": {"available": True, "has_openmp_in_closure": bool(proof.reachability._completion),
-                   "reason": "complete original native CALL graph and stable storage",
+                   "reason": "complete original native graph and stable storage",
                    "internal_cuts_authorized": False},
                # Association is retained in the full CALL proof. It is not a
                # payload access; descriptor effects use the ordinary summary
@@ -862,9 +892,10 @@ def native_call_fragment(builder, nodes):
                               for binding, _role, actions in proof.resources for action in sorted(actions)
                               if action != "association"]}
     accesses = readonly_accesses(builder, analysis, originals, summary, readonly) if readonly else {}
-    operation = Native(originals, effects, set(), bindings, summary, "complete original native CALL",
-                  sections=NativeSections(False, "complete whole-array native CALL access; no overwrite authority"),
-                  span=statement_span(originals[0]), host_metadata=metadata, preserve_original=True,
+    operation = Native(originals, effects, set(), bindings, summary, kind,
+                  sections=proof.sections,
+                  span=(statement_span(originals[0])[0], statement_span(originals[-1])[1]),
+                  host_metadata=metadata, preserve_original=True,
                   source_constants=constants, proof_analysis=analysis, call_effects=proof, native_opaque_accesses=accesses)
     for access in accesses.values():
         access.validate(operation)
@@ -1012,6 +1043,7 @@ class StructuredScope:
         self.builder, self.nodes = builder, tuple(nodes)
         self.native_metadata = native_metadata
         self.native_host_reads = native_host_reads
+        self.lexical_native = lexical_native
         self.opaque_lexical_if = original_if
         if original_if is not None and (not lexical_native or condition_only
                 or _kind(original_if) != "If_Stmt" or len(nodes) != 1
@@ -1063,15 +1095,20 @@ class StructuredScope:
             # line numbers. Numerical outlining and ordinary workers stay strict.
             if not (lexical_native and str(builder.entry.scope.path) in builder.analysis.inputs.entries
                     and len(self.tree) == 1 and isinstance(self.tree[0], Native)
-                    and self.tree[0].kind == "joined native OpenMP"):
+                    and (self.tree[0].kind == "joined native OpenMP" or original_host_access(self.tree[0]))):
                 raise CompilationError("preprocessor control boundary inside structured ownership")
             operation = self.tree[0]
             operation.preserve_original = True
             # The hooks surround one unchanged operation. Keep their storage
             # obligations conservative; section temporaries must not outlive a
             # preparation block or assume definitions inside an inactive branch.
-            operation.sections = replace(operation.sections, available=False, resources=(),
-                reason="original configured native group uses whole managed-resource effects")
+            if original_host_access(operation):
+                replacement = native_group_fragment(builder, tuple(nodes), whole=True)
+                self.native[self.native.index(operation)] = replacement
+                self.tree[0] = replacement
+            else:
+                operation.sections = replace(operation.sections, available=False, resources=(),
+                    reason="original configured native group uses whole managed-resource effects")
 
     def parse(self, nodes, depth=0, *, original_if=None, condition=None):
         if depth > 8:
@@ -1088,6 +1125,11 @@ class StructuredScope:
                 flush()
                 operation = fragment(self.builder, node, kind="joined native OpenMP", native_metadata=self.native_metadata,
                                      native_host_reads=self.native_host_reads)
+                if self.lexical_native and self.builder.config.scope_execution == "graph":
+                    # Keep the existing strict transaction when complete
+                    # original effects/storage cannot authorize may-access.
+                    with suppress(CompilationError):
+                        operation = native_group_fragment(self.builder, node)
                 self.native.append(operation)
                 self.operation_count += len(operation.summary["operations"])
                 result.append(operation)
@@ -1791,9 +1833,13 @@ class StructuredScope:
 
         if surround_native:
             if (len(self.tree) != 1 or not isinstance(self.tree[0], Native)
-                    or not self.tree[0].preserve_original or refined(self.tree[0], query=False) is not None):
-                raise CompilationError("original native hooks require one complete unrefined source operation")
+                    or not self.tree[0].preserve_original
+                    or (refined(self.tree[0], query=False) is not None and not original_host_access(self.tree[0]))):
+                raise CompilationError("original native hooks require one complete authorized source operation")
             operation = self.tree[0]
+            # The original-host transaction owns copied access regions until
+            # host_end. Its section-preparation temporaries need not span the
+            # unchanged source group; completion uses only canonical handles.
             return ([*native_plan(operation), *native_hooks(operation)],
                     [*native_end(operation), *task_completion()])
         return emit(self.tree, terminal=terminal_owner)

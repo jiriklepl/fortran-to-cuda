@@ -23,6 +23,8 @@ from compiler.ir import (
     CompilationError,
     ConditionalRegion,
     HostBlock,
+    IntrinsicCall,
+    Literal,
     ParallelRegion,
     Reference,
     ScalarType,
@@ -65,7 +67,7 @@ TYPES = {
     ScalarType.LOGICAL: ("FORT_SCOPE_LOGICAL", "logical(c_bool)"),
 }
 
-ENTRY_ABI_VERSION = 2
+ENTRY_ABI_VERSION = 3
 
 
 def generate_scoped(function, plan, config, common_header, *, runtime_id=None, root_views=False, root_view_abi=1):
@@ -80,6 +82,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     scalars = tuple(s for s in function.parameters if not s.rank)
     if any(s.intent != "in" for s in scalars):
         raise CompilationError("shared numerical entries require read-only scalar parameters")
+    if config.collective and any(s.by_value for s in scalars):
+        raise CompilationError("VALUE shared entries require a serial host coordinator")
     identity = f"entry-abi:{ENTRY_ABI_VERSION}:{function.module.lower()}::{function.name.lower()}:{plan!r}"
     if config.scope_execution == "graph":
         identity += ":dependency-task-graph-v1"
@@ -110,7 +114,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                       "pipelined": "FORT_SCOPE_TRANSFERS_PIPELINED", "auto": "FORT_SCOPE_TRANSFERS_AUTO",
                       "coalesced": "FORT_SCOPE_TRANSFERS_COALESCED"}
     transfer_reason = {"auto": "transfer_estimates_unavailable", "pipelined": "pipelined_not_available"}.get(config.scope_transfers)
-    scalar_signature = [f"const {cpp_type(s)} *fort_scalar_{s.cpp_name}" for s in scalars]
+    scalar_signature = [(f"const {cpp_type(s)} fort_value_{s.cpp_name}" if s.by_value else
+                         f"const {cpp_type(s)} *fort_scalar_{s.cpp_name}") for s in scalars]
     def array_parameter(symbol):
         return (f"const {view_type} *{symbol.cpp_name}_view" if root_views else
                 f"fort_buffer_t {symbol.cpp_name}_handle")
@@ -327,7 +332,13 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                        f"    return {team_configure_name}(fort_context);"]) if config.collective else
                     ["    return fort_scope_set_transfer_costs_v1(fort_context, &transfer_costs, scoped_host_compatible(profile));"]), "}"]
     unit_ids = {r.id: int(sha256(f"{name}:region:{r.id}".encode()).hexdigest()[:16], 16) for r in plan.regions}
-    batch_analysis, batch_candidates = scope_slab_candidates(function, plan)
+    if config.scope_execution == "graph":
+        # Queued tasks share the graph/domain. The old slab prototype has its
+        # own four-unit interval enumeration and cannot price production groups.
+        batch_analysis = OffloadAnalysis(False, "legacy slab batching is retired; use the shared task graph")
+        batch_candidates = ()
+    else:
+        batch_analysis, batch_candidates = scope_slab_candidates(function, plan)
     batch_requested = config.scope_transfers in {"pipelined", "auto"}
     batch_eligible = batch_requested and not config.collective and not root_views and any(slab for _, slab, _ in batch_candidates)
     batch_enabled = batch_eligible and costs is not None and transfer_costs is not None
@@ -370,6 +381,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                   '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported numerical environment for real short reduction");']
     setup = []
     for s in scalars:
+        if s.by_value:
+            setup += [f"    const {cpp_type(s)} &{s.cpp_name} = fort_value_{s.cpp_name};"]
+            continue
         setup += [f"    if (!fort_scalar_{s.cpp_name})",
                   '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "null shared scalar argument");',
                   f"    const {cpp_type(s)} &{s.cpp_name} = *fort_scalar_{s.cpp_name};"]
@@ -526,6 +540,24 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
 
     def host(step, executable, *, serial_work_tracking=True):
         touched = set(step.read_symbols) | set(step.write_symbols)
+        # Layout acquisition above has already checked this array-bearing
+        # entry's context. Pure local integer/logical setup has no coherent
+        # storage access or floating-point effect to publish. In particular,
+        # loop-header snapshots must not open empty host transactions.
+        local_setup = arrays and isinstance(step, HostBlock) and not touched.intersection(arrays)
+        if local_setup:
+            for assignment in step.assignments:
+                if (not isinstance(assignment.target, Reference) or assignment.target.symbol.parameter
+                        or assignment.target.symbol.dtype not in {ScalarType.INTEGER, ScalarType.LOGICAL}):
+                    local_setup = False
+                    break
+                if any((isinstance(node, Reference) and node.symbol.dtype not in {ScalarType.INTEGER, ScalarType.LOGICAL})
+                       or (isinstance(node, (Literal, IntrinsicCall)) and node.dtype not in {ScalarType.INTEGER, ScalarType.LOGICAL})
+                       for node in walk_expr(assignment.value)):
+                    local_setup = False
+                    break
+        if local_setup:
+            return [*(["fort_entry_work_started=true;"] if guarded_entry and serial_work_tracking else []), *executable]
         result = ["{", f"    fort_scoped::{batch_type}<{capacity}> fort_host(fort_context);"]
         for s in arrays:
             if s in touched:
@@ -1092,7 +1124,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 "      integer(c_int64_t), value :: fort_context", "      integer(c_int), value :: fort_mode"]
     fortran += [(f"      type({view_type}), intent(in) :: {s.cpp_name}_view" if root_views else
                  f"      integer(c_int64_t), value :: {s.cpp_name}_handle") for s in arrays]
-    fortran += [f"      {TYPES[s.dtype][1]}, intent(in) :: {s.cpp_name}" for s in scalars]
+    fortran += [f"      {TYPES[s.dtype][1]}, intent(in)" + (", value" if s.by_value else "") + f" :: {s.cpp_name}" for s in scalars]
     fortran += ["    end function"]
     if config.collective:
         fortran += _fortran_list("function run_team(", parameters,
@@ -1136,7 +1168,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         "cuda_source": "shared_entry.cu", "fortran_source": "shared_interface.f90",
         "array_parameters": [{"name": s.name, "rank": s.rank, "dtype": s.dtype.value,
                               "written": s in writes} for s in arrays],
-        "scalar_parameters": [{"name": s.name, "dtype": s.dtype.value, "passing": "reference"} for s in scalars],
+        "scalar_parameters": [{"name": s.name, "dtype": s.dtype.value,
+                               "passing": "value" if s.by_value else "reference"} for s in scalars],
         "argument_order": ["context", "mode", *[s.name for s in arrays], *[s.name for s in scalars]],
         "modes": {"native": 0, "gpu": 1, "automatic": 2},
         "numerical_environment": {
@@ -1194,7 +1227,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                             "eligible": slab is not None, "reason": reason,
                                             "slab": slab.to_dict() if slab else None}
                                            for interval, slab, reason in batch_candidates],
-                            "limits": {"adjacent_units": 4, "complete_legal_group": True},
+                            "limits": {"adjacent_units": None if config.scope_execution == "graph" else 4,
+                                       "complete_legal_group": True},
                             "coordinates": "original logical coordinates and full-array pitches",
                             "kernels": "reuse existing numerical kernels; no partition-specific copies",
                             "publication": "retain device results until original native consumers or owner close",

@@ -304,7 +304,60 @@ int main(int argc,char **argv) {
     Cache cache; fort_scope_graph_stats_v1 stats{}; stats.version=1;
     int first=0,second=1; Arguments a(&add_identity,&first,2), b(&multiply_identity,&first,3);
     fort_scope_kernel_v1 group[2]={a.descriptor,b.descriptor}; bool attempted=false;
-    if(mode=="replay") {
+    if(mode=="parameter_cache" || mode=="parameter_cache_failure") {
+        using fort_scoped::graphs::ArgumentValues;
+        {
+            unsigned char small=17,bytes[19]; double scalar=-0.0;
+            for(size_t i=0;i<19;++i) bytes[i]=static_cast<unsigned char>(i+42);
+            void *pointers[3]={&small,&scalar,bytes}; size_t sizes[3]={1,sizeof(scalar),sizeof(bytes)};
+            auto descriptor=a.descriptor; descriptor.arguments=pointers; descriptor.argument_count=3;
+            ArgumentValues packed; assert(packed.capture(descriptor,sizes));
+            for(size_t i=0;i<3;++i) {
+                assert(reinterpret_cast<uintptr_t>(packed.argument(i))%alignof(std::max_align_t)==0);
+                assert(!std::memcmp(packed.argument(i),pointers[i],sizes[i]));
+            }
+            auto copy=packed; assert(copy==packed);
+            bytes[0]=99; assert(packed.capture(descriptor,sizes)); assert(!(copy==packed));
+            sizes[0]=std::numeric_limits<size_t>::max(); assert(!packed.capture(descriptor,sizes));
+            sizes[0]=1; sizes[1]=0; assert(!packed.capture(descriptor,sizes));
+            descriptor.argument_count=0; assert(packed.capture(descriptor,nullptr));
+        }
+        ArgumentValues owned[2]; const ArgumentValues *values[2]={&owned[0],&owned[1]};
+        auto capture=[&]() {
+            const size_t sizes[2]={sizeof(int *),sizeof(int)};
+            for(int i=0;i<2;++i) {
+                assert(owned[i].capture(group[i],sizes));
+            }
+        };
+        capture(); check(cache.submit(7,group,2,nullptr,stats,attempted,values)); drain(); assert(first==6);
+        check(cache.submit(7,group,2,nullptr,stats,attempted,values)); drain(); assert(first==24);
+        assert(!stats.parameter_updates && !updates);
+        a.scalar=4; b.scalar=5; capture();
+        if(mode=="parameter_cache_failure") {
+            failure="update";
+            assert(cache.submit(7,group,2,nullptr,stats,attempted,values)!=cudaSuccess && !attempted);
+            assert(pending.empty() && first==24 && stats.parameter_updates==1);
+            failure.clear();
+            check(cache.submit(7,group,2,nullptr,stats,attempted,values)); drain(); assert(first==140);
+            assert(stats.parameter_updates==2 && updates==3); // Retry only the uninstalled node.
+        } else {
+            check(cache.submit(7,group,2,nullptr,stats,attempted,values)); drain(); assert(first==140);
+            assert(stats.parameter_updates==2);
+            b.pointer=&second; capture();
+            check(cache.submit(7,group,2,nullptr,stats,attempted,values)); drain(); assert(first==144 && second==5);
+            assert(stats.parameter_updates==3);
+            group[0].grid[0]=2; group[1].block[0]=64; group[1].shared_bytes=128;
+            check(cache.submit(7,group,2,nullptr,stats,attempted,values)); drain(); assert(first==148 && second==25);
+            assert(stats.parameter_updates==5);
+            a.scalar=7; // A raw call must invalidate the earlier cached bytes.
+            check(cache.submit(7,group,2,nullptr,stats,attempted)); drain(); assert(first==155 && second==125);
+            a.scalar=4; capture();
+            check(cache.submit(7,group,2,nullptr,stats,attempted,values)); drain(); assert(first==159 && second==625);
+            assert(stats.parameter_updates==9);
+            check(cache.submit(7,group,2,nullptr,stats,attempted,values)); drain(); assert(first==163 && second==3125);
+            assert(stats.parameter_updates==9);
+        }
+    } else if(mode=="replay") {
         check(cache.submit(7,group,2,nullptr,stats,attempted)); assert(attempted);
         a.pointer=b.pointer=&second; a.scalar=4; b.scalar=5;
         group[0].grid[0]=8; group[1].block[0]=64; group[1].shared_bytes=128;
@@ -380,7 +433,8 @@ def simulated_cuda(tmp_path_factory):
 
 
 @pytest.mark.native
-@pytest.mark.parametrize("mode", ["replay", "topology", "observe", "keys", "create", "node", "instantiate", "update", "launch"])
+@pytest.mark.parametrize("mode", ["replay", "topology", "observe", "keys", "create", "node", "instantiate", "update", "launch",
+                                 "parameter_cache", "parameter_cache_failure"])
 def test_simulated_cuda_graph_cache(simulated_cuda, mode):
     result = subprocess.run([str(simulated_cuda), mode], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stdout + result.stderr

@@ -162,10 +162,22 @@ inline int query_load(const int *array, std::initializer_list<std::size_t> dimen
 }
 inline long long index(long double value, bool &valid) {
     if (!std::isfinite(value) || value < static_cast<long double>(std::numeric_limits<long long>::min()) ||
-        value > static_cast<long double>(std::numeric_limits<long long>::max()) || std::trunc(value) != value) {
+        value > static_cast<long double>(std::numeric_limits<long long>::max())) {
         valid = false; return 0;
     }
-    return static_cast<long long>(value);
+    // A low-precision long double can round LLONG_MAX up to 2^63. Exclude
+    // that endpoint before conversion, which would otherwise be undefined.
+    if constexpr (std::numeric_limits<long double>::digits < std::numeric_limits<long long>::digits) {
+        if (value >= -static_cast<long double>(std::numeric_limits<long long>::min())) {
+            valid = false; return 0;
+        }
+    }
+    // Conversion already truncates. Its round trip checks integrality without
+    // a separate trunc operation. Keep finite/range rejection before the cast:
+    // rejected NaNs and just-out-of-range fractions must not gain exceptions.
+    const auto result = static_cast<long long>(value);
+    if (static_cast<long double>(result) != value) { valid = false; return 0; }
+    return result;
 }
 struct Box {
     std::vector<std::size_t> lower, upper; // zero-based inclusive physical coordinates

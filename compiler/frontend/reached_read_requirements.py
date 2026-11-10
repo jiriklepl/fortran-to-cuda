@@ -79,10 +79,13 @@ def prove_native_read_requirements(analysis, procedure, selection, *, completion
     Assignment authority and unchanged native-team completion share this
     contract. Communication geometry alone never grants a read precondition.
     """
+    from compiler.frontend.native_completion import NativeCompletionProof
     from compiler.frontend.native_definitions import prove_native_definitions
 
     if completion is not None:
-        sections = _native_team_read_sections(analysis, procedure, selection, completion)
+        sections = (_joined_read_sections(analysis, procedure, selection, completion)
+                    if type(completion) is NativeCompletionProof else
+                    _native_team_read_sections(analysis, procedure, selection, completion))
         return completion if sections.available else None
     if not _native_read_selection(analysis, procedure, selection):
         return None
@@ -93,11 +96,14 @@ def prove_native_read_requirements(analysis, procedure, selection, *, completion
 
 def native_read_sections(analysis, procedure, selection, proof):
     """Fresh exact reads; no prefix, whole-array or may-read definition credit."""
+    from compiler.frontend.native_completion import NativeCompletionProof
     from compiler.frontend.native_definitions import NativeDefinitionProof
     from compiler.frontend.worksharing_completion import WorksharingNativeCompletionProof
 
-    if type(proof) is WorksharingNativeCompletionProof:
-        sections = _native_team_read_sections(analysis, procedure, selection, proof)
+    if type(proof) in {NativeCompletionProof, WorksharingNativeCompletionProof}:
+        sections = (_joined_read_sections(analysis, procedure, selection, proof)
+                    if type(proof) is NativeCompletionProof else
+                    _native_team_read_sections(analysis, procedure, selection, proof))
         if not sections.available:
             raise CompilationError("native original entry reads unavailable: " + str(sections.reason))
         return sections
@@ -112,6 +118,65 @@ def native_read_sections(analysis, procedure, selection, proof):
         raise CompilationError("native reached read sections are unavailable")
     return replace(sections, resources=tuple(replace(item, writes=(), overwrites=())
                                              for item in sections.resources if item.reads))
+
+
+def _joined_read_sections(analysis, procedure, selection, completion):
+    """Exact entry reads of an unchanged, independent assignment-only team.
+
+    A communication union alone is insufficient: every source operand must be
+    evaluated, and no group write may manufacture a subsequent read. Reject
+    shared read/write roots here; native scatter updates use their separate
+    same-point proof. Geometry, guarded empty loops and aliases retain their
+    existing independent checks.
+    """
+    from compiler.ir.intrinsics import ARRAY_INQUIRIES, MODEL_INQUIRIES
+
+    _, identities = analysis._selected_source(procedure, selection)
+    completion.validate(analysis, procedure, identities)
+    if tuple(identities) != completion.selected_node_ids:
+        raise CompilationError("native entry reads require the complete original joined selection")
+    routine = analysis.routines[procedure]
+    allowed = {"Comment", "Block_Nonlabel_Do_Construct", "Nonlabel_Do_Stmt", "End_Do_Stmt", "Assignment_Stmt"}
+    count = 0
+
+    def statements(nodes):
+        nonlocal count
+        for node in nodes:
+            count += 1
+            if count > analysis.operation_limit:
+                return False
+            kind = type(node).__name__
+            if kind not in allowed:
+                return False
+            if kind == "Block_Nonlabel_Do_Construct" and not statements(node.content):
+                return False
+            if kind != "Assignment_Stmt":
+                continue
+            target = node.items[0]
+            if type(target).__name__ != "Part_Ref":
+                return False  # No scalar state or bound mutation inside the team.
+            scope = analysis.source_scope_for(node, routine.scope)
+            binding = analysis._binding(scope, target.items[0])
+            if binding is None or not binding.rank or binding.root in completion.private_roots:
+                return False
+            for item in walk(node):
+                item_kind = type(item).__name__
+                if (isinstance(item, str) and item.lower() in {".and.", ".or."}
+                        or item_kind in {"Function_Reference", "Structure_Constructor"}
+                        or item_kind == "Intrinsic_Function_Reference"
+                        and str(item.items[0]).lower() not in ARRAY_INQUIRIES | MODEL_INQUIRIES):
+                    return False
+        return True
+
+    if not statements(selection):
+        return NativeSections(False, "joined entry reads require unconditional array assignments and invariant bounds")
+    sections = analysis.native_sections_for_nodes(procedure, selection, capture_locals=True, completion=completion)
+    if not sections.available:
+        return sections
+    if any(item.reads and item.writes for item in sections.resources):
+        return NativeSections(False, "joined entry reads require independent input and output storage")
+    resources = tuple(replace(item, writes=(), overwrites=()) for item in sections.resources if item.reads)
+    return NativeSections(bool(resources), None if resources else "joined group has no entry reads", resources)
 
 
 def _native_team_read_sections(analysis, procedure, selection, completion):

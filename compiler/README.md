@@ -1,8 +1,9 @@
 # Fortran-to-CUDA/C++ compiler
 
 The compiler lowers selected Fortran procedures into immutable computation IR, validates
-types and definite definitions, proves loop independence with `islpy`, and emits C++, CUDA,
-and a Fortran bridge from checked execution, scheduling, addressing, and memory plans.
+types and definite definitions, proves loop independence with `islpy`, and emits shared CUDA
+entries and Fortran interfaces from checked execution, scheduling and addressing plans.
+Caller-owned domains provide the single production coherence and storage implementation.
 
 Generated numerical code publishes a versioned `numerical_contract` in the public
 JSON `build_sources`, library generation metadata and scoped runtime descriptors.
@@ -14,6 +15,20 @@ consumers must apply these options and record the actual command: NVCC does not
 expose a verified predefined macro for every option. Original native Fortran
 flags remain unchanged. This contract does not promise bitwise agreement for
 all arithmetic, authorize IEEE flag observers, or change numerical tolerances.
+
+Dynamic floating division uses a device fast path when the divisor is a normal
+power of two with a normal, exactly representable reciprocal and the numerator
+is finite. One multiplication then produces the same rounded result as the
+original division, including subnormals and signed zero under the required
+build flags. Other values retain ordinary division. The host path, integer
+division and constant-divisor lowering are unchanged; no reciprocal
+approximation or arithmetic reassociation is introduced.
+
+Host section-coordinate validation checks finite integer range before converting
+to an integer, then uses a round trip to check integrality. This avoids a second
+rounding operation while retaining rejected-input behavior and floating exception
+flags. Collective preparation-cost identities include the offload runtime header,
+so changing these checks requires fresh calibration before automatic placement.
 
 Offline CUDA and generated-CPU calibration uses the same requirements and binds
 them into its identities. Nonempty `NVCC_PREPEND_FLAGS` or `NVCC_APPEND_FLAGS`
@@ -51,6 +66,18 @@ entries. Source-call boundaries do not imply transfers, allocation release or
 synchronization. Valid read-only mirrors can coexist on CPU and GPU; writes,
 actual consumers and the device memory budget determine movement.
 
+`runtime/snapshots.h`, `snapshots.cu` and `snapshots.f90` provide an additive v1
+output queue over the same checked external-device transaction. Two immutable
+device/pinned snapshot pairs bound buffering. Capture precedes conflicting writes
+on the context stream; an event orders DMA on a separate stream. One writer waits
+for DMA and completes serialization before a slot becomes reusable. Creation
+charges both device slots to the domain workspace budget and checks a separate
+pinned-memory cap. The caller must join and destroy the queue before retiring its
+domain. Reads preserve the original replicas; snapshot failure never authorizes
+source replay. This utility is linked once alongside the common runtime by its
+consumer; it does not change the existing numerical-entry ABI or price output
+operations for automatic placement.
+
 Checked local CALL groups may preserve independently supplied array-entry
 definitions inside a loop when the existing native-effect analysis proves a
 preservation invariant over the complete enclosing loop. The proof includes
@@ -70,9 +97,9 @@ source regions, source indexing, and source axis order unless overridden by
 `--indexing` or `--schedule`. Automatic
 axis ordering favors Fortran locality; spatial tiling is explicit through
 `--tile-sizes`. Strict parallelization is the default; `--fallback host` executes
-valid regions whose independence is unproved sequentially on the host. Explicit
-sessions retain owned storage across calls, using the same Fortran interface for
-CPU and CUDA backends.
+valid regions whose independence is unproved sequentially on the host. Shared
+entries borrow caller-owned domains; a checked child return preserves replicas,
+and domain retirement publishes required values to unmanaged callers.
 The graph path starts in [scopes/graph.py](scopes/graph.py), with dependency
 construction in [analysis/task_dependencies.py](analysis/task_dependencies.py)
 and placement in [scheduling/task_graph.py](scheduling/task_graph.py).
@@ -164,322 +191,47 @@ CLI; direct calls to `build_execution_plan` keep their existing analysis behavio
 Emitters accept these unscheduled plans using source axis order and source indexing. Schedule and addressing records
 remain independent of fparser and ISL.
 
-## Quick start
-
-Run from the repository root with Python 3.10 or newer:
+## Public generation and integration
 
 ```bash
-python -m pip install -r requirements.txt
-python -m compiler --input fortran-stencils/elmm_cdu.f90 --kernel CDU --output-dir out --verbose
+python -m compiler --input input.f90 --kernel advance --json --output-dir out/advance
 ```
 
-`! kernels` and `! kernel` markers are optional. Select a module subroutine with
-`--kernel NAME`, or `--kernel MODULE::NAME` when several modules contain the same
-name. Reachable helpers in the same module are discovered and inlined without
-markers; unrelated unsupported routines remain untouched. The input must still
-parse as Fortran 2008. The retired `--require-markers` option and Python
-`require_markers` keyword now report an error; omit them and select entries by name.
+Numerical generation now defaults to shared graph execution: `--memory-model
+scoped --gpu-policy sections`. It publishes artifact schema 2 with
+`shared_entry.cu`, `shared_interface.f90`, the common header and versioned runtime
+artifacts. Compile the sources listed in `build_sources`, linking the common
+runtime once. Apply each source's numerical build contract. `--gpu-policy auto`
+uses compatible calibrated costs; unavailable costs do not authorize GPU placement.
+The generated interface exposes explicit native, GPU and automatic execution
+modes for diagnosis through the same runtime.
 
-Inspect candidates without generating files:
+A numerical entry takes canonical handles from its caller. Use checked
+`--form-scopes` source integration for compiler-issued ownership/effect contracts,
+or an explicit caller-owned domain for library integration. Creating a context
+per call is no longer an implicit compiler policy. A checked return preserves
+replicas; returning to an unmanaged owner requires explicit publication or domain
+retirement. Read-only host/device accesses preserve the other valid replica.
 
-```bash
-python -m compiler --input ordinary.f90 --list-candidates --json
-```
+The `call` memory model, `always`, `chunked` and `hybrid` GPU policies, ordinary
+CUDA/C++/Fortran output switches, and owned-session application API are retired.
+The public CLI and Python generator reject them with migration errors. The old
+four-unit interval planner has no production generation consumer. Historical
+numerical tests explicitly use `compiler._legacy.emission`; that reference module
+is never an application fallback or a public compatibility mode. Some private
+reference machinery and configuration coupling still await final cleanup.
 
-The list reports every module subroutine, its marker status, and either successful
-generation eligibility or a rejection reason with source location. It runs the
-same semantic, dependence, scheduling, and emission checks as normal compilation,
-under the selected options. A rejected procedure is not a promise of automatic
-host fallback; the application integration must retain its native implementation.
-The Python `discover_file(path)` API reports the narrower frontend result in
-`ProcedureCandidate.lowerable`; callers must still run `prepare_function` and
-`generate_sources`. `lower_file(path, entry)` preserves
-explicit entry selection and supports the same module qualification.
+For the primary ELMM configurations, use the pipeline's `resident-build` command.
+It generates the hot path and builds the explicitly supplied local Poisson
+provider. The pipeline's old call-region adaptation path is retired as well.
+Native baseline runs remain available independently.
 
-Normal generation also accepts `--json`:
+`--opt-level 0`, `--schedule`, `--indexing`, `--tile-sizes`, `--fallback host`,
+`--list-candidates`, effect analysis and checked source-graph integration remain
+available. Output publication follows successful validation; retired options
+fail before modifying existing artifacts.
 
-```bash
-python -m compiler --input ordinary.f90 --kernel advance --fallback error \
-  --output-dir out --json
-```
-
-Its stdout is one object with `kernel`, `supported`, `reason`, and `outputs`.
-Successful generation additionally reports `parallel_regions` (including kernels
-in conditional branches), `execution_plan`, and the ordinary pooled-call
-`memory_plan`. The last two fields reuse the existing human-readable plan reports;
-they are explanatory text, not serialized compiler IR. `outputs` lists the files
-published in the output directory. Compilation rejection returns
-`supported: false`, a diagnostic `reason`, an empty output list, and a nonzero exit
-status; existing output files remain unchanged. With both `--verbose` and `--json`,
-verbose diagnostics go to stderr so stdout remains valid JSON. Candidate-list
-JSON retains its existing array format.
-
-`supported` describes successful generation under the requested fallback policy.
-Integrations that require GPU work should select `--fallback error` and require
-`parallel_regions` greater than zero. The compiler proves each parallel region
-separately and preserves dependence order between kernels; callers should not
-require independent accesses across the entire entry.
-
-Runtime dependencies include `fparser` and **`islpy==2026.2.2`**. Generated C++ uses
-C++17; add `-fopenmp` to enable its verified OpenMP loops. Compile without that
-flag for serial execution of the same generated implementation. CUDA uses one
-kernel per accepted region and 256 threads per block. Axis order comes from the
-schedule; bounded grids use grid-stride iteration to cover larger domains. Empty
-domains skip the launch. CDU, CDV, and CDW each produce one CUDA kernel by default
-and four with `--opt-level 0`.
-
-## CLI and outputs
-
-```bash
-python -m compiler --input FILE --kernel NAME [options]
-```
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `--input`, `-i` | required | Fortran source file |
-| `--kernel`, `-k` | required except when listing | Entry subroutine or `module::name`, matched case-insensitively |
-| `--list-candidates` | off | Report each module procedure's generation eligibility; write no files |
-| `--json` | off | Machine-readable candidate list or generation result; verbose diagnostics use stderr |
-| `--output-dir`, `-o` | current directory | Destination directory |
-| `--cuda-output` | `generated_code.cu` | CUDA kernels and host C wrapper |
-| `--cpp-output` | `generated_cpp_impl.cpp` | C++ implementation with OpenMP annotations |
-| `--fortran-output` | `generated_interface.f90` | Original module/procedure interface using `iso_c_binding` |
-| `--common-header` | `common_functions.cuh` | Shared indexing, numeric, storage, and timing header |
-| `--no-common-header` | off | Use a separately supplied shared header |
-| `--opt-level {0,1}` | `1` | Enable proved scalar motion, fusion, and wide addressing; `0` retains source passes |
-| `--schedule {source,auto}` | `auto` at level 1, `source` at level 0 | Select axis ordering independently of fusion |
-| `--indexing {source,auto}` | `auto` at level 1, `source` at level 0 | Select source INTEGER addressing or statically proved wide subscripts independently of fusion and scheduling |
-| `--tile-sizes N[,N...]` | untiled | Positive tile sizes in scheduled fastest-to-slowest order; omitted axes use 1 |
-| `--fallback {error,host}` | `error` | Reject unproved regions or run them sequentially on the host |
-| `--gpu-policy {always,sections,auto,chunked,hybrid}` | `sections` with `--form-scopes`, otherwise `always` | Select the transfer and execution policy; source graphs accept sections/auto |
-| `--calibration-profile FILE` | none | Explicit reusable hardware calibration for automatic decisions |
-| `--memory-model {call,scoped}` | `scoped` with `--form-scopes`, otherwise `call` | Shared-buffer numerical entries; scoped requires sections/auto |
-| `--scope-transfers {direct,pinned,pipelined,auto,coalesced}` | `direct` | Scoped transfer choice, separate from CPU/GPU placement |
-| `--scope-execution graph` | `graph` with `--form-scopes` | Dependency-based ownership in original procedures; requires `--form-scopes` |
-| `--analyze-effects` | off | Bounded native source effects without requiring GPU lowering; writes no artifacts |
-| `--form-scopes` | off | Emit source task graphs, reusable original-module helpers, and source/build manifests |
-| `--scope-preflight` | off | With `--form-scopes`, report independent source/cost blockers without emitting scopes or artifacts |
-| `--scope-facts FILE` | none | Source-hash-bound capture, initialization, and caller facts; requires `--form-scopes` |
-| `--source-file FILE` | none | Additional effect-analysis source; repeat for separate modules |
-| `--effect-contracts FILE` | none | Versioned explicit contracts for opaque native calls; requires effect analysis |
-| `--summary-cache DIRECTORY` | memory only | Optional source-summary disk cache for effect/scope analysis |
-| `--host-threads N` | `4` | Total host thread budget, including hybrid GPU coordination |
-| `--gpu-collective` | off | Require every thread of one existing OpenMP team to call the entry |
-| `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, schedules, indexing decisions and reasons, region boundaries, scalar privacy, ISL relations, legality results, and memory operations |
-
-### Opt-in CPU/GPU policies
-
-`always` keeps the existing whole-array implementation. The alternatives apply
-to ordinary calls; explicit-session coherence is unchanged. `sections` copies
-physical rectangular read/write footprints synchronously, preserving separate
-opposite faces and values in partially written outputs. Unknown sections use
-whole-array transfers. Device storage retains the original logical layout.
-Contiguous sections use flat copies; pitched rectangles use 2D or 3D copies.
-An interior 3D rectangle takes one runtime copy call instead of one per plane;
-higher ranks use one 3D copy per remaining coordinate. Transfer estimates count
-these same calls. Disjoint faces stay separate and copyback never fills gaps.
-Overlapping sections are reduced to an exact disjoint union when worthwhile,
-with at most 32 rectangles and 1,024 intersection checks per array/direction.
-The same rectangles feed execution, cost estimates, and transfer traces.
-Without calibration, deduplication must reduce bytes without adding copy calls.
-With calibration, extra calls are allowed only when saved transfer time exceeds
-their latency cost. Ties, uncertain arithmetic, and excessive fragmentation
-retain the original rectangles; no bounding volume replaces holes or faces.
-
-For ordinary call-local entries, `auto` compares native units with GPU intervals of up to four adjacent units
-and the complete legal group. It retains units before optional fusion, respects
-source control flow and synchronization boundaries, and requires a modeled 20% advantage
-for GPU work. Dependent intervals execute in order, with host-visible outputs
-at interval boundaries. Missing, uncertain, overflowing, or incompatible cost
-estimates select native execution.
-Conditional work whose count is only an upper bound currently selects native
-execution as well; the compiler does not assume that every branch runs.
-Entries mixing empty and active units also retain the original native block:
-an empty unit can protect an undefined inner bound from the numerical value ABI.
-Scalar inputs used only inside conditional branches or potentially empty retained
-loops also keep the entry native, as do entirely unused scalar parameters. This
-conservative rule applies to the forced `sections` and `chunked` controls too:
-their numerical value ABI would otherwise read inputs that native execution can
-leave untouched. Conditional holes using constants, indices, or scalar inputs
-already required unconditionally remain supported.
-For `sections` and `auto`, entries with host preparation additionally admit
-local scalar assignments and host branches. Preparation may read scalar inputs,
-descriptors, and arrays proved unchanged throughout the entry. Selected GPU
-intervals retain their storage across these approved host nodes: inputs transfer
-once for the union of active physical sections, and written sections return
-before the following CPU interval. Host statements and branches still execute
-in source order; each worker receives its current local scalar values.
-
-The public query evaluates only the checked INTEGER/LOGICAL slice needed for
-predicates, bounds, and footprints. It checks integer intermediates and immutable
-array indices, preserves nested guards, and never computes numerical REAL setup.
-Definition-only queries with exact bounded effects omit unused placement-cost
-footprints while retaining checked domains, exact effects and ordered definition
-validation. The planning manifest reports `cost_footprints_prepared` per unit.
-REAL-dependent decision expressions, host array writes, preparation reading
-arrays written by the entry, and sequential fallback regions remain native.
-LOGICAL query conversion is permitted only for inputs unconditionally readable
-at entry. Structured queries prove that every live by-value scalar is consumed
-on their selected source path before accepting execution; unknown read coverage
-retains the original native call. Completely unused scalars receive typed zeros
-in the generated numerical bridge, preserving its public signature without
-reading the original argument. This structured proof can admit inactive branches
-alongside active kernels without exposing protected bounds. The original flat
-policy guard rules and chunked/hybrid eligibility remain unchanged.
-Public `offload.preparation` reports eligibility and reasons; decision traces
-include `FORT_OFFLOAD_ACTIVE` with the ordered original region identities.
-GPU intervals execute on the device checked during selection, restoring the
-executing host thread's previous device afterward.
-
-These prototypes currently retain unfused source units. The default whole-array
-path retains normal compiler fusion, so comparisons can differ in kernel count
-as well as transferred bytes.
-
-`chunked` provides an asynchronous GPU-only control. `hybrid` additionally
-selects a CPU/GPU split from fixed candidates using the same calibration. Only
-entries with proven independent slabs across all grouped kernels qualify;
-immutable input halos are allowed. Two pinned/device slots and non-default
-streams keep upload, computation, and download ordered per slot. The initial
-total pinned-memory budget is 64 MiB. Hybrid reserves one host thread to manage
-GPU work, while remaining workers process disjoint CPU slabs. All work and
-copyback complete before return. Cross-entry residency and dependent chunk
-pipelines remain outside these prototypes.
-The runtime retains one completed pair of slots, streams, and events between
-calls, reusing sufficient capacity on the same device. Inputs are packed and
-uploaded afresh on every call, including after host edits, shape changes, or
-reallocation. This is scratch reuse, not cross-entry data residency. Concurrent
-calls lease separate pairs; active and idle pinned capacity together remain
-within the process-wide 64 MiB budget shared with scoped pinned transfers. In-progress
-allocations also reserve their capacity. An incompatible idle pair is evicted before allocating or waiting
-for budget. Allocation failure before execution selects native work once.
-`FORT_RUNTIME_TRACE=1` reports `scratch_reuse` and its retained capacity.
-Compact slabs retain
-their complete nonslab dimensions; uploads preserve untouched halo elements
-that share those slabs. Synchronous section transfers can omit uploads of
-rectangles proved to be completely overwritten.
-
-Create calibration independently of any application:
-
-```bash
-python -m compiler.offload.calibrate --output hardware.json \
-  --threads 4 --precision 64 --cuda-host-cxx g++-14
-python -m compiler --input ordinary.f90 --kernel advance --output-dir out \
-  --gpu-policy auto --calibration-profile hardware.json --host-threads 4 --json
-```
-
-Calibration records launch, transfer, and packing costs, CPU/GPU compute and
-memory rates, and CPU worker rates with the coordination thread reserved.
-Runtime compatibility requires the calibrated CPU model, GPU UUID/compute
-capability, GCC and NVCC version triples, CUDA runtime/driver versions, precision,
-and thread budget. Unrecognized toolchain identity disables automatic selection.
-No application profile or online timing tunes decisions.
-Throughput is an approximation measured with the recorded calibration build
-flags (`-O3` and host `-fopenmp`, matching the supplied benchmark workers).
-Different application flags and instruction mixes can change realized
-rates; retain the recorded flags and validate complete application time before
-promoting a policy.
-
-Non-default JSON includes an `offload` contract with analysis availability,
-physical footprints, work and launch estimates, eligible intervals/strategies,
-and a `native_fallback_query` name. Integrations import that generated Fortran
-logical function and pass the original arguments only after allocation checks
-and collective synchronization. A false result executes the original native
-block and is a successful policy decision. The compiler owns placement and
-scheduling; callers need not inspect compiler IR or CUDA text. Query scalar
-arguments use references so guarded inner bounds are read only when needed.
-Callers with protected inputs must honor a false query and execute their original
-native block rather than call the numerical entry directly.
-`FORT_OFFLOAD_TRACE=1` records placement decisions separately from CUDA activity;
-disable tracing and phase profiling for timing and overlap measurements.
-
-REAL precision is resolved from declarations rather than the spelling of a kind
-name. The target kind model supports `REAL(4)`, `REAL(8)`, default `REAL`,
-`DOUBLE PRECISION`, INTEGER parameter aliases and arithmetic, and `KIND` of
-numeric or logical literals.
-Intrinsic `iso_fortran_env` (`real32`, `real64`) and `iso_c_binding` (`c_float`,
-`c_double`) kind imports are recognized, including `ONLY` renames. Unknown or
-unsupported kinds are rejected. Local INTEGER kind parameters are allowed, but
-general constant folding and external module resolution remain unsupported.
-
-The ABI preserves the original dummy argument order, public names, and
-`cpp_<procedure>` C symbol. Array extents follow their array pointer in dimension
-order. The generated bridge keeps `knd` mapped to binary64 and retains
-`start_hot`/`finish_hot` timing hooks. The C timing exports are
-`cpp_<procedure>_start_hot` and
-`cpp_<procedure>_finish_hot`; the public Fortran hook names remain unchanged.
-Numerical CUDA kernels have translation-unit-local linkage, so independently
-generated entries link without adapter-side symbol rewriting.
-Profiling starts disabled: `start_hot` resets and enables collection, and
-`finish_hot` reports and disables it. Ordinary
-execution creates no profiling events or phase-by-phase profiling barriers.
-Profiled public CUDA calls serialize through a shared profiling lock. Unprofiled
-calls do not take that lock. The timing hooks delimit quiescent batches: start
-profiling before starting concurrent callers and join them before finishing it.
-`calls` counts entry runs, including empty and host-only runs; `kernel_launches`
-counts actual launches. Kernel time excludes host execution and transfers.
-These three public names are reserved for that generated API. All sources are generated and validated before destination
-files are written; an unsupported or unsafe input leaves existing outputs intact.
-
-The ordinary CUDA wrapper creates private owned state, uploads `intent(in)` and
-`intent(inout)` data, executes the memory plan, downloads outputs, and releases the
-state on each call. Ordinary calls do not use the session token registry, so
-independent concurrent callers have independent storage. Ordinary calls remain
-synchronous and host-visible. On supported CUDA devices, a private memory pool
-reuses device allocation backing across calls; each call still transfers fresh
-inputs and outputs. `USE_PINNED_MEMORY`
-enables optional pinned-memory support. Host array reads and writes between launches synchronize affected arrays:
-a read sees previous device updates, and a partial host write preserves other
-device-produced cells before uploading the changed array. Array-valued launch
-bounds and strides also see previous device writes. These extra transfers are
-included in timing hooks. Unwritten `intent(inout)` cells are preserved. Unwritten portions of
-`intent(out)` arrays have no promised values.
-
-## Memory planning and runtime
-
-Shared ownership extends call-local transfers to shared buffers and section
-coherence across GPU entries and native CPU operations. The common runtime and
-source task graphs are opt-in features. Their public interfaces and supported
-boundaries are described below; eligibility alone does not establish a GPU
-speedup in a complete application.
-
-`compiler.memory.plan_memory(plan, parameters, *, acquisition_policy=None)` derives immutable acquisition,
-caller uploads/downloads, host/device access, execution, write-invalidation, synchronization, and release
-operations from an execution plan. It preserves conditional branches, counts
-predicate and array-valued launch-bound reads, and requests current contents before
-partial writes. `format_memory` describes these operations independently of
-emission. Host/device access operations represent conditional transfers: a storage
-runtime decides whether its current ownership state requires a copy.
-Explicit uploads/downloads always transfer the selected caller arrays. Before
-emission, `validate_memory` checks operation payloads, phase placement, array
-ownership, and complete acquisition, input upload, output retrieval, and release.
-Unsupported operations fail instead of being silently skipped.
-Acquisition policy is `dedicated` or `pooled`; omitted metadata preserves dedicated
-allocation. Default generation supplies dedicated session plans and pooled ordinary
-CUDA plans. Explicit `generate_cuda(..., memory=...)` plans remain authoritative
-for both APIs unless `ordinary_memory=` supplies a separate ordinary lifecycle.
-Helpers are shared only when their operation sequences match.
-
-`runtime/storage.hpp` provides owned fixed-shape CPU/CUDA buffers, lazy CUDA host
-mirrors, selective updates, checked extent/byte products, scoped pinned-memory
-registration, and a registry that diagnoses invalid or stale tokens. Buffers retain
-no caller pointers. `runtime/allocation.hpp` owns dedicated and pooled CUDA
-allocations separately from coherence state; `runtime/timing.hpp` contains opt-in
-profiling. These units are assembled into the existing support header and tested
-with instrumented CUDA calls.
-
-Emission renders every lifecycle operation, including synchronization without an
-array payload. State starts with empty buffer slots and fixed extent metadata;
-planned acquisition constructs buffers and planned release destroys them, with
-RAII as a cleanup backstop. Shared state helpers implement ordinary CUDA calls
-and explicit sessions; the registry only owns states and validates tokens.
-Host statements, branches, fallback regions, and array-valued launch bounds share
-the coherence path. CPU sessions consume the same memory operations with both
-address spaces mapped to owned host buffers; ordinary C++ calls use direct lowering.
-Verbose output displays the
-memory operations for both lifecycles; `FORT_RUNTIME_TRACE=1` logs successful GPU
-allocation requests, transfers, kernel launches, and releases, with additional
-events identifying pool operations. Allocation-request counts do not measure
-physical backing allocations: native pool requests still occur on warm calls.
+## Shared residency runtime
 
 ### Shared memory runtime foundation
 
@@ -559,7 +311,7 @@ sections into reusable pinned staging, copies against the existing full-layout
 device buffers, waits for completion, and unpacks only downloaded sections.
 Logical indices and array pitches are unchanged. This control is synchronous;
 it does not claim transfer/kernel overlap. Two staging slots, streams and events
-share the ordinary chunked/hybrid pool's 64 MiB pinned budget, including active,
+share the common staging pool's 64 MiB pinned budget, including active,
 allocating and cached storage. A scoped copy acquires a short lease without
 waiting for another caller to release budget, and releases it before native
 procedure execution. A pre-copy resource failure uses direct transfers with an
@@ -585,39 +337,11 @@ preparation, row packing and event costs. Older profiles remain valid for direct
 execution and cannot supply missing transfer costs. Default direct placement
 keeps its existing costs and behavior.
 
-`pipelined` admits complete GPU subchains with a common, source-proven independent
-slab partition. Two slots each enqueue upload, all subchain kernels, required
-download and a completion event in that order on non-default streams. Reusing
-a slot waits for its event and unpacks only its exact written output sections.
-The executor retains full device-array layouts, original logical bounds and
-pitches. Ordered definitions determine incoming reads: a GPU-produced
-intermediate is never uploaded from undefined or stale host storage. Immutable
-inputs with overlapping chunk reads have their exact required union established
-on the device before any batch kernel; subsequent slot uploads exclude them.
-
-Batch sizes come from the existing 256 KiB, 1 MiB, 4 MiB and 16 MiB payload
-candidates using offline costs, including packing row overhead, resource
-preparation, launches, completion events and pipeline fill/drain. Transfer
-`auto` requires a modeled 20% advantage over the corresponding synchronous
-transfer execution. Placement remains a separate decision; pipelining cannot
-create a GPU placement that the conservative placement planner rejected.
-Missing or incompatible calibration and unsupported slab proofs retain direct
-execution with a public reason. Resources are acquired before numerical work;
-an unapplied batch leaves the ordinary schedule available, and an error after
-work starts forbids replay. One batch can be active per context, and both slots
-complete before returning to a native boundary.
-
-The additive batch interface publishes eligibility, selected payload and chunk
-count, preparation work, modeled execution and terminal-cost change, and actual
-completed transfers and launches. A complete-owner estimate becomes unavailable
-when changed batch publication has not been repriced; direct estimates are not
-reported as if they described pipelined execution. Initial source integration
-uses direct numerical leaves in one reached straight-line segment. Native
-operations, mutable control boundaries, unsupported wrappers, uncertain aliases
-and cross-chunk dependencies retain synchronous execution. This eligibility is
-not overlap or speed evidence: use separate Nsight diagnostics with the
-synchronizing phase timer disabled and measure complete application wall time
-before promoting a policy.
+The old `pipelined` slab-batching switch is retired. Production graph generation
+does not enumerate the old four-unit intervals, even when transfer mode is
+`auto`; numerical work uses the complete checked graph and common command queue.
+The slab executor and its analyses remain private historical reference machinery
+pending final deletion, and cannot become a production fallback.
 
 The additive `fort_scope_set_transfers` metadata operation configures a context
 before registration/planning and initializes no CUDA resources. Generated
@@ -625,11 +349,8 @@ interfaces publish a `configure(context)` helper, and nondefault source owners
 call it once before planning. Standalone callers use the public helper before
 adding query operations. Complete pinned costs are installed by the additive
 `fort_scope_set_transfer_costs_v1` after host/toolchain compatibility checks;
-GPU identity is still checked before a GPU selection executes. The versioned
-`fort_scope_batch_execute_v1` provides a metadata-only preview and a
-synchronous-on-return pipelined executor. Its callbacks receive original
-full-array views and the slot stream, and must not call context APIs while the
-executor owns that context. `fort_scope_transfer_stats_get_v1` reports requested
+GPU identity is still checked before a GPU selection executes. The historical `fort_scope_batch_execute_v1` runtime interface is retained for
+reference fixtures; production source generation does not emit calls to it. `fort_scope_transfer_stats_get_v1` reports requested
 and effective modes, fallback reasons, exact packing/transfer counts, staging
 reuse, capacity and event statistics without changing the original stats ABI.
 The runtime manifest describes the shared budget and supported modes. Common
@@ -644,11 +365,19 @@ python -m compiler --input input.f90 --kernel advance --gpu-policy sections \
   --memory-model scoped --json --output-dir out/scoped-entry
 ```
 
-The additional shared CUDA source and Fortran interface are identified by public
-JSON, including argument order, array types, execution modes, and runtime build
-artifacts. Independently generated entries link one common runtime and borrow
-handles registered by their caller. Existing ordinary and owned-session outputs
-are preserved. Shared entries require read-only scalar parameters and default to
+Scoped numerical generation publishes artifact schema 2: `shared_entry.cu`,
+`shared_interface.f90`, the common header, and runtime artifacts. Its JSON lists
+only the shared-entry and common-runtime build sources, including argument order,
+array types and execution modes. It does not generate an additional ordinary
+CUDA/C++ backend, owned-session interface, or ordinary fallback query. The
+`--cuda-output`, `--cpp-output` and `--fortran-output` switches are retired and
+rejected before publication. Consumers of old
+combined packages must regenerate; use `build_sources` rather than directory
+globbing, which can pick up unrelated or historical files. Runtime and shared
+entry ABIs are unchanged by this artifact-format change.
+
+Independently generated shared entries link one common runtime and borrow
+handles registered by their caller. They require read-only scalar parameters and default to
 a serial coordinator. Native, forced GPU, and calibrated automatic execution are
 available. Planning ABI version 1 exports side-effect-free `plan` queries and a
 `choose` selector. Queries record physical effects and checked control values;
@@ -2288,6 +2017,21 @@ and runs the original team once; fatal acquisition or execution errors abort.
 This path uses version 2 source-task records and remains explicit-sections-only;
 it adds no SECTIONS, cross-unit dependence or private-state support.
 
+Caller-owned resident entry export groups adjacent serial counted-loop nests
+inside one original control region. Calls, scalar assignments, branch boundaries
+and OpenMP constructs separate these groups. Extraction authenticates consecutive
+original siblings, so selecting multiple loops cannot omit intervening effects.
+There is no loop-count cutoff in this extraction path. Each group retains its
+source loop spans in the version-2 export record; dependence analysis orders its
+passes and independently proves any fusion. Residency still belongs to the
+caller-owned domain, not the exported entry.
+Fusion also handles ascending constant-width intervals with different origins
+by reconstructing the second iterator from the first interval's ordinal. The
+complete translated body must pass the usual dependence proof, including
+anti- and output dependencies. Explicit scoped `sections` placement now honors
+`--opt-level 1`; it no longer silently disables fusion. `--opt-level 0` retains
+source passes for diagnostics.
+
 Supported numerical groups are a combined `PARALLEL DO`, or one flat `PARALLEL` containing
 up to 32 complete numerical worksharing `DO` units. The latter preserves every
 original worksharing directive, barrier and `END DO NOWAIT` in the native
@@ -2667,85 +2411,6 @@ definition kills follow admission, before the external access transaction.
 Rejected preconditions retain the native call; a failure after submission must
 not replay it. This contract supplies neither alias nor lifetime evidence, and
 calls without it retain their previous generated records and behavior.
-
-### Ordinary CUDA allocation reuse
-
-Ordinary CUDA calls acquire exclusive allocations from a lazily created private
-pool for the calling thread's current device. Generated entries share the pool,
-but each call constructs fresh buffer state, shapes, and coherence flags. Host
-mirrors and caller pointers are never cached. Explicit workspaces retain dedicated
-allocations. Neither the application's current/default pool nor CPU allocation
-behavior is changed.
-
-`FORT_CUDA_POOL_BYTES` sets the pool release threshold in unsigned decimal bytes;
-the default is `268435456` (256 MiB) per device. The setting is read once on first
-pool use. `0` disables reuse and restores ordinary `cudaMalloc`/`cudaFree` behavior,
-allowing comparisons with the same generated binary. Invalid or overflowing values
-are diagnosed. The threshold is a retention target, not a hard memory limit;
-newly freed memory can remain above it until another synchronization. Pooling is
-independent of optimization level, schedules, and indexing mode. Toolkits before
-CUDA 11.2, incompatible drivers, and devices without pool support use dedicated
-allocation; other CUDA failures are not hidden by fallback.
-
-Allocation uses `cudaMallocFromPoolAsync` on the existing default stream. Planned
-destruction synchronizes before `cudaFree`, so completed storage can be reused
-without adding a final asynchronous-free barrier. Exceptional pooled-buffer
-cleanup synchronizes before freeing. Zero-sized buffers do not initialize a pool.
-
-Each generated module also exports `<entry>_trim_cache()` (with the same collision
-and length handling as workspace names). After joining ordinary callers, call it
-to destroy this runtime's private pool and release any idle chunked/hybrid
-scratch slots on the current device. The next ordinary call recreates resources
-as needed. It diagnoses outstanding pooled leases and is a no-op
-for CPU implementations and absent pools. Sessions remain valid and no outputs
-are retrieved. Release the cache before device reset, external context teardown,
-or unloading generated code; the runtime performs no CUDA work in static
-destructors. Pools otherwise remain available until process termination.
-
-Profiling includes allocation/release requests and lazy pool setup under the
-existing timing labels. `start_hot` and `finish_hot` do not clear the cache.
-Measure cold and warm calls separately; use pool backing statistics or an
-instrumented allocator to verify reuse, and wall-clock timings to measure its
-effect. Unprofiled calls create no profiling events or profiling barriers.
-
-## Persistent workspaces
-
-Each entry gains an additive workspace API. For example, the CDU module exports:
-
-```fortran
-type(CDU_workspace) :: work
-call CDU_create(work, U2, U, V, W)
-do iteration = 1, niter
-  call CDU_run(work, dxmin, dymin, dzmin, NX, NY, NZ)
-end do
-call CDU_update_host(work, U2=U2)
-call CDU_destroy(work)
-```
-
-`create` takes all original arrays in dummy order, owns fixed-shape storage,
-and copies only `in`/`inout` data. `run` takes the original scalar arguments in
-dummy order. Neither retains caller addresses. `update_device(work, U=U)`
-publishes a complete replacement for a selected slot; `update_host` retrieves
-selected slots. Both accept optional array keywords, require matching shapes,
-and complete borrowed-pointer transfers before returning. Ordinary host writes
-are not automatically visible to resident execution.
-
-CUDA runs may enqueue work on the default stream. Updates, destruction, and
-profiling boundaries synchronize. Host blocks and fallback use lazy owned host
-mirrors and the same coherence plan. C++ implements the same API using owned
-host buffers, allowing the Fortran module to link with either backend.
-
-Workspaces use validated opaque tokens. Assignment aliases a session; destroying
-one alias invalidates the others. Creating into a live workspace and using stale
-tokens are errors. Destroying an empty workspace is a no-op and does not retrieve
-outputs. There is no automatic finalizer. Sessions are per entry, fixed-shape,
-and exclude concurrent use or cross-entry buffer sharing. Long/colliding API names
-receive deterministic shortened names in the generated interface.
-
-Profiling starts disabled. `start_hot` synchronizes, clears measurements, and
-enables recording; `finish_hot` synchronizes, prints the existing timing summary,
-and disables recording. `FORT_RUNTIME_TRACE=1` separately logs successful CUDA
-allocations, transfers, launches, and releases to stderr for validation.
 
 ## Supported Fortran subset
 
@@ -3259,6 +2924,11 @@ operations retain their order. Fresh analysis must prove that combining the bodi
 introduces no conflicts between parallel iterations; shifted RAW, WAR, or WAW
 conflicts keep the passes separate. Conservative non-affine models may prevent
 fusion even when each original region is independently legal.
+
+A temporary reused by successive passes does not prevent fusion when the
+second pass's existing private-scalar proof establishes a definition before
+every per-iteration read and no escaping value. The merged body is still checked
+again. Carried values, live-out scalars and array dependences remain barriers.
 
 Intervening scalar setup can move before the first pass only when its inputs are
 available and unchanged and its destinations are unused by the crossed loop. Array

@@ -9,14 +9,14 @@ from types import SimpleNamespace
 import pytest
 
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources
+from compiler._legacy.emission import generate_sources
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.emission.common.sessions import _preserve_numerical_environment, session_names
 from compiler.emission.cuda.batch import attempt_helper, window_worker
 from compiler.emission.cuda.generator import _numerical_environment_guard
 from compiler.emission.cuda.scoped import generate_scoped
 from compiler.frontend import lower_file
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.tests.test_scoped_planning_entries import calibration
 
 
@@ -145,6 +145,8 @@ def test_flagged_scoped_preserves_effect_queries_and_forced_gpu_but_declines_cos
 
 @pytest.mark.parametrize("collective", [False, True])
 def test_graph_flagged_heuristic_retains_unpriced_provenance_and_prework_guards(tmp_path, collective):
+    from compiler.offload.config import OffloadConfig
+
     function, plan = prepared(tmp_path)
     scoped = generate_scoped(function, plan,
         OffloadConfig(policy="auto", profile=calibration(), collective=collective), "common.cuh",

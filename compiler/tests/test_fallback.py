@@ -6,7 +6,7 @@ from dataclasses import replace
 import pytest
 
 from compiler.analysis import ParallelizationError, build_execution_plan
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.ir import CompilationError, ParallelRegion, SequentialRegion
 from compiler.tests.test_language import compile_cuda_sources, lower, run_reference_and_cpp
 from compiler.tests.test_native import cuda_device as cuda_device
@@ -97,7 +97,7 @@ def test_internal_failures_do_not_trigger_fallback(tmp_path, monkeypatch):
 @pytest.mark.parametrize("backend", ["serial", "openmp", "cuda-simulated"])
 def test_runtime_strides_empty_nests_and_partial_fallback_writes(tmp_path, monkeypatch, backend):
     from compiler.driver.pipeline import prepare_function
-    from compiler.emission import generate_sources
+    from compiler._legacy.emission import generate_sources
     from compiler.tests import test_language as language
     from compiler.tests.test_language_cuda import CUDA_RUNTIME
 
@@ -178,7 +178,7 @@ def test_fallback_cli_publishes_only_valid_source(tmp_path, valid_source):
     if valid_source:
         assert result.returncode == 0, result.stderr
         assert "sequential host fallback" in result.stdout
-        assert (output / "generated_code.cu").read_text().count("__global__ void") == 2
+        assert (output / "shared_entry.cu").read_text().count("__global__ void") == 2
     else:
         assert result.returncode != 0
         assert "read before" in result.stderr

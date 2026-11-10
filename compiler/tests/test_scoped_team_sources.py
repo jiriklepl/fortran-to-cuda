@@ -62,10 +62,10 @@ end module
 '''
 
 
-def emit(tmp_path, source=SOURCE, *, collective=True, profile=None, threads=4):
+def emit(tmp_path, source=SOURCE, *, collective=True, profile=None, threads=4, opt_level=1):
     path = tmp_path / "source.f90"
     path.write_text(source)
-    function, plan = prepare_function(lower_file(path, "advance"), options=CompilerOptions(gpu_policy="sections"))
+    function, plan = prepare_function(lower_file(path, "advance"), options=CompilerOptions(opt_level=opt_level, gpu_policy="sections"))
     return generate_scoped(function, plan, OffloadConfig("sections", profile, threads, collective),
                            "common_functions.cuh", runtime_id=read_scoped_runtime()[1]["runtime_id"])
 
@@ -160,7 +160,8 @@ def test_nested_branch_choices_use_distinct_shared_fields(tmp_path):
 
 
 def test_protected_scalar_is_borrowed_and_only_guarded_worker_remains_native(tmp_path):
-    emission = emit(tmp_path, PROTECTED_SOURCE)
+    # Preserve the mixed native/GPU sequence this protocol check exercises.
+    emission = emit(tmp_path, PROTECTED_SOURCE, opt_level=0)
     assert emission.report["region_execution"][0]["protected_scalars"] == ["protected"]
     text = team_text(emission)
     assert "const double &protected = *fort_scalar_protected" in text
@@ -170,6 +171,20 @@ def test_protected_scalar_is_borrowed_and_only_guarded_worker_remains_native(tmp
     assert "const volatile double &protected" in re.sub(r"fort_v\d+_", "", emission.cuda)
     state = state_text(emission)
     assert "protected" not in state
+
+
+def test_value_scalar_can_be_captured_before_a_conditional_gpu_write(tmp_path):
+    source = PROTECTED_SOURCE.replace("real(8),intent(in)::protected", "real(8),value,intent(in)::protected")
+    emission = emit(tmp_path, source, collective=False)
+    assert all(r["gpu_available"] for r in emission.report["region_execution"])
+    assert not emission.report["region_execution"][0]["protected_scalars"]
+    assert emission.report["entry_abi_version"] == 3
+    parameter = next(p for p in emission.report["scalar_parameters"] if p["name"] == "protected")
+    assert parameter["passing"] == "value"
+    text = re.sub(r"fort_v\d+_", "", serial_text(emission))
+    assert "const double fort_value_protected" in text
+    assert "fort_scalar_protected" not in text
+    assert "intent(in), value ::" in emission.fortran
 
 
 def test_serial_calibration_cannot_enable_collective_automatic_estimates(tmp_path):

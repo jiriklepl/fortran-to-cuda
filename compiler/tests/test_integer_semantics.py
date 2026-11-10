@@ -10,9 +10,10 @@ import pytest
 
 from compiler.analysis import build_execution_plan
 from compiler.analysis.semantics import constant_integer as stage_constant_integer
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.emission.common.c_family import render_expression
 from compiler.frontend import lower_file
 from compiler.ir import (

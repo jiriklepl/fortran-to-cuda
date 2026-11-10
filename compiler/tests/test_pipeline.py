@@ -27,21 +27,19 @@ def test_invalid_optimization_level_is_rejected(opt_level: int) -> None:
 
 
 @pytest.mark.parametrize("transfers", ["pinned", "coalesced"])
-def test_nondefault_scope_transfers_require_explicit_scoped_ownership(transfers):
+def test_default_generation_uses_scoped_transfer_ownership(transfers):
     from compiler.emission import generate_sources
-    from compiler.ir import CompilationError
     from compiler.offload.config import OffloadConfig
 
-    with pytest.raises(CompilationError, match="require scoped memory"):
-        CompilerOptions(gpu_policy="sections", scope_transfers=transfers)
-    options = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_transfers=transfers)
-    function, plan = prepare_function(lower_file(Path(__file__).parent / "fixtures" / "fill_array.f90", "fill_array"),
+    options = CompilerOptions(scope_transfers=transfers)
+    assert options.memory_model == "scoped"
+    function, plan = prepare_function(lower_file(Path(__file__).parent / "fixtures/fill_array.f90", "fill_array"),
                                      options=options)
-    with pytest.raises(CompilationError, match="require scoped memory"):
-        generate_sources(function, plan, offload_config=OffloadConfig("sections", scope_transfers=transfers))
+    generated = generate_sources(function, plan, offload_config=OffloadConfig(scope_transfers=transfers))
+    assert generated.scoped["transfer_configuration"]["requested"] == transfers
 
 
-def test_invalid_scope_transfer_combination_preserves_public_outputs(tmp_path):
+def test_removed_call_mode_preserves_public_outputs(tmp_path):
     output = tmp_path / "generated"
     output.mkdir()
     expected = {name: f"original {name}" for name in OUTPUT_FILES}
@@ -49,16 +47,11 @@ def test_invalid_scope_transfer_combination_preserves_public_outputs(tmp_path):
         (output / name).write_text(text)
     result = subprocess.run([
         sys.executable, "-m", "compiler", "--input",
-        str(Path(__file__).parent / "fixtures" / "fill_array.f90"), "--kernel", "fill_array",
-        "--output-dir", str(output), "--gpu-policy", "sections", "--scope-transfers", "pinned", "--json",
+        str(Path(__file__).parent / "fixtures/fill_array.f90"), "--kernel", "fill_array",
+        "--output-dir", str(output), "--memory-model", "call", "--json",
     ], cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
-    import json
-
     assert result.returncode != 0
-    report = json.loads(result.stdout)
-    assert not report["supported"]
-    assert report["outputs"] == []
-    assert "require scoped memory" in report["reason"]
+    assert "ordinary-call generation was removed" in result.stderr
     assert {path.name: path.read_text() for path in output.iterdir()} == expected
 
 

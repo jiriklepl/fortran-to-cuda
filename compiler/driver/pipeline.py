@@ -13,16 +13,18 @@ def prepare_function(
     function: FunctionIR, *, options: CompilerOptions | None = None
 ) -> tuple[FunctionIR, ExecutionPlan]:
     options = options or CompilerOptions()
-    # Runtime partitions need the original legal unit boundaries. The default
-    # compiler path retains its existing checked fusion and scalar motion.
+    # Explicit scoped placement executes the checked numerical graph, including
+    # legal fusion. Its entry/replica lifetime does not depend on source passes.
+    # Calibrated legacy partitions still price their original units.
     graph_report = ()
     if options.scope_execution == "graph" and options.opt_level:
         from compiler.transforms.task_motion import order_function_tasks
 
         function, ordered = order_function_tasks(function, options=options)
         graph_report = ordered.reports
-    preparation = (replace(options, opt_level=0)
-                   if options.gpu_policy != "always" and options.scope_execution != "graph" else options)
+    explicit_scoped = options.memory_model == "scoped" and options.gpu_policy == "sections"
+    preparation = (replace(options, opt_level=0) if options.gpu_policy != "always"
+                   and options.scope_execution != "graph" and not explicit_scoped else options)
     function, plan = optimize_function(function, options=preparation)
     if graph_report:
         plan = replace(plan, reports=(*graph_report, *plan.reports))

@@ -44,7 +44,19 @@ int main(int argc,char **argv) {
     if(mode=="graphs_off") setenv("FORT_SCOPE_CUDA_GRAPHS","0",1);
     if(mode=="long_mirrors" || mode=="pressure") setenv("FORT_SCOPE_QUEUE_TEST_BUDGET","192",1);
     Fixture f;
-    if(mode=="trace_origins") {
+    if(mode=="stable_parameters") {
+        for(int round=0;round<6;++round) {
+            if(round==3) f.add=4;
+            if(round==4) f.tasks[0].kernel.grid[0]=2;
+            if(round==5) f.rebind();
+            chain(f);
+            if(round==5) f.observe(f.other); else f.observe(f.out);
+            const auto *out=round==5?f.host_other:f.host_out;
+            for(int i=0;i<8;++i) assert(out[i]==3*(i+(round<3?2:4)));
+            const auto updates=f.graph().parameter_updates;
+            assert(updates==(round<3?0u:unsigned(round-2)));
+        }
+    } else if(mode=="trace_origins") {
         double *other=nullptr;
         fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,f.host_other,f.extent,f.lower,1};
         check(fort_scope_register(f.context,4,1,&layout,0,&f.other));
@@ -336,7 +348,7 @@ def cuda_queue_executable(tmp_path_factory):
 @pytest.mark.cuda
 @pytest.mark.parametrize("mode", ["owned", "repeated", "selective", "war", "queue_off", "graphs_off",
                                  "resource_fallback", "launch_failure", "mirrors", "host_mirror", "long_mirrors", "pressure",
-                                 "plan_suffix", "entry_observe", "entry_failure"])
+                                 "plan_suffix", "entry_observe", "entry_failure", "stable_parameters"])
 def test_deferred_real_cuda_queue(cuda_queue_executable, mode):
     result = subprocess.run([str(cuda_queue_executable), mode], capture_output=True, text=True, timeout=20)
     if result.returncode == 77:

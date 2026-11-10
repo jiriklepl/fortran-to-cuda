@@ -1,4 +1,4 @@
-"""Complete effects for one unchanged native CALL, independent of future work.
+"""Complete effects for unchanged native CALLs and whole joined groups.
 
 Numeric arrays require ordinary coherent host transactions. All other external
 storage requires an opaque physical reservation, including scalar state and
@@ -8,7 +8,7 @@ the CALL executes. No definitions, device work or task motion are authorized.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 
 from compiler.frontend.native_completion import native_call_storage_structures
 from compiler.frontend.native_opaque_writes import _prerequisites, _require_prerequisites
@@ -16,7 +16,7 @@ from compiler.frontend.resource_reachability import _authenticate_binding, _dige
 from compiler.frontend.storage_mutation_effects import prove_storage_mutation_effects, source_registry_budget
 from compiler.ir import CompilationError
 
-VERSION = 1
+VERSION = 2
 _ISSUER = object()
 _REGISTRY = "_native_call_effects"
 _UNSTABLE = {"pointer", "optional", "volatile", "asynchronous", "value", "codimension"}
@@ -29,18 +29,33 @@ def _require_complete(reachability):
             dict.fromkeys(item.reason for item in reachability.barriers)))
 
 
-def _project(analysis, procedure, reachability, storage):
+def _project(analysis, procedure, reachability, storage, *, completion=None):
     _require_complete(reachability)
     graph = reachability.native_graph
     record = storage.public()
     if not record["complete"] or record["frontiers"] or record["mutations"] or record["escapes"]:
         raise CompilationError("native CALL requires stable storage without escapes")
     owner = analysis._require_original(procedure).scope
+    private = set()
+    if completion is not None:
+        from compiler.frontend.descriptor_teams import DescriptorTeamProof
+
+        selected = analysis._selected_source(procedure, reachability._selection)[1]
+        completion.validate(analysis, procedure, selected)
+        structures = storage._joined_storage if type(storage._joined_storage) is tuple else (storage._joined_storage,)
+        teams = [team for team in structures if type(team) is DescriptorTeamProof
+                 and team.procedure == procedure and team.selected_node_ids == selected]
+        if completion._graph is not graph or len(teams) != 1:
+            raise CompilationError("native host group requires its original joined completion and storage")
+        teams[0].validate(analysis, procedure, selected)
+        private.update(teams[0].public()["private_bindings"])
     callees = {id(template._routine.scope): template._routine for template in graph.templates
                if template._routine.scope is not owner}
     paths, bindings = {}, {}
     for access in reachability.accesses:
         binding = access.storage.binding
+        if binding.root in private:
+            continue  # Thread-private storage cannot become a caller reservation.
         callee = callees.get(id(binding.declaring_scope))
         if (callee is not None and callee.scope.bindings.get(binding.name) is binding
                 and binding.name not in callee.arguments and "save" not in binding.attributes):
@@ -53,7 +68,16 @@ def _project(analysis, procedure, reachability, storage):
         bindings[id(binding)] = binding
         paths.setdefault(id(binding), []).append(access)
     result = []
-    if not storage.descriptors_unchanged(tuple(binding.root for binding in bindings.values())):
+    # A joined body can name fixed record fields without passing or querying
+    # the enclosing array. The storage scanner then records those exact paths,
+    # whereas the runtime reserves their common physical allocation. Consume
+    # every recorded field path; do not invent a whole-object descriptor fact.
+    storage_resources = set(record["resources"])
+    descriptor_resources = tuple(dict.fromkeys(
+        resource for key, binding in bindings.items()
+        for resource in ((binding.root,) if binding.root in storage_resources else
+                         tuple(access.storage.resource for access in paths[key]))))
+    if not storage.descriptors_unchanged(descriptor_resources):
         raise CompilationError("native CALL changes a reserved descriptor")
     for key, binding in bindings.items():
         accesses = paths[key]
@@ -82,7 +106,7 @@ def _project(analysis, procedure, reachability, storage):
 
 
 @dataclass(frozen=True)
-class NativeCallEffects:
+class NativeHostEffects:
     identity: str
     procedure: str
     resources: tuple = field(repr=False, compare=False)
@@ -92,11 +116,20 @@ class NativeCallEffects:
     _selection: tuple = field(repr=False, compare=False)
     _prerequisites: tuple = field(repr=False, compare=False)
     _issuer: object = field(repr=False, compare=False)
+    completion: object = field(default=None, repr=False, compare=False)
+    sections: object = field(default=None, repr=False, compare=False)
+
+    @property
+    def storage_structures(self):
+        storage = self.storage._joined_storage
+        return storage if type(storage) is tuple else (storage,)
 
     def validate(self, analysis, procedure, selection):
+        from compiler.frontend.native_sections import NativeSections
+
         attached = tuple((part.name, object.__getattribute__(self, part.name)) for part in fields(self))
         registry = getattr(analysis, _REGISTRY, None)
-        if (type(self) is not NativeCallEffects or self._issuer is not _ISSUER
+        if (type(self) is not NativeHostEffects or self._issuer is not _ISSUER or not isinstance(self.sections, NativeSections)
                 or analysis is not self._analysis or procedure != self.procedure
                 or type(selection) is not tuple or len(selection) != len(self._selection)
                 or any(a is not b for a, b in zip(selection, self._selection, strict=True))
@@ -112,10 +145,14 @@ class NativeCallEffects:
                 or any(a is not b for a, b in zip(self.storage._selection, selection, strict=True))):
             raise CompilationError("native CALL storage and payload graphs differ")
         self.storage.validate(analysis, procedure, selection=self.storage._selection, joined_storage=self.storage._joined_storage)
-        current = _project(analysis, procedure, self.reachability, self.storage)
+        if self.completion is None and (len(selection) != 1 or type(selection[0]).__name__ != "Call_Stmt"):
+            raise CompilationError("native host operation lost its original CALL or joined completion")
+        current = _project(analysis, procedure, self.reachability, self.storage, completion=self.completion)
         if (len(current) != len(self.resources) or any(a is not b or (role, actions) != (old_role, old_actions)
                 for (a, role, actions), (b, old_role, old_actions) in zip(current, self.resources, strict=True))):
             raise CompilationError("native CALL original storage projection changed")
+        if self.identity != _identity(self.reachability, self.storage, current, self.completion, self.sections):
+            raise CompilationError("native host source regions changed after issuance")
         _require_prerequisites(analysis, self._prerequisites)
         if (getattr(analysis, _REGISTRY, None) is not registry or registry.get(self.identity) is not self
                 or any(object.__getattribute__(self, name) is not value for name, value in attached)):
@@ -125,11 +162,14 @@ class NativeCallEffects:
     def public(self):
         return {"schema_version": VERSION, "identity": self.identity, "procedure": self.procedure,
                 "reachability_identity": self.reachability.identity, "storage_identity": self.storage.identity,
+                "selection_kind": "joined_group" if self.completion is not None else "call",
+                "completion_identity": self.completion.identity if self.completion is not None else None,
+                "sections_identity": _digest(self.sections.public()),
                 "resources": [{"resource": binding.root, "role": role, "actions": sorted(actions)}
                               for binding, role, actions in self.resources],
                 "alias_authorized": False, "capture_authorized": False, "definitions_authorized": False,
                 "motion_authorized": False, "internal_cuts_authorized": False,
-                "execution": "unchanged original CALL after coherent access and physical alias registration"}
+                "execution": "unchanged original operation after coherent access and physical alias registration"}
 
 
 def prove_native_call_effects(analysis, procedure, selection):
@@ -140,10 +180,53 @@ def prove_native_call_effects(analysis, procedure, selection):
     structures = native_call_storage_structures(analysis, reachability.native_graph)
     storage = prove_storage_mutation_effects(analysis, procedure, selection=selection,
         joined_storage=structures, native_graph=reachability.native_graph)
+    return _issue(analysis, procedure, selection, reachability, storage)
+
+
+def prove_native_group_effects(analysis, procedure, selection, *, descriptor_window=None, whole=False):
+    """Reuse original host acquisition for one complete synchronous team."""
+    from compiler.frontend.descriptor_teams import prove_descriptor_team
+    from compiler.frontend.native_completion import prove_graph_joined_completion
+
+    if type(selection) is not tuple or not selection:
+        raise CompilationError("native host group requires its complete original source selection")
+    reachability = prove_resource_reachability(analysis, procedure, selection, ())
+    _require_complete(reachability)
+    completion = prove_graph_joined_completion(analysis, procedure, selection, reachability.native_graph)
+    team = prove_descriptor_team(analysis, procedure, selection)
+    if completion.selected_node_ids != team.selected_node_ids or completion._ordinary_join is None:
+        raise CompilationError("native host group requires the same complete original ordinary join")
+    storage = prove_storage_mutation_effects(analysis, procedure, selection=selection,
+        joined_storage=team, native_graph=reachability.native_graph)
+    sections = None
+    if not whole:
+        sections = analysis.native_sections_for_nodes(procedure, selection, capture_locals=True,
+            completion=completion._ordinary_join, descriptor_window=descriptor_window)
+    return _issue(analysis, procedure, selection, reachability, storage, completion=completion, sections=sections)
+
+
+def _identity(reachability, storage, resources, completion, sections):
+    return _digest({"version": VERSION, "reachability": reachability.identity, "storage": storage.identity,
+                    "completion": completion.identity if completion is not None else None,
+                    "sections": sections.public(),
+                    "resources": [(id(binding), role, sorted(actions)) for binding, role, actions in resources]})
+
+
+def _issue(analysis, procedure, selection, reachability, storage, *, completion=None, sections=None):
+    from compiler.frontend.native_sections import NativeSections
+
     prerequisites = _prerequisites(analysis, reachability, storage)
-    resources = _project(analysis, procedure, reachability, storage)
-    identity = _digest({"version": VERSION, "reachability": reachability.identity, "storage": storage.identity,
-                        "resources": [(id(binding), role, sorted(actions)) for binding, role, actions in resources]})
+    resources = _project(analysis, procedure, reachability, storage, completion=completion)
+    if sections is None:
+        sections = NativeSections(False, "complete original host may-access; no overwrite authority")
+    elif sections.available:
+        managed = {binding.root for binding, role, actions in resources
+                   if role == "managed" and actions & {"read", "write"}}
+        sections = replace(sections, resources=tuple(replace(item, overwrites=()) for item in sections.resources
+                                                     if item.resource in managed))
+        if {item.resource for item in sections.resources} != managed:
+            sections = NativeSections(False, "native host sections omit a managed may-access")
+    identity = _identity(reachability, storage, resources, completion, sections)
     registry = getattr(analysis, _REGISTRY, None)
     if registry is None:
         registry = {}
@@ -152,7 +235,8 @@ def prove_native_call_effects(analysis, procedure, selection):
         return registry[identity].validate(analysis, procedure, selection)
     if len(registry) >= source_registry_budget(analysis):
         raise CompilationError("native CALL effect registry budget exhausted")
-    proof = NativeCallEffects(identity, procedure, resources, reachability, storage, analysis, selection, prerequisites, _ISSUER)
+    proof = NativeHostEffects(identity, procedure, resources, reachability, storage, analysis, selection,
+                              prerequisites, _ISSUER, completion, sections)
     registry[identity] = proof
     try:
         return proof.validate(analysis, procedure, selection)

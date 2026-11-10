@@ -10,9 +10,10 @@ import pytest
 
 from compiler.analysis import ParallelizationError, build_execution_plan
 from compiler.analysis.semantics import expression_type
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
 from compiler.ir import CompilationError, IntrinsicCall, Literal, ScalarType, SourceLocation, referenced_symbols
 from compiler.ir.intrinsics import INTRINSIC_ARGUMENTS

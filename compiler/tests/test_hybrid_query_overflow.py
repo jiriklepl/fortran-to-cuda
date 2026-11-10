@@ -8,11 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 
 SOURCE = """module enormous_domain
 contains

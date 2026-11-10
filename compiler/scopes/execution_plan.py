@@ -87,7 +87,7 @@ def _portable_proof_references(analysis, authorities):
 
     from compiler.frontend.descriptor_teams import DescriptorTeamProof
     from compiler.frontend.descriptor_worksharing import OriginalWorksharingStorage
-    from compiler.frontend.native_call_effects import NativeCallEffects
+    from compiler.frontend.native_call_effects import NativeHostEffects
     from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
     from compiler.frontend.source_functions import _original, _source_identity
 
@@ -108,10 +108,10 @@ def _portable_proof_references(analysis, authorities):
     # instead bind their original selections, complete checked graph and
     # canonical effects. No arbitrary diagnostic identity is stripped.
     for proof in authorities:
-        if type(proof) not in {SourceBoundNativeDemandEffects, NativeCallEffects}:
+        if type(proof) not in {SourceBoundNativeDemandEffects, NativeHostEffects}:
             continue
         source = proof._analysis
-        if type(proof) is NativeCallEffects:
+        if type(proof) is NativeHostEffects:
             proof.validate(source, proof.procedure, proof._selection)
         else:
             proof.validate(source, proof.procedure, proof._selection, proof.demanded)
@@ -136,11 +136,11 @@ def _portable_proof_references(analysis, authorities):
         reference(graph, "identity", original_selection(source, graph.procedure, graph._selection))
         reference(reachability, "proof_identity",
                   original_selection(source, reachability.procedure, reachability._selection))
-        if type(proof) is NativeCallEffects:
+        if type(proof) is NativeHostEffects:
             # Confined-pointer storage receipts include this graph's exact
             # in-process identity. Normalize the issued receipts after the
             # graph, and before the storage proof that contains them.
-            for joined in proof.storage._joined_storage:
+            for joined in proof.storage_structures:
                 if type(joined) is DescriptorTeamProof:
                     joined.validate(source, joined.procedure, joined.selected_node_ids)
                     selection = original_selection(source, joined.procedure, joined._originals)
@@ -194,7 +194,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.metadata_constructor import OriginalMetadataConstructorProof
     from compiler.frontend.native_ancestor import NativeAncestorSelection
     from compiler.frontend.native_call_coordinates import NativeCallCoordinatesProof
-    from compiler.frontend.native_call_effects import NativeCallEffects
+    from compiler.frontend.native_call_effects import NativeHostEffects
     from compiler.frontend.native_completion import NativeCompletionProof, NativeGraphCompletionProof
     from compiler.frontend.native_definitions import NativeDefinitionProof, NativeDefinitionStateProof
     from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
@@ -244,7 +244,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.scopes.supported_paths import SupportedPathStorageEpoch
 
     registries = {
-        NativeCallEffects: "_native_call_effects",
+        NativeHostEffects: "_native_call_effects",
         NativeOnlyArrayWrite: "_native_opaque_write_proofs",
         NativeReadonlyPermit: "_native_opaque_read_permits",
         AllocationExchangeProof: "_allocation_exchange_proofs",
@@ -648,8 +648,9 @@ def _proof_handoffs(owner, numerical):
                 validate_native_source_reads(member.builder, operation)
                 proof = operation.source_reads
                 if proof is not None:
-                    registry = ("_worksharing_native_completions" if type(proof).__name__ == "WorksharingNativeCompletionProof"
-                                else "_native_definition_proofs")
+                    registry = {"WorksharingNativeCompletionProof": "_worksharing_native_completions",
+                                "NativeCompletionProof": "_joined_completions"}.get(
+                                    type(proof).__name__, "_native_definition_proofs")
                     retained[id(proof)] = proof, operation.proof_analysis, registry
             proofs = getattr(unit.scope, "source_reads", None)
             for call in unit.scope.calls:

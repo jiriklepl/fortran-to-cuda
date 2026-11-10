@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUTS = {"generated_code.cu", "generated_cpp_impl.cpp", "generated_interface.f90", "common_functions.cuh"}
+OUTPUTS = {"shared_entry.cu", "shared_interface.f90", "scoped-runtime.json", "common_functions.cuh"}
 
 
 @pytest.mark.parametrize("selection", [("--kernel", "advance"), ("--list-candidates",)])
@@ -86,12 +86,16 @@ enddo
     assert report["reason"] is None
     assert report["parallel_regions"] == 2
     assert report["kernel"] == "advance"
-    assert set(report["outputs"]) == OUTPUTS
-    assert {path.name for path in output.iterdir()} == OUTPUTS
+    assert OUTPUTS <= set(report["outputs"])
+    assert {path.name for path in output.iterdir()} == set(report["outputs"])
+    assert report["artifact_schema_version"] == 2 and report["memory_model"] == "scoped"
+    assert "generated_cpp_impl.cpp" not in report["outputs"]
+    assert "offload" not in report
     assert report["execution_plan"].count("parallel legality PROVEN") == 2
-    memory = report["memory_plan"]
-    assert memory.index("execute: region 0") < memory.index("execute: region 1")
-    assert "acquire [pooled]" in memory
+    graph = report["scoped"]["graph_execution"]
+    assert graph["runtime_api"] == "fort_scope_graph_enqueue_v1"
+    assert [group["regions"] for group in graph["groups"]] == [[0], [1]]
+    assert "Caller-owned domain" in report["memory_plan"]
     assert "Normalized IR:" in result.stderr
 
 
@@ -122,23 +126,24 @@ endif
     assert report["parallel_regions"] == 2
     assert "host conditional" in report["execution_plan"]
     assert "retained sequential loops: 1" in report["execution_plan"]
-    assert "branch:" in report["memory_plan"]
+    assert report["memory_model"] == "scoped"
+    assert len(report["scoped"]["region_execution"]) == 2
 
 
 @pytest.mark.parametrize(
-    ("entry", "body", "reason"),
+    ("entry", "body", "reason", "arguments"),
     [
-        ("advance", "do i=2,n\na(i,1)=a(i-1,1)\nenddo", "RAW"),
-        ("start_hot", "do i=1,n\na(i,1)=2.0_8\nenddo", "public interface"),
+        ("advance", "do i=2,n\na(i,1)=a(i-1,1)\nenddo", "RAW", ()),
+        ("advance", "do i=1,n\na(i,1)=2.0_8\nenddo", "conflicts", ("--common-header", "shared_entry.cu")),
     ],
 )
-def test_json_rejection_does_not_publish_or_replace_outputs(tmp_path, entry, body, reason):
+def test_json_rejection_does_not_publish_or_replace_outputs(tmp_path, entry, body, reason, arguments):
     output = tmp_path / "generated"
     output.mkdir()
     before = {filename: "existing " + filename for filename in OUTPUTS}
     for filename, text in before.items():
         (output / filename).write_text(text)
-    result, report, _ = compile_report(tmp_path, body, entry=entry)
+    result, report, _ = compile_report(tmp_path, body, *arguments, entry=entry)
     assert result.returncode != 0
     assert report["supported"] is False
     assert reason in report["reason"]

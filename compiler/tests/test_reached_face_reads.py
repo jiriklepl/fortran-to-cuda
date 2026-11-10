@@ -48,8 +48,11 @@ def test_unproved_cross_iteration_reads_still_decline(tmp_path, body):
 
 
 def test_different_planes_do_not_credit_reads_after_a_local_write(tmp_path):
-    with pytest.raises(CompilationError, match="before writes"):
-        issue(tmp_path, face_source(0, body="b(0,i,j)=1.0_8\nb(n,i,j)=b(0,i,j)"))
+    _path, analysis, selection, prepared, proof = issue(
+        tmp_path, face_source(0, body="b(0,i,j)=1.0_8\nb(n,i,j)=b(0,i,j)"))
+    assert proof.validate(analysis, prepared.procedure, selection, prepared) is proof
+    assert not proof.sections.resources
+    assert not proof.public()["prefix_definitions_authorized"]
 
 
 def test_multiple_incoming_planes_remain_separate(tmp_path):

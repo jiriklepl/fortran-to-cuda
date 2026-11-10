@@ -436,7 +436,9 @@ def test_complete_native_team_composes_bounded_units_without_flattening(tmp_path
                   for op in segment['operations']['native_operations'] if op.get('atomic_effects')]
     operation, = operations
     proof = operation['atomic_effects']
-    assert len(proof['source_units']) == 24
+    # Directive nodes now retain their own zero-effect proof units.
+    assert len(proof['source_units']) == len(proof['unit_operation_counts'])
+    assert sum(count > 0 for count in proof['unit_operation_counts']) == 24
     assert max(proof['unit_operation_counts']) <= 256
     assert sum(proof['unit_operation_counts']) > 256
     assert proof['effect_count'] <= 256

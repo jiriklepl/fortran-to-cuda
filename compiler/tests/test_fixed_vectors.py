@@ -8,7 +8,8 @@ import subprocess
 import pytest
 
 from compiler.analysis import build_execution_plan
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
 from compiler.ir import (
     ArrayAccess,

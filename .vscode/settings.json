@@ -14,5 +14,6 @@
     ],
     "python.analysis.exclude": [
         "**/results"
-    ]
+    ],
+    "cmake.sourceDirectory": "${workspaceFolder}/poisson-solver"
 }
