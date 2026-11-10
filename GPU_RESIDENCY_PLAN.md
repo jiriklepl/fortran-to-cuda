@@ -11,6 +11,13 @@ references, not currently available report files. The cleanup is preserved.
 
 ## Current-state wrap: 2026-11-10
 
+The [committed hot-path report](benchmarks/reports/elmm-hot-path-20261110/README.md)
+includes native/GPU procedure diagrams, data ownership and transfer flow, actual
+generated-code examples, and performance history with transfer/computation
+breakdowns. Its [offline HTML edition](benchmarks/reports/elmm-hot-path-20261110/report.html)
+embeds all three diagrams. Compiler, pipeline and solver snapshot identities are
+recorded together with the retained measurement evidence.
+
 At the user's request, this pass stops after resolving the current issues.
 The [wrap report](benchmarks/reports/gpu-current-state-wrap-20261110/README.md)
 records the shared-backend initialization fix, migration of the native harness

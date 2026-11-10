@@ -128,5 +128,3 @@ def test_original_joined_native_consumer_keeps_descriptor_scope_with_directives(
     assert tuple(operation.summary["selected_node_ids"]) == selected
     assert graph.source_nodes(selected[0])[0] is unit.nodes[0]
     validate_checked_execution_plans(report)
-
-
