@@ -1,0 +1,1286 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ELMM hot paths, GPU residency and performance — 10 November 2026</title><style>
+:root { color-scheme: light; --ink:#172b43; --muted:#52677d; --line:#dce4ed; }
+* { box-sizing:border-box; } body { margin:0; background:#f3f6fa; color:var(--ink); font:16px/1.65 system-ui,sans-serif; }
+main { max-width:1440px; margin:32px auto; padding:44px 56px; background:white; box-shadow:0 8px 32px #183b5910; }
+h1 { font-size:2.4rem; line-height:1.15; margin:0 0 28px; } h2 { margin:56px 0 20px; padding-top:16px; border-top:2px solid var(--line); font-size:1.65rem; } h3 { margin-top:32px; font-size:1.25rem; }
+a { color:#0864a7; } p { max-width:110ch; } nav { display:flex; flex-wrap:wrap; gap:12px 24px; padding:18px 24px; border:1px solid var(--line); background:#f7fafc; } nav a { font-weight:600; }
+table { display:block; width:100%; overflow-x:auto; border-collapse:collapse; font-size:0.9rem; margin:24px 0; } th,td { border:1px solid var(--line); padding:10px 13px; text-align:left; vertical-align:top; } th { background:#eaf1f8; } tbody tr:nth-child(even) { background:#f8fafc; }
+pre { overflow:auto; padding:20px; background:#10273b; color:#e9f2fb; border-radius:8px; font-size:0.82rem; line-height:1.55; } code { font-family:ui-monospace,monospace; overflow-wrap:anywhere; } :not(pre)>code { font-size:0.9em; background:#edf2f7; padding:1px 4px; border-radius:3px; }
+.diagram { margin:28px 0 0; border:1px solid var(--line); padding:16px; overflow:auto; } .diagram svg { display:block; width:100%; min-width:720px; height:auto; } .download { margin:4px 0 28px; font-size:0.8rem; color:var(--muted); }
+blockquote { border-left:4px solid #e6ad45; margin-left:0; padding-left:20px; color:var(--muted); } footer { margin-top:40px; color:var(--muted); font-size:0.8rem; }
+@media(max-width:800px) { main { margin:0; padding:24px 18px; } h1 { font-size:1.9rem; } }
+@media print { body { background:white; } main { margin:0; padding:0; box-shadow:none; } nav,.download { display:none; } pre { white-space:pre-wrap; } .diagram svg { min-width:0; } h2,h3 { break-after:avoid; } table { font-size:8pt; } }
+</style><main><nav><a href="#reached-hot-paths-and-execution-placement">Reached hot paths and execution placement</a><a href="#representative-transcription-and-calls">Representative transcription and calls</a><a href="#data-management-and-communication">Data management and communication</a><a href="#performance-history-and-measured-cost-breakdown">Performance history and measured cost breakdown</a><a href="#committed-snapshot-and-qualification">Committed snapshot and qualification</a></nav><h1 id="elmm-hot-paths-gpu-residency-and-performance">ELMM hot paths, GPU residency and performance</h1>
+<p><strong>Snapshot: 10 November 2026.</strong> The retained resident GPU implementation runs the main field computation and pressure projection on the GPU. Fortran still controls the time loop and RK stages, performs selected diagnostics, and serializes output. The latest seven-round measurements are <strong>3.78× native for channel-simple (109 steps)</strong> and <strong>3.70× native for channel (100 steps)</strong>, using four native threads and complete-process timing.</p>
+<p>This report shows the reached hot path, representative original/generated/calling code, data movement, and historical performance. Diagrams deliberately summarize procedures and control regions; they are not exhaustive call graphs or CPU/GPU concurrency timelines. The timing tables separate measurement cohorts and profiler activity from untraced wall time. No new performance campaign was run to produce this report.</p>
+<p>Read this file on GitHub, or open the <strong><a href="report.html">standalone HTML report</a></strong> for embedded scalable diagrams, tables and code samples. Editable Mermaid and Graphviz sources are included beside each diagram.</p>
+<h2 id="reached-hot-paths-and-execution-placement">Reached hot paths and execution placement</h2>
+<p>These diagrams describe the selected, measured build <strong>A</strong> (<code>/tmp/fortran-async-output-20261110-01</code>), preserved in the committed implementation snapshot. They are reduced call/execution maps of the configured hot path, not exhaustive call graphs or time-scaled profiles. A GPU box means the procedure's numerical payload runs on the device; the enclosing Fortran procedure, branches, descriptors and runtime submission still execute on the CPU.</p>
+<p><div class="diagram"><svg
+ viewBox="0.00 0.00 762.00 902.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(14.4 887.37)">
+<title>hotpath</title>
+<polygon fill="white" stroke="none" points="-14.4,14.4 -14.4,-887.37 747.35,-887.37 747.35,14.4 -14.4,14.4"/>
+<text xml:space="preserve" text-anchor="middle" x="366.48" y="-851.87" font-family="DejaVu Sans" font-size="18.00">Native ELMM (4 CPU threads) — channel&#45;simple and channel</text>
+<!-- init -->
+<g id="node1" class="node">
+<title>init</title>
+<path fill="#dce9f7" stroke="#425569" d="M339.03,-843.22C339.03,-843.22 60,-843.22 60,-843.22 54,-843.22 48,-837.22 48,-831.22 48,-831.22 48,-816.7 48,-816.7 48,-810.7 54,-804.7 60,-804.7 60,-804.7 339.03,-804.7 339.03,-804.7 345.03,-804.7 351.03,-810.7 351.03,-816.7 351.03,-816.7 351.03,-831.22 351.03,-831.22 351.03,-837.22 345.03,-843.22 339.03,-843.22"/>
+<text xml:space="preserve" text-anchor="middle" x="199.52" y="-827.01" font-family="DejaVu Sans" font-size="11.00" fill="#142536">main / InitialConditions</text>
+<text xml:space="preserve" text-anchor="middle" x="199.52" y="-813.51" font-family="DejaVu Sans" font-size="11.00" fill="#142536">CPU allocation, setup and initial pressure projection</text>
+</g>
+<!-- time -->
+<g id="node2" class="node">
+<title>time</title>
+<path fill="#dce9f7" stroke="#425569" d="M294.41,-779.7C294.41,-779.7 104.62,-779.7 104.62,-779.7 98.62,-779.7 92.63,-773.7 92.63,-767.7 92.63,-767.7 92.63,-753.18 92.63,-753.18 92.63,-747.18 98.63,-741.18 104.63,-741.18 104.63,-741.18 294.41,-741.18 294.41,-741.18 300.41,-741.18 306.41,-747.18 306.41,-753.18 306.41,-753.18 306.41,-767.7 306.41,-767.7 306.41,-773.7 300.41,-779.7 294.41,-779.7"/>
+<text xml:space="preserve" text-anchor="middle" x="199.52" y="-763.49" font-family="DejaVu Sans" font-size="11.00" fill="#142536">TMarchRK3: TimeStepLength</text>
+<text xml:space="preserve" text-anchor="middle" x="199.52" y="-749.99" font-family="DejaVu Sans" font-size="11.00" fill="#142536">CPU CFL + scalar timestep decision</text>
+</g>
+<!-- init&#45;&gt;time -->
+<g id="edge1" class="edge">
+<title>init&#45;&gt;time</title>
+<path fill="none" stroke="#526577" d="M199.52,-804.5C199.52,-800.24 199.52,-795.61 199.52,-791.01"/>
+<polygon fill="#526577" stroke="#526577" points="203.02,-791.4 199.52,-781.4 196.02,-791.4 203.02,-791.4"/>
+</g>
+<!-- sgs -->
+<g id="node3" class="node">
+<title>sgs</title>
+<path fill="#dce9f7" stroke="#425569" d="M350.65,-716.18C350.65,-716.18 48.38,-716.18 48.38,-716.18 42.38,-716.18 36.38,-710.18 36.38,-704.18 36.38,-704.18 36.38,-676.16 36.38,-676.16 36.38,-670.16 42.38,-664.16 48.38,-664.16 48.38,-664.16 350.65,-664.16 350.65,-664.16 356.65,-664.16 362.65,-670.16 362.65,-676.16 362.65,-676.16 362.65,-704.18 362.65,-704.18 362.65,-710.18 356.65,-716.18 350.65,-716.18"/>
+<text xml:space="preserve" text-anchor="middle" x="199.52" y="-699.97" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Each of 3 RK stages: SubgridStresses</text>
+<text xml:space="preserve" text-anchor="middle" x="199.52" y="-686.47" font-family="DejaVu Sans" font-size="11.00" fill="#142536">ComputeViscsWM → SubgridModel / SGS_Sigma_uniform</text>
+<text xml:space="preserve" text-anchor="middle" x="199.52" y="-672.97" font-family="DejaVu Sans" font-size="11.00" fill="#142536">ComputeUVWFluxesWM → BoundViscosity</text>
+</g>
+<!-- time&#45;&gt;sgs -->
+<g id="edge2" class="edge">
+<title>time&#45;&gt;sgs</title>
+<path fill="none" stroke="#526577" d="M199.52,-740.78C199.52,-736.68 199.52,-732.2 199.52,-727.67"/>
+<polygon fill="#526577" stroke="#526577" points="203.02,-727.97 199.52,-717.97 196.02,-727.97 203.02,-727.97"/>
+</g>
+<!-- simple -->
+<g id="node4" class="node">
+<title>simple</title>
+<path fill="#dce9f7" stroke="#425569" d="M201.03,-628.91C201.03,-628.91 12,-628.91 12,-628.91 6,-628.91 0,-622.91 0,-616.91 0,-616.91 0,-588.89 0,-588.89 0,-582.89 6,-576.89 12,-576.89 12,-576.89 201.03,-576.89 201.03,-576.89 207.03,-576.89 213.03,-582.89 213.03,-588.89 213.03,-588.89 213.03,-616.91 213.03,-616.91 213.03,-622.91 207.03,-628.91 201.03,-628.91"/>
+<text xml:space="preserve" text-anchor="middle" x="106.52" y="-612.7" font-family="DejaVu Sans" font-size="11.00" fill="#142536">channel&#45;simple: Convection</text>
+<text xml:space="preserve" text-anchor="middle" x="106.52" y="-599.2" font-family="DejaVu Sans" font-size="11.00" fill="#142536">CDU/CDV/CDW → div + adv helpers</text>
+<text xml:space="preserve" text-anchor="middle" x="106.52" y="-585.7" font-family="DejaVu Sans" font-size="11.00" fill="#142536">No explicit filter</text>
+</g>
+<!-- sgs&#45;&gt;simple -->
+<g id="edge3" class="edge">
+<title>sgs&#45;&gt;simple</title>
+<path fill="none" stroke="#526577" d="M171.86,-663.82C162.67,-655.39 152.29,-645.87 142.56,-636.95"/>
+<polygon fill="#526577" stroke="#526577" points="145.07,-634.5 135.34,-630.33 140.34,-639.66 145.07,-634.5"/>
+<text xml:space="preserve" text-anchor="middle" x="190.46" y="-643.61" font-family="DejaVu Sans" font-size="9.00">advection = 2</text>
+</g>
+<!-- channel -->
+<g id="node5" class="node">
+<title>channel</title>
+<path fill="#dce9f7" stroke="#425569" d="M517.78,-628.91C517.78,-628.91 243.25,-628.91 243.25,-628.91 237.25,-628.91 231.25,-622.91 231.25,-616.91 231.25,-616.91 231.25,-588.89 231.25,-588.89 231.25,-582.89 237.25,-576.89 243.25,-576.89 243.25,-576.89 517.78,-576.89 517.78,-576.89 523.78,-576.89 529.78,-582.89 529.78,-588.89 529.78,-588.89 529.78,-616.91 529.78,-616.91 529.78,-622.91 523.78,-628.91 517.78,-628.91"/>
+<text xml:space="preserve" text-anchor="middle" x="380.51" y="-612.7" font-family="DejaVu Sans" font-size="11.00" fill="#142536">channel: Convection</text>
+<text xml:space="preserve" text-anchor="middle" x="380.51" y="-599.2" font-family="DejaVu Sans" font-size="11.00" fill="#142536">CD4divU / CD4divV / CD4divW</text>
+<text xml:space="preserve" text-anchor="middle" x="380.51" y="-585.7" font-family="DejaVu Sans" font-size="11.00" fill="#142536">FilterUstar → BoundUVW → Filter3ord → BoundUVW</text>
+</g>
+<!-- sgs&#45;&gt;channel -->
+<g id="edge4" class="edge">
+<title>sgs&#45;&gt;channel</title>
+<path fill="none" stroke="#526577" d="M253.33,-663.82C273.12,-654.49 295.73,-643.84 316.34,-634.13"/>
+<polygon fill="#526577" stroke="#526577" points="317.67,-637.38 325.22,-629.95 314.69,-631.04 317.67,-637.38"/>
+<text xml:space="preserve" text-anchor="middle" x="332.73" y="-643.61" font-family="DejaVu Sans" font-size="9.00">advection = 4</text>
+</g>
+<!-- diff -->
+<g id="node6" class="node">
+<title>diff</title>
+<path fill="#dce9f7" stroke="#425569" d="M400.4,-551.89C400.4,-551.89 84.62,-551.89 84.62,-551.89 78.62,-551.89 72.63,-545.89 72.63,-539.89 72.63,-539.89 72.63,-511.87 72.63,-511.87 72.63,-505.87 78.63,-499.87 84.63,-499.87 84.63,-499.87 400.4,-499.87 400.4,-499.87 406.4,-499.87 412.4,-505.87 412.4,-511.87 412.4,-511.87 412.4,-539.89 412.4,-539.89 412.4,-545.89 406.4,-551.89 400.4,-551.89"/>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-535.68" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Convection (continued)</text>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-522.18" font-family="DejaVu Sans" font-size="11.00" fill="#142536">StressBoundaryFlux → MomentumDiffusion_nobranch_2ord</text>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-508.68" font-family="DejaVu Sans" font-size="11.00" fill="#142536">RK velocity updates</text>
+</g>
+<!-- simple&#45;&gt;diff -->
+<g id="edge5" class="edge">
+<title>simple&#45;&gt;diff</title>
+<path fill="none" stroke="#526577" d="M152.56,-576.5C163.52,-570.45 175.35,-563.93 186.7,-557.67"/>
+<polygon fill="#526577" stroke="#526577" points="188.13,-560.88 195.19,-552.98 184.75,-554.75 188.13,-560.88"/>
+</g>
+<!-- channel&#45;&gt;diff -->
+<g id="edge6" class="edge">
+<title>channel&#45;&gt;diff</title>
+<path fill="none" stroke="#526577" d="M333.79,-576.5C322.67,-570.45 310.67,-563.93 299.15,-557.67"/>
+<polygon fill="#526577" stroke="#526577" points="300.97,-554.68 290.52,-552.98 297.63,-560.83 300.97,-554.68"/>
+</g>
+<!-- force -->
+<g id="node7" class="node">
+<title>force</title>
+<path fill="#dce9f7" stroke="#425569" d="M368.9,-474.87C368.9,-474.87 116.12,-474.87 116.12,-474.87 110.12,-474.87 104.13,-468.87 104.13,-462.87 104.13,-462.87 104.13,-448.35 104.13,-448.35 104.13,-442.35 110.13,-436.35 116.13,-436.35 116.13,-436.35 368.9,-436.35 368.9,-436.35 374.9,-436.35 380.9,-442.35 380.9,-448.35 380.9,-448.35 380.9,-462.87 380.9,-462.87 380.9,-468.87 374.9,-474.87 368.9,-474.87"/>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-458.66" font-family="DejaVu Sans" font-size="11.00" fill="#142536">OtherTerms → PressureGrad</text>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-445.16" font-family="DejaVu Sans" font-size="11.00" fill="#142536">BoundUVW / IBMomentum guards / BoundUVW</text>
+</g>
+<!-- diff&#45;&gt;force -->
+<g id="edge7" class="edge">
+<title>diff&#45;&gt;force</title>
+<path fill="none" stroke="#526577" d="M242.52,-499.46C242.52,-495.19 242.52,-490.72 242.52,-486.36"/>
+<polygon fill="#526577" stroke="#526577" points="246.02,-486.74 242.52,-476.74 239.02,-486.74 246.02,-486.74"/>
+</g>
+<!-- pressure -->
+<g id="node8" class="node">
+<title>pressure</title>
+<path fill="#dce9f7" stroke="#425569" d="M375.28,-401.1C375.28,-401.1 109.75,-401.1 109.75,-401.1 103.75,-401.1 97.75,-395.1 97.75,-389.1 97.75,-389.1 97.75,-374.58 97.75,-374.58 97.75,-368.58 103.75,-362.58 109.75,-362.58 109.75,-362.58 375.28,-362.58 375.28,-362.58 381.28,-362.58 387.28,-368.58 387.28,-374.58 387.28,-374.58 387.28,-389.1 387.28,-389.1 387.28,-395.1 381.28,-401.1 375.28,-401.1"/>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-384.89" font-family="DejaVu Sans" font-size="11.00" fill="#142536">PressureCorrection: PrePoisson</text>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-371.39" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Boundary / mass&#45;flux handling → inline RHS loops</text>
+</g>
+<!-- force&#45;&gt;pressure -->
+<g id="edge8" class="edge">
+<title>force&#45;&gt;pressure</title>
+<path fill="none" stroke="#526577" d="M242.52,-436.13C242.52,-429.07 242.52,-420.82 242.52,-412.95"/>
+<polygon fill="#526577" stroke="#526577" points="246.02,-413.02 242.52,-403.02 239.02,-413.02 246.02,-413.02"/>
+</g>
+<!-- solve -->
+<g id="node9" class="node">
+<title>solve</title>
+<path fill="#dce9f7" stroke="#425569" d="M338.15,-337.58C338.15,-337.58 146.88,-337.58 146.88,-337.58 140.88,-337.58 134.88,-331.58 134.88,-325.58 134.88,-325.58 134.88,-311.06 134.88,-311.06 134.88,-305.06 140.88,-299.06 146.88,-299.06 146.88,-299.06 338.15,-299.06 338.15,-299.06 344.15,-299.06 350.15,-305.06 350.15,-311.06 350.15,-311.06 350.15,-325.58 350.15,-325.58 350.15,-331.58 344.15,-337.58 338.15,-337.58"/>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-321.37" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Poiss_PoisFFT → CPU PoisFFT / FFTW</text>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-307.87" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Bound_Phi</text>
+</g>
+<!-- pressure&#45;&gt;solve -->
+<g id="edge9" class="edge">
+<title>pressure&#45;&gt;solve</title>
+<path fill="none" stroke="#526577" d="M242.52,-362.38C242.52,-358.12 242.52,-353.49 242.52,-348.89"/>
+<polygon fill="#526577" stroke="#526577" points="246.02,-349.28 242.52,-339.28 239.02,-349.28 246.02,-349.28"/>
+</g>
+<!-- correct -->
+<g id="node10" class="node">
+<title>correct</title>
+<path fill="#dce9f7" stroke="#425569" d="M405.65,-274.06C405.65,-274.06 79.38,-274.06 79.38,-274.06 73.38,-274.06 67.38,-268.06 67.38,-262.06 67.38,-262.06 67.38,-234.04 67.38,-234.04 67.38,-228.04 73.38,-222.04 79.38,-222.04 79.38,-222.04 405.65,-222.04 405.65,-222.04 411.65,-222.04 417.65,-228.04 417.65,-234.04 417.65,-234.04 417.65,-262.06 417.65,-262.06 417.65,-268.06 411.65,-274.06 405.65,-274.06"/>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-257.85" font-family="DejaVu Sans" font-size="11.00" fill="#142536">PostPoisson</text>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-244.35" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Velocity / pressure correction → deterministic TOP reference</text>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-230.85" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Pressure and velocity boundaries</text>
+</g>
+<!-- solve&#45;&gt;correct -->
+<g id="edge10" class="edge">
+<title>solve&#45;&gt;correct</title>
+<path fill="none" stroke="#526577" d="M242.52,-298.66C242.52,-294.56 242.52,-290.08 242.52,-285.55"/>
+<polygon fill="#526577" stroke="#526577" points="246.02,-285.85 242.52,-275.85 239.02,-285.85 246.02,-285.85"/>
+</g>
+<!-- swap -->
+<g id="node11" class="node">
+<title>swap</title>
+<path fill="#dce9f7" stroke="#425569" d="M404.9,-197.04C404.9,-197.04 80.12,-197.04 80.12,-197.04 74.12,-197.04 68.13,-191.04 68.13,-185.04 68.13,-185.04 68.13,-170.52 68.13,-170.52 68.13,-164.52 74.13,-158.52 80.13,-158.52 80.13,-158.52 404.9,-158.52 404.9,-158.52 410.9,-158.52 416.9,-164.52 416.9,-170.52 416.9,-170.52 416.9,-185.04 416.9,-185.04 416.9,-191.04 410.9,-197.04 404.9,-197.04"/>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-180.83" font-family="DejaVu Sans" font-size="11.00" fill="#142536">exchange_alloc(U,U2), (V,V2), (W,W2)</text>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-167.33" font-family="DejaVu Sans" font-size="11.00" fill="#142536">NullInterior / BoundUVW / IBMomentum guards / BoundUVW</text>
+</g>
+<!-- correct&#45;&gt;swap -->
+<g id="edge11" class="edge">
+<title>correct&#45;&gt;swap</title>
+<path fill="none" stroke="#526577" d="M242.52,-221.63C242.52,-217.36 242.52,-212.89 242.52,-208.53"/>
+<polygon fill="#526577" stroke="#526577" points="246.02,-208.91 242.52,-198.91 239.02,-208.91 246.02,-208.91"/>
+</g>
+<!-- swap&#45;&gt;sgs -->
+<g id="edge12" class="edge">
+<title>swap&#45;&gt;sgs</title>
+<path fill="none" stroke="#526577" stroke-dasharray="5,2" d="M332.86,-197.5C377.79,-207.24 423.27,-217.95 426.51,-222.04 440.87,-240.16 441.14,-256.16 426.51,-274.06 409.58,-294.78 384.45,-265.34 367.51,-286.06 358.44,-297.16 359.55,-338.66 367.51,-350.58 375.27,-362.18 388.76,-350.98 396.51,-362.58 406.03,-376.81 407.3,-387.81 396.51,-401.1 380.2,-421.2 355.83,-393 339.51,-413.1 336.36,-416.98 336.42,-420.42 339.51,-424.35 353.66,-442.3 375.19,-418.54 389.51,-436.35 393.1,-440.81 387.23,-483.18 390.51,-487.87 398.98,-499.98 412.09,-488.49 421.51,-499.87 440.27,-522.5 412.03,-544.84 433.51,-564.89 450.68,-580.92 522.88,-559.37 538.51,-576.89 553.91,-594.14 553.36,-611.19 538.51,-628.91 532.61,-635.95 454.17,-650.13 374.23,-662.97"/>
+<polygon fill="#526577" stroke="#526577" points="373.76,-659.5 364.44,-664.53 374.87,-666.41 373.76,-659.5"/>
+<text xml:space="preserve" text-anchor="middle" x="371.01" y="-415.8" font-family="DejaVu Sans" font-size="9.00">next RK stage</text>
+</g>
+<!-- output -->
+<g id="node12" class="node">
+<title>output</title>
+<path fill="#dce9f7" stroke="#425569" d="M389.53,-123.27C389.53,-123.27 95.5,-123.27 95.5,-123.27 89.5,-123.27 83.5,-117.27 83.5,-111.27 83.5,-111.27 83.5,-83.25 83.5,-83.25 83.5,-77.25 89.5,-71.25 95.5,-71.25 95.5,-71.25 389.53,-71.25 389.53,-71.25 395.53,-71.25 401.53,-77.25 401.53,-83.25 401.53,-83.25 401.53,-111.27 401.53,-111.27 401.53,-117.27 395.53,-123.27 389.53,-123.27"/>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-107.06" font-family="DejaVu Sans" font-size="11.00" fill="#142536">OutTStep</text>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-93.56" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Active averages, diagnostics, output serialization</text>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-80.06" font-family="DejaVu Sans" font-size="11.00" fill="#142536">channel&#45;simple averages from t=0; channel from t=40</text>
+</g>
+<!-- swap&#45;&gt;output -->
+<g id="edge13" class="edge">
+<title>swap&#45;&gt;output</title>
+<path fill="none" stroke="#526577" d="M242.52,-158.17C242.52,-151.22 242.52,-143.07 242.52,-135.06"/>
+<polygon fill="#526577" stroke="#526577" points="246.02,-135.08 242.52,-125.08 239.02,-135.08 246.02,-135.08"/>
+<text xml:space="preserve" text-anchor="middle" x="271.39" y="-137.97" font-family="DejaVu Sans" font-size="9.00">after stage 3</text>
+</g>
+<!-- output&#45;&gt;time -->
+<g id="edge14" class="edge">
+<title>output&#45;&gt;time</title>
+<path fill="none" stroke="#526577" stroke-dasharray="5,2" d="M371.98,-123.63C391.79,-132.11 410.57,-143.42 425.51,-158.52 953.53,-692.01 642.93,-496.37 558.51,-628.91 507.6,-708.86 401.63,-740.23 317.95,-752.33"/>
+<polygon fill="#526577" stroke="#526577" points="317.5,-748.86 308.06,-753.68 318.44,-755.8 317.5,-748.86"/>
+<text xml:space="preserve" text-anchor="middle" x="701.45" y="-415.8" font-family="DejaVu Sans" font-size="9.00">next timestep</text>
+</g>
+<!-- done -->
+<g id="node13" class="node">
+<title>done</title>
+<path fill="#dce9f7" stroke="#425569" d="M338.91,-36C338.91,-36 146.12,-36 146.12,-36 140.12,-36 134.12,-30 134.12,-24 134.12,-24 134.12,-12 134.12,-12 134.12,-6 140.12,0 146.12,0 146.12,0 338.91,0 338.91,0 344.91,0 350.91,-6 350.91,-12 350.91,-12 350.91,-24 350.91,-24 350.91,-30 344.91,-36 338.91,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="242.52" y="-14.3" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Final output and process completion</text>
+</g>
+<!-- output&#45;&gt;done -->
+<g id="edge15" class="edge">
+<title>output&#45;&gt;done</title>
+<path fill="none" stroke="#526577" d="M242.52,-70.96C242.52,-63.45 242.52,-55.18 242.52,-47.48"/>
+<polygon fill="#526577" stroke="#526577" points="246.02,-47.57 242.52,-37.57 239.02,-47.57 246.02,-47.57"/>
+<text xml:space="preserve" text-anchor="middle" x="252.27" y="-50.7" font-family="DejaVu Sans" font-size="9.00">stop</text>
+</g>
+</g>
+</svg>
+</div><p class="download"><a href="hot-path/native.svg">Open or save this diagram as SVG</a></p></p>
+<p><div class="diagram"><svg
+ viewBox="0.00 0.00 638.00 955.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(14.4 940.64)">
+<title>hotpath</title>
+<polygon fill="white" stroke="none" points="-14.4,14.4 -14.4,-940.64 623.85,-940.64 623.85,14.4 -14.4,14.4"/>
+<text xml:space="preserve" text-anchor="middle" x="304.72" y="-905.14" font-family="DejaVu Sans" font-size="18.00">Selected GPU ELMM — channel&#45;simple and channel</text>
+<!-- init -->
+<g id="node1" class="node">
+<title>init</title>
+<path fill="#e9e1f4" stroke="#425569" d="M347.15,-896.49C347.15,-896.49 65.88,-896.49 65.88,-896.49 59.88,-896.49 53.88,-890.49 53.88,-884.49 53.88,-884.49 53.88,-869.97 53.88,-869.97 53.88,-863.97 59.88,-857.97 65.88,-857.97 65.88,-857.97 347.15,-857.97 347.15,-857.97 353.15,-857.97 359.15,-863.97 359.15,-869.97 359.15,-869.97 359.15,-884.49 359.15,-884.49 359.15,-890.49 353.15,-896.49 347.15,-896.49"/>
+<text xml:space="preserve" text-anchor="middle" x="206.51" y="-880.28" font-family="DejaVu Sans" font-size="11.00" fill="#142536">HOST: main / InitialConditions setup and output</text>
+<text xml:space="preserve" text-anchor="middle" x="206.51" y="-866.78" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Initial pressure projection already uses GPU adapter</text>
+</g>
+<!-- time -->
+<g id="node2" class="node">
+<title>time</title>
+<path fill="#e9e1f4" stroke="#425569" d="M357.28,-832.97C357.28,-832.97 55.75,-832.97 55.75,-832.97 49.75,-832.97 43.75,-826.97 43.75,-820.97 43.75,-820.97 43.75,-792.95 43.75,-792.95 43.75,-786.95 49.75,-780.95 55.75,-780.95 55.75,-780.95 357.28,-780.95 357.28,-780.95 363.28,-780.95 369.28,-786.95 369.28,-792.95 369.28,-792.95 369.28,-820.97 369.28,-820.97 369.28,-826.97 363.28,-832.97 357.28,-832.97"/>
+<text xml:space="preserve" text-anchor="middle" x="206.51" y="-816.76" font-family="DejaVu Sans" font-size="11.00" fill="#142536">HOST: TMarchRK3 / TimeStepLength</text>
+<text xml:space="preserve" text-anchor="middle" x="206.51" y="-803.26" font-family="DejaVu Sans" font-size="11.00" fill="#142536">First CFL uses CPU; later ResidentCFL → GPU max / NaN</text>
+<text xml:space="preserve" text-anchor="middle" x="206.51" y="-789.76" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Small result returns to host for timestep decision</text>
+</g>
+<!-- init&#45;&gt;time -->
+<g id="edge1" class="edge">
+<title>init&#45;&gt;time</title>
+<path fill="none" stroke="#526577" d="M206.51,-857.57C206.51,-853.47 206.51,-848.99 206.51,-844.46"/>
+<polygon fill="#526577" stroke="#526577" points="210.02,-844.76 206.52,-834.76 203.02,-844.76 210.02,-844.76"/>
+</g>
+<!-- epoch -->
+<g id="node3" class="node">
+<title>epoch</title>
+<path fill="#dce9f7" stroke="#425569" d="M342.65,-755.95C342.65,-755.95 70.38,-755.95 70.38,-755.95 64.38,-755.95 58.38,-749.95 58.38,-743.95 58.38,-743.95 58.38,-729.43 58.38,-729.43 58.38,-723.43 64.38,-717.43 70.38,-717.43 70.38,-717.43 342.65,-717.43 342.65,-717.43 348.65,-717.43 354.65,-723.43 354.65,-729.43 354.65,-729.43 354.65,-743.95 354.65,-743.95 354.65,-749.95 348.65,-755.95 342.65,-755.95"/>
+<text xml:space="preserve" text-anchor="middle" x="206.51" y="-739.74" font-family="DejaVu Sans" font-size="11.00" fill="#142536">HOST: lazy resident_flow epoch + RK dispatch</text>
+<text xml:space="preserve" text-anchor="middle" x="206.51" y="-726.24" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Same domain reused across stages and timesteps</text>
+</g>
+<!-- time&#45;&gt;epoch -->
+<g id="edge2" class="edge">
+<title>time&#45;&gt;epoch</title>
+<path fill="none" stroke="#526577" d="M206.51,-780.54C206.51,-776.27 206.51,-771.8 206.51,-767.44"/>
+<polygon fill="#526577" stroke="#526577" points="210.02,-767.82 206.52,-757.82 203.02,-767.82 210.02,-767.82"/>
+</g>
+<!-- sgs -->
+<g id="node4" class="node">
+<title>sgs</title>
+<path fill="#d9f0df" stroke="#425569" d="M312.28,-682.18C312.28,-682.18 100.75,-682.18 100.75,-682.18 94.75,-682.18 88.75,-676.18 88.75,-670.18 88.75,-670.18 88.75,-642.16 88.75,-642.16 88.75,-636.16 94.75,-630.16 100.75,-630.16 100.75,-630.16 312.28,-630.16 312.28,-630.16 318.28,-630.16 324.28,-636.16 324.28,-642.16 324.28,-642.16 324.28,-670.18 324.28,-670.18 324.28,-676.18 318.28,-682.18 312.28,-682.18"/>
+<text xml:space="preserve" text-anchor="middle" x="206.51" y="-665.97" font-family="DejaVu Sans" font-size="11.00" fill="#142536">GPU payload: SubgridStresses</text>
+<text xml:space="preserve" text-anchor="middle" x="206.51" y="-652.47" font-family="DejaVu Sans" font-size="11.00" fill="#142536">ResidentPrStress + SGS_Sigma_uniform</text>
+<text xml:space="preserve" text-anchor="middle" x="206.51" y="-638.97" font-family="DejaVu Sans" font-size="11.00" fill="#142536">ResidentUVWStress + BoundViscosity</text>
+</g>
+<!-- epoch&#45;&gt;sgs -->
+<g id="edge3" class="edge">
+<title>epoch&#45;&gt;sgs</title>
+<path fill="none" stroke="#526577" d="M206.51,-717.08C206.51,-710.13 206.51,-701.98 206.51,-693.97"/>
+<polygon fill="#526577" stroke="#526577" points="210.02,-693.99 206.52,-683.99 203.02,-693.99 210.02,-693.99"/>
+<text xml:space="preserve" text-anchor="middle" x="238.76" y="-696.88" font-family="DejaVu Sans" font-size="9.00">each RK stage</text>
+</g>
+<!-- simple -->
+<g id="node5" class="node">
+<title>simple</title>
+<path fill="#d9f0df" stroke="#425569" d="M231.03,-594.91C231.03,-594.91 12,-594.91 12,-594.91 6,-594.91 0,-588.91 0,-582.91 0,-582.91 0,-554.89 0,-554.89 0,-548.89 6,-542.89 12,-542.89 12,-542.89 231.03,-542.89 231.03,-542.89 237.03,-542.89 243.03,-548.89 243.03,-554.89 243.03,-554.89 243.03,-582.91 243.03,-582.91 243.03,-588.91 237.03,-594.91 231.03,-594.91"/>
+<text xml:space="preserve" text-anchor="middle" x="121.51" y="-578.7" font-family="DejaVu Sans" font-size="11.00" fill="#142536">channel&#45;simple GPU payload: Convection</text>
+<text xml:space="preserve" text-anchor="middle" x="121.51" y="-565.2" font-family="DejaVu Sans" font-size="11.00" fill="#142536">CDU/CDV/CDW div + adv helpers</text>
+<text xml:space="preserve" text-anchor="middle" x="121.51" y="-551.7" font-family="DejaVu Sans" font-size="11.00" fill="#142536">No explicit filter</text>
+</g>
+<!-- sgs&#45;&gt;simple -->
+<g id="edge4" class="edge">
+<title>sgs&#45;&gt;simple</title>
+<path fill="none" stroke="#526577" d="M181.47,-630.05C173.07,-621.62 163.57,-612.09 154.65,-603.14"/>
+<polygon fill="#526577" stroke="#526577" points="157.28,-600.82 147.74,-596.21 152.32,-605.76 157.28,-600.82"/>
+<text xml:space="preserve" text-anchor="middle" x="200.98" y="-609.61" font-family="DejaVu Sans" font-size="9.00">advection = 2</text>
+</g>
+<!-- channel -->
+<g id="node6" class="node">
+<title>channel</title>
+<path fill="#d9f0df" stroke="#425569" d="M474.03,-594.91C474.03,-594.91 273,-594.91 273,-594.91 267,-594.91 261,-588.91 261,-582.91 261,-582.91 261,-554.89 261,-554.89 261,-548.89 267,-542.89 273,-542.89 273,-542.89 474.03,-542.89 474.03,-542.89 480.03,-542.89 486.03,-548.89 486.03,-554.89 486.03,-554.89 486.03,-582.91 486.03,-582.91 486.03,-588.91 480.03,-594.91 474.03,-594.91"/>
+<text xml:space="preserve" text-anchor="middle" x="373.51" y="-578.7" font-family="DejaVu Sans" font-size="11.00" fill="#142536">channel GPU payload: Convection</text>
+<text xml:space="preserve" text-anchor="middle" x="373.51" y="-565.2" font-family="DejaVu Sans" font-size="11.00" fill="#142536">CD4divU / CD4divV / CD4divW</text>
+<text xml:space="preserve" text-anchor="middle" x="373.51" y="-551.7" font-family="DejaVu Sans" font-size="11.00" fill="#142536">BoundUVW + Filter3ord + BoundUVW</text>
+</g>
+<!-- sgs&#45;&gt;channel -->
+<g id="edge5" class="edge">
+<title>sgs&#45;&gt;channel</title>
+<path fill="none" stroke="#526577" d="M256.17,-629.82C274.18,-620.62 294.72,-610.13 313.52,-600.53"/>
+<polygon fill="#526577" stroke="#526577" points="315.1,-603.66 322.42,-595.99 311.92,-597.42 315.1,-603.66"/>
+<text xml:space="preserve" text-anchor="middle" x="331.89" y="-609.61" font-family="DejaVu Sans" font-size="9.00">advection = 4</text>
+</g>
+<!-- diff -->
+<g id="node7" class="node">
+<title>diff</title>
+<path fill="#d9f0df" stroke="#425569" d="M381.15,-517.89C381.15,-517.89 111.88,-517.89 111.88,-517.89 105.88,-517.89 99.88,-511.89 99.88,-505.89 99.88,-505.89 99.88,-477.87 99.88,-477.87 99.88,-471.87 105.88,-465.87 111.88,-465.87 111.88,-465.87 381.15,-465.87 381.15,-465.87 387.15,-465.87 393.15,-471.87 393.15,-477.87 393.15,-477.87 393.15,-505.89 393.15,-505.89 393.15,-511.89 387.15,-517.89 381.15,-517.89"/>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-501.68" font-family="DejaVu Sans" font-size="11.00" fill="#142536">GPU payload: Convection / OtherTerms</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-488.18" font-family="DejaVu Sans" font-size="11.00" fill="#142536">MomentumDiffusion_nobranch_2ord + RK updates</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-474.68" font-family="DejaVu Sans" font-size="11.00" fill="#142536">PressureGrad + boundary kernels</text>
+</g>
+<!-- simple&#45;&gt;diff -->
+<g id="edge6" class="edge">
+<title>simple&#45;&gt;diff</title>
+<path fill="none" stroke="#526577" d="M163.83,-542.5C173.71,-536.57 184.34,-530.2 194.58,-524.05"/>
+<polygon fill="#526577" stroke="#526577" points="196.17,-527.18 202.94,-519.03 192.57,-521.18 196.17,-527.18"/>
+</g>
+<!-- channel&#45;&gt;diff -->
+<g id="edge7" class="edge">
+<title>channel&#45;&gt;diff</title>
+<path fill="none" stroke="#526577" d="M330.52,-542.5C320.48,-536.57 309.69,-530.2 299.28,-524.05"/>
+<polygon fill="#526577" stroke="#526577" points="301.16,-521.09 290.77,-519.02 297.6,-527.12 301.16,-521.09"/>
+</g>
+<!-- rhs -->
+<g id="node8" class="node">
+<title>rhs</title>
+<path fill="#d9f0df" stroke="#425569" d="M384.9,-430.62C384.9,-430.62 108.12,-430.62 108.12,-430.62 102.12,-430.62 96.12,-424.62 96.12,-418.62 96.12,-418.62 96.12,-404.1 96.12,-404.1 96.12,-398.1 102.12,-392.1 108.12,-392.1 108.12,-392.1 384.9,-392.1 384.9,-392.1 390.9,-392.1 396.9,-398.1 396.9,-404.1 396.9,-404.1 396.9,-418.62 396.9,-418.62 396.9,-424.62 390.9,-430.62 384.9,-430.62"/>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-414.41" font-family="DejaVu Sans" font-size="11.00" fill="#142536">GPU payload: PressureCorrection / PrePoisson</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-400.91" font-family="DejaVu Sans" font-size="11.00" fill="#142536">BuildPoissonRHS; host boundary / mass&#45;flux guards</text>
+</g>
+<!-- diff&#45;&gt;rhs -->
+<g id="edge8" class="edge">
+<title>diff&#45;&gt;rhs</title>
+<path fill="none" stroke="#526577" d="M246.51,-465.6C246.51,-458.19 246.51,-450.01 246.51,-442.33"/>
+<polygon fill="#526577" stroke="#526577" points="250.02,-442.38 246.52,-432.38 243.02,-442.38 250.02,-442.38"/>
+</g>
+<!-- solve -->
+<g id="node9" class="node">
+<title>solve</title>
+<path fill="#fce8c6" stroke="#425569" d="M386.4,-367.1C386.4,-367.1 106.62,-367.1 106.62,-367.1 100.62,-367.1 94.62,-361.1 94.62,-355.1 94.62,-355.1 94.62,-327.08 94.62,-327.08 94.62,-321.08 100.62,-315.08 106.62,-315.08 106.62,-315.08 386.4,-315.08 386.4,-315.08 392.4,-315.08 398.4,-321.08 398.4,-327.08 398.4,-327.08 398.4,-355.1 398.4,-355.1 398.4,-361.1 392.4,-367.1 386.4,-367.1"/>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-350.89" font-family="DejaVu Sans" font-size="11.00" fill="#142536">EXTERNAL GPU TASK: resident_pressure%solve</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-337.39" font-family="DejaVu Sans" font-size="11.00" fill="#142536">ELMM adapter → poisson_solver_execute_device_v1</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-323.89" font-family="DejaVu Sans" font-size="11.00" fill="#142536">FD2 Poisson via CUDA FFT provider; runtime stream</text>
+</g>
+<!-- rhs&#45;&gt;solve -->
+<g id="edge9" class="edge">
+<title>rhs&#45;&gt;solve</title>
+<path fill="none" stroke="#526577" d="M246.51,-391.7C246.51,-387.6 246.51,-383.12 246.51,-378.59"/>
+<polygon fill="#526577" stroke="#526577" points="250.02,-378.89 246.52,-368.89 243.02,-378.89 250.02,-378.89"/>
+</g>
+<!-- correct -->
+<g id="node10" class="node">
+<title>correct</title>
+<path fill="#d9f0df" stroke="#425569" d="M387.53,-290.08C387.53,-290.08 105.5,-290.08 105.5,-290.08 99.5,-290.08 93.5,-284.08 93.5,-278.08 93.5,-278.08 93.5,-250.06 93.5,-250.06 93.5,-244.06 99.5,-238.06 105.5,-238.06 105.5,-238.06 387.53,-238.06 387.53,-238.06 393.53,-238.06 399.53,-244.06 399.53,-250.06 399.53,-250.06 399.53,-278.08 399.53,-278.08 399.53,-284.08 393.53,-290.08 387.53,-290.08"/>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-273.87" font-family="DejaVu Sans" font-size="11.00" fill="#142536">GPU payload: halo + PostPoisson</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-260.37" font-family="DejaVu Sans" font-size="11.00" fill="#142536">CorrectPoissonVelocity + UpdatePoissonPressure</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-246.87" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Serial TOP plane reference, subtract, pressure faces</text>
+</g>
+<!-- solve&#45;&gt;correct -->
+<g id="edge10" class="edge">
+<title>solve&#45;&gt;correct</title>
+<path fill="none" stroke="#526577" d="M246.51,-314.69C246.51,-310.54 246.51,-306.16 246.51,-301.8"/>
+<polygon fill="#526577" stroke="#526577" points="250.02,-301.96 246.52,-291.96 243.02,-301.96 250.02,-301.96"/>
+</g>
+<!-- swap -->
+<g id="node11" class="node">
+<title>swap</title>
+<path fill="#e9e1f4" stroke="#425569" d="M355.65,-213.06C355.65,-213.06 137.38,-213.06 137.38,-213.06 131.38,-213.06 125.37,-207.06 125.37,-201.06 125.37,-201.06 125.37,-173.04 125.37,-173.04 125.37,-167.04 131.38,-161.04 137.38,-161.04 137.38,-161.04 355.65,-161.04 355.65,-161.04 361.65,-161.04 367.65,-167.04 367.65,-173.04 367.65,-173.04 367.65,-201.06 367.65,-201.06 367.65,-207.06 361.65,-213.06 355.65,-213.06"/>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-196.85" font-family="DejaVu Sans" font-size="11.00" fill="#142536">HOST: exchange_alloc descriptor swaps</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-183.35" font-family="DejaVu Sans" font-size="11.00" fill="#142536">GPU: remaining velocity boundaries</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-169.85" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Storage identity survives variable swaps</text>
+</g>
+<!-- correct&#45;&gt;swap -->
+<g id="edge11" class="edge">
+<title>correct&#45;&gt;swap</title>
+<path fill="none" stroke="#526577" d="M246.51,-237.67C246.51,-233.52 246.51,-229.14 246.51,-224.78"/>
+<polygon fill="#526577" stroke="#526577" points="250.02,-224.94 246.52,-214.94 243.02,-224.94 250.02,-224.94"/>
+</g>
+<!-- swap&#45;&gt;epoch -->
+<g id="edge12" class="edge">
+<title>swap&#45;&gt;epoch</title>
+<path fill="none" stroke="#526577" stroke-dasharray="5,2" d="M316.58,-213.5C329.77,-217.94 343.5,-222.32 356.51,-226.06 379.31,-232.61 393.75,-219.5 408.51,-238.06 422.91,-256.15 412.22,-267.26 408.51,-290.08 407.55,-296.05 403.78,-297.08 404.51,-303.08 405.19,-308.54 406.84,-309.62 407.51,-315.08 410.34,-338.03 411.22,-344.28 407.51,-367.1 406.55,-373.07 403.02,-374.08 403.51,-380.1 405.37,-402.49 419.61,-413.12 405.51,-430.62 389.82,-450.11 366.21,-423.13 350.51,-442.62 347.38,-446.51 347.4,-449.96 350.51,-453.87 365.28,-472.43 385.62,-449.22 402.51,-465.87 423.71,-486.76 396.58,-510.78 418.51,-530.89 444.04,-554.3 472.99,-516.58 495.51,-542.89 510.55,-560.45 509.28,-576.34 495.51,-594.91 463.43,-638.2 424.85,-601.04 379.51,-630.16 353.55,-646.84 358.58,-664.18 333.51,-682.18 316.38,-694.48 295.98,-704.66 276.6,-712.72"/>
+<polygon fill="#526577" stroke="#526577" points="275.36,-709.44 267.37,-716.41 277.96,-715.94 275.36,-709.44"/>
+<text xml:space="preserve" text-anchor="middle" x="382.01" y="-445.32" font-family="DejaVu Sans" font-size="9.00">next RK stage</text>
+</g>
+<!-- output -->
+<g id="node12" class="node">
+<title>output</title>
+<path fill="#e9e1f4" stroke="#425569" d="M411.15,-125.79C411.15,-125.79 81.88,-125.79 81.88,-125.79 75.88,-125.79 69.88,-119.79 69.88,-113.79 69.88,-113.79 69.88,-85.77 69.88,-85.77 69.88,-79.77 75.88,-73.77 81.88,-73.77 81.88,-73.77 411.15,-73.77 411.15,-73.77 417.15,-73.77 423.15,-79.77 423.15,-85.77 423.15,-85.77 423.15,-113.79 423.15,-113.79 423.15,-119.79 417.15,-125.79 411.15,-125.79"/>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-109.58" font-family="DejaVu Sans" font-size="11.00" fill="#142536">HOST: OutTStep schedule</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-96.08" font-family="DejaVu Sans" font-size="11.00" fill="#142536">GPU: active ResidentAverage + immutable snapshot capture</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-82.58" font-family="DejaVu Sans" font-size="11.00" fill="#142536">D2H snapshot → bounded CPU output writer</text>
+</g>
+<!-- swap&#45;&gt;output -->
+<g id="edge13" class="edge">
+<title>swap&#45;&gt;output</title>
+<path fill="none" stroke="#526577" d="M246.51,-160.93C246.51,-153.53 246.51,-145.29 246.51,-137.33"/>
+<polygon fill="#526577" stroke="#526577" points="250.02,-137.53 246.52,-127.53 243.02,-137.53 250.02,-137.53"/>
+<text xml:space="preserve" text-anchor="middle" x="275.39" y="-140.49" font-family="DejaVu Sans" font-size="9.00">after stage 3</text>
+</g>
+<!-- output&#45;&gt;time -->
+<g id="edge14" class="edge">
+<title>output&#45;&gt;time</title>
+<path fill="none" stroke="#526577" stroke-dasharray="5,2" d="M319.96,-126.2C339.68,-135.22 360.07,-146.78 376.51,-161.04 529.37,-293.63 588.93,-406.74 514.51,-594.91 478.43,-686.15 446.49,-703.59 363.51,-755.95 350.86,-763.94 336.82,-770.75 322.5,-776.53"/>
+<polygon fill="#526577" stroke="#526577" points="321.52,-773.15 313.44,-780.01 324.03,-779.69 321.52,-773.15"/>
+<text xml:space="preserve" text-anchor="middle" x="577.95" y="-445.32" font-family="DejaVu Sans" font-size="9.00">next timestep</text>
+</g>
+<!-- done -->
+<g id="node13" class="node">
+<title>done</title>
+<path fill="#dce9f7" stroke="#425569" d="M373.65,-38.52C373.65,-38.52 119.38,-38.52 119.38,-38.52 113.38,-38.52 107.38,-32.52 107.38,-26.52 107.38,-26.52 107.38,-12 107.38,-12 107.38,-6 113.38,0 119.38,0 119.38,0 373.65,0 373.65,0 379.65,0 385.65,-6 385.65,-12 385.65,-12 385.65,-26.52 385.65,-26.52 385.65,-32.52 379.65,-38.52 373.65,-38.52"/>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-22.31" font-family="DejaVu Sans" font-size="11.00" fill="#142536">HOST: join output writer, publish required fields</text>
+<text xml:space="preserve" text-anchor="middle" x="246.51" y="-8.81" font-family="DejaVu Sans" font-size="11.00" fill="#142536">Retire pressure provider and residency domain</text>
+</g>
+<!-- output&#45;&gt;done -->
+<g id="edge15" class="edge">
+<title>output&#45;&gt;done</title>
+<path fill="none" stroke="#526577" d="M246.51,-73.5C246.51,-66.09 246.51,-57.91 246.51,-50.23"/>
+<polygon fill="#526577" stroke="#526577" points="250.02,-50.28 246.52,-40.28 243.02,-50.28 250.02,-50.28"/>
+<text xml:space="preserve" text-anchor="middle" x="256.26" y="-53.22" font-family="DejaVu Sans" font-size="9.00">stop</text>
+</g>
+</g>
+</svg>
+</div><p class="download"><a href="hot-path/gpu.svg">Open or save this diagram as SVG</a></p></p>
+<p>Blue is host execution, green is device numerical work, orange is an explicitly integrated external GPU solver, and purple combines host control with a device operation. The GPU wall, pressure-tail and reduction helpers include explicit adapters as described below; green denotes the execution location, not a claim that every operation is inferred from arbitrary source automatically. Editable versions: <a href="hot-path/native.mmd">native Mermaid</a>, <a href="hot-path/gpu.mmd">GPU Mermaid</a>, <a href="hot-path/native.dot">native Graphviz</a>, <a href="hot-path/gpu.dot">GPU Graphviz</a>.</p>
+<p>Both primary configurations use the uniform 128×64×64 grid, lengths 12×4×2, Sigma SGS, periodic horizontal boundaries and no-slip vertical walls. They have no transported scalar fields. Both use second-order explicit momentum diffusion and an <strong>FD2 pressure operator</strong>; <code>channel</code>'s fourth-order <em>advection</em> does not make its pressure solve FD4. Independent FD4 solver tests qualify a separate supported operator.</p>
+<table>
+<thead>
+<tr>
+<th>Reached operation</th>
+<th>channel-simple</th>
+<th>channel</th>
+<th>Selected GPU placement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Time advance</td>
+<td>Adaptive timestep; three RK stages</td>
+<td>Same</td>
+<td>Host stage/timestep decisions; resident CFL field and max/NaN reductions after the first step</td>
+</tr>
+<tr>
+<td>SGS / wall stress</td>
+<td>Sigma plus wall model</td>
+<td>Same</td>
+<td><code>SGS_Sigma_uniform</code>, resident wall helpers and viscosity boundaries</td>
+</tr>
+<tr>
+<td>Momentum advection</td>
+<td><code>CDU</code>, <code>CDV</code>, <code>CDW</code>, split into div/adv helpers</td>
+<td><code>CD4divU</code>, <code>CD4divV</code>, <code>CD4divW</code></td>
+<td>Generated CUDA in both cases</td>
+</tr>
+<tr>
+<td>Explicit filter</td>
+<td>Disabled</td>
+<td><code>Filter3ord</code>, with velocity boundaries</td>
+<td>Generated CUDA when reached</td>
+</tr>
+<tr>
+<td>Diffusion / RK update</td>
+<td><code>MomentumDiffusion_nobranch_2ord</code>; RK linear combinations</td>
+<td>Same</td>
+<td>Generated CUDA</td>
+</tr>
+<tr>
+<td>Applied pressure gradient</td>
+<td><code>OtherTerms</code> → <code>PressureGrad</code></td>
+<td>Same</td>
+<td>Generated CUDA</td>
+</tr>
+<tr>
+<td>Pressure projection</td>
+<td>PrePoisson → PoisFFT → Bound_Phi → PostPoisson</td>
+<td>Same</td>
+<td>Generated RHS/correction loops; explicit GPU solver, halo and deterministic pressure-reference helpers</td>
+</tr>
+<tr>
+<td>Allocation exchange</td>
+<td>Three <code>exchange_alloc</code> calls per RK stage</td>
+<td>Same</td>
+<td>Host descriptor operation; residency follows the underlying allocation</td>
+</tr>
+<tr>
+<td>Time averages</td>
+<td>Active from t=0</td>
+<td>Active from t=40; absent from the early two-step trace</td>
+<td>Resident generated update when active</td>
+</tr>
+<tr>
+<td>Output</td>
+<td>Same required output contents</td>
+<td>Same</td>
+<td>Host scheduling, GPU snapshot, DMA, CPU writer; completion is joined</td>
+</tr>
+</tbody>
+</table>
+<p>The reached filter difference is supported by actual generated-backend events, not inferred only from configuration comments. The pinned ELMM wall-model parser also affects the effective filter setting; the simple configuration intentionally leaves the wall-model option at its default. Source and configuration provenance are retained in <a href="hot-path/provenance.json">provenance.json</a>, with the actual configuration files under <code>samples/</code>.</p>
+<p>The selected build's instrumented <strong>two-step-plus-initialization</strong> runs record 31 generated GPU procedure families for simple and 28 for channel, with no generated CPU-entry events. This does <strong>not</strong> mean there is no CPU work: the ledger excludes enclosing Fortran control, runtime submission, output, external FFT kernels and explicit CUDA helpers. It is also not a per-step kernel-launch count. The focused <a href="hot-path/generated-backend-evidence.json">backend ledger</a> records the exact source evidence. Representative event counts are six <code>SGS_Sigma_uniform</code> entries in each run, six of each simple div/adv helper, six of each channel CD4 helper, 108 channel <code>Filter3ord</code> entries, seven RHS builds and seven pressure updates. Initialization accounts for the extra pressure invocation.</p>
+<p>The source still contains broader CPU paths and unsupported configurations. Primary-case guards disable scalar transport, sponge and immersed-boundary payloads; their call sites can remain on the CPU without moving full fields. A steady resident run also retains host synchronization for scalar control and output. This is an explicit ELMM pipeline integration built on generic generated entries and coherence, not a demonstration that arbitrary application control graphs are fully scheduled on the GPU.</p>
+<h2 id="representative-transcription-and-calls">Representative transcription and calls</h2>
+<p>The excerpts below are actual bytes from the selected build. Full original paths, original line ranges, original-file SHA-256 and excerpt SHA-256 appear in <a href="hot-path/provenance.json">provenance.json</a>. Archived excerpts remain readable after <code>/tmp</code> is removed. These are representative examples, not manually simplified pseudocode.</p>
+<h3 id="1-native-pressure-gradient-loop-generated-cuda-queued-runtime-task">1. Native pressure-gradient loop → generated CUDA → queued runtime task</h3>
+<p>Native prepared <code>dynamics.f90</code>, original lines 87–93:</p>
+<pre><code class="language-fortran">      do k = 1, Unz
+        do j = 1, Uny
+          do i = 1, Unx
+            U(i,j,k) = U(i,j,k) + A * pr_gradient_x
+          end do
+        end do
+      end do
+</code></pre>
+<p>The pipeline extracts this region into <a href="hot-path/samples/pressure-gradient-extracted.f90">a standalone Fortran compiler input</a>. The generated CUDA kernel retains Fortran column-major addressing and explicit original lower bounds. Its grid-stride loop maps adjacent flattened points to adjacent <code>i</code> coordinates. The actual arithmetic statement (generated <code>shared_entry.cu</code>, original line 61) is:</p>
+<pre><code class="language-cuda">        fort_v0_u[F_IDX(((fort_v9_i - fort_v1_fort_region_lb_u_1) + 1), ((fort_v10_j - fort_v2_fort_region_lb_u_2) + 1), ((fort_v11_k - fort_v3_fort_region_lb_u_3) + 1), fort_v0_u_dim1, fort_v0_u_dim2, fort_v0_u_dim3)] = (fort_v0_u[F_IDX(((fort_v9_i - fort_v1_fort_region_lb_u_1) + 1), ((fort_v10_j - fort_v2_fort_region_lb_u_2) + 1), ((fort_v11_k - fort_v3_fort_region_lb_u_3) + 1), fort_v0_u_dim1, fort_v0_u_dim2, fort_v0_u_dim3)] + (fort_v4_a * fort_v5_pr_gradient_x));
+</code></pre>
+<p>The complete <a href="hot-path/samples/pressure-gradient-kernel.cu">generated kernel</a> includes the coordinate decoding and loop bounds. Numerical compilation requires <code>--fmad=false --ftz=false --prec-div=true --prec-sqrt=true</code> and host <code>-ffp-contract=off</code>; this expression is not permission to introduce contraction.</p>
+<p>The <a href="hot-path/samples/pressure-gradient-caller.f90">integrated caller</a> binds <code>u</code> to the live domain and passes a canonical handle through a generated <code>bind(C)</code> interface. The relevant actual call is:</p>
+<pre><code class="language-fortran">        rk_handle_u=resident_flow%bind_real64(u,lbound(u),.true.)
+        call pressure_require(rk_device_run( &amp;
+          resident_flow%context, &amp;
+          FORT_SCOPE_GPU, &amp;
+          rk_handle_u, &amp;
+          lbound(u,1), &amp;
+          lbound(u,2), &amp;
+          lbound(u,3), &amp;
+          a, &amp;
+          pr_gradient_x, &amp;
+          unx, &amp;
+          uny, &amp;
+          unz))
+</code></pre>
+<p>The <a href="hot-path/samples/pressure-gradient-interface.f90">generated C interface</a> binds this to <code>cpp_fort_shared_80aa32c5945f</code>; it accepts a handle rather than asking Fortran to copy an array to the GPU. The <a href="hot-path/samples/pressure-gradient-enqueue.cpp">generated enqueue excerpt</a> attaches exact read/write effects, kernel arguments and a 256-thread launch shape. Its final reservation and submission are:</p>
+<pre><code class="language-cpp">                        FORT_SHARED_CHECK(fort_scope_device_reserve_many_v1(fort_context, fort_graph_handles, fort_graph_reserve_count, fort_graph_pointers));
+                        if (fort_graph_0_active) fort_v0_u_device = static_cast&lt;double *&gt;(fort_graph_pointers[fort_graph_slot_0]);
+                        if (fort_graph_0_active) fort_graph_0_values.value_0 = fort_v0_u_device;
+                        if (!fort_graph_count) return FORT_SCOPE_OK;
+                        return fort_scope_graph_enqueue_v1(fort_context, 1757138722106318298ULL, fort_graph_tasks, fort_graph_0_argument_sizes);
+</code></pre>
+<p><code>fort_scope_device_reserve_many_v1</code> supplies storage addresses. The effect-aware <code>fort_scope_graph_enqueue_v1</code> establishes access/dependency handling; reservation alone does not assert that an input is current. Queued tasks can outlive this call. The generated file also contains a direct launch fallback on <code>fort_gpu_call.stream</code>; the queued path is shown here because it illustrates how work-unit calls become tasks in the shared domain.</p>
+<h3 id="2-cfl-generated-element-work-plus-a-resident-reduction">2. CFL: generated element work plus a resident reduction</h3>
+<p>The ELMM adapter supplies a small Fortran helper that computes each cell's CFL contribution, then uses the generic compiler to translate it. This is an application-supplied decomposition, not automatic transcription of the entire original <code>TimeStepLength</code> procedure. Actual helper body:</p>
+<pre><code class="language-fortran">do k=1,nz
+ do j=1,ny
+  do i=1,nx
+   p = max(abs(u(i+3,j+3,k+3)),abs(u(i+2,j+3,k+3))) / dx
+   p = p + max(abs(v(i+3,j+3,k+3)),abs(v(i+3,j+2,k+3))) / dy
+   p = p + max(abs(w(i+3,j+3,k+3)),abs(w(i+3,j+3,k+2))) / dz
+   cfl(i,j,k)=p
+  enddo
+ enddo
+enddo
+</code></pre>
+<p>See <a href="hot-path/samples/cfl-source.f90">complete helper</a> and <a href="hot-path/samples/cfl-kernel.cu">generated CUDA</a>. The <a href="hot-path/samples/cfl-caller.f90">actual caller</a> binds U/V/W as existing initialized inputs, binds persistent <code>cfl_values</code> as an initially uninitialized output, invokes the generated entry, then performs:</p>
+<pre><code class="language-fortran">    call pressure_require(fort_scope_max_real64_v1(resident_flow%context,handle,3_c_int32_t, &amp;
+      size(cfl_values,kind=c_size_t),0._c_double,maximum,any_nan,report))
+    nan=any_nan/=0
+</code></pre>
+<p>The device field remains resident. Only <code>maximum</code> and <code>any_nan</code> need to reach the CPU for the timestep decision. The first timestep uses the native path before the flow domain is opened.</p>
+<h3 id="3-poisson-an-explicit-device-library-task-with-region-contracts">3. Poisson: an explicit device-library task with region contracts</h3>
+<p>This operation is not a generated FFT loop. The integrated Fortran <a href="hot-path/samples/poisson-caller.f90">pressure dispatch</a> calls <code>resident_pressure%solve()</code> when the qualified resident path is active, followed by <code>resident_pressure%halo()</code>; the native fallback remains <code>Poiss_PoisFFT</code> / <code>Bound_Phi</code>.</p>
+<p>The actual C++ adapter declares only the Phi interior as overwritten, and only the RHS interior as read. It enters the same runtime access transaction used to maintain coherent data:</p>
+<pre><code class="language-cpp">        std::array&lt;size_t,3&gt; pl{2,2,2},pu{},rl{1,1,1},ru{};
+        for(int i=0;i&lt;3;++i) { pu[i]=size_t(h-&gt;config.solver.sizes[i])+2;ru[i]=size_t(h-&gt;config.solver.sizes[i])+1; }
+        fort_scope_section interior{pl.data(),pu.data()},input{rl.data(),ru.data()};
+        fort_scope_access write{0,0,nullptr,1,&amp;interior,1,&amp;interior},read{0,1,&amp;input,0,nullptr,0,nullptr};
+        fort_scope_external_binding_v1 bindings[2]={{phi,FORT_SCOPE_REAL64,3,8,write},{rhs,FORT_SCOPE_REAL64,3,8,read}};
+        fort_scope_external_call_v1 call{1,0,bindings,2,h-&gt;lease,h-&gt;workspace};
+        return fort_scope_external_execute_v1(context,&amp;call,solve_worker,h,report);
+</code></pre>
+<p>The <a href="hot-path/samples/poisson-callback.cpp">callback</a> checks rank, REAL64 element size, dense Fortran strides, original bounds, total allocation size and the verified two/one Phi/RHS ghost widths. It forwards the transaction's stream and typed device addresses to the checked solver ABI:</p>
+<pre><code class="language-cpp">        view_check(views[0],h,true);view_check(views[1],h,false);
+        const int32_t phi_ghosts[3]={2,2,2},rhs_ghosts[3]={1,1,1};
+        const int status=poisson_solver_execute_device_v1(h.solver,views[0].device,views[0].bytes,
+            views[1].device,views[1].bytes,phi_ghosts,rhs_ghosts,stream,started);
+        return provider_status(status);
+</code></pre>
+<p>RHS remains read-only, Phi halos are not solver outputs, and the separately declared halo task fills the required faces. Solver plans/workspaces are persistent and charged to the domain. <code>started</code> distinguishes rejection before submission from failure after work may have executed; the latter cannot replay source work safely. Complete <a href="hot-path/samples/poisson-transaction.cpp">transaction</a> and <a href="hot-path/samples/poisson-callback.cpp">callback</a> excerpts preserve the error-handling context.</p>
+<p>The GPU pressure tail also preserves the approved TOP-reference summation order with a single-thread plane reduction, followed by parallel subtraction and pressure-face work. This illustrates the current design's deliberate mixture: generic compiler-generated arithmetic, generic coherent task interfaces, and small explicit ELMM/solver adapters where source-level lowering alone is insufficient.</p>
+<h2 id="data-management-and-communication">Data management and communication</h2>
+<p>The native configurations keep their arrays in host memory: four OpenMP threads operate on those arrays, CPU PoisFFT uses host workspaces, and the original output routines read host arrays. The selected GPU implementation keeps a shared residency domain alive across RK stages and ordinary timesteps. Native Fortran still controls calls, predicates and timestep selection; returning from a GPU procedure does not publish all its fields to the CPU. Both configurations use resident wall-model work; <code>channel</code> additionally exercises frequent host wall diagnostics.</p>
+<p><div class="diagram"><svg
+ viewBox="0.00 0.00 900.00 888.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(18 869.7)">
+<title>memory</title>
+<polygon fill="white" stroke="none" points="-18,18 -18,-869.7 881.7,-869.7 881.7,18 -18,18"/>
+<text xml:space="preserve" text-anchor="middle" x="431.85" y="-833.45" font-family="DejaVu Sans" font-size="15.00">ELMM data management: native and selected GPU</text>
+<g id="clust1" class="cluster">
+<title>cluster_native</title>
+<path fill="white" stroke="#cbd5e1" d="M161,-734.3C161,-734.3 680,-734.3 680,-734.3 686,-734.3 692,-740.3 692,-746.3 692,-746.3 692,-805.7 692,-805.7 692,-811.7 686,-817.7 680,-817.7 680,-817.7 161,-817.7 161,-817.7 155,-817.7 149,-811.7 149,-805.7 149,-805.7 149,-746.3 149,-746.3 149,-740.3 155,-734.3 161,-734.3"/>
+<text xml:space="preserve" text-anchor="middle" x="420.5" y="-799.45" font-family="DejaVu Sans" font-size="15.00">Native: channel and channel&#45;simple</text>
+</g>
+<g id="clust3" class="cluster">
+<title>cluster_gpu</title>
+<path fill="white" stroke="#93c5fd" d="M20,-101.4C20,-101.4 772,-101.4 772,-101.4 778,-101.4 784,-107.4 784,-113.4 784,-113.4 784,-701.3 784,-701.3 784,-707.3 778,-713.3 772,-713.3 772,-713.3 20,-713.3 20,-713.3 14,-713.3 8,-707.3 8,-701.3 8,-701.3 8,-113.4 8,-113.4 8,-107.4 14,-101.4 20,-101.4"/>
+<text xml:space="preserve" text-anchor="middle" x="396" y="-695.05" font-family="DejaVu Sans" font-size="15.00">Selected GPU: shared domain across RK stages and ordinary timesteps</text>
+</g>
+<!-- nh -->
+<g id="node1" class="node">
+<title>nh</title>
+<path fill="#f8fafc" stroke="#94a3b8" d="M348.58,-781C348.58,-781 169.42,-781 169.42,-781 163.42,-781 157.42,-775 157.42,-769 157.42,-769 157.42,-757 157.42,-757 157.42,-751 163.42,-745 169.42,-745 169.42,-745 348.58,-745 348.58,-745 354.58,-745 360.58,-751 360.58,-757 360.58,-757 360.58,-769 360.58,-769 360.58,-775 354.58,-781 348.58,-781"/>
+<text xml:space="preserve" text-anchor="middle" x="259" y="-759.3" font-family="DejaVu Sans" font-size="11.00">Host arrays and CPU workspaces</text>
+</g>
+<!-- nc -->
+<g id="node2" class="node">
+<title>nc</title>
+<path fill="#f8fafc" stroke="#94a3b8" d="M498.2,-783.7C498.2,-783.7 415.8,-783.7 415.8,-783.7 409.8,-783.7 403.8,-777.7 403.8,-771.7 403.8,-771.7 403.8,-754.3 403.8,-754.3 403.8,-748.3 409.8,-742.3 415.8,-742.3 415.8,-742.3 498.2,-742.3 498.2,-742.3 504.2,-742.3 510.2,-748.3 510.2,-754.3 510.2,-754.3 510.2,-771.7 510.2,-771.7 510.2,-777.7 504.2,-783.7 498.2,-783.7"/>
+<text xml:space="preserve" text-anchor="middle" x="457" y="-766.05" font-family="DejaVu Sans" font-size="11.00">OpenMP stages</text>
+<text xml:space="preserve" text-anchor="middle" x="457" y="-752.55" font-family="DejaVu Sans" font-size="11.00">CPU PoisFFT</text>
+</g>
+<!-- nh&#45;&gt;nc -->
+<g id="edge1" class="edge">
+<title>nh&#45;&gt;nc</title>
+<path fill="none" stroke="#64748b" d="M369.08,-763C377.8,-763 386.51,-763 395.23,-763"/>
+<polygon fill="#64748b" stroke="#64748b" points="369.22,-760.55 362.22,-763 369.22,-765.45 369.22,-760.55"/>
+<polygon fill="#64748b" stroke="#64748b" points="395.07,-765.45 402.07,-763 395.07,-760.55 395.07,-765.45"/>
+</g>
+<!-- no -->
+<g id="node3" class="node">
+<title>no</title>
+<path fill="#f8fafc" stroke="#94a3b8" d="M672.21,-781C672.21,-781 565.79,-781 565.79,-781 559.79,-781 553.79,-775 553.79,-769 553.79,-769 553.79,-757 553.79,-757 553.79,-751 559.79,-745 565.79,-745 565.79,-745 672.21,-745 672.21,-745 678.21,-745 684.21,-751 684.21,-757 684.21,-757 684.21,-769 684.21,-769 684.21,-775 678.21,-781 672.21,-781"/>
+<text xml:space="preserve" text-anchor="middle" x="619" y="-759.3" font-family="DejaVu Sans" font-size="11.00">Original host output</text>
+</g>
+<!-- nc&#45;&gt;no -->
+<g id="edge2" class="edge">
+<title>nc&#45;&gt;no</title>
+<path fill="none" stroke="#64748b" d="M510.47,-763C522.07,-763 533.67,-763 545.27,-763"/>
+<polygon fill="#64748b" stroke="#64748b" points="545.2,-765.45 552.2,-763 545.2,-760.55 545.2,-765.45"/>
+</g>
+<!-- r -->
+<g id="node5" class="node">
+<title>r</title>
+<path fill="#e0e7ff" stroke="#818cf8" d="M588.21,-679.3C588.21,-679.3 325.79,-679.3 325.79,-679.3 319.79,-679.3 313.79,-673.3 313.79,-667.3 313.79,-667.3 313.79,-636.4 313.79,-636.4 313.79,-630.4 319.79,-624.4 325.79,-624.4 325.79,-624.4 588.21,-624.4 588.21,-624.4 594.21,-624.4 600.21,-630.4 600.21,-636.4 600.21,-636.4 600.21,-667.3 600.21,-667.3 600.21,-673.3 594.21,-679.3 588.21,-679.3"/>
+<text xml:space="preserve" text-anchor="middle" x="457" y="-661.65" font-family="DejaVu Sans" font-size="11.00">Canonical handles + epoch generation</text>
+<text xml:space="preserve" text-anchor="middle" x="457" y="-648.15" font-family="DejaVu Sans" font-size="11.00">Initialized / host&#45;current / device&#45;current regions</text>
+<text xml:space="preserve" text-anchor="middle" x="457" y="-634.65" font-family="DejaVu Sans" font-size="11.00">Queued users + completion dependencies</text>
+</g>
+<!-- nc&#45;&gt;r -->
+<!-- h -->
+<g id="node4" class="node">
+<title>h</title>
+<path fill="#f8fafc" stroke="#94a3b8" d="M759.33,-672.55C759.33,-672.55 656.67,-672.55 656.67,-672.55 650.67,-672.55 644.67,-666.55 644.67,-660.55 644.67,-660.55 644.67,-643.15 644.67,-643.15 644.67,-637.15 650.67,-631.15 656.67,-631.15 656.67,-631.15 759.33,-631.15 759.33,-631.15 765.33,-631.15 771.33,-637.15 771.33,-643.15 771.33,-643.15 771.33,-660.55 771.33,-660.55 771.33,-666.55 765.33,-672.55 759.33,-672.55"/>
+<text xml:space="preserve" text-anchor="middle" x="708" y="-654.9" font-family="DejaVu Sans" font-size="11.00">Native initialization</text>
+<text xml:space="preserve" text-anchor="middle" x="708" y="-641.4" font-family="DejaVu Sans" font-size="11.00">Host arrays</text>
+</g>
+<!-- d -->
+<g id="node6" class="node">
+<title>d</title>
+<path fill="#dbeafe" stroke="#60a5fa" d="M570.83,-573.15C570.83,-573.15 429.17,-573.15 429.17,-573.15 423.17,-573.15 417.17,-567.15 417.17,-561.15 417.17,-561.15 417.17,-543.75 417.17,-543.75 417.17,-537.75 423.17,-531.75 429.17,-531.75 429.17,-531.75 570.83,-531.75 570.83,-531.75 576.83,-531.75 582.83,-537.75 582.83,-543.75 582.83,-543.75 582.83,-561.15 582.83,-561.15 582.83,-567.15 576.83,-573.15 570.83,-573.15"/>
+<text xml:space="preserve" text-anchor="middle" x="500" y="-555.5" font-family="DejaVu Sans" font-size="11.00">Persistent device fields</text>
+<text xml:space="preserve" text-anchor="middle" x="500" y="-542" font-family="DejaVu Sans" font-size="11.00">Reusable compiler scratch</text>
+</g>
+<!-- h&#45;&gt;d -->
+<g id="edge3" class="edge">
+<title>h&#45;&gt;d</title>
+<path fill="none" stroke="#64748b" d="M664.9,-630.67C631.57,-615.06 585.36,-593.42 550.34,-577.02"/>
+<polygon fill="#64748b" stroke="#64748b" points="551.79,-575 544.41,-574.25 549.71,-579.43 551.79,-575"/>
+<text xml:space="preserve" text-anchor="middle" x="660.25" y="-595.85" font-family="DejaVu Sans" font-size="9.00">first required reads: H2D</text>
+</g>
+<!-- r&#45;&gt;h -->
+<g id="edge4" class="edge">
+<title>r&#45;&gt;h</title>
+<path fill="none" stroke="#64748b" stroke-dasharray="1,5" d="M600.46,-651.85C612.62,-651.85 624.56,-651.85 635.79,-651.85"/>
+<polygon fill="#64748b" stroke="#64748b" points="635.73,-654.3 642.73,-651.85 635.73,-649.4 635.73,-654.3"/>
+<text xml:space="preserve" text-anchor="middle" x="622.44" y="-657.55" font-family="DejaVu Sans" font-size="9.00">owns</text>
+</g>
+<!-- r&#45;&gt;d -->
+<g id="edge5" class="edge">
+<title>r&#45;&gt;d</title>
+<path fill="none" stroke="#64748b" stroke-dasharray="1,5" d="M468.86,-623.98C474.77,-610.61 481.89,-594.47 487.83,-581.01"/>
+<polygon fill="#64748b" stroke="#64748b" points="489.98,-582.22 490.56,-574.82 485.5,-580.24 489.98,-582.22"/>
+<text xml:space="preserve" text-anchor="middle" x="493.98" y="-595.85" font-family="DejaVu Sans" font-size="9.00">owns</text>
+</g>
+<!-- k -->
+<g id="node7" class="node">
+<title>k</title>
+<path fill="#dbeafe" stroke="#94a3b8" d="M169.83,-462.5C169.83,-462.5 28.17,-462.5 28.17,-462.5 22.17,-462.5 16.17,-456.5 16.17,-450.5 16.17,-450.5 16.17,-433.1 16.17,-433.1 16.17,-427.1 22.17,-421.1 28.17,-421.1 28.17,-421.1 169.83,-421.1 169.83,-421.1 175.83,-421.1 181.83,-427.1 181.83,-433.1 181.83,-433.1 181.83,-450.5 181.83,-450.5 181.83,-456.5 175.83,-462.5 169.83,-462.5"/>
+<text xml:space="preserve" text-anchor="middle" x="99" y="-444.85" font-family="DejaVu Sans" font-size="11.00">Generated CUDA kernels</text>
+<text xml:space="preserve" text-anchor="middle" x="99" y="-431.35" font-family="DejaVu Sans" font-size="11.00">Runtime execution stream</text>
+</g>
+<!-- d&#45;&gt;k -->
+<g id="edge6" class="edge">
+<title>d&#45;&gt;k</title>
+<path fill="none" stroke="#64748b" d="M408.59,-531.65C382.25,-525.62 353.53,-518.73 327.25,-511.75 274.03,-497.61 214.5,-479.55 169.58,-465.46"/>
+<polygon fill="#64748b" stroke="#64748b" points="407.84,-534 415.21,-533.16 408.93,-529.22 407.84,-534"/>
+<polygon fill="#64748b" stroke="#64748b" points="170.5,-463.19 163.09,-463.42 169.03,-467.86 170.5,-463.19"/>
+<text xml:space="preserve" text-anchor="middle" x="357.62" y="-497.57" font-family="DejaVu Sans" font-size="9.00">reads / writes</text>
+</g>
+<!-- p -->
+<g id="node8" class="node">
+<title>p</title>
+<path fill="#dbeafe" stroke="#94a3b8" d="M401.95,-469.25C401.95,-469.25 216.05,-469.25 216.05,-469.25 210.05,-469.25 204.05,-463.25 204.05,-457.25 204.05,-457.25 204.05,-426.35 204.05,-426.35 204.05,-420.35 210.05,-414.35 216.05,-414.35 216.05,-414.35 401.95,-414.35 401.95,-414.35 407.95,-414.35 413.95,-420.35 413.95,-426.35 413.95,-426.35 413.95,-457.25 413.95,-457.25 413.95,-463.25 407.95,-469.25 401.95,-469.25"/>
+<text xml:space="preserve" text-anchor="middle" x="309" y="-451.6" font-family="DejaVu Sans" font-size="11.00">Checked external pressure task</text>
+<text xml:space="preserve" text-anchor="middle" x="309" y="-438.1" font-family="DejaVu Sans" font-size="11.00">RHS read / Phi interior overwrite</text>
+<text xml:space="preserve" text-anchor="middle" x="309" y="-424.6" font-family="DejaVu Sans" font-size="11.00">Persistent plan + workspace lease</text>
+</g>
+<!-- d&#45;&gt;p -->
+<g id="edge7" class="edge">
+<title>d&#45;&gt;p</title>
+<path fill="none" stroke="#64748b" d="M457.13,-527.06C429.48,-511.33 393.28,-490.74 363.58,-473.85"/>
+<polygon fill="#64748b" stroke="#64748b" points="455.91,-529.19 463.21,-530.52 458.33,-524.93 455.91,-529.19"/>
+<polygon fill="#64748b" stroke="#64748b" points="364.79,-471.72 357.5,-470.39 362.37,-475.98 364.79,-471.72"/>
+<text xml:space="preserve" text-anchor="middle" x="456.47" y="-497.57" font-family="DejaVu Sans" font-size="9.00">same stream</text>
+</g>
+<!-- c -->
+<g id="node9" class="node">
+<title>c</title>
+<path fill="#fef3c7" stroke="#94a3b8" d="M574.33,-462.5C574.33,-462.5 447.67,-462.5 447.67,-462.5 441.67,-462.5 435.67,-456.5 435.67,-450.5 435.67,-450.5 435.67,-433.1 435.67,-433.1 435.67,-427.1 441.67,-421.1 447.67,-421.1 447.67,-421.1 574.33,-421.1 574.33,-421.1 580.33,-421.1 586.33,-427.1 586.33,-433.1 586.33,-433.1 586.33,-450.5 586.33,-450.5 586.33,-456.5 580.33,-462.5 574.33,-462.5"/>
+<text xml:space="preserve" text-anchor="middle" x="511" y="-444.85" font-family="DejaVu Sans" font-size="11.00">Native timestep control</text>
+<text xml:space="preserve" text-anchor="middle" x="511" y="-431.35" font-family="DejaVu Sans" font-size="11.00">Host wall diagnostics</text>
+</g>
+<!-- d&#45;&gt;c -->
+<g id="edge8" class="edge">
+<title>d&#45;&gt;c</title>
+<path fill="none" stroke="#64748b" d="M498.83,-531.49C498.4,-519.26 498.36,-503.3 500,-489.25 500.7,-483.25 501.89,-476.9 503.24,-470.89"/>
+<polygon fill="#64748b" stroke="#64748b" points="505.54,-471.82 504.79,-464.44 500.78,-470.67 505.54,-471.82"/>
+<text xml:space="preserve" text-anchor="middle" x="576.5" y="-503.2" font-family="DejaVu Sans" font-size="9.00">16&#45;byte CFL result + wait</text>
+<text xml:space="preserve" text-anchor="middle" x="576.5" y="-491.95" font-family="DejaVu Sans" font-size="9.00">Read&#45;only wall&#45;plane observations</text>
+</g>
+<!-- o -->
+<g id="node11" class="node">
+<title>o</title>
+<path fill="#dcfce7" stroke="#94a3b8" d="M739.58,-462.5C739.58,-462.5 620.42,-462.5 620.42,-462.5 614.42,-462.5 608.42,-456.5 608.42,-450.5 608.42,-450.5 608.42,-433.1 608.42,-433.1 608.42,-427.1 614.42,-421.1 620.42,-421.1 620.42,-421.1 739.58,-421.1 739.58,-421.1 745.58,-421.1 751.58,-427.1 751.58,-433.1 751.58,-433.1 751.58,-450.5 751.58,-450.5 751.58,-456.5 745.58,-462.5 739.58,-462.5"/>
+<text xml:space="preserve" text-anchor="middle" x="680" y="-444.85" font-family="DejaVu Sans" font-size="11.00">Two immutable device</text>
+<text xml:space="preserve" text-anchor="middle" x="680" y="-431.35" font-family="DejaVu Sans" font-size="11.00">snapshot slots</text>
+</g>
+<!-- d&#45;&gt;o -->
+<g id="edge10" class="edge">
+<title>d&#45;&gt;o</title>
+<path fill="none" stroke="#64748b" d="M582.95,-544.88C608.24,-539.25 634.48,-529.27 654,-511.75 665.7,-501.25 672.16,-484.95 675.71,-470.83"/>
+<polygon fill="#64748b" stroke="#64748b" points="678.04,-471.67 677.16,-464.3 673.25,-470.61 678.04,-471.67"/>
+<text xml:space="preserve" text-anchor="middle" x="713.4" y="-503.2" font-family="DejaVu Sans" font-size="9.00">D2D capture before</text>
+<text xml:space="preserve" text-anchor="middle" x="713.4" y="-491.95" font-family="DejaVu Sans" font-size="9.00">conflicting writes</text>
+</g>
+<!-- f -->
+<g id="node14" class="node">
+<title>f</title>
+<path fill="#fef3c7" stroke="#94a3b8" d="M736.96,-164.3C736.96,-164.3 539.04,-164.3 539.04,-164.3 533.04,-164.3 527.04,-158.3 527.04,-152.3 527.04,-152.3 527.04,-121.4 527.04,-121.4 527.04,-115.4 533.04,-109.4 539.04,-109.4 539.04,-109.4 736.96,-109.4 736.96,-109.4 742.96,-109.4 748.96,-115.4 748.96,-121.4 748.96,-121.4 748.96,-152.3 748.96,-152.3 748.96,-158.3 742.96,-164.3 736.96,-164.3"/>
+<text xml:space="preserve" text-anchor="middle" x="638" y="-146.65" font-family="DejaVu Sans" font-size="11.00">Unsupported access / final teardown</text>
+<text xml:space="preserve" text-anchor="middle" x="638" y="-133.15" font-family="DejaVu Sans" font-size="11.00">Publish host&#45;visible fields</text>
+<text xml:space="preserve" text-anchor="middle" x="638" y="-119.65" font-family="DejaVu Sans" font-size="11.00">Join writer, wait, release storage</text>
+</g>
+<!-- d&#45;&gt;f -->
+<g id="edge13" class="edge">
+<title>d&#45;&gt;f</title>
+<path fill="none" stroke="#64748b" d="M583.28,-550.3C651.39,-547.39 740.07,-538.4 763,-511.75 810.14,-456.96 737.4,-257.58 714,-215.55 704.69,-198.82 690.82,-183.15 677.47,-170.32"/>
+<polygon fill="#64748b" stroke="#64748b" points="679.28,-168.66 672.49,-165.67 675.93,-172.24 679.28,-168.66"/>
+<text xml:space="preserve" text-anchor="middle" x="790.61" y="-339.47" font-family="DejaVu Sans" font-size="9.00">publication</text>
+</g>
+<!-- s -->
+<g id="node10" class="node">
+<title>s</title>
+<path fill="#f8fafc" stroke="#94a3b8" d="M181.95,-679.3C181.95,-679.3 32.05,-679.3 32.05,-679.3 26.05,-679.3 20.05,-673.3 20.05,-667.3 20.05,-667.3 20.05,-636.4 20.05,-636.4 20.05,-630.4 26.05,-624.4 32.05,-624.4 32.05,-624.4 181.95,-624.4 181.95,-624.4 187.95,-624.4 193.95,-630.4 193.95,-636.4 193.95,-636.4 193.95,-667.3 193.95,-667.3 193.95,-673.3 187.95,-679.3 181.95,-679.3"/>
+<text xml:space="preserve" text-anchor="middle" x="107" y="-661.65" font-family="DejaVu Sans" font-size="11.00">Proved MOVE_ALLOC swaps</text>
+<text xml:space="preserve" text-anchor="middle" x="107" y="-648.15" font-family="DejaVu Sans" font-size="11.00">Variable binding changes</text>
+<text xml:space="preserve" text-anchor="middle" x="107" y="-634.65" font-family="DejaVu Sans" font-size="11.00">Physical allocation survives</text>
+</g>
+<!-- s&#45;&gt;r -->
+<g id="edge9" class="edge">
+<title>s&#45;&gt;r</title>
+<path fill="none" stroke="#64748b" stroke-dasharray="1,5" d="M194.42,-651.85C228.06,-651.85 267.53,-651.85 305.5,-651.85"/>
+<polygon fill="#64748b" stroke="#64748b" points="305.06,-654.3 312.06,-651.85 305.06,-649.4 305.06,-654.3"/>
+<text xml:space="preserve" text-anchor="middle" x="253.87" y="-657.55" font-family="DejaVu Sans" font-size="9.00">same physical handle</text>
+</g>
+<!-- b -->
+<g id="node12" class="node">
+<title>b</title>
+<path fill="#dcfce7" stroke="#94a3b8" d="M664.71,-363.1C664.71,-363.1 579.29,-363.1 579.29,-363.1 573.29,-363.1 567.29,-357.1 567.29,-351.1 567.29,-351.1 567.29,-333.7 567.29,-333.7 567.29,-327.7 573.29,-321.7 579.29,-321.7 579.29,-321.7 664.71,-321.7 664.71,-321.7 670.71,-321.7 676.71,-327.7 676.71,-333.7 676.71,-333.7 676.71,-351.1 676.71,-351.1 676.71,-357.1 670.71,-363.1 664.71,-363.1"/>
+<text xml:space="preserve" text-anchor="middle" x="622" y="-345.45" font-family="DejaVu Sans" font-size="11.00">Two pinned host</text>
+<text xml:space="preserve" text-anchor="middle" x="622" y="-331.95" font-family="DejaVu Sans" font-size="11.00">snapshot slots</text>
+</g>
+<!-- o&#45;&gt;b -->
+<g id="edge11" class="edge">
+<title>o&#45;&gt;b</title>
+<path fill="none" stroke="#64748b" d="M667.98,-420.62C659.35,-406.12 647.62,-386.42 638.17,-370.55"/>
+<polygon fill="#64748b" stroke="#64748b" points="640.46,-369.62 634.78,-364.86 636.25,-372.12 640.46,-369.62"/>
+<text xml:space="preserve" text-anchor="middle" x="680.62" y="-385.8" font-family="DejaVu Sans" font-size="9.00">event → DMA</text>
+</g>
+<!-- w -->
+<g id="node13" class="node">
+<title>w</title>
+<path fill="#dcfce7" stroke="#94a3b8" d="M690.96,-270.45C690.96,-270.45 529.04,-270.45 529.04,-270.45 523.04,-270.45 517.04,-264.45 517.04,-258.45 517.04,-258.45 517.04,-227.55 517.04,-227.55 517.04,-221.55 523.04,-215.55 529.04,-215.55 529.04,-215.55 690.96,-215.55 690.96,-215.55 696.96,-215.55 702.96,-221.55 702.96,-227.55 702.96,-227.55 702.96,-258.45 702.96,-258.45 702.96,-264.45 696.96,-270.45 690.96,-270.45"/>
+<text xml:space="preserve" text-anchor="middle" x="610" y="-252.8" font-family="DejaVu Sans" font-size="11.00">Writer: original serializer</text>
+<text xml:space="preserve" text-anchor="middle" x="610" y="-239.3" font-family="DejaVu Sans" font-size="11.00">Wait for DMA; release slot</text>
+<text xml:space="preserve" text-anchor="middle" x="610" y="-225.8" font-family="DejaVu Sans" font-size="11.00">Backpressure if both occupied</text>
+</g>
+<!-- b&#45;&gt;w -->
+<g id="edge12" class="edge">
+<title>b&#45;&gt;w</title>
+<path fill="none" stroke="#64748b" d="M619.51,-321.22C618.01,-309.01 616.05,-293.12 614.3,-278.93"/>
+<polygon fill="#64748b" stroke="#64748b" points="616.78,-278.96 613.49,-272.31 611.91,-279.56 616.78,-278.96"/>
+<text xml:space="preserve" text-anchor="middle" x="653.82" y="-293.15" font-family="DejaVu Sans" font-size="9.00">DMA completion</text>
+</g>
+<!-- w&#45;&gt;f -->
+<g id="edge14" class="edge">
+<title>w&#45;&gt;f</title>
+<path fill="none" stroke="#64748b" d="M617.21,-215.18C620.71,-202.18 624.94,-186.41 628.68,-172.51"/>
+<polygon fill="#64748b" stroke="#64748b" points="630.97,-173.44 630.42,-166.04 626.24,-172.17 630.97,-173.44"/>
+<text xml:space="preserve" text-anchor="middle" x="632.71" y="-187" font-family="DejaVu Sans" font-size="9.00">join</text>
+</g>
+<!-- note -->
+<g id="node15" class="node">
+<title>note</title>
+<polygon fill="#fff7ed" stroke="#fdba74" points="857.71,-68.4 412.29,-68.4 412.29,0 863.71,0 863.71,-62.4 857.71,-68.4"/>
+<polyline fill="none" stroke="#fdba74" points="857.71,-68.4 857.71,-62.4"/>
+<polyline fill="none" stroke="#fdba74" points="863.71,-62.4 857.71,-62.4"/>
+<text xml:space="preserve" text-anchor="middle" x="638" y="-50.75" font-family="DejaVu Sans" font-size="11.00">Read&#45;only access adds a replica; it preserves the source.</text>
+<text xml:space="preserve" text-anchor="middle" x="638" y="-37.25" font-family="DejaVu Sans" font-size="11.00">Writes invalidate only overlapping opposite regions.</text>
+<text xml:space="preserve" text-anchor="middle" x="638" y="-23.75" font-family="DejaVu Sans" font-size="11.00">Pending work remains ordered by stream / completion events.</text>
+<text xml:space="preserve" text-anchor="middle" x="638" y="-10.25" font-family="DejaVu Sans" font-size="11.00">Snapshots are reached on longer runs; primary cases have initial frames only.</text>
+</g>
+<!-- f&#45;&gt;note -->
+</g>
+</svg>
+</div><p class="download"><a href="data-management/memory.svg">Open or save this diagram as SVG</a></p></p>
+<p>The editable diagram is supplied as <a href="data-management/memory.mmd">Mermaid</a> and <a href="data-management/memory.dot">Graphviz</a>. Solid arrows represent data or completion flow; dotted arrows represent ownership or identity rules. The selected executable is the retained async-output implementation, not the rejected coordinate-decoder experiment.</p>
+<h3 id="allocation-identity-and-replica-validity">Allocation identity and replica validity</h3>
+<p><code>resident_flow</code> owns the domain. Its Fortran registry maps physical host allocation addresses to canonical runtime handles and an owner epoch generation. It caches handles, <strong>not coherence state</strong>. The C++ runtime alone tracks layout, initialized regions, current host/device regions, pending uploads, queued users and completion dependencies. Initialized means a value exists; current means a replica represents the latest value; pending work still requires stream/event ordering before another consumer may use it.</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Actual runtime behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>First GPU read</td>
+<td>Upload only the required region missing on the device. Preserve the current host replica.</td>
+</tr>
+<tr>
+<td>Read-only host observation</td>
+<td>Drain conflicting queued work, download missing host regions and wait for the relevant completion. Preserve device validity. A later GPU read does not re-upload unchanged data.</td>
+</tr>
+<tr>
+<td>GPU or host write</td>
+<td>Commit the written region on that side and invalidate overlapping regions in the other replica. Nonoverlapping values remain usable.</td>
+</tr>
+<tr>
+<td>Proved complete overwrite</td>
+<td>Allocate storage without uploading the value that will be replaced. Ordinary reads still require initialized data.</td>
+</tr>
+<tr>
+<td>Reused compiler temporary</td>
+<td>Borrow a persistent slot by site and shape. Discard old values once their queued users are submitted; order reuse on the same stream. No download of dead scratch is required.</td>
+</tr>
+<tr>
+<td>Allocation exchange</td>
+<td>The checked ELMM <code>exchange_alloc_3D</code> uses <code>MOVE_ALLOC</code>; physical storage survives. The next binding finds the same address/handle under the new variable name. No array payload moves.</td>
+</tr>
+<tr>
+<td>Unsupported native path / final publication</td>
+<td>Publish the host-visible values and end the epoch before unmanaged access. Finalization joins output, waits for users and releases solver/domain storage.</td>
+</tr>
+</tbody>
+</table>
+<p>The generic runtime also provides an explicit descriptor identity-swap API, but the selected ELMM adapter follows physical allocation addresses; it does not call that API for each <code>MOVE_ALLOC</code>. This depends on the adapter's checked lifetime assumptions. It is not arbitrary Fortran pointer/allocatable alias inference. Unknown reassociation or unsupported source paths require an epoch boundary. Region fragmentation may conservatively discard a redundant mirror on a write; read-only access must preserve it. Eviction must preserve needed dirty values and cannot free storage still referenced by queued work.</p>
+<h3 id="solver-control-and-output">Solver, control and output</h3>
+<p>The local <code>poisson-solver</code> runs through a checked external-device task, sharing the runtime stream. The transaction validates dense physical layouts, obtains device views of Phi and RHS, and holds a solver-workspace lease. It declares RHS interior read-only and Phi interior overwritten, preserving RHS and untouched halos. Packing, VkFFT execution, unpacking, halo updates and pressure-tail kernels stay on the device. Ghost widths of two for Phi and one for RHS are guarded layout assumptions. The persistent solver is keyed by sizes, lengths, boundary conditions and FD approximation. Successful submission commits the declared writes with their completion ordering; failure after submission poisons execution and cannot replay the source work.</p>
+<p>Not every result remains on the GPU. After native first-step setup, <code>ResidentCFL</code> performs its field calculation and reduction on the GPU, copies a <strong>16-byte maximum/NaN record</strong> to the host and synchronizes that stream so native timestep control can consume it. <code>GroundUstar</code> and <code>GroundUstarUVW</code> call <code>ResidentWallsPublish(.true.)</code>: channel wall-plane values are observed for original host diagnostics. Those reads preserve the GPU replicas. Primary-case traces therefore do <strong>not</strong> support a claim of scalar-only traffic or zero transfers on ordinary timesteps.</p>
+<p>When a postinitial VTK frame is reached, five fields are copied device-to-device into one immutable snapshot slot on the execution stream. An event lets a separate DMA stream download the snapshot into pinned host storage; the writer waits for DMA, calls the original serializer and then frees the slot. There are exactly two slots, backpressure when both are occupied, and a writer join before completion. This keeps snapshot capture ahead of conflicting field writes without making full live fields host-current. Initialization frames remain native; neither short primary timing case reaches a postinitial async frame. The retained channel200 diagnostic reaches two paired frames sharing one snapshot: <strong>25,449,248 bytes per snapshot</strong>, <strong>50,898,496 bytes in the two device slots</strong> and the same amount in the two pinned slots. Its one D2H snapshot took 2.009 ms; measured overlap with kernels was only 0.118 ms. This establishes operation, not an end-to-end speedup claim.</p>
+<p>The selected RK domain requests a 2 GiB device budget. Runtime allocations, reusable scratch and external solver/output workspace leases participate in accounting; pinned output storage has a separate 256 MiB cap. These are not a complete cap on process memory: opaque driver allocations and all graph/host bookkeeping have not been comprehensively charged.</p>
+<h3 id="measured-remaining-communication">Measured remaining communication</h3>
+<p>The following totals come from retained <strong>whole-process diagnostic profiles</strong> of the selected executable. They include initialization and final publication, are not steady-state per-step totals, and must not be added to overlapping CPU API times to reconstruct wall time. MB below means decimal megabytes; exact bytes are retained in <a href="data-management/provenance.json">provenance.json</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th style="text-align:right">H2D calls / MB</th>
+<th style="text-align:right">H2D device time</th>
+<th style="text-align:right">D2H calls / MB</th>
+<th style="text-align:right">D2H device time</th>
+<th style="text-align:right">All-copy interval union</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>channel-simple</code>, 109 steps</td>
+<td style="text-align:right">135 / 60.323</td>
+<td style="text-align:right">7.169 ms</td>
+<td style="text-align:right">157 / 115.528</td>
+<td style="text-align:right">17.378 ms</td>
+<td style="text-align:right">24.547 ms</td>
+</tr>
+<tr>
+<td><code>channel</code>, 100 steps</td>
+<td style="text-align:right">204 / 48.174</td>
+<td style="text-align:right">6.133 ms</td>
+<td style="text-align:right">441 / 115.115</td>
+<td style="text-align:right">19.848 ms</td>
+<td style="text-align:right">25.981 ms</td>
+</tr>
+</tbody>
+</table>
+<p>The profiles contain 108 and 99 D2H transfers of 16 bytes respectively, matching postinitial CFL control. They also contain 20 and 317 D2H transfers of 65,536 bytes. Source inspection identifies retained host wall-plane observations; the byte-size histogram alone cannot attribute every individual plane copy. Large field transfers remain at application boundaries. A complete per-transfer semantic ledger is not present, so this report does not assert that every remaining byte is necessary or assigned to a precise source operation.</p>
+<p>Implementation references: <a href="../../../compiler/runtime/resident_domain.f90">domain owner</a>, <a href="../../../compiler/runtime/scoped_runtime.cu">coherence and external-task runtime</a>, <a href="../../../compiler/runtime/reductions.cu">scalar reduction</a>, <a href="../../../compiler/runtime/snapshots.cu">snapshot queue</a>, <a href="../../../elmm-pipeline/elmm_pipeline/resident_time_loop.py">time-loop adapter</a>, <a href="../../../elmm-pipeline/elmm_pipeline/resident_walls.py">wall observations</a>, <a href="../../../elmm-pipeline/elmm_pipeline/gpu_pressure_sources/gpu_pressure.cpp">solver access contract</a>. Evidence: <a href="../gpu-kernel-screening-20261110/summary.json">selected profiles</a>, <a href="../gpu-async-output-20261110/README.md">snapshot diagnostic</a>.</p>
+<h2 id="performance-history-and-measured-cost-breakdown">Performance history and measured cost breakdown</h2>
+<p>The selected GPU implementation runs <code>channel-simple</code>'s natural 109 steps in <strong>3.030 s (3.78× native)</strong> and shortened <code>channel</code>'s 100 steps in <strong>3.492 s (3.70× native)</strong>. These are complete-process medians, including initialization and output, from the latest retained seven-round comparison. Both cases beat their native control in all seven paired rounds. This is a substantial gain; the 20× research target remains unmet.</p>
+<p>The code snapshot is <strong><code>620e630e21735b8e90b496ed68621c444e26b9aa</code></strong>. Its wrap-up regenerated 130 entries and reproduced all four selected ELMM binary identities. The final packaging adjustment accepts the committed Poisson provider without changing its source hashes. <strong>No new timing campaign was run for the commit</strong>: the numbers belong to the previously measured, retained binary, whose SHA-256 is <code>2d5df06329cb8447990b0d4b39327ddf803f9d3113036ca2db7d1998cb69300e</code>. The rejected coordinate-decoder experiment is excluded from the selected result. <a href="../gpu-kernel-screening-20261110/README.md">Selected measurements</a>, <a href="../gpu-current-state-wrap-20261110/README.md">regeneration evidence</a>.</p>
+<h3 id="comparable-native-and-major-commit-controls">Comparable native and major-commit controls</h3>
+<p>The most recent <strong>common four-control cohort</strong> predates the solver-cache and final kernel/host improvements. It directly compares fresh native, <code>be58ab8</code>, <code>7a612e4</code>, and the resident implementation. Each cell is median seconds followed by speedup over that cohort's four-thread native control.</p>
+<table>
+<thead>
+<tr>
+<th>Implementation in the November 10 four-control cohort</th>
+<th style="text-align:right">simple109</th>
+<th style="text-align:right">channel100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Four-thread native, CPU PoisFFT</td>
+<td style="text-align:right">11.673 (1.00×)</td>
+<td style="text-align:right">13.190 (1.00×)</td>
+</tr>
+<tr>
+<td><code>be58ab8</code>: historical SGS offload</td>
+<td style="text-align:right">9.397 (1.24×)</td>
+<td style="text-align:right">11.289 (1.17×)</td>
+</tr>
+<tr>
+<td><code>7a612e4</code>: graph redesign, refreshed calibration</td>
+<td style="text-align:right">16.685 (0.70×)</td>
+<td style="text-align:right">11.310 (1.17×)</td>
+</tr>
+<tr>
+<td>November 10 resident GPU path and GPU Poisson</td>
+<td style="text-align:right">4.032 (2.89×)</td>
+<td style="text-align:right">4.673 (2.82×)</td>
+</tr>
+</tbody>
+</table>
+<p>The resident implementation wins all seven pairs against all three controls in both cases. The fresh <code>7a612e4</code> build chooses additional Convection offloading for simple109 under its refreshed cost profile; the October observation that it offloaded only SGS does not describe this fresh build. Its regression is retained. <a href="../gpu-resident-four-controls-20261110/README.md">Four-control protocol and results</a>.</p>
+<p>The latest selected state has its own native control; it was <strong>not</strong> rerun against fresh <code>be58ab8</code> and <code>7a612e4</code> in that final cohort.</p>
+<table>
+<thead>
+<tr>
+<th>Latest retained cohort</th>
+<th style="text-align:right">simple109</th>
+<th style="text-align:right">channel100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Native median</td>
+<td style="text-align:right">11.460 s</td>
+<td style="text-align:right">12.938 s</td>
+</tr>
+<tr>
+<td>Selected GPU median</td>
+<td style="text-align:right"><strong>3.030 s</strong></td>
+<td style="text-align:right"><strong>3.492 s</strong></td>
+</tr>
+<tr>
+<td>GPU min–max, all seven samples</td>
+<td style="text-align:right">2.960–3.077 s</td>
+<td style="text-align:right">3.473–3.588 s</td>
+</tr>
+<tr>
+<td>GPU inclusive Q1–Q3</td>
+<td style="text-align:right">3.004–3.049 s</td>
+<td style="text-align:right">3.478–3.544 s</td>
+</tr>
+<tr>
+<td>Native/GPU median speedup</td>
+<td style="text-align:right"><strong>3.78×</strong></td>
+<td style="text-align:right"><strong>3.70×</strong></td>
+</tr>
+<tr>
+<td>Native/GPU paired speedup range</td>
+<td style="text-align:right">3.73–3.93×</td>
+<td style="text-align:right">3.63–3.78×</td>
+</tr>
+<tr>
+<td>Paired wins over native</td>
+<td style="text-align:right">7/7</td>
+<td style="text-align:right">7/7</td>
+</tr>
+<tr>
+<td>Complete-process budget for 20×</td>
+<td style="text-align:right">0.573 s</td>
+<td style="text-align:right">0.647 s</td>
+</tr>
+</tbody>
+</table>
+<p>All these cohorts use one excluded warmup and seven rotated complete-process measurements per variant and case. November results use four native threads and CPU affinity <code>0,2,4,6</code> on the Ryzen 5 5600G / RTX 3060 Ti setup. GPU solver-cache measurements use a warm persistent <strong>compiled-binary disk cache</strong> after the excluded warmup; each timed process still creates its CUDA context and solver plans. Cold-cache first-process time is not represented by those warm-cache medians. The cache milestone's excluded cold warmups were 4.174/4.903 s. <a href="../gpu-local-solver-cache-20261110/README.md">Cache protocol</a>.</p>
+<h3 id="progression-including-regressions">Progression, including regressions</h3>
+<p>Each speedup below uses the <strong>native measurement from that row's own cohort</strong>. Absolute times across rows are historical observations, not paired comparisons. The October cohort used different CPU affinity (<code>0..11</code>) and an earlier CUDA runtime. Dated working-tree milestones were accumulated into the latest snapshot; they were not individual source commits.</p>
+<table>
+<thead>
+<tr>
+<th>Commit or measured milestone</th>
+<th style="text-align:right">simple109: seconds (native speedup)</th>
+<th style="text-align:right">channel100: seconds (native speedup)</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>October 22 <code>be58ab8</code> control</td>
+<td style="text-align:right">9.651 (1.21×)</td>
+<td style="text-align:right">11.454 (1.16×)</td>
+<td>Original historical comparison</td>
+</tr>
+<tr>
+<td>October 22 <code>7a612e4</code></td>
+<td style="text-align:right">9.499 (1.23×)</td>
+<td style="text-align:right">11.354 (1.17×)</td>
+<td>SGS-only profiles; modest parity improvement</td>
+</tr>
+<tr>
+<td>November 8 <code>2619b7f</code></td>
+<td style="text-align:right">11.271 (1.04×)</td>
+<td style="text-align:right">16.321 (0.81×)</td>
+<td>Empty-native-call retention did not deliver both-case improvement</td>
+</tr>
+<tr>
+<td>November 8 <code>03c695d</code></td>
+<td style="text-align:right">11.186 (1.04×)</td>
+<td style="text-align:right">16.236 (0.80×)</td>
+<td>Compact-copy calibration; regression remained</td>
+</tr>
+<tr>
+<td>November 10 resident path</td>
+<td style="text-align:right">4.032 (2.89×)</td>
+<td style="text-align:right">4.673 (2.82×)</td>
+<td>Broad GPU coverage and GPU pressure solve</td>
+</tr>
+<tr>
+<td>November 10 solver binary cache</td>
+<td style="text-align:right">3.190 (3.60×)</td>
+<td style="text-align:right">3.778 (3.45×)</td>
+<td>21.36% / 19.62% below same-cohort uncached GPU</td>
+</tr>
+<tr>
+<td>November 10 exact division and grouping</td>
+<td style="text-align:right">3.096 (3.71×)</td>
+<td style="text-align:right">3.641 (3.60×)</td>
+<td>2.91% / 4.33% below same-cohort previous GPU</td>
+</tr>
+<tr>
+<td>November 10 host preparation</td>
+<td style="text-align:right">3.034 (3.83×)</td>
+<td style="text-align:right">3.524 (3.73×)</td>
+<td>1.51% / 2.66%; wins 5/7 and 6/7, not a robust paired win</td>
+</tr>
+<tr>
+<td>November 10 asynchronous output</td>
+<td style="text-align:right">3.004 (3.83×)</td>
+<td style="text-align:right">3.529 (3.73×)</td>
+<td>0.55% / 0.15%; wins 3/7 and 4/7, not a robust gain</td>
+</tr>
+<tr>
+<td>Latest retained binary, snapshot <code>620e630</code></td>
+<td style="text-align:right"><strong>3.030 (3.78×)</strong></td>
+<td style="text-align:right"><strong>3.492 (3.70×)</strong></td>
+<td>Later remeasurement of selected implementation</td>
+</tr>
+</tbody>
+</table>
+<p><code>4d944f1</code> fixed calibration-cache ownership between the failed compact-copy work and the later resident implementation; there is no separately qualified full timing row for that commit. The primary 109/100-step cases produce <strong>no post-initial asynchronous frames</strong>, so the asynchronous-output implementation cannot explain their small observed incremental difference. The first host-preparation campaign was invalidated by external CPU activity; only its complete valid replacement cohort is included.</p>
+<p>Sources: <a href="../graph-redesign-parity-20261022/README.md">October baseline</a>, <a href="../gpu-residency-speedup-20261108/README.md">2619b7f</a>, <a href="../gpu-residency-copy-v3-speedup-20261108/README.md">03c695d</a>, <a href="../gpu-exact-division-20261110/README.md">exact division</a>, <a href="../gpu-host-preparation-20261110/README.md">host preparation</a>, <a href="../gpu-async-output-20261110/README.md">asynchronous output</a>. Every measured sample, native baseline and paired ratio is retained in <a href="performance/data.json">data.json</a>; the flat <a href="performance/timing-samples.csv">timing CSV</a> contains 420 measurements across nine cohorts, including unselected controls/experiments with explicit mode names.</p>
+<h3 id="physical-transfers-and-gpu-computation">Physical transfers and GPU computation</h3>
+<p>These are <strong>separate traced full-run diagnostics</strong>, not the untraced wall-time samples above. MB means decimal megabytes. Counts and bytes include initialization, scalar results, publication and final output; they are not per-step values. CUDA memory kinds 1/2 are H2D/D2H.</p>
+<table>
+<thead>
+<tr>
+<th>Traced implementation / case</th>
+<th style="text-align:right">H2D MB (copies)</th>
+<th style="text-align:right">D2H MB (copies)</th>
+<th style="text-align:right">GPU copy interval union</th>
+<th style="text-align:right">GPU kernel interval union</th>
+<th style="text-align:right">Kernel launches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>be58ab8</code>, simple109</td>
+<td style="text-align:right">4,398.580 (2,952)</td>
+<td style="text-align:right">1,375.732 (328)</td>
+<td style="text-align:right">0.642 s</td>
+<td style="text-align:right">0.631 s</td>
+<td style="text-align:right">328</td>
+</tr>
+<tr>
+<td>Selected GPU, simple109</td>
+<td style="text-align:right">60.323 (135)</td>
+<td style="text-align:right">115.528 (157)</td>
+<td style="text-align:right">0.025 s</td>
+<td style="text-align:right">1.989 s</td>
+<td style="text-align:right">58,353</td>
+</tr>
+<tr>
+<td><code>be58ab8</code>, channel100</td>
+<td style="text-align:right">4,036.502 (2,709)</td>
+<td style="text-align:right">1,262.486 (301)</td>
+<td style="text-align:right">0.614 s</td>
+<td style="text-align:right">0.579 s</td>
+<td style="text-align:right">301</td>
+</tr>
+<tr>
+<td>Selected GPU, channel100</td>
+<td style="text-align:right">48.174 (204)</td>
+<td style="text-align:right">115.115 (441)</td>
+<td style="text-align:right">0.026 s</td>
+<td style="text-align:right">2.527 s</td>
+<td style="text-align:right">70,238</td>
+</tr>
+</tbody>
+</table>
+<p>The increase in GPU kernel activity accompanies moving substantially more numerical work off the CPU. The large reduction in transfer bytes does not imply that transfer time previously dominated the whole application. For example, <code>be58</code>'s host copy-API spans are 0.888/0.849 s, and its device copy intervals are 0.642/0.614 s; those spans overlap and <strong>must not be added</strong>. <a href="../gpu-residency-recovered-gap-20261109/README.md">Historical profile</a>, <a href="performance/be58-profile-extract.json">durable historical extract</a>, <a href="../gpu-kernel-screening-20261110/summary.json">selected profile</a>.</p>
+<p>The selected GPU has 0.641/0.889 s without recorded GPU kernel/copy activity <strong>inside its first-to-last-kernel window</strong> (2.639/3.426 s). This excludes startup before the first kernel and final activity after the last kernel. It identifies remaining gaps, not a directly recoverable speedup or an exclusive host-runtime charge.</p>
+<p>The following decomposition sums kernel activity by procedure family from those same selected traces. It measures device work, not end-to-end contribution. Individual kernel durations can overlap; the total activity sum (1.991/2.528 s) is slightly larger than the kernel interval union above.</p>
+<table>
+<thead>
+<tr>
+<th>GPU procedure family</th>
+<th style="text-align:right">simple109 activity</th>
+<th style="text-align:right">channel100 activity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SGS</td>
+<td style="text-align:right">0.485 s</td>
+<td style="text-align:right">0.446 s</td>
+</tr>
+<tr>
+<td>Convection and advection</td>
+<td style="text-align:right">0.246 s</td>
+<td style="text-align:right">0.583 s</td>
+</tr>
+<tr>
+<td>Diffusion</td>
+<td style="text-align:right">0.166 s</td>
+<td style="text-align:right">0.152 s</td>
+</tr>
+<tr>
+<td>Channel filter</td>
+<td style="text-align:right">0.000 s</td>
+<td style="text-align:right">0.326 s</td>
+</tr>
+<tr>
+<td>Wall model stresses and corrections</td>
+<td style="text-align:right">0.348 s</td>
+<td style="text-align:right">0.318 s</td>
+</tr>
+<tr>
+<td>Velocity / viscosity boundaries</td>
+<td style="text-align:right">0.096 s</td>
+<td style="text-align:right">0.121 s</td>
+</tr>
+<tr>
+<td>Poisson FFT kernels</td>
+<td style="text-align:right">0.260 s</td>
+<td style="text-align:right">0.239 s</td>
+</tr>
+<tr>
+<td>Poisson packing, denominator, normalization</td>
+<td style="text-align:right">0.059 s</td>
+<td style="text-align:right">0.054 s</td>
+</tr>
+<tr>
+<td>Pressure RHS, halos, velocity / pressure correction and pressure gradient</td>
+<td style="text-align:right">0.137 s</td>
+<td style="text-align:right">0.126 s</td>
+</tr>
+<tr>
+<td>Pressure reference</td>
+<td style="text-align:right">0.088 s</td>
+<td style="text-align:right">0.081 s</td>
+</tr>
+<tr>
+<td>RK array updates</td>
+<td style="text-align:right">0.077 s</td>
+<td style="text-align:right">0.070 s</td>
+</tr>
+<tr>
+<td>Time control and reductions</td>
+<td style="text-align:right">0.029 s</td>
+<td style="text-align:right">0.012 s</td>
+</tr>
+<tr>
+<td><strong>Summed kernel activity</strong></td>
+<td style="text-align:right"><strong>1.991 s</strong></td>
+<td style="text-align:right"><strong>2.528 s</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Exact procedure names, launch counts, unrounded times and the grouping map are in <a href="performance/gpu-stage-times.csv">gpu-stage-times.csv</a> and <a href="performance/gpu-stage-groups.json">gpu-stage-groups.json</a>. For example, <code>BoundUVW</code> alone launches 29,448/37,818 kernels, while SGS launches 327/300; launch count and kernel duration expose different optimization opportunities.</p>
+<h3 id="initialization-host-phases-and-output">Initialization, host phases and output</h3>
+<p>The dedicated phase experiment adds a complementary view. Values below are <strong>single untraced diagnostic observations</strong>, not seven-run medians. Instrumented host phases are disjoint, but a host call may enqueue device work whose completion is charged to a later phase.</p>
+<table>
+<thead>
+<tr>
+<th>Main-thread phase</th>
+<th style="text-align:right">simple native</th>
+<th style="text-align:right">simple GPU</th>
+<th style="text-align:right">channel native</th>
+<th style="text-align:right">channel GPU</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Initial conditions, including initial pressure setup</td>
+<td style="text-align:right">0.070 s</td>
+<td style="text-align:right">0.639 s</td>
+<td style="text-align:right">0.063 s</td>
+<td style="text-align:right">0.517 s</td>
+</tr>
+<tr>
+<td>RK calls</td>
+<td style="text-align:right">10.971 s</td>
+<td style="text-align:right">2.289 s</td>
+<td style="text-align:right">12.748 s</td>
+<td style="text-align:right">1.726 s</td>
+</tr>
+<tr>
+<td><code>OutTStep</code> calls</td>
+<td style="text-align:right">0.227 s</td>
+<td style="text-align:right">0.004 s</td>
+<td style="text-align:right">0.030 s</td>
+<td style="text-align:right">1.150 s</td>
+</tr>
+<tr>
+<td>Resident finalization</td>
+<td style="text-align:right">0.000 s</td>
+<td style="text-align:right">0.032 s</td>
+<td style="text-align:right">0.000 s</td>
+<td style="text-align:right">0.021 s</td>
+</tr>
+<tr>
+<td>Final output</td>
+<td style="text-align:right">0.066 s</td>
+<td style="text-align:right">0.070 s</td>
+<td style="text-align:right">0.057 s</td>
+<td style="text-align:right">0.052 s</td>
+</tr>
+<tr>
+<td>Other recorded setup/control/teardown phases</td>
+<td style="text-align:right">0.068 s</td>
+<td style="text-align:right">0.122 s</td>
+<td style="text-align:right">0.066 s</td>
+<td style="text-align:right">0.089 s</td>
+</tr>
+</tbody>
+</table>
+<p>The channel GPU's 1.150 s <code>OutTStep</code> value is <strong>not serialization time</strong>: it includes waits for queued work. In the separate traced diagnostic, 0.917 s of a 1.187 s output-call span overlaps GPU activity. Narrowed untraced instrumentation puts GPU adapter creation at approximately 0.323/0.298 s, including solver creation at 0.251/0.227 s; these nested intervals must not be added. Profiling itself increases CUDA initialization cost. <a href="../gpu-phase-attribution-20261110/README.md">Phase analysis</a>, <a href="performance/host-phase-times.csv">unrounded phase CSV</a>.</p>
+<p>There is no comparable exclusive CPU-per-procedure / initialization / output breakdown for <strong>every historical commit</strong>. An additive table claiming one would mix sampling, nested host spans, overlapping CUDA activity and different cohorts. The retained measurements establish the change from SGS-only offload to a broadly resident GPU path, its traffic reduction, and current launch/computation costs without that inference.</p>
+<h3 id="evidence-and-limits">Evidence and limits</h3>
+<p>The latest selected binary retains strict primary-case checks and the approved natural channel2458 criterion: independent per-field/output relative L2 limit of 1%, with exact layouts and inventories. Its worst retained natural-run L2 error is 0.155%; the stricter natural-run pointwise criterion still fails. These qualifications and focused milestone suites do not imply full release qualification. No new benchmark or application test was performed to assemble this report.</p>
+<p><a href="performance/sources.json">sources.json</a> records SHA-256 hashes for each source summary and the archived <code>be58</code> extract. <a href="performance/build_tables.py">build_tables.py</a> reproduces the tables' underlying data, checks each seven-sample median and verifies GPU-stage sums. The 20× goal would require a further <strong>5.29×/5.40×</strong> reduction from the selected complete-process medians. Startup, remaining numerical work and launch gaps all remain relevant; transfer elimination alone does not establish that result.</p>
+<h2 id="committed-snapshot-and-qualification">Committed snapshot and qualification</h2>
+<table>
+<thead>
+<tr>
+<th>Repository</th>
+<th>Implementation commit</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compiler/runtime</td>
+<td><code>620e630e21735b8e90b496ed68621c444e26b9aa</code></td>
+<td>Shared graph backend, resident memory, reductions, snapshots and current issue fixes</td>
+</tr>
+<tr>
+<td>ELMM pipeline</td>
+<td><code>aa40dd281a409e96ae31f6f8905bc7d507f3992b</code></td>
+<td>Resident RK/pressure/wall/output adapters; explicit local provider</td>
+</tr>
+<tr>
+<td>Poisson solver</td>
+<td><code>0b0ec4facc41697d2ad9fe34cb86959e799c5858</code></td>
+<td>Stream-aware device ABI, persistent kernel cache and FD2/FD4 qualification</td>
+</tr>
+</tbody>
+</table>
+<p>These are independent local Git repositories; commits have <strong>not been pushed</strong>. The overview itself is committed afterward. <a href="snapshot/revisions.json">Snapshot identities and binary hashes</a> also pin the companion parents. <a href="snapshot/pipeline.patch">Pipeline</a> and <a href="snapshot/solver.patch">solver</a> binary-safe patches preserve their changes in this repository; apply them only to the recorded parent revisions. Generated build/install products are excluded from source control.</p>
+<p>The last implementation wrap passed <strong>316 CPU/CUDA checks and 126 focused checks</strong>. All 130 ELMM numerical entries regenerated with zero changed CUDA sources; all four executable identities match the selected asynchronous-output build. Existing strict primary and approved natural channel2458 evidence belongs to those exact binaries. The broader audit and its repaired failures are described in the <a href="../gpu-current-state-wrap-20261110/README.md">wrap report</a>; this does not claim a fresh full-suite qualification of the final source snapshot.</p>
+<p>One small preparation fix was necessary for committing: the pipeline now accepts local solver commits <strong>descended from</strong> the pinned upstream base, rather than requiring <code>HEAD</code> to equal that base. Source snapshot hashes and rejection of unrelated history remain enforced. <strong>34 provider tests pass</strong>, including actual descendant/unrelated Git histories, and a snapshot of the committed solver verifies all 49 selected source files. This changes preparation, not numerical kernels or the measured executable. A trailing blank line and the editor's workspace-relative solver path were also tidied.</p>
+<p>Correctness uses the approved deterministic pressure reference and four native threads. Primary/operator checks retain <code>atol=1e-6</code>, <code>rtol=1e-5</code>. Natural channel2458 uses the approved independent 1% relative L2 limit per field/output component, with exact layout, coordinate, frame-inventory and time checks. The retained long run's worst L2 discrepancy is 0.154896%; its worst local pressure discrepancy is 1.467061% of peak, so the long run is <strong>not</strong> a strict pointwise pass. See <a href="../gpu-operator-parity-20261110/README.md">operator qualification</a> and <a href="../gpu-solver-residual-20261110/README.md">solver residuals</a>.</p>
+<p>The 20× research target is unmet. Complete graph/driver/host-memory accounting, remaining private legacy coupling, final release qualification, changed-identity calibration and a fresh comparison of all historical controls with the latest build remain deferred. No additional research run was started for this snapshot.</p>
+<footer>Offline report. Diagrams, measurements and excerpts are retained in the adjacent source files. No external scripts, fonts or services are required.</footer></main></html>

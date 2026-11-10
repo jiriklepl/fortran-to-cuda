@@ -1,0 +1,24 @@
+flowchart TB
+  subgraph Native[Native channel and channel-simple]
+    NH[Host arrays and CPU workspaces] --> NC[OpenMP stages and CPU PoisFFT]
+    NC --> NH
+    NH --> NO[Original host output]
+  end
+  subgraph Selected[Selected GPU implementation: one shared domain]
+    H[Native initialization and host arrays] -->|first required reads: H2D| D[Persistent device fields and reusable scratch]
+    R[Canonical handles and epoch generation<br/>initialized / host-current / device-current regions<br/>queued users and completion dependencies] -. owns .-> H
+    R -. owns .-> D
+    D --> K[Generated kernels on runtime stream]
+    K -->|declared writes| D
+    D --> P[Checked external pressure task<br/>RHS read / Phi interior write<br/>persistent plan and workspace lease]
+    P -->|same stream, preserve RHS and halos| D
+    D -->|16-byte CFL record; wait| C[Native control and diagnostics]
+    D -->|read-only wall-plane observations| C
+    C -. read-only keeps device replica .-> D
+    S[Proved MOVE_ALLOC swaps<br/>variable bindings change, storage survives] -. same physical handle .-> R
+    D -->|D2D capture before conflicting writes| O[Two immutable device snapshot slots]
+    O -->|capture event then DMA| B[Two pinned host snapshot slots]
+    B -->|wait for DMA| W[Writer: original serialization<br/>slot freed only after writing]
+    W -->|full queue applies backpressure| O
+    D -->|publish host-visible values| F[Unsupported path or final teardown<br/>join writer, wait, release storage]
+  end

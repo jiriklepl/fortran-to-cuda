@@ -1,0 +1,33 @@
+flowchart TB
+  init["main / InitialConditions<br/>CPU allocation, setup and initial pressure projection"]:::host
+  time["TMarchRK3: TimeStepLength<br/>CPU CFL + scalar timestep decision"]:::host
+  sgs["Each of 3 RK stages: SubgridStresses<br/>ComputeViscsWM → SubgridModel / SGS_Sigma_uniform<br/>ComputeUVWFluxesWM → BoundViscosity"]:::host
+  simple["channel-simple: Convection<br/>CDU/CDV/CDW → div + adv helpers<br/>No explicit filter"]:::host
+  channel["channel: Convection<br/>CD4divU / CD4divV / CD4divW<br/>FilterUstar → BoundUVW → Filter3ord → BoundUVW"]:::host
+  diff["Convection (continued)<br/>StressBoundaryFlux → MomentumDiffusion_nobranch_2ord<br/>RK velocity updates"]:::host
+  force["OtherTerms → PressureGrad<br/>BoundUVW / IBMomentum guards / BoundUVW"]:::host
+  pressure["PressureCorrection: PrePoisson<br/>Boundary / mass-flux handling → inline RHS loops"]:::host
+  solve["Poiss_PoisFFT → CPU PoisFFT / FFTW<br/>Bound_Phi"]:::host
+  correct["PostPoisson<br/>Velocity / pressure correction → deterministic TOP reference<br/>Pressure and velocity boundaries"]:::host
+  swap["exchange_alloc(U,U2), (V,V2), (W,W2)<br/>NullInterior / BoundUVW / IBMomentum guards / BoundUVW"]:::host
+  output["OutTStep<br/>Active averages, diagnostics, output serialization<br/>channel-simple averages from t=0; channel from t=40"]:::host
+  done["Final output and process completion"]:::host
+  init --> time
+  time --> sgs
+  sgs -->|"advection = 2"| simple
+  sgs -->|"advection = 4"| channel
+  simple --> diff
+  channel --> diff
+  diff --> force
+  force --> pressure
+  pressure --> solve
+  solve --> correct
+  correct --> swap
+  swap -->|"next RK stage"| sgs
+  swap -->|"after stage 3"| output
+  output -->|"next timestep"| time
+  output -->|"stop"| done
+  classDef host fill:#dce9f7,stroke:#425569,color:#142536
+  classDef gpu fill:#d9f0df,stroke:#425569,color:#142536
+  classDef external fill:#fce8c6,stroke:#425569,color:#142536
+  classDef mixed fill:#e9e1f4,stroke:#425569,color:#142536

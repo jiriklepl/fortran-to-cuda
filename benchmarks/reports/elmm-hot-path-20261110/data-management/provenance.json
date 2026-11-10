@@ -1,0 +1,316 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-10",
+  "kind": "Source inspection and retained diagnostic-profile extraction; no new benchmark",
+  "implementation_commits": {
+    "root": "620e630e21735b8e90b496ed68621c444e26b9aa",
+    "elmm_pipeline": "aa40dd281a409e96ae31f6f8905bc7d507f3992b",
+    "poisson_solver": "0b0ec4facc41697d2ad9fe34cb86959e799c5858"
+  },
+  "selected_executable": "/tmp/fortran-async-output-20261110-01/work/build/ELMM",
+  "selected_executable_sha256": "2d5df06329cb8447990b0d4b39327ddf803f9d3113036ca2db7d1998cb69300e",
+  "sources": [
+    {
+      "path": "compiler/runtime/resident_domain.f90",
+      "sha256": "81541f0d38cd2f57ce5555cf80b758b2f7139435d1c9858e0925c421d5b0bb15",
+      "anchors": [
+        {
+          "text": "registered_storage",
+          "first_line": 10
+        },
+        {
+          "text": "begin_epoch",
+          "first_line": 33
+        },
+        {
+          "text": "register_storage",
+          "first_line": 34
+        },
+        {
+          "text": "acquire_work_real64_3",
+          "first_line": 42
+        },
+        {
+          "text": "publish",
+          "first_line": 44
+        },
+        {
+          "text": "end_epoch",
+          "first_line": 45
+        },
+        {
+          "text": "close",
+          "first_line": 19
+        }
+      ]
+    },
+    {
+      "path": "compiler/runtime/scoped_runtime.cu",
+      "sha256": "b2053586fd35224ffbae8c0b5e2a802a527fd2105ce4d09d448d9df026a5b413",
+      "anchors": [
+        {
+          "text": "Buffer",
+          "first_line": 80
+        },
+        {
+          "text": "Residency",
+          "first_line": 143
+        },
+        {
+          "text": "prepare_effects",
+          "first_line": 1459
+        },
+        {
+          "text": "acquire_prepared_accesses",
+          "first_line": 1530
+        },
+        {
+          "text": "fort_scope_identity_swap_v1",
+          "first_line": 4059
+        },
+        {
+          "text": "fort_scope_external_execute_v1",
+          "first_line": 4378
+        }
+      ]
+    },
+    {
+      "path": "compiler/runtime/reductions.cu",
+      "sha256": "eca878b720198b4d355f0fa9508f5544b53673085f899cce2cac581d4a4f5349",
+      "anchors": [
+        {
+          "text": "Result",
+          "first_line": 10
+        },
+        {
+          "text": "cudaMemcpyAsync",
+          "first_line": 59
+        },
+        {
+          "text": "cudaStreamSynchronize",
+          "first_line": 61
+        }
+      ]
+    },
+    {
+      "path": "compiler/runtime/snapshots.cu",
+      "sha256": "72b498800a9b9069ce2a02ccd5e879258a7bae31b324273db478225730f76a6b",
+      "anchors": [
+        {
+          "text": "fort_snapshot_create_v1",
+          "first_line": 122
+        },
+        {
+          "text": "fort_snapshot_submit_v1",
+          "first_line": 169
+        },
+        {
+          "text": "fort_snapshot_destroy_v1",
+          "first_line": 226
+        }
+      ]
+    },
+    {
+      "path": "elmm-pipeline/elmm_pipeline/resident_rk.py",
+      "sha256": "01581fbe583a655b757e94097005992f8961ff858f3d504226357341672ed054",
+      "anchors": [
+        {
+          "text": "integrate_rk_epoch",
+          "first_line": 513
+        },
+        {
+          "text": "2147483648",
+          "first_line": 571
+        }
+      ]
+    },
+    {
+      "path": "elmm-pipeline/elmm_pipeline/resident_time_loop.py",
+      "sha256": "477504dabe6634d25956768686a97eb1c024754259c84296b38eb07be3c06294",
+      "anchors": [
+        {
+          "text": "ResidentCFL",
+          "first_line": 100
+        },
+        {
+          "text": "integrate_time_loop",
+          "first_line": 155
+        },
+        {
+          "text": "FinalizeResidentOutput",
+          "first_line": 144
+        }
+      ]
+    },
+    {
+      "path": "elmm-pipeline/elmm_pipeline/resident_walls.py",
+      "sha256": "3b82927460ec771a1724ba92936034437c800803470c5e129e0a2a8c472cd49b",
+      "anchors": [
+        {
+          "text": "ResidentWallsPublish",
+          "first_line": 267
+        },
+        {
+          "text": "GroundUstar",
+          "first_line": 473
+        }
+      ]
+    },
+    {
+      "path": "elmm-pipeline/elmm_pipeline/resident_output.py",
+      "sha256": "459b76e8febbe104442c40e75278737563f7462bc1e9da67a6bd7af3313faa08",
+      "anchors": [
+        {
+          "text": "fort_snapshot_create_v1",
+          "first_line": 82
+        },
+        {
+          "text": "268435456",
+          "first_line": 82
+        }
+      ]
+    },
+    {
+      "path": "elmm-pipeline/elmm_pipeline/gpu_pressure_sources/gpu_pressure.cpp",
+      "sha256": "aa90aaa0c2776144ffc38598f16728eb068a7c18f086a5c825b5d4163479e126",
+      "anchors": [
+        {
+          "text": "view_check",
+          "first_line": 85
+        },
+        {
+          "text": "solve_worker",
+          "first_line": 96
+        },
+        {
+          "text": "elmm_gpu_pressure_solve_v1",
+          "first_line": 152
+        }
+      ]
+    },
+    {
+      "path": "elmm-pipeline/elmm_pipeline/gpu_pressure_sources/resident_pressure_state.f90",
+      "sha256": "1b381a9bf87aa7dd3646e2ec5257fb08b06dbc7b080af060a90f0d800fbd63b7",
+      "anchors": [
+        {
+          "text": "resident_flow",
+          "first_line": 10
+        },
+        {
+          "text": "subroutine pressure_finish",
+          "first_line": 83
+        }
+      ]
+    }
+  ],
+  "evidence_reports": [
+    {
+      "path": "benchmarks/reports/gpu-kernel-screening-20261110/summary.json",
+      "sha256": "1f19e6e8407e62b8afa1810c655c7e09886a89e125e1176f81ada1b357cf7132"
+    },
+    {
+      "path": "benchmarks/reports/gpu-async-output-20261110/summary.json",
+      "sha256": "48d1cf7db6f51a00d9f2dcb81e6b4d01c822dc20abf4e61d694aa5dcc3ae6de6"
+    }
+  ],
+  "cuda_copy_kind": {
+    "1": "Host-to-Device",
+    "2": "Device-to-Host",
+    "8": "Device-to-Device"
+  },
+  "selected_profile_cases": {
+    "channel-simple": {
+      "steps": 109,
+      "scope": "Whole-process selected diagnostic profile; includes initialization and final publication. Not an untraced timing run or per-step transfer ledger.",
+      "physical_transfers_by_cuda_kind": {
+        "1": {
+          "calls": 135,
+          "bytes": 60323112,
+          "device_seconds": 0.007168949
+        },
+        "2": {
+          "calls": 157,
+          "bytes": 115528416,
+          "device_seconds": 0.017378074999999982
+        }
+      },
+      "copy_union_seconds": 0.024547024,
+      "selected_D2H_size_histogram": [
+        {
+          "copyKind": 2,
+          "bytes": 16,
+          "calls": 108,
+          "device_seconds": 0.00023117000000000002
+        },
+        {
+          "copyKind": 2,
+          "bytes": 65536,
+          "calls": 20,
+          "device_seconds": 0.0006948540000000001
+        }
+      ],
+      "raw_sqlite_path": "/tmp/fortran-coordinate-decode-20261110-01/selected-profile/channel-simple.sqlite",
+      "raw_sqlite_bytes": 8781824
+    },
+    "channel": {
+      "steps": 100,
+      "scope": "Whole-process selected diagnostic profile; includes initialization and final publication. Not an untraced timing run or per-step transfer ledger.",
+      "physical_transfers_by_cuda_kind": {
+        "1": {
+          "calls": 204,
+          "bytes": 48174088,
+          "device_seconds": 0.006132510999999998
+        },
+        "2": {
+          "calls": 441,
+          "bytes": 115114800,
+          "device_seconds": 0.019848167000000007
+        }
+      },
+      "copy_union_seconds": 0.025980678,
+      "selected_D2H_size_histogram": [
+        {
+          "copyKind": 2,
+          "bytes": 16,
+          "calls": 99,
+          "device_seconds": 0.000196355
+        },
+        {
+          "copyKind": 2,
+          "bytes": 65536,
+          "calls": 317,
+          "device_seconds": 0.0031838020000000003
+        }
+      ],
+      "raw_sqlite_path": "/tmp/fortran-coordinate-decode-20261110-01/selected-profile/channel.sqlite",
+      "raw_sqlite_bytes": 10076160
+    }
+  },
+  "sqlite_histogram_query": "SELECT copyKind,bytes,count(*) AS calls,sum(end-start)*1e-9 AS device_seconds FROM CUPTI_ACTIVITY_KIND_MEMCPY WHERE copyKind=2 AND bytes IN (16,65536) GROUP BY copyKind,bytes ORDER BY copyKind,bytes",
+  "snapshot_diagnostic": {
+    "profile_steps": 200,
+    "snapshot_field_bytes": {
+      "U": 5252800,
+      "V": 5252800,
+      "W": 5177760,
+      "Pr": 4882944,
+      "Viscosity": 4882944
+    },
+    "snapshot_payload_bytes": 25449248,
+    "device_snapshot_capacity_bytes": 50898496,
+    "pinned_snapshot_capacity_bytes": 50898496,
+    "noninitial_frames": 2,
+    "snapshots": 1,
+    "download_seconds": 0.002008917,
+    "overlap_with_kernel_union_seconds": 0.000118337,
+    "overlap_fraction": 0.05890586818668964
+  },
+  "limitations": [
+    "Trace activity times overlap CPU API spans; they are not additive wall-time categories.",
+    "Byte-size histograms do not provide a complete semantic transfer ledger. Source inspection identifies wall-plane observations but does not uniquely assign each 64KiB transfer.",
+    "Primary short cases do not reach postinitial asynchronous frames; the channel200 diagnostic establishes that path.",
+    "ELMM allocation identity follows checked physical addresses and epoch ownership, not arbitrary pointer/association inference.",
+    "Device budget accounting does not comprehensively charge opaque driver allocations or all graph/host metadata.",
+    "No claim of zero transfers, scalar-only steady-state communication or 20x end-to-end performance."
+  ]
+}

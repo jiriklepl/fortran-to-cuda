@@ -1,0 +1,34 @@
+digraph hotpath {
+graph [rankdir=TB, bgcolor="white", pad=0.2, nodesep=0.25, ranksep=0.32, fontname="DejaVu Sans", label="Native ELMM (4 CPU threads) — channel-simple and channel", labelloc=t, fontsize=18];
+node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=11, color="#425569", fontcolor="#142536", margin="0.12,0.08"];
+edge [fontname="DejaVu Sans", fontsize=9, color="#526577"];
+init [label="main / InitialConditions\nCPU allocation, setup and initial pressure projection", fillcolor="#dce9f7"];
+time [label="TMarchRK3: TimeStepLength\nCPU CFL + scalar timestep decision", fillcolor="#dce9f7"];
+sgs [label="Each of 3 RK stages: SubgridStresses\nComputeViscsWM → SubgridModel / SGS_Sigma_uniform\nComputeUVWFluxesWM → BoundViscosity", fillcolor="#dce9f7"];
+simple [label="channel-simple: Convection\nCDU/CDV/CDW → div + adv helpers\nNo explicit filter", fillcolor="#dce9f7"];
+channel [label="channel: Convection\nCD4divU / CD4divV / CD4divW\nFilterUstar → BoundUVW → Filter3ord → BoundUVW", fillcolor="#dce9f7"];
+diff [label="Convection (continued)\nStressBoundaryFlux → MomentumDiffusion_nobranch_2ord\nRK velocity updates", fillcolor="#dce9f7"];
+force [label="OtherTerms → PressureGrad\nBoundUVW / IBMomentum guards / BoundUVW", fillcolor="#dce9f7"];
+pressure [label="PressureCorrection: PrePoisson\nBoundary / mass-flux handling → inline RHS loops", fillcolor="#dce9f7"];
+solve [label="Poiss_PoisFFT → CPU PoisFFT / FFTW\nBound_Phi", fillcolor="#dce9f7"];
+correct [label="PostPoisson\nVelocity / pressure correction → deterministic TOP reference\nPressure and velocity boundaries", fillcolor="#dce9f7"];
+swap [label="exchange_alloc(U,U2), (V,V2), (W,W2)\nNullInterior / BoundUVW / IBMomentum guards / BoundUVW", fillcolor="#dce9f7"];
+output [label="OutTStep\nActive averages, diagnostics, output serialization\nchannel-simple averages from t=0; channel from t=40", fillcolor="#dce9f7"];
+done [label="Final output and process completion", fillcolor="#dce9f7"];
+{rank=same; simple; channel;}
+init -> time;
+time -> sgs;
+sgs -> simple [label="advection = 2"];
+sgs -> channel [label="advection = 4"];
+simple -> diff;
+channel -> diff;
+diff -> force;
+force -> pressure;
+pressure -> solve;
+solve -> correct;
+correct -> swap;
+swap -> sgs [label="next RK stage", constraint=false, style=dashed];
+swap -> output [label="after stage 3"];
+output -> time [label="next timestep", constraint=false, style=dashed];
+output -> done [label="stop"];
+}

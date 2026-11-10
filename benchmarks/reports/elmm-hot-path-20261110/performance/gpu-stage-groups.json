@@ -1,0 +1,227 @@
+{
+  "channel-simple": {
+    "SGS": {
+      "seconds": 0.4849962330000001,
+      "launches": 327,
+      "source_stages": [
+        "subgrid::sgs_sigma_uniform"
+      ]
+    },
+    "Poisson FFT kernels": {
+      "seconds": 0.2600829130000005,
+      "launches": 1968,
+      "source_stages": [
+        "VkFFT_main"
+      ]
+    },
+    "Diffusion": {
+      "seconds": 0.1658927859999997,
+      "launches": 981,
+      "source_stages": [
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord"
+      ]
+    },
+    "Wall model": {
+      "seconds": 0.34791481799999985,
+      "launches": 4578,
+      "source_stages": [
+        "resident_wall::stress1",
+        "resident_wall::stress2",
+        "resident_wall::stress0",
+        "resident_wall::stress3",
+        "resident_wall::correction2m",
+        "resident_wall::correction1m",
+        "resident_wall::correction3m",
+        "resident_wall::correction2p",
+        "resident_wall::correction1p",
+        "resident_wall::correction3p"
+      ]
+    },
+    "Pressure reference": {
+      "seconds": 0.08815331700000005,
+      "launches": 656,
+      "source_stages": [
+        "<unnamed>::plane_reference",
+        "<unnamed>::subtract_reference"
+      ]
+    },
+    "Velocity and viscosity boundaries": {
+      "seconds": 0.09615693199999782,
+      "launches": 36318,
+      "source_stages": [
+        "boundaries::bounduvw_do_bc",
+        "boundaries::periodic_corners_edges",
+        "scalarboundaries::boundviscosity"
+      ]
+    },
+    "Convection and advection": {
+      "seconds": 0.24610741900000008,
+      "launches": 4251,
+      "source_stages": [
+        "dynamics::convection",
+        "momentumadvection::cdudiv",
+        "momentumadvection::cdwdiv",
+        "momentumadvection::cdvdiv",
+        "momentumadvection::cduadv",
+        "momentumadvection::cdvadv",
+        "momentumadvection::cdwadv"
+      ]
+    },
+    "Pressure preparation, halos and correction": {
+      "seconds": 0.13650220600000001,
+      "launches": 3604,
+      "source_stages": [
+        "dynamics::pressuregrad",
+        "pressure::correctpoissonvelocity",
+        "pressure_faces",
+        "pressure::buildpoissonrhs",
+        "pressure::updatepoissonpressure",
+        "<unnamed>::pressure_faces"
+      ]
+    },
+    "RK array updates": {
+      "seconds": 0.07739854099999996,
+      "launches": 3270,
+      "source_stages": [
+        "arrayutilities::add_3d",
+        "arrayutilities::multiply_3d",
+        "arrayutilities::set_3d"
+      ]
+    },
+    "Poisson packing, denominator, normalization": {
+      "seconds": 0.05908293899999996,
+      "launches": 1640,
+      "source_stages": [
+        "void poisson_solver::detail::kernels::DivideByDenoms<double, ",
+        "void poisson_solver::detail::kernels::common_cmplx::Normalize<double, ",
+        "void poisson_solver::detail::kernels::common_cmplx::Init<double, ",
+        "void poisson_solver::detail::kernels::PackPaddedGrid<double, ",
+        "void poisson_solver::detail::kernels::UnpackPaddedGrid<double, "
+      ]
+    },
+    "Time control and reductions": {
+      "seconds": 0.028540502000000002,
+      "launches": 760,
+      "source_stages": [
+        "resident_time::average",
+        "resident_time::cfl",
+        "<unnamed>::partial_max",
+        "<unnamed>::final_max"
+      ]
+    }
+  },
+  "channel": {
+    "SGS": {
+      "seconds": 0.4458593220000003,
+      "launches": 300,
+      "source_stages": [
+        "subgrid::sgs_sigma_uniform"
+      ]
+    },
+    "Channel filter": {
+      "seconds": 0.3263779839999988,
+      "launches": 5400,
+      "source_stages": [
+        "filters::filter3ord"
+      ]
+    },
+    "Poisson FFT kernels": {
+      "seconds": 0.23914839599999987,
+      "launches": 1806,
+      "source_stages": [
+        "VkFFT_main"
+      ]
+    },
+    "Convection and advection": {
+      "seconds": 0.5826101699999995,
+      "launches": 3000,
+      "source_stages": [
+        "momentumadvection::cd4divw",
+        "momentumadvection::cd4divv",
+        "momentumadvection::cd4divu",
+        "dynamics::convection"
+      ]
+    },
+    "Diffusion": {
+      "seconds": 0.15221873799999985,
+      "launches": 900,
+      "source_stages": [
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord"
+      ]
+    },
+    "Velocity and viscosity boundaries": {
+      "seconds": 0.12113240399999763,
+      "launches": 45921,
+      "source_stages": [
+        "boundaries::bounduvw_do_bc",
+        "boundaries::periodic_corners_edges",
+        "scalarboundaries::boundviscosity"
+      ]
+    },
+    "Wall model": {
+      "seconds": 0.3179088289999999,
+      "launches": 4200,
+      "source_stages": [
+        "resident_wall::stress1",
+        "resident_wall::stress2",
+        "resident_wall::stress0",
+        "resident_wall::stress3",
+        "resident_wall::correction2m",
+        "resident_wall::correction1m",
+        "resident_wall::correction3m",
+        "resident_wall::correction2p",
+        "resident_wall::correction1p",
+        "resident_wall::correction3p"
+      ]
+    },
+    "Pressure reference": {
+      "seconds": 0.08107214100000017,
+      "launches": 602,
+      "source_stages": [
+        "<unnamed>::plane_reference",
+        "<unnamed>::subtract_reference"
+      ]
+    },
+    "Pressure preparation, halos and correction": {
+      "seconds": 0.1256598270000001,
+      "launches": 3307,
+      "source_stages": [
+        "dynamics::pressuregrad",
+        "pressure::correctpoissonvelocity",
+        "pressure_faces",
+        "pressure::buildpoissonrhs",
+        "pressure::updatepoissonpressure",
+        "<unnamed>::pressure_faces"
+      ]
+    },
+    "RK array updates": {
+      "seconds": 0.07040200700000004,
+      "launches": 3000,
+      "source_stages": [
+        "arrayutilities::add_3d",
+        "arrayutilities::multiply_3d",
+        "arrayutilities::set_3d"
+      ]
+    },
+    "Poisson packing, denominator, normalization": {
+      "seconds": 0.05430962999999999,
+      "launches": 1505,
+      "source_stages": [
+        "void poisson_solver::detail::kernels::DivideByDenoms<double, ",
+        "void poisson_solver::detail::kernels::common_cmplx::Normalize<double, ",
+        "void poisson_solver::detail::kernels::common_cmplx::Init<double, ",
+        "void poisson_solver::detail::kernels::PackPaddedGrid<double, ",
+        "void poisson_solver::detail::kernels::UnpackPaddedGrid<double, "
+      ]
+    },
+    "Time control and reductions": {
+      "seconds": 0.011799378999999995,
+      "launches": 297,
+      "source_stages": [
+        "resident_time::cfl",
+        "<unnamed>::partial_max",
+        "<unnamed>::final_max"
+      ]
+    }
+  }
+}

@@ -1,0 +1,33 @@
+flowchart TB
+  init["HOST: main / InitialConditions setup and output<br/>Initial pressure projection already uses GPU adapter"]:::mixed
+  time["HOST: TMarchRK3 / TimeStepLength<br/>First CFL uses CPU; later ResidentCFL → GPU max / NaN<br/>Small result returns to host for timestep decision"]:::mixed
+  epoch["HOST: lazy resident_flow epoch + RK dispatch<br/>Same domain reused across stages and timesteps"]:::host
+  sgs["GPU payload: SubgridStresses<br/>ResidentPrStress + SGS_Sigma_uniform<br/>ResidentUVWStress + BoundViscosity"]:::gpu
+  simple["channel-simple GPU payload: Convection<br/>CDU/CDV/CDW div + adv helpers<br/>No explicit filter"]:::gpu
+  channel["channel GPU payload: Convection<br/>CD4divU / CD4divV / CD4divW<br/>BoundUVW + Filter3ord + BoundUVW"]:::gpu
+  diff["GPU payload: Convection / OtherTerms<br/>MomentumDiffusion_nobranch_2ord + RK updates<br/>PressureGrad + boundary kernels"]:::gpu
+  rhs["GPU payload: PressureCorrection / PrePoisson<br/>BuildPoissonRHS; host boundary / mass-flux guards"]:::gpu
+  solve["EXTERNAL GPU TASK: resident_pressure%solve<br/>ELMM adapter → poisson_solver_execute_device_v1<br/>FD2 Poisson via CUDA FFT provider; runtime stream"]:::external
+  correct["GPU payload: halo + PostPoisson<br/>CorrectPoissonVelocity + UpdatePoissonPressure<br/>Serial TOP plane reference, subtract, pressure faces"]:::gpu
+  swap["HOST: exchange_alloc descriptor swaps<br/>GPU: remaining velocity boundaries<br/>Storage identity survives variable swaps"]:::mixed
+  output["HOST: OutTStep schedule<br/>GPU: active ResidentAverage + immutable snapshot capture<br/>D2H snapshot → bounded CPU output writer"]:::mixed
+  done["HOST: join output writer, publish required fields<br/>Retire pressure provider and residency domain"]:::host
+  init --> time
+  time --> epoch
+  epoch -->|"each RK stage"| sgs
+  sgs -->|"advection = 2"| simple
+  sgs -->|"advection = 4"| channel
+  simple --> diff
+  channel --> diff
+  diff --> rhs
+  rhs --> solve
+  solve --> correct
+  correct --> swap
+  swap -->|"next RK stage"| epoch
+  swap -->|"after stage 3"| output
+  output -->|"next timestep"| time
+  output -->|"stop"| done
+  classDef host fill:#dce9f7,stroke:#425569,color:#142536
+  classDef gpu fill:#d9f0df,stroke:#425569,color:#142536
+  classDef external fill:#fce8c6,stroke:#425569,color:#142536
+  classDef mixed fill:#e9e1f4,stroke:#425569,color:#142536

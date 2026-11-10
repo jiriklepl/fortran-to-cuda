@@ -1,0 +1,44 @@
+digraph memory {
+  graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.3", ranksep="0.55", fontname="DejaVu Sans", fontsize=15, label="ELMM data management: native and selected GPU", labelloc=t];
+  node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=11, margin="0.14,0.1", color="#94a3b8", fillcolor="#f8fafc"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", arrowsize=0.7];
+  subgraph cluster_native {
+    label="Native: channel and channel-simple"; color="#cbd5e1"; style=rounded;
+    nh [label="Host arrays and CPU workspaces"];
+    nc [label="OpenMP stages\nCPU PoisFFT"];
+    no [label="Original host output"];
+    nh -> nc [dir=both]; nc -> no;
+    {rank=same; nh; nc; no;}
+  }
+  subgraph cluster_gpu {
+    label="Selected GPU: shared domain across RK stages and ordinary timesteps"; color="#93c5fd"; style=rounded;
+    h [label="Native initialization\nHost arrays"];
+    r [label="Canonical handles + epoch generation\nInitialized / host-current / device-current regions\nQueued users + completion dependencies", fillcolor="#e0e7ff", color="#818cf8"];
+    d [label="Persistent device fields\nReusable compiler scratch", fillcolor="#dbeafe", color="#60a5fa"];
+    k [label="Generated CUDA kernels\nRuntime execution stream", fillcolor="#dbeafe"];
+    p [label="Checked external pressure task\nRHS read / Phi interior overwrite\nPersistent plan + workspace lease", fillcolor="#dbeafe"];
+    c [label="Native timestep control\nHost wall diagnostics", fillcolor="#fef3c7"];
+    s [label="Proved MOVE_ALLOC swaps\nVariable binding changes\nPhysical allocation survives"];
+    o [label="Two immutable device\nsnapshot slots", fillcolor="#dcfce7"];
+    b [label="Two pinned host\nsnapshot slots", fillcolor="#dcfce7"];
+    w [label="Writer: original serializer\nWait for DMA; release slot\nBackpressure if both occupied", fillcolor="#dcfce7"];
+    f [label="Unsupported access / final teardown\nPublish host-visible fields\nJoin writer, wait, release storage", fillcolor="#fef3c7"];
+    h -> d [label="first required reads: H2D"];
+    r -> h [style=dotted, label="owns"];
+    r -> d [style=dotted, label="owns"];
+    d -> k [dir=both, label="reads / writes"];
+    d -> p [dir=both, label="same stream"];
+    d -> c [label="16-byte CFL result + wait\nRead-only wall-plane observations"];
+    s -> r [style=dotted, label="same physical handle"];
+    d -> o [label="D2D capture before\nconflicting writes"];
+    o -> b [label="event → DMA"];
+    b -> w [label="DMA completion"];
+    d -> f [label="publication"];
+    w -> f [label="join"];
+    {rank=same; r; h; s;}
+    {rank=same; k; p; c;}
+  }
+  nc -> r [style=invis, minlen=1];
+  note [shape=note, fillcolor="#fff7ed", color="#fdba74", label="Read-only access adds a replica; it preserves the source.\nWrites invalidate only overlapping opposite regions.\nPending work remains ordered by stream / completion events.\nSnapshots are reached on longer runs; primary cases have initial frames only."];
+  f -> note [style=invis];
+}

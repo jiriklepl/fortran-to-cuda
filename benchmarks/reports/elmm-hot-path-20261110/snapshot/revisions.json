@@ -1,0 +1,65 @@
+{
+  "date": "2026-11-10",
+  "repositories": {
+    "compiler": {
+      "path": "/home/jirka/research/fortran-abomination",
+      "commit": "620e630e21735b8e90b496ed68621c444e26b9aa",
+      "parent": "4d944f14ac15a84705e6cd72089404bc676a9c16",
+      "remote": "https://github.com/jiriklepl/fortran-to-cuda.git",
+      "publication": "local commit; not pushed"
+    },
+    "pipeline": {
+      "path": "/home/jirka/research/fortran-abomination/elmm-pipeline",
+      "commit": "aa40dd281a409e96ae31f6f8905bc7d507f3992b",
+      "parent": "ea0679ae3319976d1dbd1e08800589e7565ceadc",
+      "remote": "https://github.com/jiriklepl/elmm-pipeline.git",
+      "publication": "local commit; not pushed",
+      "patch": {
+        "path": "snapshot/pipeline.patch",
+        "sha256": "58dbed18a68671cea9cffe91c103f2dd7cdf14a46ad0b619e33b76c2a76b3593",
+        "base": "ea0679ae3319976d1dbd1e08800589e7565ceadc"
+      }
+    },
+    "solver": {
+      "path": "/home/jirka/research/fortran-abomination/poisson-solver",
+      "commit": "0b0ec4facc41697d2ad9fe34cb86959e799c5858",
+      "parent": "4a1f1bb7e6f9dab6a2934b62d9b8655cf3a9f99a",
+      "remote": "git@gitlab.mff.cuni.cz:d3s/hpc/poisson-solver.git",
+      "publication": "local commit; not pushed",
+      "patch": {
+        "path": "snapshot/solver.patch",
+        "sha256": "11eee56e203f3b83445cd47aca8d1502e3dfd406bc6f1b955bb2568eea635bbe",
+        "base": "4a1f1bb7e6f9dab6a2934b62d9b8655cf3a9f99a"
+      }
+    }
+  },
+  "selected_binaries": {
+    "ELMM": {
+      "path": "/tmp/fortran-definition-retention-20261110-01/ELMM",
+      "sha256": "2d5df06329cb8447990b0d4b39327ddf803f9d3113036ca2db7d1998cb69300e"
+    },
+    "ELMM-full20": {
+      "path": "/tmp/fortran-definition-retention-20261110-01/ELMM-full20",
+      "sha256": "51e2fc298bc7004e859f8592837fd018f9fcdc6ac9289ab0c489cc6d56c81984"
+    },
+    "ELMM-native": {
+      "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native",
+      "sha256": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9"
+    },
+    "ELMM-native-full20": {
+      "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20",
+      "sha256": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6"
+    }
+  },
+  "selected_provider": {
+    "path": "/tmp/fortran-async-output-20261110-01/work/build/lib/libpoisson-solver.so.0.1",
+    "sha256": "4c6d1bd8d0d12c439910a57ca4e49b69ddb20f71772d4a3d0edebdd710a95d7c"
+  },
+  "timing_attribution": "Selected binary previously measured; latest compiler regenerated 130 entries byte-identically. Companion snapshot ancestry acceptance changed preparation only; no new benchmark campaign.",
+  "source_snapshot_check": {
+    "status": "PASS",
+    "solver_commit": "0b0ec4facc41697d2ad9fe34cb86959e799c5858",
+    "base_revision": "4a1f1bb7e6f9dab6a2934b62d9b8655cf3a9f99a",
+    "files": 49
+  }
+}

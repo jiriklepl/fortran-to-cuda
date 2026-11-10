@@ -1,0 +1,34 @@
+digraph hotpath {
+graph [rankdir=TB, bgcolor="white", pad=0.2, nodesep=0.25, ranksep=0.32, fontname="DejaVu Sans", label="Selected GPU ELMM — channel-simple and channel", labelloc=t, fontsize=18];
+node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=11, color="#425569", fontcolor="#142536", margin="0.12,0.08"];
+edge [fontname="DejaVu Sans", fontsize=9, color="#526577"];
+init [label="HOST: main / InitialConditions setup and output\nInitial pressure projection already uses GPU adapter", fillcolor="#e9e1f4"];
+time [label="HOST: TMarchRK3 / TimeStepLength\nFirst CFL uses CPU; later ResidentCFL → GPU max / NaN\nSmall result returns to host for timestep decision", fillcolor="#e9e1f4"];
+epoch [label="HOST: lazy resident_flow epoch + RK dispatch\nSame domain reused across stages and timesteps", fillcolor="#dce9f7"];
+sgs [label="GPU payload: SubgridStresses\nResidentPrStress + SGS_Sigma_uniform\nResidentUVWStress + BoundViscosity", fillcolor="#d9f0df"];
+simple [label="channel-simple GPU payload: Convection\nCDU/CDV/CDW div + adv helpers\nNo explicit filter", fillcolor="#d9f0df"];
+channel [label="channel GPU payload: Convection\nCD4divU / CD4divV / CD4divW\nBoundUVW + Filter3ord + BoundUVW", fillcolor="#d9f0df"];
+diff [label="GPU payload: Convection / OtherTerms\nMomentumDiffusion_nobranch_2ord + RK updates\nPressureGrad + boundary kernels", fillcolor="#d9f0df"];
+rhs [label="GPU payload: PressureCorrection / PrePoisson\nBuildPoissonRHS; host boundary / mass-flux guards", fillcolor="#d9f0df"];
+solve [label="EXTERNAL GPU TASK: resident_pressure%solve\nELMM adapter → poisson_solver_execute_device_v1\nFD2 Poisson via CUDA FFT provider; runtime stream", fillcolor="#fce8c6"];
+correct [label="GPU payload: halo + PostPoisson\nCorrectPoissonVelocity + UpdatePoissonPressure\nSerial TOP plane reference, subtract, pressure faces", fillcolor="#d9f0df"];
+swap [label="HOST: exchange_alloc descriptor swaps\nGPU: remaining velocity boundaries\nStorage identity survives variable swaps", fillcolor="#e9e1f4"];
+output [label="HOST: OutTStep schedule\nGPU: active ResidentAverage + immutable snapshot capture\nD2H snapshot → bounded CPU output writer", fillcolor="#e9e1f4"];
+done [label="HOST: join output writer, publish required fields\nRetire pressure provider and residency domain", fillcolor="#dce9f7"];
+{rank=same; simple; channel;}
+init -> time;
+time -> epoch;
+epoch -> sgs [label="each RK stage"];
+sgs -> simple [label="advection = 2"];
+sgs -> channel [label="advection = 4"];
+simple -> diff;
+channel -> diff;
+diff -> rhs;
+rhs -> solve;
+solve -> correct;
+correct -> swap;
+swap -> epoch [label="next RK stage", constraint=false, style=dashed];
+swap -> output [label="after stage 3"];
+output -> time [label="next timestep", constraint=false, style=dashed];
+output -> done [label="stop"];
+}

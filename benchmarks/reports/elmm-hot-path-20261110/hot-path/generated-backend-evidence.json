@@ -1,0 +1,86 @@
+{
+  "source_path": "/tmp/fortran-async-output-20261110-01/qualification/result.json",
+  "source_sha256": "3d7c8fd15a929e6eab137966d3f7b1eb05d4fbbad79c62aa967a1044d4ee8b41",
+  "scope": "Two timesteps plus initialization; generated-entry events, not every device kernel",
+  "rows": [
+    {
+      "case": "simple2",
+      "mode": "candidate",
+      "backend": {
+        "gpu_kernels_by_procedure": {
+          "arrayutilities::add_3d": 18,
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_3d": 24,
+          "boundaries::bounduvw_do_bc": 558,
+          "boundaries::periodic_corners_edges": 93,
+          "dynamics::convection": 42,
+          "dynamics::pressuregrad": 24,
+          "momentumadvection::cduadv": 6,
+          "momentumadvection::cdudiv": 6,
+          "momentumadvection::cdvadv": 6,
+          "momentumadvection::cdvdiv": 6,
+          "momentumadvection::cdwadv": 6,
+          "momentumadvection::cdwdiv": 6,
+          "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+          "pressure::buildpoissonrhs": 7,
+          "pressure::correctpoissonvelocity": 21,
+          "pressure::updatepoissonpressure": 7,
+          "resident_time::average": 8,
+          "resident_time::cfl": 1,
+          "resident_wall::correction1m": 6,
+          "resident_wall::correction1p": 6,
+          "resident_wall::correction2m": 6,
+          "resident_wall::correction2p": 6,
+          "resident_wall::correction3m": 6,
+          "resident_wall::correction3p": 6,
+          "resident_wall::stress0": 12,
+          "resident_wall::stress1": 12,
+          "resident_wall::stress2": 12,
+          "resident_wall::stress3": 12,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "generated_cpu_events": {},
+        "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"
+      }
+    },
+    {
+      "case": "channel2",
+      "mode": "candidate",
+      "backend": {
+        "gpu_kernels_by_procedure": {
+          "arrayutilities::add_3d": 18,
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_3d": 24,
+          "boundaries::bounduvw_do_bc": 774,
+          "boundaries::periodic_corners_edges": 129,
+          "dynamics::convection": 42,
+          "dynamics::pressuregrad": 24,
+          "filters::filter3ord": 108,
+          "momentumadvection::cd4divu": 6,
+          "momentumadvection::cd4divv": 6,
+          "momentumadvection::cd4divw": 6,
+          "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+          "pressure::buildpoissonrhs": 7,
+          "pressure::correctpoissonvelocity": 21,
+          "pressure::updatepoissonpressure": 7,
+          "resident_time::cfl": 1,
+          "resident_wall::correction1m": 6,
+          "resident_wall::correction1p": 6,
+          "resident_wall::correction2m": 6,
+          "resident_wall::correction2p": 6,
+          "resident_wall::correction3m": 6,
+          "resident_wall::correction3p": 6,
+          "resident_wall::stress0": 12,
+          "resident_wall::stress1": 12,
+          "resident_wall::stress2": 12,
+          "resident_wall::stress3": 12,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "generated_cpu_events": {},
+        "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"
+      }
+    }
+  ]
+}

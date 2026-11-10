@@ -1,0 +1,17 @@
+{
+  "algorithm": "sha256",
+  "sources": {
+    "benchmarks/reports/graph-redesign-parity-20261022/performance.json": "d2602179fb2938dc50e65c5fee1d853800bab25c82bd318580f4cf43b176cd77",
+    "benchmarks/reports/gpu-residency-speedup-20261108/summary.json": "21c6efce41bfcf3eef21563fb72708430a463c045e8ba117a46800a6e2a2e43d",
+    "benchmarks/reports/gpu-residency-copy-v3-speedup-20261108/summary.json": "5d523012804950e1abc0346d2dc0c8da0a944af96ae7424a2baeddf40e8557ec",
+    "benchmarks/reports/gpu-resident-four-controls-20261110/summary.json": "ce37d7fece3e544e62d97f3aa483eefe4918bf310cab5e3be701ac67539200d3",
+    "benchmarks/reports/gpu-local-solver-cache-20261110/summary.json": "535c83bf9c5f28b5cb1365682ffed385a19b6a804817a6d5481da4e43f8bfc7f",
+    "benchmarks/reports/gpu-exact-division-20261110/summary.json": "dc3a8eef44f6903c4f303962387727de1e164f35409f4475b4e9c786fe5e912e",
+    "benchmarks/reports/gpu-host-preparation-20261110/summary.json": "1b2acc63c5a2e1b196a9b7db40256ddca8439287e55304ea1a16c7082fd5969e",
+    "benchmarks/reports/gpu-async-output-20261110/summary.json": "48d1cf7db6f51a00d9f2dcb81e6b4d01c822dc20abf4e61d694aa5dcc3ae6de6",
+    "benchmarks/reports/gpu-kernel-screening-20261110/summary.json": "1f19e6e8407e62b8afa1810c655c7e09886a89e125e1176f81ada1b357cf7132",
+    "benchmarks/reports/gpu-current-state-wrap-20261110/summary.json": "aae3ed56463b48805e443a6121dae6da88e396c518061b82ed9d79e8ecbe9742",
+    "benchmarks/reports/elmm-hot-path-20261110/performance/be58-profile-extract.json": "c680a16314f6834e8d73f40639cdcd6287aa4dc63cc1e26ea20a3a04ee06b5fa",
+    "benchmarks/reports/gpu-phase-attribution-20261110/summary.json": "1ac85dcd40b981a7abd6c600778991f2676765a1addabb8253de9e2c082fd397"
+  }
+}

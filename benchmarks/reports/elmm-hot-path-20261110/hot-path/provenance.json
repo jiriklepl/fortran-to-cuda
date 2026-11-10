@@ -1,0 +1,251 @@
+{
+  "build_root": "/tmp/fortran-async-output-20261110-01",
+  "implementation_commit": "620e630e21735b8e90b496ed68621c444e26b9aa",
+  "samples": [
+    {
+      "archive": "samples/pressure-gradient-source.f90",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/configured/dc164d2b776a_dynamics.f90",
+      "source_lines": [
+        87,
+        93
+      ],
+      "source_sha256": "704211e1bd46d4ce4c8185bd12ecb2a9a62a4dd06454ab7e0d36253ad09dff63",
+      "excerpt_sha256": "67ef78f920c0ed7018f4fdd066531b9739b913abcba29f04e85d81f16e224518",
+      "role": "Native prepared source: uniform x pressure-gradient loop"
+    },
+    {
+      "archive": "samples/pressure-gradient-extracted.f90",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/rk-values/fort_inline_182d4562d805.f90",
+      "source_lines": [
+        1,
+        26
+      ],
+      "source_sha256": "d488cd897b3772e42727d239b81265c9bb1d2b63909df95278756547336a03d8",
+      "excerpt_sha256": "d488cd897b3772e42727d239b81265c9bb1d2b63909df95278756547336a03d8",
+      "role": "Compiler input extracted from the native loop"
+    },
+    {
+      "archive": "samples/pressure-gradient-kernel.cu",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/rk-entries/182d4562d805221c/shared_entry.cu",
+      "source_lines": [
+        25,
+        65
+      ],
+      "source_sha256": "6a7e9ac938120950bd56ecd751c133ca00478c193051e7c4efd89c403db1effa",
+      "excerpt_sha256": "f8a429d541436b8a65f2fa34c02dd4c2f6b00f13fb13d2a167e982222aead01a",
+      "role": "Compiler-generated CUDA kernel"
+    },
+    {
+      "archive": "samples/pressure-gradient-caller.f90",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/integrated/dynamics.f90",
+      "source_lines": [
+        112,
+        141
+      ],
+      "source_sha256": "8dbaf4318468e95a04a41f1c617389904a7edbec60794da3128d722c148893a2",
+      "excerpt_sha256": "d8f03806dd5352bb3779619e42b4b2b48cd173b19fb09d0c90b9a7138cd28665",
+      "role": "Integrated Fortran caller with coherent handle and CPU fallback"
+    },
+    {
+      "archive": "samples/pressure-gradient-interface.f90",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/rk-entries/182d4562d805221c/shared_interface.f90",
+      "source_lines": [
+        1,
+        34
+      ],
+      "source_sha256": "8e8f7c807349acf51d8711ddfce593d1e5865d73b6182cb1733e1bed744316a6",
+      "excerpt_sha256": "37dfeb8a7efb503b2474f9fc7273794d99ba503cd52f330c3fcbcc80d672f236",
+      "role": "Generated interoperable Fortran interface"
+    },
+    {
+      "archive": "samples/pressure-gradient-enqueue.cpp",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/rk-entries/182d4562d805221c/shared_entry.cu",
+      "source_lines": [
+        418,
+        480
+      ],
+      "source_sha256": "6a7e9ac938120950bd56ecd751c133ca00478c193051e7c4efd89c403db1effa",
+      "excerpt_sha256": "49dda1b2473b6b85a43657e04c574b45a3e7a99c647f02a5b73d205bdf85dc33",
+      "role": "Generated effect binding, kernel geometry and runtime graph enqueue"
+    },
+    {
+      "archive": "samples/cfl-source.f90",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/time-entries/cfl.f90",
+      "source_lines": [
+        1,
+        22
+      ],
+      "source_sha256": "359c7e04660fb27f6c3ab355039d07aec5f10c6485e9e6aacb094bf99b0ece1d",
+      "excerpt_sha256": "359c7e04660fb27f6c3ab355039d07aec5f10c6485e9e6aacb094bf99b0ece1d",
+      "role": "Pipeline-supplied Fortran helper compiled by the generic compiler"
+    },
+    {
+      "archive": "samples/cfl-caller.f90",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/integrated/resident_time_tasks.f90",
+      "source_lines": [
+        13,
+        47
+      ],
+      "source_sha256": "98cdf6cf104c26287abbb42e8bdb98fe5eac26ceecc8a0c6d18cf1466ad50e30",
+      "excerpt_sha256": "ca3254591a4d2ba4cbd23876d327eba113649fd1ce15aa2ec3ec407af5f9aa2f",
+      "role": "Integrated CFL caller and runtime maximum reduction"
+    },
+    {
+      "archive": "samples/cfl-kernel.cu",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/time-entries/cfl-entry/shared_entry.cu",
+      "source_lines": [
+        25,
+        82
+      ],
+      "source_sha256": "bfdb6a2d169ab7439df8fe9e09eaae9858b5bc36ce14361f8793728c77150ed8",
+      "excerpt_sha256": "8b55d906fb71d5e05bd3119afa10642da00f4b85419905c3fd6e947753ca19da",
+      "role": "Generated pointwise CFL CUDA kernel"
+    },
+    {
+      "archive": "samples/poisson-callback.cpp",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/pressure-adapter/gpu_pressure.cpp",
+      "source_lines": [
+        85,
+        107
+      ],
+      "source_sha256": "aa90aaa0c2776144ffc38598f16728eb068a7c18f086a5c825b5d4163479e126",
+      "excerpt_sha256": "cecea5b59c80fa796951d7397e5993a26f734f48f634218b28ae21fec33fe71b",
+      "role": "Explicit ELMM pressure adapter: typed layout validation and stream-aware provider call"
+    },
+    {
+      "archive": "samples/poisson-transaction.cpp",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/pressure-adapter/gpu_pressure.cpp",
+      "source_lines": [
+        152,
+        166
+      ],
+      "source_sha256": "aa90aaa0c2776144ffc38598f16728eb068a7c18f086a5c825b5d4163479e126",
+      "excerpt_sha256": "20f64edbb3690becfaa0f1d76db0f8d09a53fa0b24b3c64ec6d862709452e2df",
+      "role": "Explicit ELMM pressure adapter: declared RHS reads and Phi interior writes"
+    },
+    {
+      "archive": "samples/poisson-caller.f90",
+      "source_path": "/tmp/fortran-async-output-20261110-01/work/integrated/pressure.f90",
+      "source_lines": [
+        231,
+        274
+      ],
+      "source_sha256": "f7e4acf672386422d99b35e59f78fda0d42544cefaf91dd9442028e782a89c69",
+      "excerpt_sha256": "bedefe42b8188d7860a645d2286972b17800219ceaa5fbfd34caf5a08b681e5b",
+      "role": "Integrated pressure caller: resident provider and halo dispatch"
+    },
+    {
+      "archive": "samples/simple109-main.conf",
+      "source_path": "/tmp/fortran-async-output-20261110-01/qualification/simple109/native/main.conf",
+      "source_lines": [
+        1,
+        49
+      ],
+      "source_sha256": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+      "excerpt_sha256": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+      "role": "Actual benchmark configuration"
+    },
+    {
+      "archive": "samples/simple109-les.conf",
+      "source_path": "/tmp/fortran-async-output-20261110-01/qualification/simple109/native/les.conf",
+      "source_lines": [
+        1,
+        6
+      ],
+      "source_sha256": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+      "excerpt_sha256": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+      "role": "Actual benchmark configuration"
+    },
+    {
+      "archive": "samples/simple109-grid.conf",
+      "source_path": "/tmp/fortran-async-output-20261110-01/qualification/simple109/native/grid.conf",
+      "source_lines": [
+        1,
+        47
+      ],
+      "source_sha256": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+      "excerpt_sha256": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+      "role": "Actual benchmark configuration"
+    },
+    {
+      "archive": "samples/channel100-main.conf",
+      "source_path": "/tmp/fortran-async-output-20261110-01/qualification/channel100/native/main.conf",
+      "source_lines": [
+        1,
+        49
+      ],
+      "source_sha256": "3bbb39e3312dcfbc846e78d83bd7eb3bc071907c028e8db79569bd707af43e9b",
+      "excerpt_sha256": "3bbb39e3312dcfbc846e78d83bd7eb3bc071907c028e8db79569bd707af43e9b",
+      "role": "Actual benchmark configuration"
+    },
+    {
+      "archive": "samples/channel100-les.conf",
+      "source_path": "/tmp/fortran-async-output-20261110-01/qualification/channel100/native/les.conf",
+      "source_lines": [
+        1,
+        9
+      ],
+      "source_sha256": "1cee53a844bb557673849df1942cb749db067b01f2b19356c9018a53f9b3385d",
+      "excerpt_sha256": "1cee53a844bb557673849df1942cb749db067b01f2b19356c9018a53f9b3385d",
+      "role": "Actual benchmark configuration"
+    },
+    {
+      "archive": "samples/channel100-grid.conf",
+      "source_path": "/tmp/fortran-async-output-20261110-01/qualification/channel100/native/grid.conf",
+      "source_lines": [
+        1,
+        47
+      ],
+      "source_sha256": "f44970b7a9e636d1bf78bd2b48820f1bd50ec2adec1c163825ed0d435f8cd7ef",
+      "excerpt_sha256": "f44970b7a9e636d1bf78bd2b48820f1bd50ec2adec1c163825ed0d435f8cd7ef",
+      "role": "Actual benchmark configuration"
+    }
+  ],
+  "call_graph_sources": [
+    {
+      "role": "native-main",
+      "path": "/tmp/fortran-async-output-20261110-01/work/configured/8af859dc9b3c_main.f90",
+      "sha256": "076f26ccf01af28d631479a0c00a37588da0d55dea682ac993ddb25eb210efd0"
+    },
+    {
+      "role": "native-rk",
+      "path": "/tmp/fortran-async-output-20261110-01/work/configured/a89215b911cb_tsteps.f90",
+      "sha256": "8d9faf2a11ab0de45faf784d6b435e3e57591f976aadcd559246a94b0b5a0377"
+    },
+    {
+      "role": "native-dynamics",
+      "path": "/tmp/fortran-async-output-20261110-01/work/configured/dc164d2b776a_dynamics.f90",
+      "sha256": "704211e1bd46d4ce4c8185bd12ecb2a9a62a4dd06454ab7e0d36253ad09dff63"
+    },
+    {
+      "role": "native-pressure",
+      "path": "/tmp/fortran-async-output-20261110-01/work/configured/85346d8e7254_pressure.f90",
+      "sha256": "3033f70e16cdf131df1bafa5940bbfff5cad765bd8e9b70acb9bb8541967d4e5"
+    },
+    {
+      "role": "integrated-main",
+      "path": "/tmp/fortran-async-output-20261110-01/work/integrated/main.f90",
+      "sha256": "6f0e56f049580465022453c610a24826c8c4032717d7a974c5947cf77044ea79"
+    },
+    {
+      "role": "integrated-rk",
+      "path": "/tmp/fortran-async-output-20261110-01/work/integrated/tsteps.f90",
+      "sha256": "38e5f514ea38ba354eb88a4f86d7a88269feff3e3508514eda7ac1a32c65a3c6"
+    },
+    {
+      "role": "integrated-dynamics",
+      "path": "/tmp/fortran-async-output-20261110-01/work/integrated/dynamics.f90",
+      "sha256": "8dbaf4318468e95a04a41f1c617389904a7edbec60794da3128d722c148893a2"
+    },
+    {
+      "role": "integrated-pressure",
+      "path": "/tmp/fortran-async-output-20261110-01/work/integrated/pressure.f90",
+      "sha256": "f7e4acf672386422d99b35e59f78fda0d42544cefaf91dd9442028e782a89c69"
+    },
+    {
+      "role": "integrated-output",
+      "path": "/tmp/fortran-async-output-20261110-01/work/integrated/outputs.f90",
+      "sha256": "827ae3f7d8441e372e4b4577f9feccf1638e1a1d5b8ef61d5c26ddf70b4f89db"
+    }
+  ]
+}

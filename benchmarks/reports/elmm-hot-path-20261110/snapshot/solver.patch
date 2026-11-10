@@ -1,0 +1,2776 @@
+diff --git a/.gitignore b/.gitignore
+index 40a35a35a547e8f0268eac8df88865af5c8e8591..7f70416377bf4fc9fc1ba06da9564f04742e19fa 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -2,3 +2,4 @@ build*
+ lib
+ compile_commands.json
+ .clangd
++/install*/
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9c0ef1d751bd1c961a4eda5d4a0cfc409398a2c9..dabcc1dc91b042433b09a4161fba18eb844eb999 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -5,17 +5,17 @@ project(PoissonSolver
+ )
+ 
+ find_package(CUDAToolkit REQUIRED)
++find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+ 
+ if (NOT DEFINED CMAKE_CUDA_COMPILER AND NOT DEFINED ENV{CUDACXX}
+         AND CUDAToolkit_NVCC_EXECUTABLE)
+     set(CMAKE_CUDA_COMPILER "${CUDAToolkit_NVCC_EXECUTABLE}")
+ endif()
+ 
+-# Build for Voltas as well if possible
+-if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "13.0")
+-    set(CMAKE_CUDA_ARCHITECTURES 80 90 100)
+-else()
+-    set(CMAKE_CUDA_ARCHITECTURES 70 80 90 100)
++# Respect caller/toolchain architecture selection; the reproducible local
++# preset selects the deployed Ampere device explicitly.
++if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
++    set(CMAKE_CUDA_ARCHITECTURES 86 CACHE STRING "CUDA architectures")
+ endif()
+ 
+ enable_language(CUDA)
+@@ -29,6 +29,13 @@ if (POISSON_SOLVER_BUILD_FORTRAN)
+     set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules)
+ endif()
+ 
++include(GNUInstallDirs)
++include(CMakePackageConfigHelpers)
++option(BUILD_SHARED_LIBS "Build shared libraries" ON)
++option(POISSON_SOLVER_BUILD_TESTS "Build legacy residuum tests" OFF)
++option(POISSON_SOLVER_BUILD_EXAMPLES "Build examples" OFF)
++option(POISSON_SOLVER_BUILD_DOCS "Configure documentation dependencies" OFF)
++option(POISSON_SOLVER_BUILD_API_TESTS "Build status ABI and optional pinned-PoisFFT differential checks" OFF)
+ enable_testing()
+ 
+ set(CMAKE_CXX_STANDARD 20)
+@@ -64,13 +71,13 @@ option(POISSON_SOLVER_ENABLE_BENCHMARKS
+     "Enable measurements and the benchmarks target" OFF)
+ 
+ # VkFFT is required even for MPI builds
+-FetchContent_Populate(
++FetchContent_Declare(
+     vkfft
+     GIT_REPOSITORY https://github.com/DTolm/VkFFT
+-    GIT_TAG v1.3.4
+-    SOURCE_DIR ${CMAKE_BINARY_DIR}/_deps/vkfft-src
+-    BINARY_DIR ${CMAKE_BINARY_DIR}/_deps/vkfft-build
++    GIT_TAG 066a17c17068c0f11c9298d848c2976c71fad1c1
++    SOURCE_SUBDIR poisson-header-only
+ )
++FetchContent_MakeAvailable(vkfft)
+ 
+ add_library(VkFFT INTERFACE)
+ 
+@@ -81,7 +88,9 @@ target_compile_definitions(VkFFT INTERFACE VKFFT_BACKEND=1)
+ target_compile_definitions(VkFFT INTERFACE CUDA_TOOLKIT_ROOT_DIR="${CUDAToolkit_TARGET_DIR}")
+ 
+ # Have to use `SYSTEM` to prevent `VkFFT` warnings cluttering compilation output
+-target_include_directories(VkFFT SYSTEM INTERFACE ${CMAKE_BINARY_DIR}/_deps/vkfft-src/vkFFT)
++target_include_directories(VkFFT SYSTEM INTERFACE
++    $<BUILD_INTERFACE:${vkfft_SOURCE_DIR}/vkFFT>
++    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/VkFFT>)
+ target_link_libraries(VkFFT INTERFACE CUDA::cuda_driver CUDA::nvrtc)
+ 
+ # Define compiler flags.
+@@ -94,12 +103,21 @@ target_compile_options(common_flags INTERFACE
+     $<$<COMPILE_LANGUAGE:Fortran>:-cpp>
+ )
+ 
++include(cmake/KernelCacheIdentity.cmake)
++
+ add_subdirectory(src)
+-add_subdirectory(tests/residuum)
++if (POISSON_SOLVER_BUILD_API_TESTS)
++    add_subdirectory(tests/differential)
++endif()
++if (POISSON_SOLVER_BUILD_TESTS)
++    add_subdirectory(tests/residuum)
++endif()
+ if (POISSON_SOLVER_ENABLE_BENCHMARKS)
+     add_subdirectory(tests/benchmarks)
+ endif()
+-add_subdirectory(examples)
++if (POISSON_SOLVER_BUILD_EXAMPLES)
++    add_subdirectory(examples)
++endif()
+ 
+ # === Auto-generate .clangd ===
+ set(CLANGD_CONFIG
+@@ -124,10 +142,11 @@ string(APPEND CLANGD_CONFIG "
+     - \"-forward-unknown-to-host-compiler\"
+ ")
+ 
+-file(WRITE "${CMAKE_SOURCE_DIR}/.clangd" "${CLANGD_CONFIG}")
++file(WRITE "${CMAKE_BINARY_DIR}/clangd.yaml" "${CLANGD_CONFIG}")
+ 
+ # === Doxygen Documentation ===
+-find_package(Doxygen)
++if (POISSON_SOLVER_BUILD_DOCS)
++find_package(Doxygen REQUIRED)
+ if (DOXYGEN_FOUND)
+     set(DOXYGEN_PROJECT_NAME "poisson-solver")
+     set(DOXYGEN_EXTRACT_ALL YES)
+@@ -146,7 +165,7 @@ if (DOXYGEN_FOUND)
+     FetchContent_Declare(
+         doxygen_awesome_css
+         GIT_REPOSITORY https://github.com/jothepro/doxygen-awesome-css.git
+-        GIT_TAG v2.3.4
++        GIT_TAG 568f56cde6ac78b6dfcc14acd380b2e745c301ea
+     )
+     FetchContent_MakeAvailable(doxygen_awesome_css)
+ 
+@@ -161,3 +180,33 @@ if (DOXYGEN_FOUND)
+         ${CMAKE_CURRENT_SOURCE_DIR}/src
+     )
+ endif()
++endif()
++
++install(TARGETS poisson-solver VkFFT EXPORT PoissonSolverTargets
++    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
++    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
++    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
++install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
++install(DIRECTORY ${vkfft_SOURCE_DIR}/vkFFT/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/VkFFT)
++install(FILES ${vkfft_SOURCE_DIR}/LICENSE
++    DESTINATION ${CMAKE_INSTALL_DATADIR}/PoissonSolver/licenses RENAME VkFFT-LICENSE)
++install(FILES dependencies.lock.json docs/device-api.md
++    DESTINATION ${CMAKE_INSTALL_DATADIR}/PoissonSolver)
++install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/kernel-cache-identity.json"
++    "${CMAKE_CURRENT_BINARY_DIR}/generated/kernel-cache-build-recipe.txt"
++    DESTINATION ${CMAKE_INSTALL_DATADIR}/PoissonSolver)
++if (POISSON_SOLVER_BUILD_FORTRAN)
++    install(DIRECTORY ${CMAKE_Fortran_MODULE_DIRECTORY}/
++        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/poisson-solver/fortran OPTIONAL
++        FILES_MATCHING PATTERN "*.mod")
++endif()
++install(EXPORT PoissonSolverTargets NAMESPACE PoissonSolver::
++    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/PoissonSolver)
++configure_package_config_file(cmake/PoissonSolverConfig.cmake.in
++    ${CMAKE_CURRENT_BINARY_DIR}/PoissonSolverConfig.cmake
++    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/PoissonSolver)
++write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/PoissonSolverConfigVersion.cmake
++    VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
++install(FILES ${CMAKE_CURRENT_BINARY_DIR}/PoissonSolverConfig.cmake
++    ${CMAKE_CURRENT_BINARY_DIR}/PoissonSolverConfigVersion.cmake
++    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/PoissonSolver)
+diff --git a/CMakePresets.json b/CMakePresets.json
+index addf76b0131dbf52d4bacb0ca8934810708bf04d..755ae74a200656f2b3a2fc8a7f85bd9ed9233376 100644
+--- a/CMakePresets.json
++++ b/CMakePresets.json
+@@ -72,6 +72,21 @@
+       "cacheVariables": {
+         "POISSON_SOLVER_ENABLE_BENCHMARKS": "ON"
+       }
++    },
++    {
++      "name": "release-sm86",
++      "inherits": "release",
++      "binaryDir": "${sourceDir}/build-sm86",
++      "cacheVariables": {
++        "CMAKE_CUDA_ARCHITECTURES": "86",
++        "CMAKE_CXX_COMPILER": "/usr/bin/g++-14",
++        "CMAKE_CUDA_HOST_COMPILER": "/usr/bin/g++-14",
++        "CMAKE_Fortran_COMPILER": "/usr/bin/gfortran-15",
++        "POISSON_SOLVER_BUILD_TESTS": "OFF",
++        "POISSON_SOLVER_BUILD_EXAMPLES": "OFF",
++        "POISSON_SOLVER_BUILD_DOCS": "OFF",
++        "CMAKE_C_COMPILER": "/usr/bin/gcc-14"
++      }
+     }
+   ]
+ }
+diff --git a/README.md b/README.md
+index dc1c11d06ea437c06e36e41bce9f4cc91df1b742..86ef584f82e43f42cf74c64af449348556fd7946 100644
+--- a/README.md
++++ b/README.md
+@@ -10,6 +10,7 @@ It is based on the [PoisFFT](https://github.com/LadaF/PoisFFT) library and provi
+ `poisson-solver` requires the following compilers, libraries and hardware (those that are **completely optional**, **fetched automatically** or **required only in certain build configurations** are marked accordingly):
+ - CMake >= 4.0,
+ - C++ compiler supporting C++20,
++- OpenSSL Crypto development library (compiled-kernel cache checksums),
+ - Fortran compiler (**optional** - see [examples](./examples/README.md) for information about disabling Fortran binding compilation),
+ - `VkFFT` for computation of local FFTs (**fetched automatically**),
+ - `heFFTe` for computation of distributed FFTs (**only for distributed use but fetched automatically in that configuration**),
+@@ -30,6 +31,26 @@ See the [container-environment](./container-environment/) directory to learn mor
+ [benchmark-results](./benchmark-results/) contains the performance comparison of `poisson-solver` against the original `PoisFFT` library.
+ At last, see [docs](./docs/) for the inner code structure of `poisson-solver`.
+ 
++## Installed device API
++
++The [status-returning device API](./docs/device-api.md) accepts device pointers
++and a caller-supplied CUDA stream, with matching Fortran `c_ptr` bindings. Its
++initial scope is local uniform double-precision FD2/FD4. The `release-sm86`
++preset pins the local compiler/architecture configuration; dependency commits
++are recorded in [dependencies.lock.json](./dependencies.lock.json). CMake install
++exports headers, the library, Fortran modules and `PoissonSolver::poisson-solver`.
++
++To reuse compiled VkFFT kernels across processes, create an owner-only directory
++(`mkdir -m 700 /absolute/cache/path`) and set
++`POISSON_SOLVER_KERNEL_CACHE_DIR=/absolute/cache/path`. This optional cache stores
++up to 64 MiB of cubins, with a 16 MiB bound per image. Keys bind the generated
++source, options, build recipe, NVRTC and driver libraries, and device identity.
++Missing, invalid or incompatible entries compile normally. No field data or
++solver plans are serialized. Without the environment variable, caching is off.
++The installed `share/PoissonSolver/kernel-cache-identity.json` and build recipe
++record the cache contract. Performance reports must distinguish empty-cache
++startup from runs after an excluded warmup; lookup and loading remain timed.
++
+ ## AI usage
+ Claude and Google Gemini were used to:
+ - assist with writing and editing the documentation, and
+diff --git a/cmake/KernelCacheIdentity.cmake b/cmake/KernelCacheIdentity.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..c5764dbe7ece8c7a2ff32a9e24892117248cfc13
+--- /dev/null
++++ b/cmake/KernelCacheIdentity.cmake
+@@ -0,0 +1,77 @@
++# The cache key describes the code-generation recipe, never the final shared
++# library (which would make its own embedded identity recursive). Installation
++# retains the exact recipe so the caller can bind it in its build receipt.
++get_target_property(_cache_nvrtc CUDA::nvrtc IMPORTED_LOCATION)
++if (NOT _cache_nvrtc OR NOT EXISTS "${_cache_nvrtc}")
++    message(FATAL_ERROR "Kernel cache identity requires the selected NVRTC library")
++endif()
++get_filename_component(_cache_cuda_lib "${_cache_nvrtc}" DIRECTORY)
++find_library(_cache_builtins NAMES nvrtc-builtins
++    PATHS "${_cache_cuda_lib}" NO_DEFAULT_PATH REQUIRED)
++file(REAL_PATH "${_cache_builtins}" POISSON_SOLVER_CACHE_NVRTC_BUILTINS)
++file(SHA256 "${POISSON_SOLVER_CACHE_NVRTC_BUILTINS}" _cache_builtins_sha256)
++
++file(GLOB_RECURSE _cache_source_inputs CONFIGURE_DEPENDS
++    "${PROJECT_SOURCE_DIR}/include/*" "${PROJECT_SOURCE_DIR}/src/*"
++    "${PROJECT_SOURCE_DIR}/cmake/*")
++list(APPEND _cache_source_inputs "${PROJECT_SOURCE_DIR}/CMakeLists.txt"
++    "${PROJECT_SOURCE_DIR}/dependencies.lock.json")
++file(GLOB_RECURSE _cache_vkfft_inputs CONFIGURE_DEPENDS "${vkfft_SOURCE_DIR}/vkFFT/*.h")
++set(_cache_inputs ${_cache_source_inputs} ${_cache_vkfft_inputs}
++    "${_cache_nvrtc}" "${POISSON_SOLVER_CACHE_NVRTC_BUILTINS}"
++    "${CMAKE_CXX_COMPILER}" "${CMAKE_CUDA_COMPILER}" "${OPENSSL_CRYPTO_LIBRARY}")
++foreach(_cache_include IN LISTS CUDAToolkit_INCLUDE_DIRS)
++    file(GLOB_RECURSE _cache_headers CONFIGURE_DEPENDS "${_cache_include}/*")
++    list(APPEND _cache_inputs ${_cache_headers})
++endforeach()
++file(GLOB_RECURSE _cache_crypto_headers CONFIGURE_DEPENDS "${OPENSSL_INCLUDE_DIR}/openssl/*")
++list(APPEND _cache_inputs ${_cache_crypto_headers})
++# Record the host compiler executable used behind the driver as well.
++execute_process(COMMAND "${CMAKE_CXX_COMPILER}" -print-prog-name=cc1plus
++    OUTPUT_VARIABLE _cache_cc1plus OUTPUT_STRIP_TRAILING_WHITESPACE
++    RESULT_VARIABLE _cache_cc1plus_status TIMEOUT 15)
++if (_cache_cc1plus_status EQUAL 0 AND EXISTS "${_cache_cc1plus}")
++    list(APPEND _cache_inputs "${_cache_cc1plus}")
++endif()
++list(REMOVE_DUPLICATES _cache_inputs)
++list(SORT _cache_inputs)
++set(_cache_recipe "poisson-nvrtc-cubin-build-recipe-v1\n")
++# Length framing also preserves flags containing separators or newlines.
++function(_poisson_cache_part value)
++    string(LENGTH "${value}" _cache_length)
++    string(APPEND _cache_recipe "${_cache_length}:${value}\n")
++    set(_cache_recipe "${_cache_recipe}" PARENT_SCOPE)
++endfunction()
++get_cmake_property(_cache_variables VARIABLES)
++list(REMOVE_DUPLICATES _cache_variables)
++list(SORT _cache_variables)
++foreach(_cache_variable IN LISTS _cache_variables)
++    if (_cache_variable MATCHES "^CMAKE_(BUILD_TYPE|SYSTEM_NAME|SYSTEM_PROCESSOR|CXX_COMPILER(_ID|_VERSION|_FRONTEND_VARIANT)?|CUDA_COMPILER(_ID|_VERSION)?|Fortran_COMPILER(_ID|_VERSION)?|CUDA_HOST_COMPILER|CXX_STANDARD|CXX_EXTENSIONS|CUDA_ARCHITECTURES)$"
++            OR (_cache_variable MATCHES "^CMAKE_(CXX|CUDA|Fortran|SHARED_LINKER)_FLAGS(_[A-Za-z0-9_]+)?$"
++                AND NOT _cache_variable MATCHES "_INIT$")
++            OR _cache_variable MATCHES "^POISSON_SOLVER_(USE_MPI|ENABLE_BENCHMARKS)$")
++        _poisson_cache_part("${_cache_variable}=${${_cache_variable}}")
++    endif()
++endforeach()
++foreach(_cache_input IN LISTS _cache_inputs)
++    if (IS_DIRECTORY "${_cache_input}")
++        continue()
++    endif()
++    file(REAL_PATH "${_cache_input}" _cache_real_input)
++    file(SHA256 "${_cache_real_input}" _cache_hash)
++    _poisson_cache_part("${_cache_real_input}")
++    _poisson_cache_part("${_cache_hash}")
++endforeach()
++set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_cache_inputs})
++string(SHA256 POISSON_SOLVER_CACHE_BUILD_KEY "${_cache_recipe}")
++file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/generated")
++file(WRITE "${PROJECT_BINARY_DIR}/generated/kernel-cache-build-recipe.txt" "${_cache_recipe}")
++# Reject unsupported literal characters rather than generating an ambiguous
++# C++ string or JSON path. This is only the selected system library location.
++if (POISSON_SOLVER_CACHE_NVRTC_BUILTINS MATCHES "[\"\\\\\n\r]")
++    message(FATAL_ERROR "Unsupported characters in NVRTC builtins path")
++endif()
++configure_file("${CMAKE_CURRENT_LIST_DIR}/kernel_cache_build_identity.hpp.in"
++    "${PROJECT_BINARY_DIR}/generated/kernel_cache_build_identity.hpp" @ONLY)
++file(WRITE "${PROJECT_BINARY_DIR}/generated/kernel-cache-identity.json"
++"{\n  \"schema_version\": 1,\n  \"kind\": \"poisson-nvrtc-cubin-cache\",\n  \"cache_format\": \"POISSON_CUBIN_1\",\n  \"build_key\": \"${POISSON_SOLVER_CACHE_BUILD_KEY}\",\n  \"environment_variable\": \"POISSON_SOLVER_KERNEL_CACHE_DIR\",\n  \"max_image_bytes\": 16777216,\n  \"max_cache_bytes\": 67108864,\n  \"nvrtc_builtins\": {\"path\": \"${POISSON_SOLVER_CACHE_NVRTC_BUILTINS}\", \"sha256\": \"${_cache_builtins_sha256}\"},\n  \"recipe_file\": \"kernel-cache-build-recipe.txt\"\n}\n")
+diff --git a/cmake/PoissonSolverConfig.cmake.in b/cmake/PoissonSolverConfig.cmake.in
+new file mode 100644
+index 0000000000000000000000000000000000000000..98c8ea52baabef4d63987c9590cabb6d2cdf82f3
+--- /dev/null
++++ b/cmake/PoissonSolverConfig.cmake.in
+@@ -0,0 +1,9 @@
++@PACKAGE_INIT@
++include(CMakeFindDependencyMacro)
++find_dependency(CUDAToolkit)
++find_dependency(OpenSSL COMPONENTS Crypto)
++if (@POISSON_SOLVER_USE_MPI@)
++    find_dependency(MPI COMPONENTS CXX)
++    find_dependency(Heffte)
++endif()
++include("${CMAKE_CURRENT_LIST_DIR}/PoissonSolverTargets.cmake")
+diff --git a/cmake/kernel_cache_build_identity.hpp.in b/cmake/kernel_cache_build_identity.hpp.in
+new file mode 100644
+index 0000000000000000000000000000000000000000..26899221c064c1e7591dd0670937fce18bb321db
+--- /dev/null
++++ b/cmake/kernel_cache_build_identity.hpp.in
+@@ -0,0 +1,3 @@
++#pragma once
++#define POISSON_SOLVER_CACHE_BUILD_KEY "@POISSON_SOLVER_CACHE_BUILD_KEY@"
++#define POISSON_SOLVER_CACHE_NVRTC_BUILTINS "@POISSON_SOLVER_CACHE_NVRTC_BUILTINS@"
+diff --git a/dependencies.lock.json b/dependencies.lock.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..0cde32937269a6e79ea95a5d92a5e5ffae6c9371
+--- /dev/null
++++ b/dependencies.lock.json
+@@ -0,0 +1,10 @@
++{
++  "schema_version": 1,
++  "dependencies": {
++    "VkFFT": {"repository": "https://github.com/DTolm/VkFFT", "commit": "066a17c17068c0f11c9298d848c2976c71fad1c1", "upstream_release": "v1.3.4"},
++    "heffte": {"repository": "https://github.com/mntjams/heffte", "commit": "38f9b9b546561d2b2a172afc2168437ae7426889", "optional": "MPI"},
++    "doctest": {"repository": "https://github.com/doctest/doctest", "commit": "6804767ee637789db8a5cb281381cae98dc36906", "optional": "legacy tests"},
++    "doxygen-awesome-css": {"repository": "https://github.com/jothepro/doxygen-awesome-css", "commit": "568f56cde6ac78b6dfcc14acd380b2e745c301ea", "optional": "documentation"}
++  },
++  "system_dependencies": "CUDA toolkit/driver, C++ and optional Fortran compilers are supplied by the caller and must be recorded by the build receipt; their versions are not silently downloaded."
++}
+diff --git a/docs/device-api.md b/docs/device-api.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..03ee84ff3d3bd464ca76a421b5e5fabe03588eae
+--- /dev/null
++++ b/docs/device-api.md
+@@ -0,0 +1,68 @@
++# Resident device integration
++
++`device_api.h` and Fortran module `poisson_solver_device` provide the version1
++local uniform double-precision FD2/FD4 interface. Both dimensions and precision
++are deliberately explicit: dimension3 is supported; other requests return
++`POISSON_SOLVER_UNSUPPORTED`. Legacy void-return APIs remain source-compatible,
++but integrations that require failure recovery must use this status ABI.
++
++Use `cmake --preset release-sm86`, then `cmake --build build-sm86 --parallel 2`
++and `cmake --install build-sm86 --prefix <prefix>`. All source dependencies are
++pinned in `dependencies.lock.json`; an offline VkFFT checkout can be supplied as
++`-DFETCHCONTENT_SOURCE_DIR_VKFFT=<checkout>`. Configuration writes generated
++editor data into the build tree only. Examples, documentation and legacy Slurm
++tests are optional. The installed CMake package exports
++`PoissonSolver::poisson-solver`; generated Fortran modules are installed under
++`include/poisson-solver/fortran` and require the matching compiler ABI. The C++
++virtual device-execution signature gained a stream parameter; rebuild C++
++consumers when adopting this version. Legacy C symbol signatures are unchanged.
++
++Reserve the configuration's `device_budget_bytes` in the caller's residency
++budget **before** `poisson_solver_create_v1`. Creation enforces that cap on
++solver buffers and every `cudaMalloc` in the pinned VkFFT implementation,
++including temporary transforms and prime-size LUT/Bluestein buffers. Query exact
++live and peak owned device-buffer bytes afterward. The peak is the observed
++creation/lifetime high-water, including any temporary planning buffers; after
++successful creation shrink the provisional claim to current persistent bytes
++plus the reported execution-extra requirement (zero in v1). CUDA context, loaded code/module and driver metadata
++are explicitly outside these buffer counts. Exact workspace size is not claimed
++before FFT planning. Execution refuses any additional device-buffer allocation attempt; retain the
++claim until successful destruction. Events are execution resources, not field
++payload bytes.
++
++Pass valid dense first-index-fastest device allocations and their exact padded
++byte sizes, separate nonoverlapping RHS/output, and explicit ghost counts. The
++solver writes the phi interior only. RHS and phi halos remain unchanged.
++`void* stream` carries the caller's `cudaStream_t`; all packing, FFT and numerical
++kernels use that stream. Success may return before completion. The caller must
++keep fields alive until its stream completes. One provider owns private
++workspaces, serializes host submissions and records a private event so later
++calls on another stream wait before workspace reuse. Creation and destruction
++must run on the same CUDA device; destruction waits its last completion only. After a failed enqueue or event-record
++attempt it joins the supplied stream before retirement instead. Keep that stream
++alive until successful destruction.
++
++Every execution sets `started=0` before preflight and `started=1` before the first
++enqueue attempt. An error after that transition poisons the provider. Never
++replay original numerical work after a started failure. No C++ exception crosses
++the new ABI. Diagnostic text is thread-local and retrieved through
++`poisson_solver_last_error_v1`. Handles must be live values returned by creation;
++the caller must not copy or reuse a destroyed handle. Caller retirement must be
++serialized with its submissions.
++
++Build CPU ABI tests with `-DPOISSON_SOLVER_BUILD_API_TESTS=ON`; these do not
++initialize CUDA. Differential GPU checks additionally require
++`POISSON_SOLVER_POISFFT_BUILD` pointing to an authenticated build of pinned
++PoisFFT commit `256a2338254c08f611881b2df5e72bdfa73bc257` and
++`POISSON_SOLVER_POISFFT_LIBS` listing its FFTW libraries. Record hashes of the six
++reference objects, modules, source checkout and FFTW inputs in the execution
++receipt. Run `ctest -R 'device-(api|fortran)-contract'` for CPU checks and
++`ctest -R '^poisfft-differential$'` only with an actual GPU correctness lease.
++
++The differential cases cover FD2/FD4 on even and odd grids, periodic and
++Neumann-staggered null spaces, and exact channel boundary classes
++`[Periodic,Periodic,Periodic,Periodic,NeumannStag,NeumannStag]`. Ghost widths are
++phi2/RHS1. They compare the active solutions against unmodified PoisFFT, check
++zero-mean gauge/null RHS behavior, preserve RHS and phi-halo bytes, and use a
++dependent producer in a nonblocking stream. They establish operator and memory
++compatibility on those cases, not whole-application equivalence or performance.
+diff --git a/include/poisson-solver/detail/execution.hpp b/include/poisson-solver/detail/execution.hpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..b6a462907819ad43c33b5d42d7b62535eba22c61
+--- /dev/null
++++ b/include/poisson-solver/detail/execution.hpp
+@@ -0,0 +1,72 @@
++#ifndef POISSON_SOLVER_EXECUTION_HPP
++#define POISSON_SOLVER_EXECUTION_HPP
++
++#include <cuda_runtime.h>
++#include <cstddef>
++#include <limits>
++#include <unordered_map>
++
++namespace poisson_solver::detail {
++// Host thread-local submission state only. Each solver owns its buffers and
++// FFT plans; callers must serialize access to one solver instance.
++inline thread_local cudaStream_t execution_stream = nullptr;
++struct StreamScope {
++    cudaStream_t previous;
++    explicit StreamScope(cudaStream_t stream) : previous(execution_stream) { execution_stream = stream; }
++    ~StreamScope() { execution_stream = previous; }
++};
++struct AllocationAccount {
++    std::unordered_map<void *, std::size_t> live;
++    bool budget_exceeded = false;
++    bool allocations_forbidden = false, forbidden_allocation_attempted = false;
++    std::size_t bytes = 0, peak = 0, limit = std::numeric_limits<std::size_t>::max();
++};
++inline thread_local AllocationAccount *allocation_account = nullptr;
++struct AllocationScope {
++    AllocationAccount *previous;
++    explicit AllocationScope(AllocationAccount &account) : previous(allocation_account) { allocation_account = &account; }
++    ~AllocationScope() { allocation_account = previous; }
++};
++struct NoAllocationScope {
++    AllocationAccount &account;
++    bool previous;
++    explicit NoAllocationScope(AllocationAccount &value)
++        : account(value), previous(value.allocations_forbidden) {
++        account.allocations_forbidden = true;
++        account.forbidden_allocation_attempted = false;
++    }
++    ~NoAllocationScope() { account.allocations_forbidden = previous; }
++};
++inline cudaError_t DeviceAllocate(void **out, std::size_t bytes) noexcept {
++    if (allocation_account && allocation_account->allocations_forbidden) {
++        allocation_account->forbidden_allocation_attempted = true;
++        return cudaErrorMemoryAllocation;
++    }
++    if (allocation_account && bytes > allocation_account->limit - allocation_account->bytes) {
++        allocation_account->budget_exceeded = true;
++        return cudaErrorMemoryAllocation;
++    }
++    const auto status = cudaMalloc(out, bytes);
++    if (status != cudaSuccess || !allocation_account) return status;
++    try {
++        allocation_account->live.emplace(*out, bytes);
++        allocation_account->bytes += bytes;
++        if (allocation_account->bytes > allocation_account->peak) allocation_account->peak = allocation_account->bytes;
++    } catch (...) {
++        (void)cudaFree(*out); *out = nullptr; return cudaErrorMemoryAllocation;
++    }
++    return status;
++}
++inline cudaError_t DeviceFree(void *ptr) noexcept {
++    const auto status = cudaFree(ptr);
++    if (status == cudaSuccess && allocation_account) {
++        auto found = allocation_account->live.find(ptr);
++        if (found != allocation_account->live.end()) {
++            allocation_account->bytes -= found->second;
++            allocation_account->live.erase(found);
++        }
++    }
++    return status;
++}
++} // namespace poisson_solver::detail
++#endif
+diff --git a/include/poisson-solver/detail/fft_policies.hpp b/include/poisson-solver/detail/fft_policies.hpp
+index 4bf52fbb13da4c1fa6987ae23e526bff3a2a82a2..992ea2efd40fc1339909f3bca4cbf225feb1be22 100644
+--- a/include/poisson-solver/detail/fft_policies.hpp
++++ b/include/poisson-solver/detail/fft_policies.hpp
+@@ -15,7 +15,24 @@
+ #include <stdexcept>
+ #include <type_traits>
+ #include <variant>
++#include "poisson-solver/detail/nvrtc_cache.hpp"
++// Account every device buffer allocated by the pinned VkFFT headers, including
++// LUT/Bluestein scratch. Driver context/module/code allocations are excluded.
++#define cudaMalloc ::poisson_solver::detail::DeviceAllocate
++#define cudaFree ::poisson_solver::detail::DeviceFree
++#define nvrtcCreateProgram ::poisson_solver::detail::nvrtc_cache::create
++#define nvrtcCompileProgram ::poisson_solver::detail::nvrtc_cache::compile
++#define nvrtcGetCUBINSize ::poisson_solver::detail::nvrtc_cache::cubin_size
++#define nvrtcGetCUBIN ::poisson_solver::detail::nvrtc_cache::cubin
++#define nvrtcDestroyProgram ::poisson_solver::detail::nvrtc_cache::destroy
+ #include <vkFFT.h>
++#undef nvrtcDestroyProgram
++#undef nvrtcGetCUBIN
++#undef nvrtcGetCUBINSize
++#undef nvrtcCompileProgram
++#undef nvrtcCreateProgram
++#undef cudaFree
++#undef cudaMalloc
+ 
+ #ifdef POISSON_SOLVER_USE_MPI
+ #include "poisson-solver/detail/mpi_check.hpp"
+@@ -107,6 +124,7 @@ struct VkFFTSplitHandle {
+ 
+ struct VkFFTPlan {
+     std::unique_ptr<CUdevice> cu_device{};
++    std::unique_ptr<cudaStream_t> stream{};
+     VkFFTVariantHandle handle{};
+ };
+ 
+@@ -163,18 +181,20 @@ public:
+     using Plan = VkFFTPlan;
+ 
+     static auto Init(GridSizes<Dim> ns, VariantLayout layout) -> Plan {
++        nvrtc_cache::CreationScope compile_scope;
+         Plan plan{};
+ 
+         // Shared among all layouts.
+         plan.cu_device = GetCudaDevice();
++        plan.stream = std::make_unique<cudaStream_t>(nullptr);
+ 
+         std::visit(Overloaded{[&plan, ns](FullLayout l) {
+                                   plan.handle = GetFullHandle(
+-                                      l, ns, plan.cu_device.get());
++                                      l, ns, plan.cu_device.get(), plan.stream.get());
+                               },
+                               [&plan, ns](SplitLayout l) {
+                                   plan.handle = GetSplitHandle(
+-                                      l, ns, plan.cu_device.get());
++                                      l, ns, plan.cu_device.get(), plan.stream.get());
+                               },
+                               [](std::monostate) {
+                                   assert(false && "Visited a monostate.");
+@@ -184,6 +204,8 @@ public:
+         return plan;
+     }
+ 
++    static void SetStream(Plan &plan, cudaStream_t stream) { *plan.stream = stream; }
++
+     template <ValidWorkspace<T> Workspace>
+     static void Forward(Workspace *dev_buffer, Plan &plan) {
+         assert(std::holds_alternative<VkFFTFullHandle>(plan.handle));
+@@ -283,11 +305,13 @@ private:
+     // Returns initialized full handle.
+     static auto GetFullHandle(FullLayout layout,
+                               GridSizes<Dim> ns,
+-                              CUdevice *device_ptr) -> VkFFTFullHandle {
++                              CUdevice *device_ptr, cudaStream_t *stream) -> VkFFTFullHandle {
+         VkFFTFullHandle h{};
+         auto &config = h.handle.config;
+ 
+         config.device = device_ptr;
++        config.stream = stream;
++        config.num_streams = 1;
+ 
+         // 0 for float, 1 for doubles.
+         config.doublePrecision = !std::is_same_v<T, float>;
+@@ -314,13 +338,15 @@ private:
+     // Returns initialized split handle.
+     static auto GetSplitHandle(SplitLayout layout,
+                                GridSizes<Dim> ns,
+-                               CUdevice *device_ptr) -> VkFFTSplitHandle {
++                               CUdevice *device_ptr, cudaStream_t *stream) -> VkFFTSplitHandle {
+         VkFFTSplitHandle h{};
+         auto &config_1d = h.handle_1d.config;
+         auto &config_2d = h.handle_2d.config;
+ 
+         config_1d.device = device_ptr;
+         config_2d.device = device_ptr;
++        config_1d.stream = config_2d.stream = stream;
++        config_1d.num_streams = config_2d.num_streams = 1;
+ 
+         // 0 for float, 1 for doubles.
+         bool double_prec_used = !std::is_same_v<T, float>;
+diff --git a/include/poisson-solver/detail/helpers.hpp b/include/poisson-solver/detail/helpers.hpp
+index f54230117ddbc85628ac1da46a7e2be83017343d..ea89c680c2d77692dc3358704830c98d3496f688 100644
+--- a/include/poisson-solver/detail/helpers.hpp
++++ b/include/poisson-solver/detail/helpers.hpp
+@@ -3,6 +3,7 @@
+ 
+ #include "poisson-solver/aliases.hpp"
+ #include "poisson-solver/detail/cuch.hpp"
++#include "poisson-solver/detail/execution.hpp"
+ 
+ #include <array>
+ #include <concepts>
+@@ -26,7 +27,7 @@ struct Overloaded : Ts... {
+ 
+ struct CudaFreeDeleter {
+     void operator()(void *ptr) {
+-        cudaFree(ptr);
++        DeviceFree(ptr);
+     }
+ };
+ 
+@@ -92,7 +93,8 @@ constexpr auto FlatIndex(MultidimIdx<Dim> midx,
+ template <typename T>
+ auto MakeCudaUnique(std::size_t size) -> CudaUniquePtr<T> {
+     T *ptr;
+-    CUCH(cudaMalloc(&ptr, size * sizeof(T)));
++    if (size > std::numeric_limits<std::size_t>::max() / sizeof(T)) throw std::overflow_error("device allocation overflow");
++    CUCH(DeviceAllocate(reinterpret_cast<void **>(&ptr), size * sizeof(T)));
+     return CudaUniquePtr<T>(ptr);
+ }
+ 
+@@ -103,7 +105,8 @@ auto MakeCudaUnique(std::size_t size) -> CudaUniquePtr<T> {
+ template <typename T>
+ auto MakeCudaShared(std::size_t size) -> CudaSharedPtr<T> {
+     T *ptr;
+-    CUCH(cudaMalloc(&ptr, size * sizeof(T)));
++    if (size > std::numeric_limits<std::size_t>::max() / sizeof(T)) throw std::overflow_error("device allocation overflow");
++    CUCH(DeviceAllocate(reinterpret_cast<void **>(&ptr), size * sizeof(T)));
+     return CudaSharedPtr<T>(ptr, CudaFreeDeleter{});
+ }
+ 
+diff --git a/include/poisson-solver/detail/kernel_binary_cache.hpp b/include/poisson-solver/detail/kernel_binary_cache.hpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..6fcbc5be77120295a8fbe7249c66510c917a8e95
+--- /dev/null
++++ b/include/poisson-solver/detail/kernel_binary_cache.hpp
+@@ -0,0 +1,37 @@
++#pragma once
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <span>
++#include <string>
++#include <vector>
++
++namespace poisson_solver::detail::kernel_cache {
++using Digest = std::array<unsigned char, 32>;
++constexpr std::size_t max_binary_bytes = 16U << 20;
++constexpr std::size_t max_disk_bytes = 64U << 20;
++
++Digest hash(std::span<const unsigned char> bytes);
++Digest hash_parts(const std::vector<std::string> &parts);
++Digest hash_file(const std::string &filename);
++std::string hex(const Digest &value);
++bool valid_cubin(std::span<const unsigned char> bytes) noexcept;
++
++// An explicit, caller-selected private directory. Missing/unsafe directories,
++// corrupt artifacts and I/O failures are misses. No code is loaded by this
++// class.
++class BinaryCache {
++public:
++  explicit BinaryCache(const std::string &directory) noexcept;
++  ~BinaryCache();
++  BinaryCache(const BinaryCache &) = delete;
++  BinaryCache &operator=(const BinaryCache &) = delete;
++  bool enabled() const noexcept { return directory_ >= 0; }
++  std::vector<unsigned char> load(const Digest &key) const noexcept;
++  void store(const Digest &key,
++             std::span<const unsigned char> bytes) const noexcept;
++
++private:
++  int directory_ = -1;
++};
++} // namespace poisson_solver::detail::kernel_cache
+diff --git a/include/poisson-solver/detail/nvrtc_cache.hpp b/include/poisson-solver/detail/nvrtc_cache.hpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..6cc6c49bea844a870158f34aae63f89c1a859596
+--- /dev/null
++++ b/include/poisson-solver/detail/nvrtc_cache.hpp
+@@ -0,0 +1,24 @@
++#pragma once
++#include <cstddef>
++#include <nvrtc.h>
++
++// These wrappers are used only at the provider's VkFFT compile
++// boundary. They do not interpose public NVRTC symbols or other libraries.
++namespace poisson_solver::detail::nvrtc_cache {
++class CreationScope {
++public:
++  CreationScope() noexcept;
++  ~CreationScope();
++  CreationScope(const CreationScope &) = delete;
++  CreationScope &operator=(const CreationScope &) = delete;
++
++private:
++  CreationScope *previous_;
++};
++nvrtcResult create(nvrtcProgram *, const char *, const char *, int,
++                   const char *const *, const char *const *) noexcept;
++nvrtcResult compile(nvrtcProgram, int, const char *const *) noexcept;
++nvrtcResult cubin_size(nvrtcProgram, std::size_t *) noexcept;
++nvrtcResult cubin(nvrtcProgram, char *) noexcept;
++nvrtcResult destroy(nvrtcProgram *) noexcept;
++} // namespace poisson_solver::detail::nvrtc_cache
+diff --git a/include/poisson-solver/detail/reshaper.hpp b/include/poisson-solver/detail/reshaper.hpp
+index e9a8c5cf8cfb5225d165cb00bc6fbbf0be619637..bc1f02bdaa76a5f9638628b5f7291d7172795e1f 100644
+--- a/include/poisson-solver/detail/reshaper.hpp
++++ b/include/poisson-solver/detail/reshaper.hpp
+@@ -170,10 +170,10 @@ public:
+                      [[maybe_unused]] const T *src) -> mpi_utils::LocalGridInfo<Dim> override {
+         // nop if aliased
+         if (src != dest) {
+-            CUCH(cudaMemcpy(dest,
++            CUCH(cudaMemcpyAsync(dest,
+                             src,
+                             MaxLocalElements() * sizeof(T),
+-                            cudaMemcpyDeviceToDevice));
++                            cudaMemcpyDeviceToDevice, detail::execution_stream));
+         }
+         return {ns_, offs_};
+     }
+@@ -183,10 +183,10 @@ public:
+         -> mpi_utils::LocalGridInfo<Dim> override {
+         // nop if aliased
+         if (src != dest) {
+-            CUCH(cudaMemcpy(dest,
++            CUCH(cudaMemcpyAsync(dest,
+                             src,
+                             MaxLocalElements() * sizeof(CuComplexTrait<T>),
+-                            cudaMemcpyDeviceToDevice));
++                            cudaMemcpyDeviceToDevice, detail::execution_stream));
+         }
+         return {ns_, offs_};
+     }
+@@ -512,10 +512,10 @@ private:
+             auto my_new_box =
+                 rp_.decompositions_[next_reshape_box_idx_][rp_.rank_];
+             auto elems_to_copy = static_cast<std::size_t>(my_new_box.count());
+-            CUCH(cudaMemcpy(dest,
++            CUCH(cudaMemcpyAsync(dest,
+                             src,
+                             elems_to_copy * sizeof(Workspace),
+-                            cudaMemcpyDeviceToDevice));
++                            cudaMemcpyDeviceToDevice, detail::execution_stream));
+         }
+     }
+ 
+diff --git a/include/poisson-solver/device_api.h b/include/poisson-solver/device_api.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..ef5e1bc6f07fb6d49dc1ce9a3b03db2092609cc3
+--- /dev/null
++++ b/include/poisson-solver/device_api.h
+@@ -0,0 +1,54 @@
++#ifndef POISSON_SOLVER_DEVICE_API_H
++#define POISSON_SOLVER_DEVICE_API_H
++#include <stddef.h>
++#include <stdint.h>
++#ifdef __cplusplus
++extern "C" {
++#endif
++typedef struct poisson_solver_handle_v1 poisson_solver_handle_v1;
++enum poisson_solver_status_v1 {
++    POISSON_SOLVER_OK = 0, POISSON_SOLVER_ARGUMENT = 1,
++    POISSON_SOLVER_RESOURCE = 2, POISSON_SOLVER_EXECUTION = 3,
++    POISSON_SOLVER_UNSUPPORTED = 4, POISSON_SOLVER_POISONED = 5
++};
++typedef struct poisson_solver_config_v1 {
++    uint32_t version, dimensions;
++    int32_t sizes[3];
++    double lengths[3];
++    int32_t boundary_conditions[6]; /* same 0..4 enum as c_binding.h */
++    int32_t approximation; /* FD2=2 or FD4=4 */
++    uint32_t flags; /* must be zero */
++    uint64_t device_budget_bytes; /* hard cap for all owned device buffers */
++} poisson_solver_config_v1;
++typedef struct poisson_solver_workspace_v1 {
++    uint32_t version, flags;
++    uint64_t persistent_device_bytes, peak_device_bytes, execution_extra_bytes;
++    /* Current live buffers; observed creation/lifetime high-water; additional
++     * execution requirement (zero for v1), respectively. */
++} poisson_solver_workspace_v1;
++enum { POISSON_SOLVER_DEVICE_BUFFERS_EXACT = 1, POISSON_SOLVER_DRIVER_OVERHEAD_EXCLUDED = 2 };
++/* Local uniform double precision, dimension3. No exceptions cross this ABI.
++ * Reserve device_budget_bytes in the caller's residency budget BEFORE create,
++ * then retain persistent_device_bytes + execution_extra_bytes. The observed
++ * creation peak is diagnostic, not a permanently resident byte claim. CUDA
++ * context, module/code and driver bookkeeping memory is outside this ledger. */
++int poisson_solver_create_v1(const poisson_solver_config_v1 *, poisson_solver_handle_v1 **);
++int poisson_solver_workspace_query_v1(poisson_solver_handle_v1 *, poisson_solver_workspace_v1 *);
++/* Dense first-index-fastest padded device allocations. Writes ONLY the active
++ * phi interior; preserves every RHS byte and phi halo. Stream is cudaStream_t
++ * transported as void*. Success is asynchronous on that stream. started is
++ * set0 on entry and1 BEFORE the first enqueue attempt; started failure poisons
++ * the handle and forbids native replay. This solver instance serializes calls
++ * and orders workspace reuse across streams using a private completion event.
++ * Device and allocation lifetime must outlive completion. */
++int poisson_solver_execute_device_v1(poisson_solver_handle_v1 *, void *phi, size_t phi_bytes,
++    const void *rhs, size_t rhs_bytes, const int32_t ghost_phi[3], const int32_t ghost_rhs[3],
++    void *stream, int *started);
++/* Waits only this provider's last completion before freeing its workspaces. */
++int poisson_solver_destroy_v1(poisson_solver_handle_v1 **);
++/* Thread-local diagnostic, valid until the next API call on this thread. */
++const char *poisson_solver_last_error_v1(void);
++#ifdef __cplusplus
++}
++#endif
++#endif
+diff --git a/include/poisson-solver/solver.hpp b/include/poisson-solver/solver.hpp
+index 89b61e92a16700b41976d97075e1d9e1b512dafa..53198036dc28bd60bb472ce2d100ffde4eb8f35b 100644
+--- a/include/poisson-solver/solver.hpp
++++ b/include/poisson-solver/solver.hpp
+@@ -73,7 +73,8 @@ public:
+     virtual ExecutionTimes ExecuteGPU(std::span<T> d_phi,
+                                       std::span<const T> d_rhs,
+                                       GridSizes<Dim> ngs_phi,
+-                                      GridSizes<Dim> ngs_rhs) = 0;
++                                      GridSizes<Dim> ngs_rhs,
++                                      cudaStream_t stream = nullptr) = 0;
+     virtual auto GetTotalGridSize() const -> std::size_t = 0;
+ 
+ protected:
+@@ -87,11 +88,11 @@ protected:
+             : accum(acc) {
+             cudaEventCreate(&start);
+             cudaEventCreate(&stop);
+-            cudaEventRecord(start);
++            cudaEventRecord(start, detail::execution_stream);
+         }
+ 
+         ~CUDAScopedTimer() {
+-            cudaEventRecord(stop);
++            cudaEventRecord(stop, detail::execution_stream);
+             cudaEventSynchronize(stop);
+ 
+             float ms = 0;
+@@ -111,12 +112,12 @@ protected:
+ #ifdef POISSON_SOLVER_ENABLE_BENCHMARKS
+         explicit HybridScopedTimer(float &acc)
+             : accum(acc) {
+-            cudaDeviceSynchronize();
++            cudaStreamSynchronize(detail::execution_stream);
+             start = std::chrono::steady_clock::now();
+         }
+ 
+         ~HybridScopedTimer() {
+-            cudaDeviceSynchronize();
++            cudaStreamSynchronize(detail::execution_stream);
+             auto stop = std::chrono::steady_clock::now();
+             std::chrono::duration<float, std::milli> ms = stop - start;
+             accum += ms.count();
+@@ -212,6 +213,10 @@ public:
+                  std::span<const T> rhs,
+                  GridSizes<Dim> ngs_phi,
+                  GridSizes<Dim> ngs_rhs) -> ExecutionTimes override {
++        detail::StreamScope stream_scope(nullptr);
++#ifndef POISSON_SOLVER_USE_MPI
++        detail::FFTPolicy<T, Dim>::SetStream(core_.fft_plan, nullptr);
++#endif
+         using detail::runners::PackPaddedGrid;
+         using detail::runners::UnpackPaddedGrid;
+ 
+@@ -257,7 +262,14 @@ public:
+     auto ExecuteGPU(std::span<T> d_phi,
+                     std::span<const T> d_rhs,
+                     GridSizes<Dim> ngs_phi,
+-                    GridSizes<Dim> ngs_rhs) -> ExecutionTimes override {
++                    GridSizes<Dim> ngs_rhs,
++                    cudaStream_t stream = nullptr) -> ExecutionTimes override {
++        detail::StreamScope stream_scope(stream);
++#ifndef POISSON_SOLVER_USE_MPI
++        detail::FFTPolicy<T, Dim>::SetStream(core_.fft_plan, stream);
++#else
++        if (stream) throw std::invalid_argument("nondefault streams require local solver build");
++#endif
+         using detail::runners::PackPaddedGrid;
+         using detail::runners::UnpackPaddedGrid;
+ 
+@@ -1023,6 +1035,10 @@ public:
+                            std::span<const T> rhs,
+                            GridSizes<3> ngs_phi,
+                            GridSizes<3> ngs_rhs) override {
++        detail::StreamScope stream_scope(nullptr);
++#ifndef POISSON_SOLVER_USE_MPI
++        detail::FFTPolicy<T, 3>::SetStream(core_.fft_plan, nullptr);
++#endif
+         using detail::runners::PackPaddedGrid;
+         using detail::runners::UnpackPaddedGrid;
+ 
+@@ -1068,7 +1084,14 @@ public:
+     ExecutionTimes ExecuteGPU(std::span<T> d_phi,
+                               std::span<const T> d_rhs,
+                               GridSizes<3> ngs_phi,
+-                              GridSizes<3> ngs_rhs) override {
++                              GridSizes<3> ngs_rhs,
++                              cudaStream_t stream = nullptr) override {
++        detail::StreamScope stream_scope(stream);
++#ifndef POISSON_SOLVER_USE_MPI
++        detail::FFTPolicy<T, 3>::SetStream(core_.fft_plan, stream);
++#else
++        if (stream) throw std::invalid_argument("nondefault streams require local solver build");
++#endif
+         using detail::runners::PackPaddedGrid;
+         using detail::runners::UnpackPaddedGrid;
+ 
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index e63420d895ac97584e1dcf125233f509fe2663e6..9cccdbbe7fa2beaf79f9677d8ce35ff18d1e512b 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -1,5 +1,8 @@
+ set(LIB_SRC_CXX
+     c_binding.cpp
++    device_api.cpp
++    detail/kernel_binary_cache.cpp
++    detail/nvrtc_cache.cpp
+     detail/c_binding_for_fortran.cpp
+     detail/runners/common.cu
+     detail/runners/common_real.cu
+@@ -9,6 +12,7 @@ set(LIB_SRC_CXX
+ )
+ set(FORTRAN_BINDING
+     fortran_binding.f90
++    device_binding.f90
+ )
+ 
+ 
+@@ -22,9 +26,13 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+ 
+ add_library(poisson-solver ${LIB_SRC_CXX})
++set_target_properties(poisson-solver PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION 1)
+ 
+ if (POISSON_SOLVER_BUILD_FORTRAN)
+     target_sources(poisson-solver PRIVATE ${FORTRAN_BINDING})
++    target_include_directories(poisson-solver INTERFACE
++        $<BUILD_INTERFACE:${CMAKE_Fortran_MODULE_DIRECTORY}>
++        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/poisson-solver/fortran>)
+ endif()
+ 
+ # The `BUILD_INTERFACE` evals to true when target 
+@@ -32,9 +40,12 @@ endif()
+ # (e.g. called `add_subdirectory(libs/poisson-solver))`.
+ target_include_directories(poisson-solver PUBLIC
+     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include/>
++    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+ )
+ 
+-target_link_libraries(poisson-solver PRIVATE common_flags)
++target_include_directories(poisson-solver PRIVATE "${PROJECT_BINARY_DIR}/generated")
++target_link_libraries(poisson-solver PRIVATE $<BUILD_INTERFACE:common_flags> OpenSSL::Crypto ${CMAKE_DL_LIBS})
++target_compile_features(poisson-solver PUBLIC cxx_std_20)
+ target_link_libraries(poisson-solver PUBLIC CUDA::cudart VkFFT)
+ if (POISSON_SOLVER_USE_MPI)
+     target_link_libraries(poisson-solver PUBLIC
+diff --git a/src/detail/kernel_binary_cache.cpp b/src/detail/kernel_binary_cache.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b6f271c1ff2110f6fe27f9c9bd815c90222fbdf
+--- /dev/null
++++ b/src/detail/kernel_binary_cache.cpp
+@@ -0,0 +1,343 @@
++#include "poisson-solver/detail/kernel_binary_cache.hpp"
++#include <algorithm>
++#include <atomic>
++#include <cerrno>
++#include <cstring>
++#include <dirent.h>
++#include <fcntl.h>
++#include <fstream>
++#include <memory>
++#include <openssl/evp.h>
++#include <stdexcept>
++#include <sys/file.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++namespace poisson_solver::detail::kernel_cache {
++namespace {
++constexpr std::array<unsigned char, 16> magic{'P', 'O', 'I', 'S', 'S', 'O',
++                                              'N', '_', 'C', 'U', 'B', 'I',
++                                              'N', '_', '1', 0};
++constexpr std::size_t header_bytes = 16 + 32 + 8 + 32;
++struct File {
++  int fd;
++  explicit File(int value = -1) : fd(value) {}
++  ~File() {
++    if (fd >= 0)
++      close(fd);
++  }
++  File(const File &) = delete;
++  File &operator=(const File &) = delete;
++};
++struct DirectoryDeleter {
++  void operator()(DIR *value) const {
++    if (value)
++      closedir(value);
++  }
++};
++bool private_file(int fd, struct stat &s) {
++  return fd >= 0 && fstat(fd, &s) == 0 && S_ISREG(s.st_mode) &&
++         s.st_uid == geteuid() && !(s.st_mode & 0077) && s.st_nlink == 1;
++}
++bool transfer(int fd, unsigned char *data, std::size_t bytes, bool writing) {
++  while (bytes) {
++    const ssize_t count =
++        writing ? write(fd, data, bytes) : read(fd, data, bytes);
++    if (count < 0 && errno == EINTR)
++      continue;
++    if (count <= 0)
++      return false;
++    data += count;
++    bytes -= std::size_t(count);
++  }
++  return true;
++}
++std::uint64_t u64(std::span<const unsigned char> bytes, std::size_t offset) {
++  std::uint64_t value = 0;
++  for (unsigned i = 0; i < 8; ++i)
++    value |= std::uint64_t(bytes[offset + i]) << (8 * i);
++  return value;
++}
++std::uint32_t u32(std::span<const unsigned char> bytes, std::size_t offset) {
++  return std::uint32_t(bytes[offset]) | std::uint32_t(bytes[offset + 1]) << 8 |
++         std::uint32_t(bytes[offset + 2]) << 16 |
++         std::uint32_t(bytes[offset + 3]) << 24;
++}
++std::uint16_t u16(std::span<const unsigned char> bytes, std::size_t offset) {
++  return std::uint16_t(bytes[offset]) | std::uint16_t(bytes[offset + 1]) << 8;
++}
++bool extent(std::size_t total, std::uint64_t offset, std::uint64_t bytes) {
++  return offset <= total && bytes <= total - offset;
++}
++bool managed_name(const std::string &name) {
++  return name.size() == 70 && name.ends_with(".cubin") &&
++         std::all_of(name.begin(), name.begin() + 64, [](char c) {
++           return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
++         });
++}
++} // namespace
++
++Digest hash(std::span<const unsigned char> bytes) {
++  Digest result{};
++  unsigned length = 0;
++  if (EVP_Digest(bytes.data(), bytes.size(), result.data(), &length,
++                 EVP_sha256(), nullptr) != 1 ||
++      length != result.size())
++    throw std::runtime_error("kernel cache digest failed");
++  return result;
++}
++
++Digest hash_parts(const std::vector<std::string> &parts) {
++  // Length framing distinguishes ["ab","c"] from ["a","bc"], including NULs.
++  std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> context(
++      EVP_MD_CTX_new(), EVP_MD_CTX_free);
++  if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
++    throw std::runtime_error("kernel cache digest initialization failed");
++  for (const auto &part : parts) {
++    std::array<unsigned char, 8> size{};
++    for (unsigned i = 0; i < 8; ++i)
++      size[i] = (std::uint64_t(part.size()) >> (8 * i)) & 255;
++    if (EVP_DigestUpdate(context.get(), size.data(), size.size()) != 1 ||
++        EVP_DigestUpdate(context.get(), part.data(), part.size()) != 1)
++      throw std::runtime_error("kernel cache digest update failed");
++  }
++  Digest result{};
++  unsigned length = 0;
++  if (EVP_DigestFinal_ex(context.get(), result.data(), &length) != 1 ||
++      length != result.size())
++    throw std::runtime_error("kernel cache digest finalization failed");
++  return result;
++}
++
++Digest hash_file(const std::string &filename) {
++  std::ifstream input(filename, std::ios::binary);
++  std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> context(
++      EVP_MD_CTX_new(), EVP_MD_CTX_free);
++  if (!input || !context ||
++      EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
++    throw std::runtime_error("kernel cache library digest unavailable");
++  std::array<char, 65536> bytes{};
++  std::size_t total = 0;
++  while (input) {
++    input.read(bytes.data(), bytes.size());
++    const auto count = input.gcount();
++    total += std::size_t(count);
++    if (total > 256U * 1024 * 1024 ||
++        EVP_DigestUpdate(context.get(), bytes.data(), std::size_t(count)) != 1)
++      throw std::runtime_error("kernel cache library digest failed");
++  }
++  if (!input.eof() || !total)
++    throw std::runtime_error("kernel cache library read failed");
++  Digest result{};
++  unsigned length = 0;
++  if (EVP_DigestFinal_ex(context.get(), result.data(), &length) != 1 ||
++      length != result.size())
++    throw std::runtime_error("kernel cache library digest finalization failed");
++  return result;
++}
++
++std::string hex(const Digest &value) {
++  static constexpr char alphabet[] = "0123456789abcdef";
++  std::string result;
++  result.reserve(64);
++  for (auto byte : value) {
++    result.push_back(alphabet[byte >> 4]);
++    result.push_back(alphabet[byte & 15]);
++  }
++  return result;
++}
++
++bool valid_cubin(std::span<const unsigned char> bytes) noexcept {
++  // Accept the bounded ELF64 little-endian CUDA container emitted by the
++  // pinned modern NVRTC. Unsupported formats simply do not enter the cache.
++  if (bytes.size() < 64 || bytes.size() > max_binary_bytes ||
++      std::memcmp(bytes.data(), "\177ELF", 4) || bytes[4] != 2 ||
++      bytes[5] != 1 || bytes[6] != 1 || u16(bytes, 18) != 190 ||
++      u32(bytes, 20) != 1 || u16(bytes, 52) != 64 ||
++      (u16(bytes, 16) != 1 && u16(bytes, 16) != 2))
++    return false;
++  const auto phoff = u64(bytes, 32), shoff = u64(bytes, 40);
++  const auto phnum = u16(bytes, 56), shnum = u16(bytes, 60);
++  if (!shnum || phnum == 65535 || u16(bytes, 62) >= shnum ||
++      u16(bytes, 58) != 64 ||
++      !extent(bytes.size(), shoff, std::uint64_t(shnum) * 64) ||
++      (phnum && (u16(bytes, 54) != 56 ||
++                 !extent(bytes.size(), phoff, std::uint64_t(phnum) * 56))))
++    return false;
++  for (std::uint64_t i = 0; i < shnum; ++i) {
++    const auto p = std::size_t(shoff + i * 64);
++    if ((u32(bytes, p + 4) != 8 &&
++         !extent(bytes.size(), u64(bytes, p + 24), u64(bytes, p + 32))) ||
++        u32(bytes, p + 40) >= shnum)
++      return false;
++  }
++  for (std::uint64_t i = 0; i < phnum; ++i) {
++    const auto p = std::size_t(phoff + i * 56);
++    if (!extent(bytes.size(), u64(bytes, p + 8), u64(bytes, p + 32)))
++      return false;
++  }
++  return true;
++}
++
++BinaryCache::BinaryCache(const std::string &path) noexcept {
++  if (path.empty() || path.front() != '/' ||
++      path.find('\0') != std::string::npos)
++    return;
++  // Parent directory creation belongs to the explicit caller/pipeline.
++  directory_ =
++      open(path.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
++  struct stat s{};
++  if (directory_ >= 0 &&
++      (fstat(directory_, &s) || s.st_uid != geteuid() || (s.st_mode & 0077))) {
++    close(directory_);
++    directory_ = -1;
++  }
++}
++BinaryCache::~BinaryCache() {
++  if (directory_ >= 0)
++    close(directory_);
++}
++
++std::vector<unsigned char> BinaryCache::load(const Digest &key) const noexcept {
++  try {
++    if (!enabled())
++      return {};
++    const auto name = hex(key) + ".cubin";
++    File file(openat(directory_, name.c_str(),
++                     O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK));
++    struct stat s{};
++    if (!private_file(file.fd, s) || s.st_size < std::int64_t(header_bytes) ||
++        s.st_size > std::int64_t(header_bytes + max_binary_bytes))
++      return {};
++    std::array<unsigned char, header_bytes> header{};
++    if (!transfer(file.fd, header.data(), header.size(), false) ||
++        !std::equal(magic.begin(), magic.end(), header.begin()) ||
++        !std::equal(key.begin(), key.end(), header.begin() + 16))
++      return {};
++    const auto size = u64(header, 48);
++    if (size != std::uint64_t(s.st_size - header_bytes))
++      return {};
++    std::vector<unsigned char> bytes(std::size_t(size), 0);
++    if (!transfer(file.fd, bytes.data(), bytes.size(), false))
++      return {};
++    unsigned char extra = 0;
++    if (read(file.fd, &extra, 1) != 0 || !valid_cubin(bytes))
++      return {};
++    const auto expected = hash(bytes);
++    if (!std::equal(expected.begin(), expected.end(), header.begin() + 56))
++      return {};
++    return bytes;
++  } catch (...) {
++    return {};
++  }
++}
++
++void BinaryCache::store(const Digest &key,
++                        std::span<const unsigned char> bytes) const noexcept {
++  std::string temporary;
++  try {
++    if (!enabled() || !valid_cubin(bytes))
++      return;
++    File lock(openat(directory_, ".lock",
++                     O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK,
++                     0600));
++    struct stat lock_stat{};
++    if (!private_file(lock.fd, lock_stat) || flock(lock.fd, LOCK_EX | LOCK_NB))
++      return;
++    const auto name = hex(key) + ".cubin";
++    // A parallel miss may already have populated this key. Replacing it
++    // atomically is safe and avoids a second full-image read/allocation.
++    struct Row {
++      std::string name;
++      std::uint64_t bytes;
++      timespec age;
++      bool removable;
++    };
++    std::vector<Row> rows;
++    std::uint64_t used = 0;
++    // dup() would share and advance the retained directory offset across
++    // stores. A fresh open file description starts every bounded scan.
++    const int scan_fd = openat(directory_, ".",
++                               O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
++    std::unique_ptr<DIR, DirectoryDeleter> entries(
++        scan_fd < 0 ? nullptr : fdopendir(scan_fd));
++    if (!entries && scan_fd >= 0)
++      close(scan_fd);
++    if (!entries)
++      return;
++    while (auto *entry = readdir(entries.get())) {
++      const std::string filename = entry->d_name;
++      if (filename == "." || filename == ".." || filename == ".lock")
++        continue;
++      struct stat s{};
++      if (fstatat(directory_, filename.c_str(), &s, AT_SYMLINK_NOFOLLOW) ||
++          s.st_size < 0)
++        return;
++      if (!S_ISREG(s.st_mode))
++        return; // Foreign objects are never removed.
++      if (std::uint64_t(s.st_size) > max_disk_bytes ||
++          used > max_disk_bytes - std::uint64_t(s.st_size))
++        return;
++      used += std::uint64_t(s.st_size);
++      rows.push_back(
++          {filename, std::uint64_t(s.st_size), s.st_mtim,
++           s.st_uid == geteuid() && !(s.st_mode & 0077) && s.st_nlink == 1 &&
++               (managed_name(filename) || filename.starts_with(".tmp-"))});
++      if (rows.size() > 4096)
++        return;
++    }
++    const std::uint64_t required = header_bytes + bytes.size();
++    std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b) {
++      return a.age.tv_sec != b.age.tv_sec     ? a.age.tv_sec < b.age.tv_sec
++             : a.age.tv_nsec != b.age.tv_nsec ? a.age.tv_nsec < b.age.tv_nsec
++                                              : a.name < b.name;
++    });
++    // Remove stale same-key data and then oldest clean cache files. Loaded
++    // images own their host bytes independently of any directory entry.
++    for (const auto &row : rows) {
++      if (row.removable && row.name == name) {
++        if (unlinkat(directory_, row.name.c_str(), 0))
++          return;
++        used -= row.bytes;
++      }
++    }
++    for (const auto &row : rows) {
++      if (used <= max_disk_bytes - required)
++        break;
++      if (!row.removable || row.name == name)
++        continue;
++      if (unlinkat(directory_, row.name.c_str(), 0))
++        return;
++      used -= row.bytes;
++    }
++    if (used > max_disk_bytes - required)
++      return;
++    static std::atomic<unsigned long> serial{0};
++    temporary = ".tmp-" + std::to_string(getpid()) + "-" +
++                std::to_string(serial.fetch_add(1));
++    File file(openat(directory_, temporary.c_str(),
++                     O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
++                     0600));
++    if (file.fd < 0) {
++      temporary.clear();
++      return;
++    }
++    std::array<unsigned char, header_bytes> header{};
++    std::copy(magic.begin(), magic.end(), header.begin());
++    std::copy(key.begin(), key.end(), header.begin() + 16);
++    for (unsigned i = 0; i < 8; ++i)
++      header[48 + i] = (std::uint64_t(bytes.size()) >> (8 * i)) & 255;
++    const auto checksum = hash(bytes);
++    std::copy(checksum.begin(), checksum.end(), header.begin() + 56);
++    if (transfer(file.fd, header.data(), header.size(), true) &&
++        transfer(file.fd, const_cast<unsigned char *>(bytes.data()),
++                 bytes.size(), true) &&
++        fsync(file.fd) == 0 &&
++        renameat(directory_, temporary.c_str(), directory_, name.c_str()) == 0)
++      temporary.clear();
++  } catch (...) { /* A cache cannot turn a valid normal compile into failure. */
++  }
++  if (!temporary.empty())
++    unlinkat(directory_, temporary.c_str(), 0);
++}
++} // namespace poisson_solver::detail::kernel_cache
+diff --git a/src/detail/nvrtc_cache.cpp b/src/detail/nvrtc_cache.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..87b28bfd99fcaa4ee995d2d874d2fa7f56c3f440
+--- /dev/null
++++ b/src/detail/nvrtc_cache.cpp
+@@ -0,0 +1,406 @@
++#include "poisson-solver/detail/nvrtc_cache.hpp"
++#include "kernel_cache_build_identity.hpp"
++#include "poisson-solver/detail/kernel_binary_cache.hpp"
++#include <cstdlib>
++#include <cstring>
++#include <cuda.h>
++#include <cuda_runtime_api.h>
++#include <dlfcn.h>
++#include <fstream>
++#include <link.h>
++#include <map>
++#include <memory>
++#include <mutex>
++#include <optional>
++#include <sstream>
++#include <string>
++#include <vector>
++
++namespace poisson_solver::detail::nvrtc_cache {
++namespace {
++using kernel_cache::Digest;
++constexpr std::size_t max_live_programs = 64;
++constexpr std::size_t max_live_image_bytes = 64U << 20;
++constexpr std::size_t max_source_bytes = 8U << 20;
++constexpr std::size_t max_header_bytes = 32U << 20;
++struct State {
++  explicit State(std::string directory, Digest source, CreationScope *owner)
++      : directory(std::move(directory)), source(source), owner(owner) {}
++  std::mutex mutex;
++  std::string directory;
++  Digest source{}, key{};
++  CreationScope *owner;
++  std::vector<unsigned char> image;
++  bool keyed = false, compiled = false, reserved = false;
++  std::size_t binary_bytes = 0;
++};
++struct Registry {
++  std::mutex mutex;
++  std::map<nvrtcProgram, std::shared_ptr<State>> programs;
++  std::size_t image_reservations = 0;
++};
++Registry &registry() {
++  static Registry value;
++  return value;
++}
++thread_local CreationScope *active_scope = nullptr;
++std::shared_ptr<State> lookup(nvrtcProgram p) {
++  auto &r = registry();
++  std::lock_guard lock(r.mutex);
++  auto i = r.programs.find(p);
++  return i == r.programs.end() ? nullptr : i->second;
++}
++void release_image(State &state) {
++  std::vector<unsigned char>().swap(state.image);
++  if (state.reserved) {
++    auto &r = registry();
++    std::lock_guard lock(r.mutex);
++    r.image_reservations -= kernel_cache::max_binary_bytes;
++    state.reserved = false;
++  }
++}
++std::string bounded(const char *text, std::size_t limit) {
++  if (!text)
++    throw std::invalid_argument("absent compiler text");
++  auto size = strnlen(text, limit + 1);
++  if (size > limit)
++    throw std::invalid_argument("compiler text exceeds cache bound");
++  return std::string(text, size);
++}
++bool self_contained(const std::string &source) {
++  // The pinned generator uses no filesystem includes. Conservatively decline
++  // even comments/identifiers containing "include", rather than pretending
++  // that a partial preprocessor resolves arbitrary external dependencies.
++  std::string joined;
++  joined.reserve(source.size());
++  for (std::size_t i = 0; i < source.size(); ++i) {
++    if (source[i] == '\\' && i + 1 < source.size() && source[i + 1] == '\n') {
++      ++i;
++      continue;
++    }
++    if (source[i] == '\\' && i + 2 < source.size() && source[i + 1] == '\r' &&
++        source[i + 2] == '\n') {
++      i += 2;
++      continue;
++    }
++    joined.push_back(source[i]);
++  }
++  return joined.find("include") == std::string::npos &&
++         joined.find("embed") == std::string::npos &&
++         joined.find("??") == std::string::npos &&
++         joined.find("__TIME__") == std::string::npos &&
++         joined.find("__DATE__") == std::string::npos &&
++         joined.find("__TIMESTAMP__") == std::string::npos;
++}
++bool pinned_option(const std::string &option) {
++  const std::string prefix = "--gpu-architecture=sm_";
++  if (option == "-fmad=false")
++    return true;
++  if (!option.starts_with(prefix))
++    return false;
++  const auto suffix = option.substr(prefix.size());
++  return !suffix.empty() && suffix.size() <= 4 &&
++         suffix.find_first_not_of("0123456789af") == std::string::npos;
++}
++std::string library_digest(const void *function) {
++  Dl_info info{};
++  if (!dladdr(function, &info) || !info.dli_fname)
++    throw std::runtime_error("compiler library unavailable");
++  return kernel_cache::hex(kernel_cache::hash_file(info.dli_fname));
++}
++struct BuiltinsLibrary {
++  void *handle = nullptr;
++  ~BuiltinsLibrary() {
++    if (handle)
++      dlclose(handle);
++  }
++  std::string identity(int major, int minor) {
++    // NVRTC's supported Linux builtins dependency is versioned by major and
++    // minor. Resolve the same SONAME before compilation and retain the
++    // object, so a loader search override is represented by its actual
++    // bytes rather than only by the configure-time toolkit path.
++    const std::string soname = "libnvrtc-builtins.so." + std::to_string(major) +
++                               "." + std::to_string(minor);
++    handle = dlopen(soname.c_str(), RTLD_NOW | RTLD_LOCAL);
++    if (!handle)
++      handle =
++          dlopen(POISSON_SOLVER_CACHE_NVRTC_BUILTINS, RTLD_NOW | RTLD_LOCAL);
++    // A configured absolute-path fallback must be the dependency SONAME
++    // requested by this runtime NVRTC. An unknown/minor-mismatched compiler
++    // must miss, not key its kernels using another compiler's builtins.
++    void *selected =
++        dlopen(soname.c_str(), RTLD_NOW | RTLD_LOCAL | RTLD_NOLOAD);
++    const bool same_object = selected && selected == handle;
++    if (selected)
++      dlclose(selected);
++    if (!same_object)
++      throw std::runtime_error("NVRTC builtins SONAME is not bound");
++    link_map *object = nullptr;
++    if (!handle || dlinfo(handle, RTLD_DI_LINKMAP, &object) || !object ||
++        !object->l_name)
++      throw std::runtime_error("NVRTC builtins identity unavailable");
++    return kernel_cache::hex(kernel_cache::hash_file(object->l_name));
++  }
++};
++const std::optional<std::string> &library_identity() {
++  static BuiltinsLibrary builtins;
++  static const auto value = []() -> std::optional<std::string> {
++    try {
++      int major = 0, minor = 0;
++      const std::string build = POISSON_SOLVER_CACHE_BUILD_KEY;
++      if (build.size() != 64 ||
++          build.find_first_not_of("0123456789abcdef") != std::string::npos)
++        return {};
++      if (nvrtcVersion(&major, &minor) != NVRTC_SUCCESS)
++        return {};
++      return build + ";nvrtc=" + std::to_string(major) + "." +
++             std::to_string(minor) + ";nvrtc-image=" +
++             library_digest(reinterpret_cast<const void *>(&nvrtcVersion)) +
++             ";nvrtc-builtins=" + builtins.identity(major, minor) +
++             ";driver-image=" +
++             library_digest(reinterpret_cast<const void *>(&cuDeviceGet));
++    } catch (...) {
++      return {};
++    }
++  }();
++  return value;
++}
++std::string device_identity() {
++  CUdevice device;
++  CUuuid uuid{};
++  int driver = 0, runtime = 0;
++  if (cuCtxGetDevice(&device) != CUDA_SUCCESS ||
++      cuDeviceGetUuid_v2(&uuid, device) != CUDA_SUCCESS ||
++      cuDriverGetVersion(&driver) != CUDA_SUCCESS ||
++      cudaRuntimeGetVersion(&runtime) != cudaSuccess)
++    throw std::runtime_error("kernel cache device identity unavailable");
++  static constexpr CUdevice_attribute attributes[] = {
++      CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
++      CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
++      CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK,
++      CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X,
++      CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y,
++      CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z,
++      CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X,
++      CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y,
++      CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z,
++      CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
++      CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN,
++      CU_DEVICE_ATTRIBUTE_WARP_SIZE,
++      CU_DEVICE_ATTRIBUTE_SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO};
++  std::string result(uuid.bytes, sizeof uuid.bytes);
++  result += ";driver=" + std::to_string(driver) +
++            ";runtime=" + std::to_string(runtime);
++  for (auto attribute : attributes) {
++    int value = 0;
++    if (cuDeviceGetAttribute(&value, attribute, device) != CUDA_SUCCESS)
++      throw std::runtime_error("kernel cache attribute unavailable");
++    result +=
++        ';' + std::to_string(int(attribute)) + '=' + std::to_string(value);
++  }
++  return result;
++}
++} // namespace
++
++CreationScope::CreationScope() noexcept : previous_(active_scope) {
++  active_scope = this;
++}
++CreationScope::~CreationScope() {
++  active_scope = previous_;
++  // VkFFT error exits can omit nvrtcDestroyProgram. Retire cache-owned
++  // compilation records at the enclosing plan-creation boundary regardless
++  // of the exit path. No source kernels have been submitted at this point.
++  auto &r = registry();
++  for (;;) {
++    nvrtcProgram program = nullptr;
++    std::shared_ptr<State> state;
++    {
++      std::lock_guard lock(r.mutex);
++      for (auto i = r.programs.begin(); i != r.programs.end(); ++i) {
++        if (i->second->owner == this) {
++          program = i->first;
++          state = i->second;
++          r.programs.erase(i);
++          break;
++        }
++      }
++    }
++    if (!state)
++      break;
++    std::lock_guard lock(state->mutex);
++    release_image(*state);
++    nvrtcDestroyProgram(&program);
++  }
++}
++
++nvrtcResult create(nvrtcProgram *out, const char *source, const char *name,
++                   int headers, const char *const *contents,
++                   const char *const *names) noexcept {
++  const auto result =
++      nvrtcCreateProgram(out, source, name, headers, contents, names);
++  if (result != NVRTC_SUCCESS)
++    return result;
++  try {
++    const char *directory = getenv("POISSON_SOLVER_KERNEL_CACHE_DIR");
++    if (!active_scope || !directory || !*directory || !source || headers < 0 ||
++        headers > 64)
++      return result;
++    kernel_cache::BinaryCache cache(bounded(directory, 4096));
++    if (!cache.enabled())
++      return result;
++    std::vector<std::string> parts{
++        "poisson-nvrtc-cubin-v1", bounded(source, max_source_bytes),
++        name ? "name-present" : "name-null", name ? bounded(name, 4096) : ""};
++    if (!self_contained(parts[1]))
++      return result;
++    std::size_t total = 0;
++    for (int i = 0; i < headers; ++i) {
++      if (!contents || !names)
++        return result;
++      auto text = bounded(contents[i], max_source_bytes);
++      total += text.size();
++      if (total > max_header_bytes)
++        return result;
++      if (!self_contained(text))
++        return result;
++      parts.push_back(bounded(names[i], 4096));
++      parts.push_back(std::move(text));
++    }
++    auto state = std::make_shared<State>(
++        directory, kernel_cache::hash_parts(parts), active_scope);
++    auto &r = registry();
++    std::lock_guard lock(r.mutex);
++    if (r.programs.size() < max_live_programs)
++      r.programs.emplace(*out, std::move(state));
++  } catch (...) { /* Optional cache metadata failure preserves native NVRTC
++                     semantics. */
++  }
++  return result;
++}
++
++nvrtcResult compile(nvrtcProgram program, int count,
++                    const char *const *options) noexcept {
++  std::shared_ptr<State> state;
++  try {
++    state = lookup(program);
++  } catch (...) {
++    return nvrtcCompileProgram(program, count, options);
++  }
++  if (!state)
++    return nvrtcCompileProgram(program, count, options);
++  std::lock_guard lock(state->mutex);
++  release_image(*state);
++  state->keyed = false;
++  state->compiled = false;
++  state->binary_bytes = 0;
++  try {
++    const auto &library = library_identity();
++    if (!library || count < 0 || count > 64)
++      throw std::runtime_error("uncacheable compiler recipe");
++    std::vector<std::string> parts{*library, kernel_cache::hex(state->source),
++                                   device_identity()};
++    for (int i = 0; i < count; ++i) {
++      if (!options)
++        throw std::invalid_argument("absent options");
++      auto option = bounded(options[i], 16384);
++      if (!pinned_option(option))
++        throw std::invalid_argument("compiler option outside pinned recipe");
++      parts.push_back(std::move(option));
++    }
++    state->key = kernel_cache::hash_parts(parts);
++    state->keyed = true;
++    auto &r = registry();
++    {
++      std::lock_guard guard(r.mutex);
++      if (r.image_reservations <=
++          max_live_image_bytes - kernel_cache::max_binary_bytes) {
++        r.image_reservations += kernel_cache::max_binary_bytes;
++        state->reserved = true;
++      }
++    }
++    if (state->reserved) {
++      state->image =
++          kernel_cache::BinaryCache(state->directory).load(state->key);
++      if (!state->image.empty()) {
++        state->compiled = true;
++        return NVRTC_SUCCESS;
++      }
++      release_image(*state);
++    }
++  } catch (...) {
++    release_image(*state);
++    state->keyed = false;
++  }
++  const auto result = nvrtcCompileProgram(program, count, options);
++  state->compiled = result == NVRTC_SUCCESS;
++  return result;
++}
++
++nvrtcResult cubin_size(nvrtcProgram program, std::size_t *out) noexcept {
++  try {
++    auto state = lookup(program);
++    if (!state)
++      return nvrtcGetCUBINSize(program, out);
++    std::lock_guard lock(state->mutex);
++    if (!state->image.empty()) {
++      if (!out)
++        return NVRTC_ERROR_INVALID_INPUT;
++      *out = state->image.size();
++      return NVRTC_SUCCESS;
++    }
++    const auto result = nvrtcGetCUBINSize(program, out);
++    if (result == NVRTC_SUCCESS && out)
++      state->binary_bytes = *out;
++    return result;
++  } catch (...) {
++    return NVRTC_ERROR_INTERNAL_ERROR;
++  }
++}
++
++nvrtcResult cubin(nvrtcProgram program, char *out) noexcept {
++  try {
++    auto state = lookup(program);
++    if (!state)
++      return nvrtcGetCUBIN(program, out);
++    std::lock_guard lock(state->mutex);
++    if (!state->image.empty()) {
++      if (!out)
++        return NVRTC_ERROR_INVALID_INPUT;
++      std::memcpy(out, state->image.data(), state->image.size());
++      return NVRTC_SUCCESS;
++    }
++    const auto result = nvrtcGetCUBIN(program, out);
++    if (result == NVRTC_SUCCESS && state->compiled && state->keyed && out &&
++        state->binary_bytes &&
++        state->binary_bytes <= kernel_cache::max_binary_bytes)
++      kernel_cache::BinaryCache(state->directory)
++          .store(state->key, {reinterpret_cast<const unsigned char *>(out),
++                              state->binary_bytes});
++    return result;
++  } catch (...) {
++    return NVRTC_ERROR_INTERNAL_ERROR;
++  }
++}
++
++nvrtcResult destroy(nvrtcProgram *program) noexcept {
++  if (!program)
++    return nvrtcDestroyProgram(program);
++  try {
++    const auto original = *program;
++    auto state = lookup(original);
++    std::unique_lock<std::mutex> lock;
++    if (state)
++      lock = std::unique_lock<std::mutex>(state->mutex);
++    const auto result = nvrtcDestroyProgram(program);
++    if (result == NVRTC_SUCCESS && state) {
++      release_image(*state);
++      auto &r = registry();
++      std::lock_guard guard(r.mutex);
++      r.programs.erase(original);
++    }
++    return result;
++  } catch (...) {
++    return NVRTC_ERROR_INTERNAL_ERROR;
++  }
++}
++} // namespace poisson_solver::detail::nvrtc_cache
+diff --git a/src/detail/runners/common.cu b/src/detail/runners/common.cu
+index 36a64f6560979f99e45a63fb10cfbdf9b691a91d..53ec8c40529c5254607f8184bd6cab941b5dbafb 100644
+--- a/src/detail/runners/common.cu
++++ b/src/detail/runners/common.cu
+@@ -16,20 +16,20 @@ void DivideByDenoms(Workspace *workspace,
+                     dim3 cu_grid_size,
+                     dim3 cu_block_size,
+                     bool zero_origin) {
+-    ker::DivideByDenoms<<<cu_grid_size, cu_block_size>>>(
++    ker::DivideByDenoms<<<cu_grid_size, cu_block_size, 0, detail::execution_stream>>>(
+         workspace, ns, offs, denoms, zero_origin);
+     CUCH(cudaGetLastError());
+ }
+ 
+ template <std::floating_point T, std::size_t Dim>
+ void UnpackPaddedGrid(T *active, const T * padded, GridSizes<Dim> ns, GridSizes<Dim> ngs, dim3 cu_grid_size, dim3 cu_block_size) {
+-    ker::UnpackPaddedGrid<<<cu_grid_size, cu_block_size>>>(active, padded, ns, ngs);
++    ker::UnpackPaddedGrid<<<cu_grid_size, cu_block_size, 0, detail::execution_stream>>>(active, padded, ns, ngs);
+     CUCH(cudaGetLastError());
+ }
+ 
+ template <std::floating_point T, std::size_t Dim>
+ void PackPaddedGrid(T * padded, const T * active, GridSizes<Dim> ns, GridSizes<Dim> ngs, dim3 cu_grid_size, dim3 cu_block_size) {
+-    ker::PackPaddedGrid<<<cu_grid_size, cu_block_size>>>(padded, active, ns, ngs);
++    ker::PackPaddedGrid<<<cu_grid_size, cu_block_size, 0, detail::execution_stream>>>(padded, active, ns, ngs);
+     CUCH(cudaGetLastError());
+ }
+ 
+diff --git a/src/detail/runners/common_cmplx.cu b/src/detail/runners/common_cmplx.cu
+index 46df04c2d2ec0b31979edba5a5b29cf1657b556c..00217f50a323a379f66ac8f87d33250979da2776 100644
+--- a/src/detail/runners/common_cmplx.cu
++++ b/src/detail/runners/common_cmplx.cu
+@@ -15,7 +15,7 @@ void Init(CuComplexTrait<T> *cmplx_workspace,
+           GridSizes<Dim> ns,
+           dim3 cu_grid_size,
+           dim3 cu_block_size) {
+-    ker::Init<<<cu_grid_size, cu_block_size>>>(
++    ker::Init<<<cu_grid_size, cu_block_size, 0, detail::execution_stream>>>(
+         cmplx_workspace, real_workspace, ns);
+     CUCH(cudaGetLastError());
+ }
+@@ -27,7 +27,7 @@ void Normalize(T *res,
+                T norm_factor,
+                dim3 cu_grid_size,
+                dim3 cu_block_size) {
+-    ker::Normalize<<<cu_grid_size, cu_block_size>>>(
++    ker::Normalize<<<cu_grid_size, cu_block_size, 0, detail::execution_stream>>>(
+         res, cmplx_workspace, ns, norm_factor);
+     CUCH(cudaGetLastError());
+ }
+diff --git a/src/detail/runners/common_real.cu b/src/detail/runners/common_real.cu
+index e565a097be38c2ac31220a4451a4c8cee9cf2cb8..845eef5b00f9b9bfae378387329435d52b38ac85 100644
+--- a/src/detail/runners/common_real.cu
++++ b/src/detail/runners/common_real.cu
+@@ -15,7 +15,7 @@ void Normalize(T *real_workspace,
+                T norm_factor,
+                dim3 cu_grid_size,
+                dim3 cu_block_size) {
+-    ker::Normalize<<<cu_grid_size, cu_block_size>>>(
++    ker::Normalize<<<cu_grid_size, cu_block_size, 0, detail::execution_stream>>>(
+         real_workspace, ns, norm_factor);
+     CUCH(cudaGetLastError());
+ }
+diff --git a/src/detail/runners/nonuniform_z.cu b/src/detail/runners/nonuniform_z.cu
+index 872acfe8c333337416d53f18dad84609da94c6b9..139129de47a81affbda31ba3af83bba913d1f0d5 100644
+--- a/src/detail/runners/nonuniform_z.cu
++++ b/src/detail/runners/nonuniform_z.cu
+@@ -21,7 +21,7 @@ void TridiagZ(Workspace *real_workspace,
+               const T *mat_c,
+               dim3 cu_grid_size,
+               dim3 cu_block_size) {
+-    nzk::TridiagZ<<<cu_grid_size, cu_block_size>>>(
++    nzk::TridiagZ<<<cu_grid_size, cu_block_size, 0, detail::execution_stream>>>(
+         real_workspace, cp_workspace, ns, offs, denoms, mat_a, mat_b, mat_c);
+     CUCH(cudaGetLastError());
+ }
+diff --git a/src/device_api.cpp b/src/device_api.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..f96a5335ff18d443e2b067e997abcb4a3b5db645
+--- /dev/null
++++ b/src/device_api.cpp
+@@ -0,0 +1,136 @@
++#include "poisson-solver/device_api.h"
++#include "poisson-solver/solver.hpp"
++#include <climits>
++#include <cmath>
++#include <cstdio>
++#include <memory>
++#include <mutex>
++#include <stdexcept>
++
++struct poisson_solver_handle_v1 {
++    poisson_solver::detail::AllocationAccount account;
++    std::unique_ptr<poisson_solver::Solver<double, 3>> solver;
++    poisson_solver::GridSizes<3> sizes;
++    cudaEvent_t complete = nullptr;
++    bool pending = false, poisoned = false, untracked_submission = false;
++    cudaStream_t last_stream = nullptr;
++    int device = 0;
++    std::mutex mutex;
++};
++namespace {
++thread_local char last_error[1024]{};
++void require(bool value, const char *message) { if (!value) throw std::invalid_argument(message); }
++void cuda_check(cudaError_t value) { if (value != cudaSuccess) throw std::runtime_error(cudaGetErrorString(value)); }
++template<class F> int protect(F action) noexcept {
++    last_error[0] = 0;
++    try { return action(); }
++    catch (const std::invalid_argument &e) { std::snprintf(last_error,sizeof last_error,"%s",e.what()); return POISSON_SOLVER_ARGUMENT; }
++    catch (const std::bad_alloc &e) { std::snprintf(last_error,sizeof last_error,"%s",e.what()); return POISSON_SOLVER_RESOURCE; }
++    catch (const std::exception &e) { std::snprintf(last_error,sizeof last_error,"%s",e.what()); return POISSON_SOLVER_EXECUTION; }
++    catch (...) { std::snprintf(last_error,sizeof last_error,"unknown solver failure"); return POISSON_SOLVER_EXECUTION; }
++}
++size_t padded_count(const poisson_solver_handle_v1 &h, const int32_t *ghosts) {
++    require(ghosts, "missing ghost counts"); size_t count=1;
++    for (size_t i=0;i<3;++i) {
++        require(ghosts[i]>=0 && size_t(ghosts[i])<=(INT_MAX-h.sizes[i])/2,"invalid/overflowing ghost extent");
++        const auto extent=h.sizes[i]+2*size_t(ghosts[i]);
++        require(count<=SIZE_MAX/extent,"padded grid size overflow"); count*=extent;
++    }
++    require(count<=SIZE_MAX/sizeof(double),"padded grid byte overflow"); return count;
++}
++void device_pointer(const void *p, int device) {
++    require(p,"missing device pointer"); cudaPointerAttributes a{}; cuda_check(cudaPointerGetAttributes(&a,p));
++    require(a.type==cudaMemoryTypeDevice && a.device==device,"pointer is not on solver device");
++}
++}
++extern "C" const char *poisson_solver_last_error_v1() { return last_error; }
++extern "C" int poisson_solver_create_v1(const poisson_solver_config_v1 *c, poisson_solver_handle_v1 **out) {
++    return protect([&] {
++        require(out,"missing solver output"); *out=nullptr;
++        require(c && c->version==1 && c->flags==0,"unsupported solver configuration");
++        if (c->dimensions!=3 || (c->approximation!=2 && c->approximation!=4)) return int(POISSON_SOLVER_UNSUPPORTED);
++#ifdef POISSON_SOLVER_USE_MPI
++        return int(POISSON_SOLVER_UNSUPPORTED);
++#else
++        require(c->device_budget_bytes && c->device_budget_bytes<=SIZE_MAX,"invalid provider device budget");
++        auto h=std::make_unique<poisson_solver_handle_v1>();
++        h->account.limit=size_t(c->device_budget_bytes); size_t count=1;
++        std::array<double,3> lengths{}; poisson_solver::BCs<3> bcs{};
++        for (size_t i=0;i<3;++i) {
++            require(c->sizes[i]>0 && std::isfinite(c->lengths[i]) && c->lengths[i]>0,"invalid grid size or length");
++            h->sizes[i]=size_t(c->sizes[i]); lengths[i]=c->lengths[i];
++            require(count<=SIZE_MAX/h->sizes[i],"active grid overflow"); count*=h->sizes[i];
++            int a=c->boundary_conditions[2*i],b=c->boundary_conditions[2*i+1];
++            require(a>=0 && a<=4 && b>=0 && b<=4 && ((a==0)==(b==0)),"invalid boundary pair");
++            bcs[i]={poisson_solver::BC(a),poisson_solver::BC(b)};
++        }
++        require(count<=SIZE_MAX/(4*sizeof(double)),"workspace size overflow");
++        if (count > h->account.limit / sizeof(double)) {
++            std::snprintf(last_error,sizeof last_error,"provider budget smaller than active workspace");
++            return int(POISSON_SOLVER_RESOURCE);
++        }
++        cuda_check(cudaGetDevice(&h->device));
++        poisson_solver::detail::AllocationScope allocation(h->account);
++        try {
++            if (c->approximation==2) h->solver=std::make_unique<poisson_solver::Solver<double,3>>(h->sizes,lengths,bcs,poisson_solver::FiniteDifference2Approximation<double>{});
++            else h->solver=std::make_unique<poisson_solver::Solver<double,3>>(h->sizes,lengths,bcs,poisson_solver::FiniteDifference4Approximation<double>{});
++            cuda_check(cudaEventCreateWithFlags(&h->complete,cudaEventDisableTiming));
++        } catch (...) { h->solver.reset(); if (h->account.budget_exceeded) throw std::bad_alloc(); throw; }
++        *out=h.release(); return int(POISSON_SOLVER_OK);
++#endif
++    });
++}
++extern "C" int poisson_solver_workspace_query_v1(poisson_solver_handle_v1 *h, poisson_solver_workspace_v1 *out) {
++    return protect([&] {
++        require(h && out,"missing solver/workspace output"); std::lock_guard lock(h->mutex);
++        *out={1,POISSON_SOLVER_DEVICE_BUFFERS_EXACT|POISSON_SOLVER_DRIVER_OVERHEAD_EXCLUDED,
++            h->account.bytes,h->account.peak,0}; return int(POISSON_SOLVER_OK);
++    });
++}
++extern "C" int poisson_solver_execute_device_v1(poisson_solver_handle_v1 *h, void *phi,size_t phi_bytes,
++    const void *rhs,size_t rhs_bytes,const int32_t *gp,const int32_t *gr,void *raw_stream,int *started) {
++    if (started) *started=0;
++    return protect([&] {
++        require(h && started,"missing solver/started output"); std::lock_guard lock(h->mutex);
++        if (h->poisoned) return int(POISSON_SOLVER_POISONED);
++        int device; cuda_check(cudaGetDevice(&device)); require(device==h->device,"solver device changed");
++        size_t np=padded_count(*h,gp),nr=padded_count(*h,gr);
++        require(phi_bytes==np*sizeof(double) && rhs_bytes==nr*sizeof(double),"padded allocation byte count mismatch");
++        const auto p=reinterpret_cast<uintptr_t>(phi),r=reinterpret_cast<uintptr_t>(rhs);
++        require(p<=UINTPTR_MAX-phi_bytes && r<=UINTPTR_MAX-rhs_bytes && (p+phi_bytes<=r || r+rhs_bytes<=p),"overlapping solver inputs/output");
++        device_pointer(phi,h->device); device_pointer(rhs,h->device);
++        auto stream=reinterpret_cast<cudaStream_t>(raw_stream);
++        poisson_solver::detail::AllocationScope allocation(h->account);
++        const auto resident=h->account.bytes;
++        poisson_solver::detail::NoAllocationScope no_allocation(h->account);
++        try {
++            h->last_stream=stream; h->untracked_submission=true;
++            *started=1;
++            if (h->pending) cuda_check(cudaStreamWaitEvent(stream,h->complete,0));
++            h->solver->ExecuteGPU(std::span(static_cast<double*>(phi),np),std::span(static_cast<const double*>(rhs),nr),
++                {size_t(gp[0]),size_t(gp[1]),size_t(gp[2])},{size_t(gr[0]),size_t(gr[1]),size_t(gr[2])},stream);
++            cuda_check(cudaEventRecord(h->complete,stream)); h->pending=true; h->untracked_submission=false;
++            if (h->account.forbidden_allocation_attempted) throw std::runtime_error("execution attempted unreserved workspace allocation");
++            if (h->account.bytes!=resident) throw std::runtime_error("unexpected execution workspace growth");
++        } catch (...) { h->poisoned=true; throw; }
++        return int(POISSON_SOLVER_OK);
++    });
++}
++extern "C" int poisson_solver_destroy_v1(poisson_solver_handle_v1 **out) {
++    return protect([&] {
++        require(out,"missing solver pointer"); auto *h=*out; if (!h) return int(POISSON_SOLVER_OK);
++        std::unique_lock lock(h->mutex); int device; cuda_check(cudaGetDevice(&device)); require(device==h->device,"solver device changed");
++        // A failed enqueue/event-record attempt may have work not represented by
++        // complete. Do not release workspaces until its supplied stream joins.
++        if (h->untracked_submission) cuda_check(cudaStreamSynchronize(h->last_stream));
++        else if (h->pending) cuda_check(cudaEventSynchronize(h->complete));
++        poisson_solver::detail::AllocationScope allocation(h->account); h->solver.reset();
++        // CUDA destructors cannot throw. Retain the account/handle on a failed
++        // free so retirement can report the error and be retried safely.
++        while (!h->account.live.empty())
++            cuda_check(poisson_solver::detail::DeviceFree(h->account.live.begin()->first));
++        if (h->account.bytes) throw std::runtime_error("provider device allocation retirement failed");
++        if (h->complete) { cuda_check(cudaEventDestroy(h->complete)); h->complete=nullptr; }
++        lock.unlock(); delete h; *out=nullptr; return int(POISSON_SOLVER_OK);
++    });
++}
+diff --git a/src/device_binding.f90 b/src/device_binding.f90
+new file mode 100644
+index 0000000000000000000000000000000000000000..7ffde2347846f2e8b134d1e4cd88ddd02aba8496
+--- /dev/null
++++ b/src/device_binding.f90
+@@ -0,0 +1,54 @@
++! Status-returning device-pointer API. These are C pointers, never Fortran
++! array descriptors or host association to device memory. Completion belongs
++! to the supplied stream; the caller retains its allocations until completion.
++module poisson_solver_device
++    use, intrinsic :: iso_c_binding
++    implicit none
++    integer(c_int), parameter :: poisson_solver_ok=0, poisson_solver_argument=1, &
++        poisson_solver_resource=2, poisson_solver_execution=3, &
++        poisson_solver_unsupported=4, poisson_solver_poisoned=5
++    type, bind(C) :: poisson_solver_config_v1
++        integer(c_int32_t) :: version=1, dimensions=3
++        integer(c_int32_t) :: sizes(3)=0
++        real(c_double) :: lengths(3)=0
++        integer(c_int32_t) :: boundary_conditions(6)=0
++        integer(c_int32_t) :: approximation=2, flags=0
++        integer(c_int64_t) :: device_budget_bytes=0
++    end type
++    type, bind(C) :: poisson_solver_workspace_v1
++        integer(c_int32_t) :: version=0, flags=0
++        integer(c_int64_t) :: persistent_device_bytes=0, peak_device_bytes=0, execution_extra_bytes=0
++    end type
++    interface
++        function poisson_solver_create_v1(config, handle) bind(C) result(status)
++            import :: c_ptr, c_int, poisson_solver_config_v1
++            type(poisson_solver_config_v1), intent(in) :: config
++            type(c_ptr), intent(out) :: handle
++            integer(c_int) :: status
++        end function
++        function poisson_solver_workspace_query_v1(handle, info) bind(C) result(status)
++            import :: c_ptr, c_int, poisson_solver_workspace_v1
++            type(c_ptr), value :: handle
++            type(poisson_solver_workspace_v1), intent(out) :: info
++            integer(c_int) :: status
++        end function
++        function poisson_solver_execute_device_v1(handle, phi, phi_bytes, rhs, rhs_bytes, &
++                ghost_phi, ghost_rhs, stream, started) bind(C) result(status)
++            import :: c_ptr, c_size_t, c_int, c_int32_t
++            type(c_ptr), value :: handle, phi, rhs, stream
++            integer(c_size_t), value :: phi_bytes, rhs_bytes
++            integer(c_int32_t), intent(in) :: ghost_phi(3), ghost_rhs(3)
++            integer(c_int), intent(out) :: started
++            integer(c_int) :: status
++        end function
++        function poisson_solver_destroy_v1(handle) bind(C) result(status)
++            import :: c_ptr, c_int
++            type(c_ptr), intent(inout) :: handle
++            integer(c_int) :: status
++        end function
++        function poisson_solver_last_error_v1() bind(C) result(message)
++            import :: c_ptr
++            type(c_ptr) :: message
++        end function
++    end interface
++end module
+diff --git a/tests/differential/CMakeLists.txt b/tests/differential/CMakeLists.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..106d1a736cfaf3ae0b5204b4c793c868c3773b5a
+--- /dev/null
++++ b/tests/differential/CMakeLists.txt
+@@ -0,0 +1,50 @@
++# Local CPU ABI checks never initialize CUDA. GPU differential tests are an
++# explicit opt-in with authenticated reference objects, never fetched implicitly.
++enable_language(C)
++add_executable(device-api-contract device_contract.c)
++target_link_libraries(device-api-contract PRIVATE poisson-solver)
++add_test(NAME device-api-contract COMMAND device-api-contract)
++add_executable(allocation-contract allocation_contract.cpp)
++target_link_libraries(allocation-contract PRIVATE poisson-solver)
++add_test(NAME allocation-contract COMMAND allocation-contract)
++if(POISSON_SOLVER_BUILD_FORTRAN)
++    add_executable(device-fortran-contract fortran_contract.f90 fortran_layout.c)
++    target_include_directories(device-fortran-contract PRIVATE ${CMAKE_Fortran_MODULE_DIRECTORY})
++    target_link_libraries(device-fortran-contract PRIVATE poisson-solver)
++    add_test(NAME device-fortran-contract COMMAND device-fortran-contract)
++endif()
++set(POISSON_SOLVER_POISFFT_BUILD "" CACHE PATH "Pinned reference PoisFFT build with modules and P/*.o")
++set(POISSON_SOLVER_POISFFT_LIBS "" CACHE STRING "Pinned FFTW libraries required by the reference objects")
++if(POISSON_SOLVER_POISFFT_BUILD)
++    if(NOT POISSON_SOLVER_BUILD_FORTRAN)
++        message(FATAL_ERROR "Differential reference requires Fortran binding")
++    endif()
++    set(reference_objects)
++    foreach(name customfftw3 fft main parameters poisfft precisions)
++        set(object "${POISSON_SOLVER_POISFFT_BUILD}/P/${name}.o")
++        if(NOT EXISTS "${object}")
++            message(FATAL_ERROR "Missing pinned PoisFFT reference object ${object}")
++        endif()
++        list(APPEND reference_objects "${object}")
++    endforeach()
++    add_executable(poisfft-differential test_poisfft.cu poisfft_reference.f90 ${reference_objects})
++    target_include_directories(poisfft-differential PRIVATE ${POISSON_SOLVER_POISFFT_BUILD})
++    target_link_libraries(poisfft-differential PRIVATE poisson-solver ${POISSON_SOLVER_POISFFT_LIBS} gomp)
++    target_compile_options(poisfft-differential PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-fopenmp>)
++    add_test(NAME poisfft-differential COMMAND poisfft-differential)
++    set_tests_properties(poisfft-differential PROPERTIES LABELS "cuda;differential" TIMEOUT 240)
++endif()
++
++# The cache contract uses NVRTC/CUDA stubs and never initializes a GPU.
++find_package(Threads REQUIRED)
++add_executable(kernel-cache-contract kernel_cache_host.cpp
++    ../../src/detail/kernel_binary_cache.cpp ../../src/detail/nvrtc_cache.cpp)
++target_include_directories(kernel-cache-contract PRIVATE
++    ../../include "${PROJECT_BINARY_DIR}/generated" ${CUDAToolkit_INCLUDE_DIRS})
++target_link_libraries(kernel-cache-contract PRIVATE OpenSSL::Crypto Threads::Threads ${CMAKE_DL_LIBS})
++# The assertions are the test, including in a Release provider build.
++target_compile_options(kernel-cache-contract PRIVATE -UNDEBUG -Wall -Wextra)
++add_test(NAME kernel-cache-contract COMMAND kernel-cache-contract)
++set_tests_properties(kernel-cache-contract PROPERTIES LABELS "host;cache" TIMEOUT 30)
++add_test(NAME kernel-cache-unknown-runtime COMMAND kernel-cache-contract --unknown-runtime)
++set_tests_properties(kernel-cache-unknown-runtime PROPERTIES LABELS "host;cache" TIMEOUT 30)
+diff --git a/tests/differential/allocation_contract.cpp b/tests/differential/allocation_contract.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b6fa556be55b41530599a68dffe6c69698659e1
+--- /dev/null
++++ b/tests/differential/allocation_contract.cpp
+@@ -0,0 +1,23 @@
++#include "poisson-solver/detail/execution.hpp"
++#include <cstdio>
++
++int main() {
++    using namespace poisson_solver::detail;
++    AllocationAccount account;
++    account.limit = 1;
++    AllocationScope allocation(account);
++    void *pointer = nullptr;
++    {
++        NoAllocationScope execute(account);
++        if (DeviceAllocate(&pointer, 1) != cudaErrorMemoryAllocation ||
++            !account.forbidden_allocation_attempted || pointer || account.bytes || account.peak)
++            return 1;
++    }
++    // Exceeding a known cap must also reject before touching CUDA, so this
++    // contract remains executable on a CPU-only packaging host.
++    if (account.allocations_forbidden || DeviceAllocate(&pointer, 2) != cudaErrorMemoryAllocation ||
++        !account.budget_exceeded || pointer || account.bytes || account.peak)
++        return 2;
++    std::puts("PASS allocation-free execute and bounded-create preflight");
++    return 0;
++}
+diff --git a/tests/differential/device_contract.c b/tests/differential/device_contract.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..331f307394244b28049371588824d4f7114f5e62
+--- /dev/null
++++ b/tests/differential/device_contract.c
+@@ -0,0 +1,19 @@
++#include "poisson-solver/device_api.h"
++#include <stdio.h>
++int main(void) {
++    poisson_solver_handle_v1 *h=(void*)1;
++    poisson_solver_config_v1 c={0};
++    int started=99;
++    if (poisson_solver_create_v1(&c,&h)!=POISSON_SOLVER_ARGUMENT || h) return 1;
++    c.version=1; c.dimensions=4; c.approximation=2;
++    if (poisson_solver_create_v1(&c,&h)!=POISSON_SOLVER_UNSUPPORTED || h) return 2;
++    c.dimensions=3; c.device_budget_bytes=1;
++    for(int i=0;i<3;++i) { c.sizes[i]=2; c.lengths[i]=1; }
++    if (poisson_solver_create_v1(&c,&h)!=POISSON_SOLVER_RESOURCE || h) return 7;
++    if (poisson_solver_execute_device_v1(0,0,0,0,0,0,0,0,&started)!=POISSON_SOLVER_ARGUMENT || started) return 3;
++    if (poisson_solver_workspace_query_v1(0,0)!=POISSON_SOLVER_ARGUMENT) return 4;
++    if (poisson_solver_destroy_v1(&h)!=POISSON_SOLVER_OK || h) return 5;
++    if (poisson_solver_destroy_v1(0)!=POISSON_SOLVER_ARGUMENT) return 6;
++    puts("PASS status-return C ABI invalid/prework paths (no GPU initialization)");
++    return 0;
++}
+diff --git a/tests/differential/fortran_contract.f90 b/tests/differential/fortran_contract.f90
+new file mode 100644
+index 0000000000000000000000000000000000000000..2c9d67ed709c205759742cb67e109d1d8311cc0d
+--- /dev/null
++++ b/tests/differential/fortran_contract.f90
+@@ -0,0 +1,45 @@
++program contract
++    use, intrinsic :: iso_c_binding
++    use poisson_solver_device
++    implicit none
++    type(poisson_solver_config_v1) :: config
++    type(poisson_solver_workspace_v1) :: workspace
++    type(c_ptr) :: handle
++    integer(c_int) :: status, started
++    interface
++        function verify_fortran_layout(c, bytes) bind(C) result(status)
++            import :: c_int, c_size_t, poisson_solver_config_v1
++            type(poisson_solver_config_v1), intent(in) :: c
++            integer(c_size_t), value :: bytes
++            integer(c_int) :: status
++        end function
++    end interface
++    config%sizes=[2,3,4]
++    config%lengths=[.25_c_double,.5_c_double,.75_c_double]
++    config%boundary_conditions=[0,1,2,3,4,5]
++    config%approximation=4
++    config%flags=7
++    config%device_budget_bytes=int(z'112233445566',c_int64_t)
++    if(verify_fortran_layout(config,c_sizeof(config))/=0) stop 7
++    config%flags=0
++    config%version=0
++    status=poisson_solver_create_v1(config,handle)
++    if(status/=poisson_solver_argument .or. c_associated(handle)) stop 1
++    config%version=1
++    config%flags=1 ! Checks a field after all fixed arrays in the C layout.
++    status=poisson_solver_create_v1(config,handle)
++    if(status/=poisson_solver_argument .or. c_associated(handle)) stop 2
++    config%flags=0
++    config%dimensions=4
++    status=poisson_solver_create_v1(config,handle)
++    if(status/=poisson_solver_unsupported .or. c_associated(handle)) stop 3
++    status=poisson_solver_workspace_query_v1(handle,workspace)
++    if(status/=poisson_solver_argument) stop 4
++    started=99
++    status=poisson_solver_execute_device_v1(handle,c_null_ptr,0_c_size_t,c_null_ptr,0_c_size_t, &
++        [2_c_int32_t,2_c_int32_t,2_c_int32_t],[1_c_int32_t,1_c_int32_t,1_c_int32_t],c_null_ptr,started)
++    if(status/=poisson_solver_argument .or. started/=0) stop 5
++    status=poisson_solver_destroy_v1(handle)
++    if(status/=poisson_solver_ok) stop 6
++    print *, 'PASS Fortran c_ptr/status bindings without CUDA initialization'
++end program
+diff --git a/tests/differential/fortran_layout.c b/tests/differential/fortran_layout.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb33c382d7a19f8c70a31ece1976c50f63668f56
+--- /dev/null
++++ b/tests/differential/fortran_layout.c
+@@ -0,0 +1,9 @@
++#include "poisson-solver/device_api.h"
++int verify_fortran_layout(const poisson_solver_config_v1 *c, size_t bytes) {
++    if(bytes != sizeof(*c) || c->version != 1 || c->dimensions != 3 ||
++       c->approximation != 4 || c->flags != 7 || c->device_budget_bytes != UINT64_C(0x112233445566))
++        return 1;
++    for(int i=0;i<3;++i) if(c->sizes[i] != i+2 || c->lengths[i] != .25*(i+1)) return 2;
++    for(int i=0;i<6;++i) if(c->boundary_conditions[i] != i) return 3;
++    return 0;
++}
+diff --git a/tests/differential/kernel_cache_host.cpp b/tests/differential/kernel_cache_host.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..5f989c6b6a5da927906622e814d9242106ea54d0
+--- /dev/null
++++ b/tests/differential/kernel_cache_host.cpp
+@@ -0,0 +1,367 @@
++#include "poisson-solver/detail/kernel_binary_cache.hpp"
++#include "poisson-solver/detail/nvrtc_cache.hpp"
++#include <algorithm>
++#include <array>
++#include <atomic>
++#include <cassert>
++#include <cstring>
++#include <cuda.h>
++#include <cuda_runtime_api.h>
++#include <fcntl.h>
++#include <filesystem>
++#include <fstream>
++#include <iostream>
++#include <sys/stat.h>
++#include <thread>
++#include <unistd.h>
++namespace cache = poisson_solver::detail::kernel_cache;
++namespace wrap = poisson_solver::detail::nvrtc_cache;
++namespace fs = std::filesystem;
++
++void set16(std::vector<unsigned char> &v, size_t p, unsigned x) {
++  v[p] = x & 255;
++  v[p + 1] = (x >> 8) & 255;
++}
++void set64(std::vector<unsigned char> &v, size_t p, uint64_t x) {
++  for (unsigned i = 0; i < 8; ++i)
++    v[p + i] = (x >> (8 * i)) & 255;
++}
++std::vector<unsigned char> binary(size_t n = 128) {
++  std::vector<unsigned char> v(n, 0);
++  std::memcpy(v.data(), "\177ELF", 4);
++  v[4] = 2;
++  v[5] = 1;
++  v[6] = 1;
++  set16(v, 16, 1);
++  set16(v, 18, 190);
++  v[20] = 1;
++  set64(v, 40, 64);
++  set16(v, 52, 64);
++  set16(v, 58, 64);
++  set16(v, 60, 1);
++  return v;
++}
++struct _nvrtcProgram {
++  std::string source;
++  bool compiled = false;
++};
++std::atomic<unsigned> creates{0}, compiles{0}, destroys{0}, live{0};
++extern "C" nvrtcResult nvrtcCreateProgram(nvrtcProgram *out, const char *source,
++                                          const char *, int,
++                                          const char *const *,
++                                          const char *const *) {
++  if (!out || !source)
++    return NVRTC_ERROR_INVALID_INPUT;
++  *out = new _nvrtcProgram{source};
++  ++creates;
++  ++live;
++  return NVRTC_SUCCESS;
++}
++extern "C" nvrtcResult nvrtcCompileProgram(nvrtcProgram p, int,
++                                           const char *const *) {
++  if (!p)
++    return NVRTC_ERROR_INVALID_INPUT;
++  ++compiles;
++  if (p->source == "FAIL")
++    return NVRTC_ERROR_COMPILATION;
++  p->compiled = true;
++  return NVRTC_SUCCESS;
++}
++extern "C" nvrtcResult nvrtcGetCUBINSize(nvrtcProgram p, size_t *out) {
++  if (!p || !p->compiled || !out)
++    return NVRTC_ERROR_INVALID_INPUT;
++  *out = 128;
++  return NVRTC_SUCCESS;
++}
++extern "C" nvrtcResult nvrtcGetCUBIN(nvrtcProgram p, char *out) {
++  if (!p || !p->compiled || !out)
++    return NVRTC_ERROR_INVALID_INPUT;
++  auto v = binary();
++  std::memcpy(out, v.data(), v.size());
++  return NVRTC_SUCCESS;
++}
++extern "C" nvrtcResult nvrtcDestroyProgram(nvrtcProgram *p) {
++  if (!p || !*p)
++    return NVRTC_ERROR_INVALID_INPUT;
++  delete *p;
++  *p = nullptr;
++  ++destroys;
++  --live;
++  return NVRTC_SUCCESS;
++}
++int runtime_major = CUDART_VERSION / 1000;
++extern "C" nvrtcResult nvrtcVersion(int *a, int *b) {
++  *a = runtime_major;
++  *b = (CUDART_VERSION % 1000) / 10;
++  return NVRTC_SUCCESS;
++}
++extern "C" CUresult CUDAAPI cuCtxGetDevice(CUdevice *d) {
++  *d = 0;
++  return CUDA_SUCCESS;
++}
++extern "C" CUresult CUDAAPI cuDeviceGet(CUdevice *d, int) {
++  *d = 0;
++  return CUDA_SUCCESS;
++}
++extern "C" CUresult CUDAAPI cuDeviceGetUuid_v2(CUuuid *u, CUdevice) {
++  std::memset(u, 7, sizeof *u);
++  return CUDA_SUCCESS;
++}
++extern "C" CUresult CUDAAPI cuDriverGetVersion(int *v) {
++  *v = CUDART_VERSION;
++  return CUDA_SUCCESS;
++}
++extern "C" CUresult CUDAAPI cuDeviceGetAttribute(int *v, CUdevice_attribute a,
++                                                 CUdevice) {
++  *v = int(a);
++  return CUDA_SUCCESS;
++}
++extern "C" cudaError_t CUDARTAPI cudaRuntimeGetVersion(int *v) {
++  *v = CUDART_VERSION;
++  return cudaSuccess;
++}
++
++struct Temp {
++  fs::path root;
++  Temp() {
++    char p[] = "/tmp/poisson-cache-test-XXXXXX";
++    auto result = mkdtemp(p);
++    assert(result);
++    root = result;
++  }
++  ~Temp() { fs::remove_all(root); }
++};
++void output(const fs::path &p, std::span<const unsigned char> b) {
++  std::ofstream f(p, std::ios::binary);
++  f.write((const char *)b.data(), b.size());
++  assert(f.good());
++}
++std::vector<unsigned char> input(const fs::path &p) {
++  std::ifstream f(p, std::ios::binary);
++  return {std::istreambuf_iterator<char>(f), {}};
++}
++void one(const std::string &source,
++         const char *option = "--gpu-architecture=sm_86",
++         const char *header = "header", bool abandon = false) {
++  wrap::CreationScope scope;
++  nvrtcProgram p = nullptr;
++  const char *contents[] = {header};
++  const char *names[] = {"header.h"};
++  assert(wrap::create(&p, source.c_str(), "VkFFT.cu", 1, contents, names) ==
++         NVRTC_SUCCESS);
++  const char *options[] = {option};
++  auto code = wrap::compile(p, 1, options);
++  if (source == "FAIL") {
++    assert(code == NVRTC_ERROR_COMPILATION);
++    return;
++  }
++  assert(code == NVRTC_SUCCESS);
++  size_t n = 0;
++  assert(wrap::cubin_size(p, &n) == NVRTC_SUCCESS && n == 128);
++  std::vector<unsigned char> v(n);
++  assert(wrap::cubin(p, (char *)v.data()) == NVRTC_SUCCESS && v == binary());
++  if (!abandon)
++    assert(wrap::destroy(&p) == NVRTC_SUCCESS && p == nullptr);
++}
++size_t files(const fs::path &p) {
++  size_t result = 0;
++  for (auto &e : fs::directory_iterator(p))
++    if (e.path().extension() == ".cubin")
++      ++result;
++  return result;
++}
++
++int main(int argc, char **argv) {
++  if (argc == 2 && std::string(argv[1]) == "--unknown-runtime") {
++    runtime_major = 999;
++    Temp t;
++    setenv("POISSON_SOLVER_KERNEL_CACHE_DIR", t.root.c_str(), 1);
++    one("unknown runtime");
++    one("unknown runtime");
++    assert(compiles == 2 && files(t.root) == 0 && live == 0);
++    assert(creates == destroys);
++    std::cout << "PASS unknown runtime dependency bypass\n";
++    return 0;
++  }
++  assert(argc == 1);
++  unsigned cases = 0;
++  {
++    Temp t;
++    setenv("POISSON_SOLVER_KERNEL_CACHE_DIR", t.root.c_str(), 1);
++    one("held");
++    const unsigned initial = compiles;
++    wrap::CreationScope scope;
++    std::vector<nvrtcProgram> held(5, nullptr);
++    const char *contents[] = {"header"};
++    const char *names[] = {"header.h"};
++    const char *options[] = {"--gpu-architecture=sm_86"};
++    for (auto &program : held) {
++      assert(wrap::create(&program, "held", "VkFFT.cu", 1, contents, names) ==
++             NVRTC_SUCCESS);
++      assert(wrap::compile(program, 1, options) == NVRTC_SUCCESS);
++      size_t size = 0;
++      assert(wrap::cubin_size(program, &size) == NVRTC_SUCCESS && size == 128);
++    }
++    // Four loaded images reserve the entire budget; the fifth compiles.
++    assert(compiles == initial + 1);
++    assert(wrap::destroy(&held[0]) == NVRTC_SUCCESS);
++    one("held");
++    assert(compiles == initial + 1);
++    for (auto &program : held)
++      if (program)
++        assert(wrap::destroy(&program) == NVRTC_SUCCESS);
++    assert(live == 0);
++    ++cases;
++  }
++  {
++    auto good = binary();
++    assert(cache::valid_cubin(good));
++    for (size_t n = 0; n < 64; ++n)
++      assert(!cache::valid_cubin(std::span(good).first(n)));
++    auto bad = good;
++    bad[5] = 2;
++    assert(!cache::valid_cubin(bad));
++    bad = good;
++    set64(bad, 40, UINT64_MAX);
++    assert(!cache::valid_cubin(bad));
++    bad = good;
++    set64(bad, 64 + 24, 120);
++    set64(bad, 64 + 32, 20);
++    assert(!cache::valid_cubin(bad));
++    bad = good;
++    set16(bad, 60, 65535);
++    assert(!cache::valid_cubin(bad));
++    assert(cache::hash_parts({"ab", "c"}) != cache::hash_parts({"a", "bc"}));
++    ++cases;
++  }
++  {
++    Temp t;
++    cache::BinaryCache c(t.root);
++    auto key = cache::hash_parts({"a"}), other = cache::hash_parts({"b"});
++    auto good = binary();
++    assert(c.enabled() && c.load(key).empty());
++    c.store(key, good);
++    assert(c.load(key) == good);
++    ++cases;
++    auto path = t.root / (cache::hex(key) + ".cubin"),
++         wrong = t.root / (cache::hex(other) + ".cubin");
++    fs::copy_file(path, wrong);
++    assert(c.load(other).empty());
++    fs::remove(wrong);
++    ++cases;
++    auto data = input(path);
++    data.back() ^= 1;
++    output(path, data);
++    assert(c.load(key).empty());
++    c.store(key, good);
++    assert(c.load(key) == good);
++    ++cases;
++    fs::create_hard_link(path, wrong);
++    assert(c.load(key).empty());
++    fs::remove(wrong);
++    ++cases;
++    chmod(path.c_str(), 0666);
++    assert(c.load(key).empty());
++    chmod(path.c_str(), 0600);
++    ++cases;
++    fs::create_symlink(path, wrong);
++    assert(c.load(other).empty());
++    fs::remove(wrong);
++    ++cases;
++    auto link = t.root.string() + "-link";
++    fs::create_directory_symlink(t.root, link);
++    assert(!cache::BinaryCache(link).enabled());
++    fs::remove(link);
++    ++cases;
++    chmod(t.root.c_str(), 0777);
++    assert(!cache::BinaryCache(t.root).enabled());
++    chmod(t.root.c_str(), 0700);
++    ++cases;
++  }
++  {
++    Temp t;
++    cache::BinaryCache c(t.root);
++    auto good = binary(13U << 20);
++    for (int i = 0; i < 5; ++i)
++      c.store(cache::hash_parts({std::to_string(i)}), good);
++    uintmax_t total = 0;
++    for (auto &e : fs::directory_iterator(t.root))
++      total += e.file_size();
++    assert(total <= cache::max_disk_bytes && files(t.root) == 4);
++    ++cases;
++    assert(c.load(cache::hash_parts({"0"})).empty());
++    ++cases;
++  }
++  {
++    Temp t;
++    cache::BinaryCache c(t.root);
++    int fd = open((t.root / "foreign").c_str(), O_CREAT | O_WRONLY, 0600);
++    assert(fd >= 0);
++    assert(ftruncate(fd, cache::max_disk_bytes) == 0);
++    close(fd);
++    c.store(cache::hash_parts({"full"}), binary());
++    assert(files(t.root) == 0 && fs::exists(t.root / "foreign"));
++    ++cases;
++  }
++  {
++    Temp t;
++    cache::BinaryCache c(t.root);
++    chmod(t.root.c_str(), 0500);
++    c.store(cache::hash_parts({"readonly"}), binary());
++    assert(files(t.root) == 0);
++    chmod(t.root.c_str(), 0700);
++    ++cases;
++  }
++  {
++    Temp t;
++    setenv("POISSON_SOLVER_KERNEL_CACHE_DIR", t.root.c_str(), 1);
++    auto initial = compiles.load();
++    one("source");
++    assert(compiles == initial + 1);
++    one("source");
++    assert(compiles == initial + 1 && files(t.root) == 1);
++    ++cases;
++    one("source changed");
++    one("source", "--gpu-architecture=sm_89");
++    one("source", "--gpu-architecture=sm_86", "changed header");
++    assert(compiles == initial + 4 && files(t.root) == 4);
++    ++cases;
++    one("FAIL");
++    assert(live == 0 && files(t.root) == 4);
++    ++cases;
++    one("source", "--gpu-architecture=sm_86", "header", true);
++    assert(live == 0 && compiles == initial + 5);
++    ++cases;
++    std::vector<std::thread> threads;
++    for (int i = 0; i < 12; ++i)
++      threads.emplace_back([] { one("parallel"); });
++    for (auto &thread : threads)
++      thread.join();
++    assert(live == 0);
++    auto prior = compiles.load();
++    one("parallel");
++    assert(compiles == prior);
++    ++cases;
++    unsetenv("POISSON_SOLVER_KERNEL_CACHE_DIR");
++    one("source");
++    assert(compiles == prior + 1 && live == 0);
++    ++cases;
++  }
++  {
++    Temp t;
++    setenv("POISSON_SOLVER_KERNEL_CACHE_DIR", t.root.c_str(), 1);
++    auto initial = compiles.load();
++    one("filesystem # include <other.h>");
++    one("filesystem # include <other.h>");
++    one("preprocessor #inc\\\nlude <other.h>");
++    one("preprocessor #inc\\\nlude <other.h>");
++    one("source", "--include-path=/tmp");
++    one("source", "--include-path=/tmp");
++    assert(compiles == initial + 6 && files(t.root) == 0 && live == 0);
++    ++cases;
++    unsetenv("POISSON_SOLVER_KERNEL_CACHE_DIR");
++  }
++  assert(creates == destroys && live == 0);
++  std::cout << "PASS " << cases << " host cache groups; creates=" << creates
++            << " compiles=" << compiles << " destroys=" << destroys << "\n";
++}
+diff --git a/tests/differential/poisfft_reference.f90 b/tests/differential/poisfft_reference.f90
+new file mode 100644
+index 0000000000000000000000000000000000000000..4f9cd8946d80abb57f2e2ea9066494ab273efad1
+--- /dev/null
++++ b/tests/differential/poisfft_reference.f90
+@@ -0,0 +1,17 @@
++! Independent reference adapter to the pinned, unmodified CPU PoisFFT module.
++subroutine reference_solve(ns, lens, bcs, approximation, phi, rhs) bind(C)
++    use, intrinsic :: iso_c_binding
++    use PoisFFT, only: PoisFFT_Solver3D_DP, Execute, Finalize
++    implicit none
++    integer(c_int), intent(in) :: ns(3), bcs(6)
++    real(c_double), intent(in) :: lens(3)
++    integer(c_int), value :: approximation
++    type(c_ptr), value :: phi, rhs
++    real(c_double), pointer :: p(:,:,:), r(:,:,:)
++    type(PoisFFT_Solver3D_DP) :: solver
++    call c_f_pointer(phi,p,ns+4)
++    call c_f_pointer(rhs,r,ns+2)
++    solver=PoisFFT_Solver3D_DP(ns,lens,bcs,approximation)
++    call Execute(solver,p,r)
++    call Finalize(solver)
++end subroutine
+diff --git a/tests/differential/test_poisfft.cu b/tests/differential/test_poisfft.cu
+new file mode 100644
+index 0000000000000000000000000000000000000000..fbd23312f2a8c7bd5b1dcb3f954b224bac4f5613
+--- /dev/null
++++ b/tests/differential/test_poisfft.cu
+@@ -0,0 +1,182 @@
++#include "poisson-solver/device_api.h"
++#include <cuda_runtime.h>
++#include <algorithm>
++#include <array>
++#include <bit>
++#include <cmath>
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++#include <stdexcept>
++#include <string>
++#include <vector>
++
++extern "C" void reference_solve(const int*,const double*,const int*,int,void*,void*);
++static void check(cudaError_t x) { if (x!=cudaSuccess) throw std::runtime_error(cudaGetErrorString(x)); }
++static void api(int x) { if(x) throw std::runtime_error(std::to_string(x)+": "+poisson_solver_last_error_v1()); }
++static size_t count(std::array<int,3> n,int g) { return size_t(n[0]+2*g)*(n[1]+2*g)*(n[2]+2*g); }
++static size_t index(std::array<int,3> n,int g,int i,int j,int k) { return (i+g)+size_t(n[0]+2*g)*((j+g)+size_t(n[1]+2*g)*(k+g)); }
++// Evaluate the real-space operator independently of the solver's Fourier
++// eigenvalues. FD4 here is the composed fourth-order staggered gradient and
++// divergence, not the usual five-point collocated fourth-order Laplacian.
++// Its third neighbor is reconstructed from the boundary condition: the public
++// Phi allocation has only two ghosts, which must remain untouched.
++static int extension(int i,int n,int boundary) {
++    if(boundary==0) return (i%n+n)%n;
++    if(boundary!=4) throw std::runtime_error("unqualified residual boundary");
++    while(i<0 || i>=n) i=i<0 ? -i-1 : 2*n-i-1;
++    return i;
++}
++static long double laplacian(const std::vector<double> &phi,std::array<int,3> n,
++    std::array<double,3> lens,std::array<int,6> bcs,int order,int i,int j,int k) {
++    const std::array<int,3> point{i,j,k};
++    const std::array<long double,4> fd4{-1460.L/576,783.L/576,-54.L/576,1.L/576};
++    const std::array<long double,4> fd2{-2,1,0,0};
++    const auto &weights=order==4 ? fd4 : fd2;
++    long double value=0;
++    for(int axis=0;axis<3;++axis) {
++        long double term=weights[0]*phi[index(n,2,i,j,k)];
++        for(int d=1;d<=(order==4?3:1);++d) for(int sign:{-1,1}) {
++            auto p=point;p[axis]=extension(p[axis]+sign*d,n[axis],bcs[2*axis]);
++            term+=weights[d]*phi[index(n,2,p[0],p[1],p[2])];
++        }
++        const long double h=static_cast<long double>(lens[axis])/n[axis];
++        value+=term/(h*h);
++    }
++    return value;
++}
++static double residual(const std::vector<double> &phi,const std::vector<double> &rhs,
++    std::array<int,3> n,std::array<double,3> lens,std::array<int,6> bcs,int order) {
++    long double mean=0;
++    for(int k=0;k<n[2];++k) for(int j=0;j<n[1];++j) for(int i=0;i<n[0];++i) mean+=rhs[index(n,1,i,j,k)];
++    mean/=static_cast<long double>(n[0])*n[1]*n[2];
++    long double squared=0,norm=0,max_error=0,peak=0;
++    for(int k=0;k<n[2];++k) for(int j=0;j<n[1];++j) for(int i=0;i<n[0];++i) {
++        const long double target=rhs[index(n,1,i,j,k)]-mean;
++        const auto error=laplacian(phi,n,lens,bcs,order,i,j,k)-target;
++        squared+=error*error;norm+=target*target;
++        max_error=std::max(max_error,std::abs(error));peak=std::max(peak,std::abs(target));
++    }
++    const auto relative=norm>0 ? std::sqrt(squared/norm) : std::sqrt(squared);
++    if(!std::isfinite(relative) || relative>2e-10L || max_error>2e-10L*(1+peak))
++        throw std::runtime_error("independent FD"+std::to_string(order)+" residual failed");
++    return static_cast<double>(relative);
++}
++// A nonblocking stream's producer must precede ALL solver work. A wrong
++// default-stream unpack can observe old storage even though the host call order
++// is correct. This is an ordering correctness check, not a timing assertion.
++__global__ void delayed_rhs(double *out,const double *in,size_t n) {
++    auto begin=clock64(); while(clock64()-begin<20000000ULL) {}
++    for(size_t i=threadIdx.x;i<n;i+=blockDim.x) out[i]=in[i];
++}
++static void one(std::array<int,3> n,std::array<int,6> bcs,int approximation,bool null_rhs,bool cross_stream=false,
++    bool manufactured=false,std::array<double,3> lens={2.75,1.25,3.5}) {
++    const double sentinel=-0x1.23456789abcp+10;
++    std::vector<double> rhs(count(n,1),sentinel),initial(count(n,2),sentinel);
++    auto truth=initial;
++    if(manufactured) {
++        const double pi=std::acos(-1.0);
++        for(int k=0;k<n[2];++k) for(int j=0;j<n[1];++j) for(int i=0;i<n[0];++i) {
++            const std::array<int,3> p{i,j,k};double value=1;
++            for(int axis=0;axis<3;++axis)
++                value*=std::cos((bcs[2*axis]==0?2:1)*pi*(p[axis]+.5)/n[axis]);
++            truth[index(n,2,i,j,k)]=value;
++        }
++    }
++    double mean=0;
++    for(int k=0;k<n[2];++k) for(int j=0;j<n[1];++j) for(int i=0;i<n[0];++i) {
++        double value=null_rhs ? 1.0 : std::sin(.31*i+.17*j)+std::cos(.27*k+.1*i)+.013*i*j;
++        if(manufactured) value=static_cast<double>(laplacian(truth,n,lens,bcs,approximation,i,j,k));
++        rhs[index(n,1,i,j,k)]=value;mean+=value;
++    }
++    mean/=double(n[0]*n[1]*n[2]);
++    if(!null_rhs) for(int k=0;k<n[2];++k) for(int j=0;j<n[1];++j) for(int i=0;i<n[0];++i) rhs[index(n,1,i,j,k)]-=mean;
++    const auto original_rhs=rhs;auto expected=initial;
++    reference_solve(n.data(),lens.data(),bcs.data(),approximation,expected.data(),rhs.data());
++    if(rhs!=original_rhs) throw std::runtime_error("PoisFFT reference mutated RHS");
++    poisson_solver_config_v1 config{};config.version=1;config.dimensions=3;config.approximation=approximation;config.device_budget_bytes=256ULL<<20;
++    std::copy(n.begin(),n.end(),config.sizes);std::copy(lens.begin(),lens.end(),config.lengths);std::copy(bcs.begin(),bcs.end(),config.boundary_conditions);
++    poisson_solver_handle_v1 *solver=nullptr;api(poisson_solver_create_v1(&config,&solver));
++    poisson_solver_workspace_v1 before{};api(poisson_solver_workspace_query_v1(solver,&before));
++    if(!before.persistent_device_bytes || before.peak_device_bytes<before.persistent_device_bytes || before.execution_extra_bytes) throw std::runtime_error("incomplete workspace accounting");
++    cudaStream_t stream,second=nullptr;check(cudaStreamCreateWithFlags(&stream,cudaStreamNonBlocking));
++    double *p=nullptr,*r=nullptr,*producer=nullptr,*p2=nullptr,*r2=nullptr;
++    auto rhs2=original_rhs;
++    if(cross_stream) {
++        check(cudaStreamCreateWithFlags(&second,cudaStreamNonBlocking));
++        check(cudaMalloc(&p2,initial.size()*8));check(cudaMalloc(&r2,rhs.size()*8));
++        for(int k=0;k<n[2];++k) for(int j=0;j<n[1];++j) for(int i=0;i<n[0];++i) rhs2[index(n,1,i,j,k)]*=.5;
++        check(cudaMemcpyAsync(p2,initial.data(),initial.size()*8,cudaMemcpyHostToDevice,second));
++        check(cudaMemcpyAsync(r2,rhs2.data(),rhs.size()*8,cudaMemcpyHostToDevice,second));
++    }
++    check(cudaMalloc(&p,initial.size()*8));check(cudaMalloc(&r,rhs.size()*8));check(cudaMalloc(&producer,rhs.size()*8));
++    check(cudaMemcpyAsync(p,initial.data(),initial.size()*8,cudaMemcpyHostToDevice,stream));
++    check(cudaMemsetAsync(r,0,rhs.size()*8,stream));
++    check(cudaMemcpyAsync(producer,original_rhs.data(),rhs.size()*8,cudaMemcpyHostToDevice,stream));
++    delayed_rhs<<<1,256,0,stream>>>(r,producer,rhs.size());check(cudaGetLastError());
++    int32_t gp[3]={2,2,2},gr[3]={1,1,1};int started=-1;
++    api(poisson_solver_execute_device_v1(solver,p,initial.size()*8,r,rhs.size()*8,gp,gr,stream,&started));
++    if(started!=1) throw std::runtime_error("successful solve did not report enqueue");
++    if(cross_stream) {
++        started=-1;
++        api(poisson_solver_execute_device_v1(solver,p2,initial.size()*8,r2,rhs.size()*8,gp,gr,second,&started));
++        if(started!=1) throw std::runtime_error("cross-stream solve did not report enqueue");
++    }
++    std::vector<double> actual(initial.size()),after_rhs(rhs.size());
++    check(cudaMemcpyAsync(actual.data(),p,actual.size()*8,cudaMemcpyDeviceToHost,stream));
++    check(cudaMemcpyAsync(after_rhs.data(),r,after_rhs.size()*8,cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
++    if(std::memcmp(after_rhs.data(),original_rhs.data(),rhs.size()*8)) throw std::runtime_error("device RHS or halo mutated");
++    auto compare=[&](const std::vector<double> &values,double scale) {
++    double max_error=0,solution_mean=0;
++    for(int k=-2;k<n[2]+2;++k) for(int j=-2;j<n[1]+2;++j) for(int i=-2;i<n[0]+2;++i) {
++        auto a=index(n,2,i,j,k);bool inside=i>=0&&i<n[0]&&j>=0&&j<n[1]&&k>=0&&k<n[2];
++        if(!inside) { if(std::bit_cast<uint64_t>(values[a])!=std::bit_cast<uint64_t>(sentinel)) throw std::runtime_error("phi halo overwritten");continue; }
++        if(!std::isfinite(values[a]) || !std::isfinite(expected[a])) throw std::runtime_error("nonfinite solution");
++        double error=std::abs(values[a]-scale*expected[a]);max_error=std::max(max_error,error);solution_mean+=values[a];
++        if(error>2e-10+2e-10*std::abs(expected[a])) throw std::runtime_error("FD operator differs from pinned PoisFFT");
++    }
++    solution_mean/=double(n[0]*n[1]*n[2]);if(std::abs(solution_mean)>2e-10) throw std::runtime_error("nullspace gauge is not zero mean");
++    return std::array<double,2>{max_error,solution_mean};
++    };
++    const auto result=compare(actual,1.0);
++    const auto relative_residual=residual(actual,original_rhs,n,lens,bcs,approximation);
++    (void)residual(expected,original_rhs,n,lens,bcs,approximation);
++    if(manufactured) {
++        for(int k=0;k<n[2];++k) for(int j=0;j<n[1];++j) for(int i=0;i<n[0];++i)
++            if(std::abs(actual[index(n,2,i,j,k)]-truth[index(n,2,i,j,k)])>2e-10)
++                throw std::runtime_error("manufactured solution was not recovered");
++        // This test must distinguish FD4 from FD2, not just accept either
++        // smooth solution under a loose residual tolerance.
++        if(approximation==4) {
++            bool rejected=false;
++            try { (void)residual(actual,original_rhs,n,lens,bcs,2); }
++            catch(const std::runtime_error &) { rejected=true; }
++            if(!rejected) throw std::runtime_error("FD4 residual accepts wrong FD2 operator");
++        }
++    }
++    if(cross_stream) {
++        check(cudaMemcpyAsync(actual.data(),p2,actual.size()*8,cudaMemcpyDeviceToHost,second));
++        check(cudaMemcpyAsync(after_rhs.data(),r2,after_rhs.size()*8,cudaMemcpyDeviceToHost,second));check(cudaStreamSynchronize(second));
++        if(std::memcmp(after_rhs.data(),rhs2.data(),rhs2.size()*8)) throw std::runtime_error("second-stream RHS or halo mutated");
++        (void)compare(actual,.5);
++        (void)residual(actual,rhs2,n,lens,bcs,approximation);
++    }
++    poisson_solver_workspace_v1 after{};api(poisson_solver_workspace_query_v1(solver,&after));
++    if(after.persistent_device_bytes!=before.persistent_device_bytes || after.peak_device_bytes!=before.peak_device_bytes) throw std::runtime_error("execution allocated unreported workspace");
++    api(poisson_solver_destroy_v1(&solver));if(solver) throw std::runtime_error("destroy retained handle");
++    check(cudaFree(p));check(cudaFree(r));check(cudaFree(producer));check(cudaStreamDestroy(stream));
++    if(cross_stream) { check(cudaFree(p2));check(cudaFree(r2));check(cudaStreamDestroy(second)); }
++    std::printf("PASS FD%d n=%d,%d,%d BC=%d%d%d%d%d%d null=%d cross_stream=%d manufactured=%d max_error=%.17g mean=%.17g residual=%.17g workspace=%llu peak=%llu\n",approximation,n[0],n[1],n[2],bcs[0],bcs[1],bcs[2],bcs[3],bcs[4],bcs[5],null_rhs,cross_stream,manufactured,result[0],result[1],relative_residual,(unsigned long long)before.persistent_device_bytes,(unsigned long long)before.peak_device_bytes);
++}
++int main() {
++    try {
++        for(int order:{2,4}) for(auto n:{std::array<int,3>{8,6,10},std::array<int,3>{7,5,9}})
++            for(auto bcs:{std::array<int,6>{0,0,0,0,4,4},std::array<int,6>{0,0,0,0,0,0},std::array<int,6>{4,4,4,4,4,4}}) one(n,bcs,order,false,order==2 && n[0]==8 && bcs[4]==4 && bcs[0]==0);
++        for(int order:{2,4}) one({7,5,9},{0,0,0,0,4,4},order,true);
++        for(int order:{2,4}) {
++            one({7,5,9},{0,0,0,0,4,4},order,false,false,true);
++            one({128,64,64},{0,0,0,0,4,4},order,false,false,true,{12.,4.,2.});
++        }
++    } catch(const std::exception &e) { std::fprintf(stderr,"FAIL %s\n",e.what());return 1; }
++    return 0;
++}
+diff --git a/tests/residuum/CMakeLists.txt b/tests/residuum/CMakeLists.txt
+index bfb61601e3d5802a66f8818f04dcd6e2ee413e62..1b52e8eb601955f616bad4b487f0870c58cefda0 100644
+--- a/tests/residuum/CMakeLists.txt
++++ b/tests/residuum/CMakeLists.txt
+@@ -4,7 +4,7 @@ set(DOCTEST_VERSION v2.5.2)
+ FetchContent_Declare(
+     doctest
+     GIT_REPOSITORY https://github.com/doctest/doctest
+-    GIT_TAG v2.5.2
++    GIT_TAG 6804767ee637789db8a5cb281381cae98dc36906
+ )
+ FetchContent_MakeAvailable(doctest)
+ 

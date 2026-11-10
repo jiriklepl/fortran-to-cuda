@@ -1,0 +1,84 @@
+case,stage,seconds,launches
+channel-simple,subgrid::sgs_sigma_uniform,0.4849962330000001,327
+channel-simple,VkFFT_main,0.2600829130000005,1968
+channel-simple,momentumdiffusion::momentumdiffusion_nobranch_2ord,0.1658927859999997,981
+channel-simple,resident_wall::stress1,0.0905258799999999,654
+channel-simple,resident_wall::stress2,0.087509749,654
+channel-simple,resident_wall::stress0,0.08645348199999993,654
+channel-simple,<unnamed>::plane_reference,0.08105048500000006,328
+channel-simple,boundaries::bounduvw_do_bc,0.0785334159999979,29448
+channel-simple,resident_wall::stress3,0.07763188999999998,654
+channel-simple,dynamics::convection,0.05190165100000004,2289
+channel-simple,momentumadvection::cdudiv,0.03924976900000003,327
+channel-simple,momentumadvection::cdwdiv,0.039047081,327
+channel-simple,momentumadvection::cdvdiv,0.03903271900000002,327
+channel-simple,dynamics::pressuregrad,0.03820090400000009,1308
+channel-simple,arrayutilities::add_3d,0.03710421300000001,981
+channel-simple,pressure::correctpoissonvelocity,0.031013937000000047,984
+channel-simple,pressure_faces,0.02845330799999999,328
+channel-simple,momentumadvection::cduadv,0.025756954000000012,327
+channel-simple,momentumadvection::cdvadv,0.025597364999999997,327
+channel-simple,momentumadvection::cdwadv,0.02552187999999997,327
+channel-simple,"void poisson_solver::detail::kernels::DivideByDenoms<double, ",0.025379061999999973,328
+channel-simple,pressure::buildpoissonrhs,0.024796974999999926,328
+channel-simple,arrayutilities::multiply_3d,0.02400017199999998,981
+channel-simple,arrayutilities::set_3d,0.016294155999999973,1308
+channel-simple,resident_time::average,0.015680589,436
+channel-simple,boundaries::periodic_corners_edges,0.014256535999999887,4908
+channel-simple,"void poisson_solver::detail::kernels::common_cmplx::Normalize<double, ",0.010840655999999982,328
+channel-simple,pressure::updatepoissonpressure,0.010676787999999993,328
+channel-simple,"void poisson_solver::detail::kernels::common_cmplx::Init<double, ",0.009683178999999997,328
+channel-simple,resident_time::cfl,0.009630566999999998,108
+channel-simple,<unnamed>::subtract_reference,0.007102831999999994,328
+channel-simple,"void poisson_solver::detail::kernels::PackPaddedGrid<double, ",0.006599202000000001,328
+channel-simple,"void poisson_solver::detail::kernels::UnpackPaddedGrid<double, ",0.006580840000000005,328
+channel-simple,scalarboundaries::boundviscosity,0.0033669800000000315,1962
+channel-simple,<unnamed>::pressure_faces,0.003360293999999999,328
+channel-simple,<unnamed>::partial_max,0.0028951,108
+channel-simple,resident_wall::correction2m,0.0012060930000000012,327
+channel-simple,resident_wall::correction1m,0.001205197,327
+channel-simple,resident_wall::correction3m,0.0010678490000000007,327
+channel-simple,resident_wall::correction2p,0.0008072720000000011,327
+channel-simple,resident_wall::correction1p,0.0008048409999999987,327
+channel-simple,resident_wall::correction3p,0.000702565000000001,327
+channel-simple,<unnamed>::final_max,0.0003342459999999999,108
+channel,subgrid::sgs_sigma_uniform,0.4458593220000003,300
+channel,filters::filter3ord,0.3263779839999988,5400
+channel,VkFFT_main,0.23914839599999987,1806
+channel,momentumadvection::cd4divw,0.17911544499999985,300
+channel,momentumadvection::cd4divv,0.17823840499999993,300
+channel,momentumadvection::cd4divu,0.17780836299999983,300
+channel,momentumdiffusion::momentumdiffusion_nobranch_2ord,0.15221873799999985,900
+channel,boundaries::bounduvw_do_bc,0.0995839829999978,37818
+channel,resident_wall::stress1,0.08260257200000001,600
+channel,resident_wall::stress2,0.07985023699999996,600
+channel,resident_wall::stress0,0.07896242,600
+channel,<unnamed>::plane_reference,0.07456223600000017,301
+channel,resident_wall::stress3,0.07117285,600
+channel,dynamics::convection,0.04744795699999998,2100
+channel,dynamics::pressuregrad,0.03503919900000006,1200
+channel,arrayutilities::add_3d,0.034052107999999984,900
+channel,pressure::correctpoissonvelocity,0.028486158000000077,903
+channel,pressure_faces,0.026130246000000013,301
+channel,"void poisson_solver::detail::kernels::DivideByDenoms<double, ",0.023347918000000002,301
+channel,pressure::buildpoissonrhs,0.022800890999999983,301
+channel,arrayutilities::multiply_3d,0.02142228500000004,900
+channel,boundaries::periodic_corners_edges,0.01847251399999982,6303
+channel,arrayutilities::set_3d,0.014927614000000013,1200
+channel,pressure::updatepoissonpressure,0.010103226999999994,301
+channel,"void poisson_solver::detail::kernels::common_cmplx::Normalize<double, ",0.00996959399999998,301
+channel,"void poisson_solver::detail::kernels::common_cmplx::Init<double, ",0.008893447000000004,301
+channel,resident_time::cfl,0.008848794999999994,99
+channel,<unnamed>::subtract_reference,0.006509905000000001,301
+channel,"void poisson_solver::detail::kernels::PackPaddedGrid<double, ",0.006057168999999999,301
+channel,"void poisson_solver::detail::kernels::UnpackPaddedGrid<double, ",0.0060415020000000015,301
+channel,<unnamed>::pressure_faces,0.0031001060000000026,301
+channel,scalarboundaries::boundviscosity,0.003075907000000022,1800
+channel,<unnamed>::partial_max,0.0026538450000000006,99
+channel,resident_wall::correction2m,0.001109416,300
+channel,resident_wall::correction1m,0.0011082090000000008,300
+channel,resident_wall::correction3m,0.0009825360000000009,300
+channel,resident_wall::correction2p,0.0007398110000000005,300
+channel,resident_wall::correction1p,0.0007370959999999995,300
+channel,resident_wall::correction3p,0.0006436820000000005,300
+channel,<unnamed>::final_max,0.00029673900000000013,99

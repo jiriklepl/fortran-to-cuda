@@ -1,0 +1,64 @@
+{
+  "source": "/tmp/fortran-recovered-gap-profile-20261109-02/analysis.json",
+  "source_sha256": "3890b36783b0f5a4139bfd50867e93ca5e8706c70b574f75c47be813d1796cb4",
+  "source_report": "benchmarks/reports/gpu-residency-recovered-gap-20261109/README.md",
+  "note": "Separate traced full runs; CPU API and device spans overlap.",
+  "rows": [
+    {
+      "case": "channel",
+      "mode": "be58",
+      "timing_sample": false,
+      "database": "/tmp/fortran-recovered-gap-profile-20261109-02/channel/be58/capture.sqlite",
+      "copies": [
+        {
+          "bytes": 4036501504,
+          "calls": 2709,
+          "kind": 1,
+          "sum_seconds": 0.485899974
+        },
+        {
+          "bytes": 1262485504,
+          "calls": 301,
+          "kind": 2,
+          "sum_seconds": 0.128175225
+        }
+      ],
+      "gpu_kernel_union_seconds": 0.579275488,
+      "gpu_copy_union_seconds": 0.614075199,
+      "gpu_all_union_seconds": 1.193350687,
+      "host_api_union_seconds": 1.746859236,
+      "host_copy_api_union_seconds": 0.848765174,
+      "host_api_and_gpu_intersection_seconds": 1.178887104,
+      "host_api_or_gpu_union_seconds": 1.761322819,
+      "kernel_launches": 301
+    },
+    {
+      "case": "channel-simple",
+      "mode": "be58",
+      "timing_sample": false,
+      "database": "/tmp/fortran-recovered-gap-profile-20261109-02/channel-simple/be58/capture.sqlite",
+      "copies": [
+        {
+          "bytes": 4398579712,
+          "calls": 2952,
+          "kind": 1,
+          "sum_seconds": 0.50698785
+        },
+        {
+          "bytes": 1375731712,
+          "calls": 328,
+          "kind": 2,
+          "sum_seconds": 0.134896068
+        }
+      ],
+      "gpu_kernel_union_seconds": 0.63124551,
+      "gpu_copy_union_seconds": 0.641883918,
+      "gpu_all_union_seconds": 1.273129428,
+      "host_api_union_seconds": 1.782289385,
+      "host_copy_api_union_seconds": 0.887569056,
+      "host_api_and_gpu_intersection_seconds": 1.260526,
+      "host_api_or_gpu_union_seconds": 1.794892813,
+      "kernel_launches": 328
+    }
+  ]
+}
