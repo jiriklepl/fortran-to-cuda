@@ -1,0 +1,315 @@
+{
+  "build_seconds": 246.35393401799956,
+  "candidate_beats_be58_medians_both": false,
+  "candidate_beats_previous_medians_both": true,
+  "candidate_natural_2458_pass": false,
+  "candidate_product": {
+    "bytes": 14463248,
+    "path": "/tmp/fortran-retention-may-host-build-20261109-01/work/build/ELMM",
+    "sha256": "54054fe2e69c420f4fc5526983c374e1f51c500cbbe5f9dc837d94fa6f3949eb"
+  },
+  "evidence": {
+    "build": "/tmp/fortran-retention-may-host-build-20261109-01",
+    "generation": "/tmp/fortran-retention-may-host-20261109-01",
+    "short": "/tmp/fortran-retention-may-host-short-20261109-01",
+    "timing": "/tmp/fortran-retention-may-host-pilot-20261109-01"
+  },
+  "full_maintained_suite_pass": false,
+  "generation_seconds": 2046.4006263740011,
+  "interpretation": "Partial recovery from recent regression; simple is effectively tied; no substantial two-case gain and no promotion.",
+  "max_external_cpu_cores": 0.4592564355885507,
+  "outputs": "All original output files pass unchanged atol=1e-6, rtol=1e-5. Full20 diagnostic qualification is separate.",
+  "paired_wins_vs_be58_all": false,
+  "performance_checkpoint": false,
+  "pilot_execution": {
+    "CPU": [
+      0,
+      2,
+      4,
+      6
+    ],
+    "all_owned_groups_absent": true,
+    "application_execution": true,
+    "owned_group": 171255,
+    "plan_sha256": "0de37314b101a2bddddc34107df7ef77f6a21a228e33ca6fb57bb42596924d93",
+    "retries": 0,
+    "returncode": 0,
+    "seconds": 566.4825923540011,
+    "status": "PASS"
+  },
+  "protocol": "One excluded warmup and three rotated measurements of four modes per case; 32 complete processes. A pilot, not the seven-round research protocol.",
+  "research_checkpoint": false,
+  "rows": [
+    {
+      "candidate_vs_be58_percent": 17.438324626355552,
+      "candidate_vs_previous_percent": -0.010745537517264925,
+      "case": "channel-simple",
+      "medians_seconds": {
+        "be58": 10.709478937998938,
+        "candidate": 12.577032640998368,
+        "native": 12.95016035899971,
+        "original": 12.578384255997662
+      },
+      "native_speedup": 1.029667388854906,
+      "paired_ratios": {
+        "be58": [
+          1.2132465403416866,
+          1.2041969126070309,
+          1.1342915866708734
+        ],
+        "native": [
+          0.8463966197189999,
+          1.0421009058211648,
+          0.9380325432463925
+        ],
+        "original": [
+          0.9646981538803185,
+          1.0956257138244963,
+          0.9657577324535006
+        ]
+      },
+      "paired_wins": {
+        "be58": 0,
+        "native": 2,
+        "original": 2
+      },
+      "samples_seconds": {
+        "be58": [
+          10.366427780998492,
+          11.141702050997992,
+          10.709478937998938
+        ],
+        "candidate": [
+          12.577032640998368,
+          13.416803210999205,
+          12.147671857001114
+        ],
+        "native": [
+          14.85950244599735,
+          12.874763984997116,
+          12.95016035899971
+        ],
+        "original": [
+          13.037272426001437,
+          12.245790731001762,
+          12.578384255997662
+        ]
+      }
+    },
+    {
+      "candidate_vs_be58_percent": 42.09583234395748,
+      "candidate_vs_previous_percent": -7.437008369781606,
+      "case": "channel",
+      "medians_seconds": {
+        "be58": 13.01786061200255,
+        "candidate": 18.497837390001223,
+        "native": 14.803092468999239,
+        "original": 19.984053091000533
+      },
+      "native_speedup": 0.8002607092330084,
+      "paired_ratios": {
+        "be58": [
+          1.4746205992787518,
+          1.4314144248349638,
+          1.3822733682810515
+        ],
+        "native": [
+          1.3075051083857738,
+          1.2495927745327235,
+          1.1677677031477802
+        ],
+        "original": [
+          0.9876126814925805,
+          0.9256299163021839,
+          0.8857276241729701
+        ]
+      },
+      "paired_wins": {
+        "be58": 0,
+        "native": 0,
+        "original": 3
+      },
+      "samples_seconds": {
+        "be58": [
+          13.01786061200255,
+          12.922768604999874,
+          13.039882119999675
+        ],
+        "candidate": [
+          19.19640541699846,
+          18.497837390001223,
+          18.02468177999981
+        ],
+        "native": [
+          14.681705864000833,
+          14.803092468999239,
+          15.435160376000567
+        ],
+        "original": [
+          19.437179955999454,
+          19.984053091000533,
+          20.350140707003447
+        ]
+      }
+    }
+  ],
+  "runtime_id": "d0e179c4821005b8fe9d39eab1f378e4ca4b67a5d4da0ed1c9dffd282b978d52",
+  "status": "PILOT_GAIN_VS_PREVIOUS",
+  "transfer_gate_pass": false,
+  "transfer_gates": [
+    {
+      "candidate": {
+        "compact_events": 0,
+        "copies": {
+          "download_bytes": 146316352,
+          "download_events": 30,
+          "upload_bytes": 134664192,
+          "upload_events": 118
+        },
+        "numerical_launches": {
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_int_3d": 18,
+          "dynamics::convection": 12,
+          "momentumadvection::cduadv": 6,
+          "momentumadvection::cdudiv": 6,
+          "momentumadvection::cdvadv": 6,
+          "momentumadvection::cdvdiv": 6,
+          "momentumadvection::cdwadv": 6,
+          "momentumadvection::cdwdiv": 6,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 146316352
+        },
+        "trace_events": {
+          "allocate": 60,
+          "close": 16,
+          "create": 16,
+          "download": 30,
+          "host_commit": 492,
+          "launch": 126,
+          "release": 60,
+          "upload": 118
+        }
+      },
+      "candidate_bytes": 280980544,
+      "case": "channel-simple",
+      "execution_changed": false,
+      "numerical_launch_inventory_equal": true,
+      "payload_reduced": false,
+      "prior": {
+        "compact_events": 0,
+        "copies": {
+          "download_bytes": 146316352,
+          "download_events": 30,
+          "upload_bytes": 134664192,
+          "upload_events": 118
+        },
+        "numerical_launches": {
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_int_3d": 18,
+          "dynamics::convection": 12,
+          "momentumadvection::cduadv": 6,
+          "momentumadvection::cdudiv": 6,
+          "momentumadvection::cdvadv": 6,
+          "momentumadvection::cdvdiv": 6,
+          "momentumadvection::cdwadv": 6,
+          "momentumadvection::cdwdiv": 6,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 146316352
+        },
+        "trace_events": {
+          "allocate": 60,
+          "close": 16,
+          "create": 16,
+          "download": 30,
+          "host_commit": 492,
+          "launch": 126,
+          "release": 60,
+          "upload": 118
+        }
+      },
+      "prior_bytes": 280980544
+    },
+    {
+      "candidate": {
+        "compact_events": 28,
+        "copies": {
+          "download_bytes": 146316352,
+          "download_events": 442,
+          "upload_bytes": 184158208,
+          "upload_events": 288
+        },
+        "numerical_launches": {
+          "arrayutilities::multiply_3d": 12,
+          "arrayutilities::set_3d": 12,
+          "dynamics::convection": 12,
+          "momentumadvection::cd4divu": 108,
+          "momentumadvection::cd4divv": 108,
+          "momentumadvection::cd4divw": 108,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 143696704
+        },
+        "trace_events": {
+          "allocate": 78,
+          "close": 40,
+          "create": 40,
+          "download": 442,
+          "host_commit": 622,
+          "launch": 402,
+          "observe": 18,
+          "observe_all": 4,
+          "release": 78,
+          "upload": 288
+        }
+      },
+      "candidate_bytes": 330474560,
+      "case": "channel",
+      "execution_changed": true,
+      "numerical_launch_inventory_equal": true,
+      "payload_reduced": false,
+      "prior": {
+        "compact_events": 28,
+        "copies": {
+          "download_bytes": 146316352,
+          "download_events": 442,
+          "upload_bytes": 184158208,
+          "upload_events": 288
+        },
+        "numerical_launches": {
+          "arrayutilities::multiply_3d": 12,
+          "arrayutilities::set_3d": 12,
+          "dynamics::convection": 12,
+          "momentumadvection::cd4divu": 108,
+          "momentumadvection::cd4divv": 108,
+          "momentumadvection::cd4divw": 108,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 143696704
+        },
+        "trace_events": {
+          "allocate": 78,
+          "close": 70,
+          "create": 70,
+          "download": 442,
+          "host_commit": 622,
+          "launch": 402,
+          "observe": 18,
+          "observe_all": 4,
+          "release": 78,
+          "upload": 288
+        }
+      },
+      "prior_bytes": 330474560
+    }
+  ]
+}

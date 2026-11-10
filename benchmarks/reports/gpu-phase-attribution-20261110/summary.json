@@ -1,0 +1,1674 @@
+{
+  "schema_version": 1,
+  "status": "DIAGNOSIS_COMPLETE_SELECTED_APPLICATION_UNCHANGED",
+  "goal_complete": false,
+  "new_speedup_claim": false,
+  "full_field_or_release_qualification_claim": false,
+  "diagnostic_output_checks": 10,
+  "analysis": {
+    "status": "PASS",
+    "scope": "Diagnostic phase attribution, not performance samples. Main-thread NVTX phases are disjoint; device/API overlaps are reported separately and cannot be added to host time. Pressure/provider detail ranges are nested. Tracing perturbs visibility initialization strongly.",
+    "host_runs": [
+      {
+        "case": "channel-simple",
+        "mode": "ELMM-native",
+        "traced": false,
+        "directory": "/tmp/fortran-phase-attribution-20261110-01/host/channel-simple/ELMM-native",
+        "phases": {
+          "bootstrap": {
+            "seconds": 4.4371e-05,
+            "calls": 1
+          },
+          "configuration": {
+            "seconds": 0.001039732,
+            "calls": 1
+          },
+          "boundary_setup": {
+            "seconds": 0.041919056,
+            "calls": 1
+          },
+          "allocate_fields": {
+            "seconds": 0.007394277,
+            "calls": 1
+          },
+          "allocate_outputs": {
+            "seconds": 0.008279108,
+            "calls": 1
+          },
+          "initial_conditions": {
+            "seconds": 0.069714665,
+            "calls": 1
+          },
+          "initial_output": {
+            "seconds": 0.001957822,
+            "calls": 1
+          },
+          "step_control": {
+            "seconds": 0.00235245,
+            "calls": 219
+          },
+          "rk_work": {
+            "seconds": 10.971464447,
+            "calls": 109
+          },
+          "step_output": {
+            "seconds": 0.227351527,
+            "calls": 109
+          },
+          "final_barriers": {
+            "seconds": 1.5521e-05,
+            "calls": 2
+          },
+          "resident_finalize": {
+            "seconds": 0.0,
+            "calls": 0
+          },
+          "solver_deallocate": {
+            "seconds": 0.002818909,
+            "calls": 1
+          },
+          "final_output": {
+            "seconds": 0.065788404,
+            "calls": 1
+          },
+          "field_deallocate": {
+            "seconds": 0.001847199,
+            "calls": 1
+          },
+          "program_tail": {
+            "seconds": 5.53e-06,
+            "calls": 1
+          }
+        },
+        "details": {},
+        "outputs_passed": true
+      },
+      {
+        "case": "channel-simple",
+        "mode": "ELMM",
+        "traced": false,
+        "directory": "/tmp/fortran-phase-attribution-20261110-01/host/channel-simple/ELMM",
+        "phases": {
+          "bootstrap": {
+            "seconds": 5.0471e-05,
+            "calls": 1
+          },
+          "configuration": {
+            "seconds": 0.001218307,
+            "calls": 1
+          },
+          "boundary_setup": {
+            "seconds": 0.071230783,
+            "calls": 1
+          },
+          "allocate_fields": {
+            "seconds": 0.015727456,
+            "calls": 1
+          },
+          "allocate_outputs": {
+            "seconds": 0.015180053,
+            "calls": 1
+          },
+          "initial_conditions": {
+            "seconds": 0.638700871,
+            "calls": 1
+          },
+          "initial_output": {
+            "seconds": 0.001896371,
+            "calls": 1
+          },
+          "step_control": {
+            "seconds": 0.001165596,
+            "calls": 219
+          },
+          "rk_work": {
+            "seconds": 2.288980177,
+            "calls": 109
+          },
+          "step_output": {
+            "seconds": 0.003717939,
+            "calls": 109
+          },
+          "final_barriers": {
+            "seconds": 6.721e-06,
+            "calls": 2
+          },
+          "resident_finalize": {
+            "seconds": 0.032437146,
+            "calls": 1
+          },
+          "solver_deallocate": {
+            "seconds": 0.001799535,
+            "calls": 1
+          },
+          "final_output": {
+            "seconds": 0.069608479,
+            "calls": 1
+          },
+          "field_deallocate": {
+            "seconds": 0.001700856,
+            "calls": 1
+          },
+          "program_tail": {
+            "seconds": 0.011725376,
+            "calls": 1
+          }
+        },
+        "details": {},
+        "outputs_passed": true
+      },
+      {
+        "case": "channel",
+        "mode": "ELMM-native",
+        "traced": false,
+        "directory": "/tmp/fortran-phase-attribution-20261110-01/host/channel/ELMM-native",
+        "phases": {
+          "bootstrap": {
+            "seconds": 5.4442e-05,
+            "calls": 1
+          },
+          "configuration": {
+            "seconds": 0.001112304,
+            "calls": 1
+          },
+          "boundary_setup": {
+            "seconds": 0.041925724,
+            "calls": 1
+          },
+          "allocate_fields": {
+            "seconds": 0.007180503,
+            "calls": 1
+          },
+          "allocate_outputs": {
+            "seconds": 0.006961159,
+            "calls": 1
+          },
+          "initial_conditions": {
+            "seconds": 0.062744229,
+            "calls": 1
+          },
+          "initial_output": {
+            "seconds": 0.001676966,
+            "calls": 1
+          },
+          "step_control": {
+            "seconds": 0.002355505,
+            "calls": 201
+          },
+          "rk_work": {
+            "seconds": 12.747535873,
+            "calls": 100
+          },
+          "step_output": {
+            "seconds": 0.029549899,
+            "calls": 100
+          },
+          "final_barriers": {
+            "seconds": 2.3201e-05,
+            "calls": 2
+          },
+          "resident_finalize": {
+            "seconds": 0.0,
+            "calls": 0
+          },
+          "solver_deallocate": {
+            "seconds": 0.003008254,
+            "calls": 1
+          },
+          "final_output": {
+            "seconds": 0.057350351,
+            "calls": 1
+          },
+          "field_deallocate": {
+            "seconds": 0.001903911,
+            "calls": 1
+          },
+          "program_tail": {
+            "seconds": 7.53e-06,
+            "calls": 1
+          }
+        },
+        "details": {},
+        "outputs_passed": true
+      },
+      {
+        "case": "channel",
+        "mode": "ELMM",
+        "traced": false,
+        "directory": "/tmp/fortran-phase-attribution-20261110-01/host/channel/ELMM",
+        "phases": {
+          "bootstrap": {
+            "seconds": 4.5621e-05,
+            "calls": 1
+          },
+          "configuration": {
+            "seconds": 0.001159174,
+            "calls": 1
+          },
+          "boundary_setup": {
+            "seconds": 0.047337073,
+            "calls": 1
+          },
+          "allocate_fields": {
+            "seconds": 0.016277157,
+            "calls": 1
+          },
+          "allocate_outputs": {
+            "seconds": 0.01603942,
+            "calls": 1
+          },
+          "initial_conditions": {
+            "seconds": 0.517076303,
+            "calls": 1
+          },
+          "initial_output": {
+            "seconds": 0.001563733,
+            "calls": 1
+          },
+          "step_control": {
+            "seconds": 0.001635828,
+            "calls": 201
+          },
+          "rk_work": {
+            "seconds": 1.725716896,
+            "calls": 100
+          },
+          "step_output": {
+            "seconds": 1.150399494,
+            "calls": 100
+          },
+          "final_barriers": {
+            "seconds": 1.407e-05,
+            "calls": 2
+          },
+          "resident_finalize": {
+            "seconds": 0.021324385,
+            "calls": 1
+          },
+          "solver_deallocate": {
+            "seconds": 0.001780478,
+            "calls": 1
+          },
+          "final_output": {
+            "seconds": 0.051988229,
+            "calls": 1
+          },
+          "field_deallocate": {
+            "seconds": 0.001733207,
+            "calls": 1
+          },
+          "program_tail": {
+            "seconds": 0.001137121,
+            "calls": 1
+          }
+        },
+        "details": {},
+        "outputs_passed": true
+      },
+      {
+        "case": "channel-simple",
+        "mode": "ELMM",
+        "traced": true,
+        "directory": "/tmp/fortran-phase-attribution-20261110-01/traced/channel-simple/ELMM",
+        "phases": {
+          "bootstrap": {
+            "seconds": 0.000103352,
+            "calls": 1
+          },
+          "configuration": {
+            "seconds": 0.001815478,
+            "calls": 1
+          },
+          "boundary_setup": {
+            "seconds": 0.498376474,
+            "calls": 1
+          },
+          "allocate_fields": {
+            "seconds": 0.0074878,
+            "calls": 1
+          },
+          "allocate_outputs": {
+            "seconds": 0.007238514,
+            "calls": 1
+          },
+          "initial_conditions": {
+            "seconds": 0.81606035,
+            "calls": 1
+          },
+          "initial_output": {
+            "seconds": 0.002081165,
+            "calls": 1
+          },
+          "step_control": {
+            "seconds": 0.004267202,
+            "calls": 219
+          },
+          "rk_work": {
+            "seconds": 2.637973135,
+            "calls": 109
+          },
+          "step_output": {
+            "seconds": 0.004078374,
+            "calls": 109
+          },
+          "final_barriers": {
+            "seconds": 1.3981e-05,
+            "calls": 2
+          },
+          "resident_finalize": {
+            "seconds": 0.033220039,
+            "calls": 1
+          },
+          "solver_deallocate": {
+            "seconds": 0.001850659,
+            "calls": 1
+          },
+          "final_output": {
+            "seconds": 0.064573526,
+            "calls": 1
+          },
+          "field_deallocate": {
+            "seconds": 0.001919781,
+            "calls": 1
+          },
+          "program_tail": {
+            "seconds": 0.031961284,
+            "calls": 1
+          }
+        },
+        "details": {},
+        "outputs_passed": true
+      },
+      {
+        "case": "channel",
+        "mode": "ELMM",
+        "traced": true,
+        "directory": "/tmp/fortran-phase-attribution-20261110-01/traced/channel/ELMM",
+        "phases": {
+          "bootstrap": {
+            "seconds": 0.000104592,
+            "calls": 1
+          },
+          "configuration": {
+            "seconds": 0.001932781,
+            "calls": 1
+          },
+          "boundary_setup": {
+            "seconds": 0.359178312,
+            "calls": 1
+          },
+          "allocate_fields": {
+            "seconds": 0.007381039,
+            "calls": 1
+          },
+          "allocate_outputs": {
+            "seconds": 0.007347601,
+            "calls": 1
+          },
+          "initial_conditions": {
+            "seconds": 0.831650495,
+            "calls": 1
+          },
+          "initial_output": {
+            "seconds": 0.00180766,
+            "calls": 1
+          },
+          "step_control": {
+            "seconds": 0.006984452,
+            "calls": 201
+          },
+          "rk_work": {
+            "seconds": 2.161866935,
+            "calls": 100
+          },
+          "step_output": {
+            "seconds": 1.178515946,
+            "calls": 100
+          },
+          "final_barriers": {
+            "seconds": 2.6971e-05,
+            "calls": 2
+          },
+          "resident_finalize": {
+            "seconds": 0.026086476,
+            "calls": 1
+          },
+          "solver_deallocate": {
+            "seconds": 0.001699487,
+            "calls": 1
+          },
+          "final_output": {
+            "seconds": 0.055115896,
+            "calls": 1
+          },
+          "field_deallocate": {
+            "seconds": 0.001719067,
+            "calls": 1
+          },
+          "program_tail": {
+            "seconds": 0.015422958,
+            "calls": 1
+          }
+        },
+        "details": {},
+        "outputs_passed": true
+      },
+      {
+        "case": "channel-simple",
+        "mode": "ELMM",
+        "traced": false,
+        "directory": "/tmp/fortran-phase-attribution-20261110-02/host/channel-simple/ELMM",
+        "phases": {
+          "bootstrap": {
+            "seconds": 4.9321e-05,
+            "calls": 1
+          },
+          "configuration": {
+            "seconds": 0.001262747,
+            "calls": 1
+          },
+          "boundary_setup": {
+            "seconds": 0.067670473,
+            "calls": 1
+          },
+          "allocate_fields": {
+            "seconds": 0.017032625,
+            "calls": 1
+          },
+          "allocate_outputs": {
+            "seconds": 0.015674345,
+            "calls": 1
+          },
+          "initial_conditions": {
+            "seconds": 0.470372629,
+            "calls": 1
+          },
+          "initial_output": {
+            "seconds": 0.001914601,
+            "calls": 1
+          },
+          "step_control": {
+            "seconds": 0.001169159,
+            "calls": 219
+          },
+          "rk_work": {
+            "seconds": 2.313376801,
+            "calls": 109
+          },
+          "step_output": {
+            "seconds": 0.003790525,
+            "calls": 109
+          },
+          "final_barriers": {
+            "seconds": 6.53e-06,
+            "calls": 2
+          },
+          "resident_finalize": {
+            "seconds": 0.034746522,
+            "calls": 1
+          },
+          "solver_deallocate": {
+            "seconds": 0.001765347,
+            "calls": 1
+          },
+          "final_output": {
+            "seconds": 0.068888,
+            "calls": 1
+          },
+          "field_deallocate": {
+            "seconds": 0.001772788,
+            "calls": 1
+          },
+          "program_tail": {
+            "seconds": 0.001201903,
+            "calls": 1
+          }
+        },
+        "details": {
+          "visibility_query": {
+            "seconds": 0.070718221,
+            "calls": 1
+          },
+          "pressure_create": {
+            "seconds": 0.322727697,
+            "calls": 1
+          },
+          "solver_create": {
+            "seconds": 0.25086041,
+            "calls": 1
+          }
+        },
+        "outputs_passed": true
+      },
+      {
+        "case": "channel",
+        "mode": "ELMM",
+        "traced": false,
+        "directory": "/tmp/fortran-phase-attribution-20261110-02/host/channel/ELMM",
+        "phases": {
+          "bootstrap": {
+            "seconds": 6.3212e-05,
+            "calls": 1
+          },
+          "configuration": {
+            "seconds": 0.001183965,
+            "calls": 1
+          },
+          "boundary_setup": {
+            "seconds": 0.043288763,
+            "calls": 1
+          },
+          "allocate_fields": {
+            "seconds": 0.010542924,
+            "calls": 1
+          },
+          "allocate_outputs": {
+            "seconds": 0.015434669,
+            "calls": 1
+          },
+          "initial_conditions": {
+            "seconds": 0.44439429,
+            "calls": 1
+          },
+          "initial_output": {
+            "seconds": 0.001929381,
+            "calls": 1
+          },
+          "step_control": {
+            "seconds": 0.001564038,
+            "calls": 201
+          },
+          "rk_work": {
+            "seconds": 1.572779439,
+            "calls": 100
+          },
+          "step_output": {
+            "seconds": 1.250391283,
+            "calls": 100
+          },
+          "final_barriers": {
+            "seconds": 1.4111e-05,
+            "calls": 2
+          },
+          "resident_finalize": {
+            "seconds": 0.021242919,
+            "calls": 1
+          },
+          "solver_deallocate": {
+            "seconds": 0.001821559,
+            "calls": 1
+          },
+          "final_output": {
+            "seconds": 0.052297489,
+            "calls": 1
+          },
+          "field_deallocate": {
+            "seconds": 0.001732687,
+            "calls": 1
+          },
+          "program_tail": {
+            "seconds": 0.00112479,
+            "calls": 1
+          }
+        },
+        "details": {
+          "visibility_query": {
+            "seconds": 0.069697393,
+            "calls": 1
+          },
+          "pressure_create": {
+            "seconds": 0.298179771,
+            "calls": 1
+          },
+          "solver_create": {
+            "seconds": 0.227432075,
+            "calls": 1
+          }
+        },
+        "outputs_passed": true
+      },
+      {
+        "case": "channel-simple",
+        "mode": "ELMM",
+        "traced": true,
+        "directory": "/tmp/fortran-phase-attribution-20261110-02/traced/channel-simple/ELMM",
+        "phases": {
+          "bootstrap": {
+            "seconds": 0.000101282,
+            "calls": 1
+          },
+          "configuration": {
+            "seconds": 0.001785605,
+            "calls": 1
+          },
+          "boundary_setup": {
+            "seconds": 0.487313745,
+            "calls": 1
+          },
+          "allocate_fields": {
+            "seconds": 0.007912923,
+            "calls": 1
+          },
+          "allocate_outputs": {
+            "seconds": 0.006966489,
+            "calls": 1
+          },
+          "initial_conditions": {
+            "seconds": 0.829169128,
+            "calls": 1
+          },
+          "initial_output": {
+            "seconds": 0.002290909,
+            "calls": 1
+          },
+          "step_control": {
+            "seconds": 0.003936737,
+            "calls": 219
+          },
+          "rk_work": {
+            "seconds": 2.443292915,
+            "calls": 109
+          },
+          "step_output": {
+            "seconds": 0.003941682,
+            "calls": 109
+          },
+          "final_barriers": {
+            "seconds": 1.085e-05,
+            "calls": 2
+          },
+          "resident_finalize": {
+            "seconds": 0.040881525,
+            "calls": 1
+          },
+          "solver_deallocate": {
+            "seconds": 0.001932001,
+            "calls": 1
+          },
+          "final_output": {
+            "seconds": 0.069693823,
+            "calls": 1
+          },
+          "field_deallocate": {
+            "seconds": 0.001783778,
+            "calls": 1
+          },
+          "program_tail": {
+            "seconds": 0.028195994,
+            "calls": 1
+          }
+        },
+        "details": {
+          "visibility_query": {
+            "seconds": 0.378418348,
+            "calls": 1
+          },
+          "pressure_create": {
+            "seconds": 0.649355453,
+            "calls": 1
+          },
+          "solver_create": {
+            "seconds": 0.270902684,
+            "calls": 1
+          }
+        },
+        "outputs_passed": true
+      },
+      {
+        "case": "channel",
+        "mode": "ELMM",
+        "traced": true,
+        "directory": "/tmp/fortran-phase-attribution-20261110-02/traced/channel/ELMM",
+        "phases": {
+          "bootstrap": {
+            "seconds": 0.000103082,
+            "calls": 1
+          },
+          "configuration": {
+            "seconds": 0.001940471,
+            "calls": 1
+          },
+          "boundary_setup": {
+            "seconds": 0.428132278,
+            "calls": 1
+          },
+          "allocate_fields": {
+            "seconds": 0.00743264,
+            "calls": 1
+          },
+          "allocate_outputs": {
+            "seconds": 0.007255325,
+            "calls": 1
+          },
+          "initial_conditions": {
+            "seconds": 0.697552371,
+            "calls": 1
+          },
+          "initial_output": {
+            "seconds": 0.002628847,
+            "calls": 1
+          },
+          "step_control": {
+            "seconds": 0.006766189,
+            "calls": 201
+          },
+          "rk_work": {
+            "seconds": 2.269462341,
+            "calls": 100
+          },
+          "step_output": {
+            "seconds": 1.18714679,
+            "calls": 100
+          },
+          "final_barriers": {
+            "seconds": 7.1112e-05,
+            "calls": 2
+          },
+          "resident_finalize": {
+            "seconds": 0.020863554,
+            "calls": 1
+          },
+          "solver_deallocate": {
+            "seconds": 0.002113445,
+            "calls": 1
+          },
+          "final_output": {
+            "seconds": 0.048290801,
+            "calls": 1
+          },
+          "field_deallocate": {
+            "seconds": 0.002141687,
+            "calls": 1
+          },
+          "program_tail": {
+            "seconds": 0.01552517,
+            "calls": 1
+          }
+        },
+        "details": {
+          "visibility_query": {
+            "seconds": 0.309476268,
+            "calls": 1
+          },
+          "pressure_create": {
+            "seconds": 0.554996144,
+            "calls": 1
+          },
+          "solver_create": {
+            "seconds": 0.245462355,
+            "calls": 1
+          }
+        },
+        "outputs_passed": true
+      }
+    ],
+    "traced": {
+      "channel-simple": {
+        "allocate_fields": {
+          "host_seconds": 0.007914973,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "allocate_outputs": {
+          "host_seconds": 0.006958788,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "bootstrap": {
+          "host_seconds": 1.221e-05,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "boundary_setup": {
+          "host_seconds": 0.487314625,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "configuration": {
+          "host_seconds": 0.001785335,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "field_deallocate": {
+          "host_seconds": 0.001781498,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "final_barriers": {
+          "host_seconds": 1.0431e-05,
+          "calls": 2,
+          "overlapping_gpu_active_seconds": 1.0431e-05,
+          "overlapping_kernel_seconds": 1.0431e-05,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "final_output": {
+          "host_seconds": 0.069692523,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "initial_conditions": {
+          "host_seconds": 0.829168567,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.007816226,
+          "overlapping_kernel_seconds": 0.001835537,
+          "overlapping_device_copy_seconds": 0.005980689,
+          "main_thread_cuda_api_union_seconds": 0.247449979,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.23996149,
+          "cuda_calls": {
+            "cudaFree_v3020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 0.17227482
+            },
+            "cudaMallocFromPoolAsync_v11020": {
+              "calls": 7,
+              "inclusive_overlap_seconds": 0.029382247
+            },
+            "cudaLaunchKernel_v7000": {
+              "calls": 35,
+              "inclusive_overlap_seconds": 0.024843392000000002
+            },
+            "cudaMemcpy3DAsync_v3020": {
+              "calls": 39,
+              "inclusive_overlap_seconds": 0.0068307279999999995
+            },
+            "cudaMemcpyAsync_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 0.005377435
+            },
+            "cuLibraryLoadData": {
+              "calls": 15,
+              "inclusive_overlap_seconds": 0.0025173630000000003
+            },
+            "cuModuleLoadDataEx": {
+              "calls": 12,
+              "inclusive_overlap_seconds": 0.0014654329999999997
+            },
+            "cudaMalloc_v3020": {
+              "calls": 13,
+              "inclusive_overlap_seconds": 0.0013802880000000001
+            },
+            "cudaStreamCreateWithFlags_v5000": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 0.000770666
+            },
+            "cudaMemPoolCreate_v11020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 0.000768036
+            },
+            "cudaMemcpy_v3020": {
+              "calls": 11,
+              "inclusive_overlap_seconds": 0.000651337
+            },
+            "cudaEventCreateWithFlags_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 0.000566852
+            },
+            "cudaEventRecord_v3020": {
+              "calls": 5,
+              "inclusive_overlap_seconds": 0.000432829
+            },
+            "cuLaunchKernel": {
+              "calls": 6,
+              "inclusive_overlap_seconds": 9.680299999999999e-05
+            },
+            "cuLibraryGetKernel": {
+              "calls": 33,
+              "inclusive_overlap_seconds": 5.0039999999999995e-05
+            },
+            "cudaFreeAsync_v11020": {
+              "calls": 4,
+              "inclusive_overlap_seconds": 1.312e-05
+            },
+            "cudaEventQuery_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 1.133e-05
+            },
+            "cudaStreamSynchronize_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 1.005e-05
+            },
+            "cuModuleGetLoadingMode": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 2.94e-06
+            },
+            "cuKernelGetName": {
+              "calls": 9,
+              "inclusive_overlap_seconds": 2.77e-06
+            },
+            "cudaMemPoolSetAttribute_v11020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 1.5e-06
+            }
+          }
+        },
+        "initial_output": {
+          "host_seconds": 0.002291199,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "program_tail": {
+          "host_seconds": 0.028195654,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "resident_finalize": {
+          "host_seconds": 0.040883384,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.02538281,
+          "overlapping_kernel_seconds": 0.008117462,
+          "overlapping_device_copy_seconds": 0.017265348,
+          "main_thread_cuda_api_union_seconds": 0.038968165,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.013637482,
+          "cuda_calls": {
+            "cudaMemcpyAsync_v3020": {
+              "calls": 29,
+              "inclusive_overlap_seconds": 0.026798139999999998
+            },
+            "cudaMemcpy3DAsync_v3020": {
+              "calls": 12,
+              "inclusive_overlap_seconds": 0.006319259
+            },
+            "cudaLaunchKernel_v7000": {
+              "calls": 46,
+              "inclusive_overlap_seconds": 0.0037004079999999996
+            },
+            "cudaStreamSynchronize_v3020": {
+              "calls": 33,
+              "inclusive_overlap_seconds": 0.0008292970000000001
+            },
+            "cudaFree_v3020": {
+              "calls": 13,
+              "inclusive_overlap_seconds": 0.000633776
+            },
+            "cudaGraphExecDestroy_v10000": {
+              "calls": 6,
+              "inclusive_overlap_seconds": 0.000273255
+            },
+            "cuModuleUnload": {
+              "calls": 12,
+              "inclusive_overlap_seconds": 0.000184395
+            },
+            "cudaGraphDestroy_v10000": {
+              "calls": 6,
+              "inclusive_overlap_seconds": 9.791299999999998e-05
+            },
+            "cudaFreeAsync_v11020": {
+              "calls": 36,
+              "inclusive_overlap_seconds": 5.142100000000001e-05
+            },
+            "cudaEventRecord_v3020": {
+              "calls": 15,
+              "inclusive_overlap_seconds": 4.305000000000001e-05
+            },
+            "cudaEventQuery_v3020": {
+              "calls": 15,
+              "inclusive_overlap_seconds": 2.7601e-05
+            },
+            "cudaEventDestroy_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 5.2e-06
+            },
+            "cudaEventSynchronize_v3020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 2.39e-06
+            },
+            "cudaMemPoolGetAttribute_v11020": {
+              "calls": 2,
+              "inclusive_overlap_seconds": 1.31e-06
+            },
+            "cudaMemPoolTrimTo_v11020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 7.5e-07
+            }
+          }
+        },
+        "rk_work": {
+          "host_seconds": 2.443406998,
+          "calls": 109,
+          "overlapping_gpu_active_seconds": 1.981700841,
+          "overlapping_kernel_seconds": 1.976655394,
+          "overlapping_device_copy_seconds": 0.005045447,
+          "main_thread_cuda_api_union_seconds": 1.336347316,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.09434542699999993,
+          "cuda_calls": {
+            "cudaMemcpyAsync_v3020": {
+              "calls": 125,
+              "inclusive_overlap_seconds": 1.0353721049999998
+            },
+            "cudaGraphLaunch_v10000": {
+              "calls": 1192,
+              "inclusive_overlap_seconds": 0.10014032300000003
+            },
+            "cudaGraphExecKernelNodeSetParams_v10010": {
+              "calls": 34606,
+              "inclusive_overlap_seconds": 0.08273011200000129
+            },
+            "cudaLaunchKernel_v7000": {
+              "calls": 3471,
+              "inclusive_overlap_seconds": 0.06437251599999998
+            },
+            "cuLaunchKernel": {
+              "calls": 1962,
+              "inclusive_overlap_seconds": 0.02358488800000001
+            },
+            "cudaStreamSynchronize_v3020": {
+              "calls": 110,
+              "inclusive_overlap_seconds": 0.0064051640000000005
+            },
+            "cudaMemcpy3DAsync_v3020": {
+              "calls": 55,
+              "inclusive_overlap_seconds": 0.0063390650000000005
+            },
+            "cudaGraphInstantiate_v12000": {
+              "calls": 6,
+              "inclusive_overlap_seconds": 0.004100013
+            },
+            "cudaMallocFromPoolAsync_v11020": {
+              "calls": 30,
+              "inclusive_overlap_seconds": 0.004098027
+            },
+            "cuLibraryLoadData": {
+              "calls": 39,
+              "inclusive_overlap_seconds": 0.0032988900000000005
+            },
+            "cudaGraphAddKernelNode_v10000": {
+              "calls": 313,
+              "inclusive_overlap_seconds": 0.0018699580000000014
+            },
+            "cudaEventRecord_v3020": {
+              "calls": 332,
+              "inclusive_overlap_seconds": 0.0012233760000000002
+            },
+            "cuKernelGetName": {
+              "calls": 3159,
+              "inclusive_overlap_seconds": 0.0010622580000000039
+            },
+            "cudaStreamWaitEvent_v3020": {
+              "calls": 327,
+              "inclusive_overlap_seconds": 0.0010058259999999996
+            },
+            "cudaMemcpy2DAsync_v3020": {
+              "calls": 18,
+              "inclusive_overlap_seconds": 0.000689535
+            },
+            "cuLibraryGetKernel": {
+              "calls": 50,
+              "inclusive_overlap_seconds": 2.665e-05
+            },
+            "cudaGraphCreate_v10000": {
+              "calls": 6,
+              "inclusive_overlap_seconds": 1.4299999999999999e-05
+            },
+            "cudaEventQuery_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 9.2e-06
+            },
+            "cudaFreeAsync_v11020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 5.11e-06
+            }
+          }
+        },
+        "solver_deallocate": {
+          "host_seconds": 0.001930522,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "step_control": {
+          "host_seconds": 0.003595757,
+          "calls": 219,
+          "overlapping_gpu_active_seconds": 0.003503515,
+          "overlapping_kernel_seconds": 0.003503515,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "step_output": {
+          "host_seconds": 0.003924222,
+          "calls": 109,
+          "overlapping_gpu_active_seconds": 0.003908702,
+          "overlapping_kernel_seconds": 0.003908702,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 1.1401e-05,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {
+            "cudaMallocFromPoolAsync_v11020": {
+              "calls": 4,
+              "inclusive_overlap_seconds": 1.1401e-05
+            }
+          }
+        }
+      },
+      "channel": {
+        "allocate_fields": {
+          "host_seconds": 0.00743355,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "allocate_outputs": {
+          "host_seconds": 0.007249855,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "bootstrap": {
+          "host_seconds": 1.119e-05,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "boundary_setup": {
+          "host_seconds": 0.428133029,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "configuration": {
+          "host_seconds": 0.001940292,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "field_deallocate": {
+          "host_seconds": 0.002141726,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "final_barriers": {
+          "host_seconds": 7.0592e-05,
+          "calls": 2,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "final_output": {
+          "host_seconds": 0.04829071,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "initial_conditions": {
+          "host_seconds": 0.697552965,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.00624719,
+          "overlapping_kernel_seconds": 0.001834128,
+          "overlapping_device_copy_seconds": 0.004413062,
+          "main_thread_cuda_api_union_seconds": 0.197976863,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.192103659,
+          "cuda_calls": {
+            "cudaFree_v3020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 0.149315915
+            },
+            "cudaLaunchKernel_v7000": {
+              "calls": 35,
+              "inclusive_overlap_seconds": 0.017231655999999998
+            },
+            "cudaMallocFromPoolAsync_v11020": {
+              "calls": 7,
+              "inclusive_overlap_seconds": 0.015096293999999998
+            },
+            "cudaMemcpy3DAsync_v3020": {
+              "calls": 39,
+              "inclusive_overlap_seconds": 0.006506817
+            },
+            "cuLibraryLoadData": {
+              "calls": 15,
+              "inclusive_overlap_seconds": 0.00273494
+            },
+            "cudaMemcpyAsync_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 0.002218687
+            },
+            "cuModuleLoadDataEx": {
+              "calls": 12,
+              "inclusive_overlap_seconds": 0.001168528
+            },
+            "cudaMalloc_v3020": {
+              "calls": 13,
+              "inclusive_overlap_seconds": 0.0010023900000000001
+            },
+            "cudaMemPoolCreate_v11020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 0.000588742
+            },
+            "cudaStreamCreateWithFlags_v5000": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 0.000581622
+            },
+            "cudaMemcpy_v3020": {
+              "calls": 11,
+              "inclusive_overlap_seconds": 0.0005505309999999999
+            },
+            "cudaEventCreateWithFlags_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 0.0004907020000000001
+            },
+            "cudaEventRecord_v3020": {
+              "calls": 5,
+              "inclusive_overlap_seconds": 0.00038166800000000005
+            },
+            "cuLaunchKernel": {
+              "calls": 6,
+              "inclusive_overlap_seconds": 5.6061000000000004e-05
+            },
+            "cuLibraryGetKernel": {
+              "calls": 33,
+              "inclusive_overlap_seconds": 2.644e-05
+            },
+            "cudaEventQuery_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 6.94e-06
+            },
+            "cudaFreeAsync_v11020": {
+              "calls": 4,
+              "inclusive_overlap_seconds": 6.269999999999999e-06
+            },
+            "cudaStreamSynchronize_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 6.19e-06
+            },
+            "cuModuleGetLoadingMode": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 2.98e-06
+            },
+            "cuKernelGetName": {
+              "calls": 9,
+              "inclusive_overlap_seconds": 1.95e-06
+            },
+            "cudaMemPoolSetAttribute_v11020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 1.54e-06
+            }
+          }
+        },
+        "initial_output": {
+          "host_seconds": 0.002625317,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "program_tail": {
+          "host_seconds": 0.015494199,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "resident_finalize": {
+          "host_seconds": 0.020865445,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.011583741,
+          "overlapping_kernel_seconds": 0.000118145,
+          "overlapping_device_copy_seconds": 0.011465596,
+          "main_thread_cuda_api_union_seconds": 0.019202301,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.007638915000000001,
+          "cuda_calls": {
+            "cudaMemcpyAsync_v3020": {
+              "calls": 22,
+              "inclusive_overlap_seconds": 0.010878785000000002
+            },
+            "cudaMemcpy3DAsync_v3020": {
+              "calls": 12,
+              "inclusive_overlap_seconds": 0.005605999
+            },
+            "cudaStreamSynchronize_v3020": {
+              "calls": 32,
+              "inclusive_overlap_seconds": 0.000761022
+            },
+            "cudaFree_v3020": {
+              "calls": 13,
+              "inclusive_overlap_seconds": 0.000630697
+            },
+            "cudaLaunchKernel_v7000": {
+              "calls": 42,
+              "inclusive_overlap_seconds": 0.0005303920000000001
+            },
+            "cudaGraphExecDestroy_v10000": {
+              "calls": 14,
+              "inclusive_overlap_seconds": 0.00037778899999999996
+            },
+            "cuModuleUnload": {
+              "calls": 12,
+              "inclusive_overlap_seconds": 0.00019713400000000004
+            },
+            "cudaGraphDestroy_v10000": {
+              "calls": 14,
+              "inclusive_overlap_seconds": 0.000133122
+            },
+            "cudaFreeAsync_v11020": {
+              "calls": 37,
+              "inclusive_overlap_seconds": 4.528999999999999e-05
+            },
+            "cudaEventRecord_v3020": {
+              "calls": 12,
+              "inclusive_overlap_seconds": 1.943e-05
+            },
+            "cudaEventQuery_v3020": {
+              "calls": 12,
+              "inclusive_overlap_seconds": 1.4611000000000001e-05
+            },
+            "cudaEventDestroy_v3020": {
+              "calls": 3,
+              "inclusive_overlap_seconds": 4.08e-06
+            },
+            "cudaEventSynchronize_v3020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 1.78e-06
+            },
+            "cudaMemPoolGetAttribute_v11020": {
+              "calls": 2,
+              "inclusive_overlap_seconds": 1.26e-06
+            },
+            "cudaMemPoolTrimTo_v11020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 9.1e-07
+            }
+          }
+        },
+        "rk_work": {
+          "host_seconds": 2.269578774,
+          "calls": 100,
+          "overlapping_gpu_active_seconds": 1.606127271,
+          "overlapping_kernel_seconds": 1.601900579,
+          "overlapping_device_copy_seconds": 0.004226692,
+          "main_thread_cuda_api_union_seconds": 0.407638045,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.11064554599999998,
+          "cuda_calls": {
+            "cudaGraphLaunch_v10000": {
+              "calls": 3185,
+              "inclusive_overlap_seconds": 0.1741532929999997
+            },
+            "cudaGraphExecKernelNodeSetParams_v10010": {
+              "calls": 32525,
+              "inclusive_overlap_seconds": 0.10173791500000132
+            },
+            "cudaLaunchKernel_v7000": {
+              "calls": 3308,
+              "inclusive_overlap_seconds": 0.06441933300000004
+            },
+            "cuLaunchKernel": {
+              "calls": 1800,
+              "inclusive_overlap_seconds": 0.02272166999999996
+            },
+            "cudaMemcpyAsync_v3020": {
+              "calls": 116,
+              "inclusive_overlap_seconds": 0.017636952
+            },
+            "cudaMemcpy3DAsync_v3020": {
+              "calls": 107,
+              "inclusive_overlap_seconds": 0.008787694000000002
+            },
+            "cudaGraphInstantiate_v12000": {
+              "calls": 14,
+              "inclusive_overlap_seconds": 0.005454597
+            },
+            "cuLibraryLoadData": {
+              "calls": 39,
+              "inclusive_overlap_seconds": 0.0033596290000000007
+            },
+            "cudaGraphAddKernelNode_v10000": {
+              "calls": 411,
+              "inclusive_overlap_seconds": 0.0024847810000000006
+            },
+            "cudaMemcpy2DAsync_v3020": {
+              "calls": 35,
+              "inclusive_overlap_seconds": 0.0016218340000000002
+            },
+            "cudaMallocFromPoolAsync_v11020": {
+              "calls": 35,
+              "inclusive_overlap_seconds": 0.0012641
+            },
+            "cudaEventRecord_v3020": {
+              "calls": 313,
+              "inclusive_overlap_seconds": 0.0011986120000000002
+            },
+            "cudaStreamWaitEvent_v3020": {
+              "calls": 300,
+              "inclusive_overlap_seconds": 0.001112391
+            },
+            "cuKernelGetName": {
+              "calls": 2898,
+              "inclusive_overlap_seconds": 0.0010937150000000038
+            },
+            "cudaStreamSynchronize_v3020": {
+              "calls": 101,
+              "inclusive_overlap_seconds": 0.0004969359999999999
+            },
+            "cudaEventQuery_v3020": {
+              "calls": 12,
+              "inclusive_overlap_seconds": 3.0921000000000004e-05
+            },
+            "cudaGraphCreate_v10000": {
+              "calls": 14,
+              "inclusive_overlap_seconds": 2.9841e-05
+            },
+            "cuLibraryGetKernel": {
+              "calls": 50,
+              "inclusive_overlap_seconds": 2.9021000000000002e-05
+            },
+            "cudaFreeAsync_v11020": {
+              "calls": 1,
+              "inclusive_overlap_seconds": 4.81e-06
+            }
+          }
+        },
+        "solver_deallocate": {
+          "host_seconds": 0.002111205,
+          "calls": 1,
+          "overlapping_gpu_active_seconds": 0.0,
+          "overlapping_kernel_seconds": 0.0,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "step_control": {
+          "host_seconds": 0.005919555,
+          "calls": 201,
+          "overlapping_gpu_active_seconds": 0.000157659,
+          "overlapping_kernel_seconds": 0.000157659,
+          "overlapping_device_copy_seconds": 0.0,
+          "main_thread_cuda_api_union_seconds": 0.0,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.0,
+          "cuda_calls": {}
+        },
+        "step_output": {
+          "host_seconds": 1.187292877,
+          "calls": 100,
+          "overlapping_gpu_active_seconds": 0.917307532,
+          "overlapping_kernel_seconds": 0.914870452,
+          "overlapping_device_copy_seconds": 0.00243708,
+          "main_thread_cuda_api_union_seconds": 0.951787182,
+          "main_thread_cuda_api_without_overlapping_gpu_activity_seconds": 0.035771630000000054,
+          "cuda_calls": {
+            "cudaMemcpyAsync_v3020": {
+              "calls": 300,
+              "inclusive_overlap_seconds": 0.9502324899999999
+            },
+            "cudaEventRecord_v3020": {
+              "calls": 300,
+              "inclusive_overlap_seconds": 0.0009125319999999992
+            },
+            "cudaEventQuery_v3020": {
+              "calls": 300,
+              "inclusive_overlap_seconds": 0.00064216
+            }
+          }
+        }
+      }
+    }
+  },
+  "selected_binaries": {
+    "ELMM": {
+      "path": "/tmp/fortran-local-host-setup-20261110-01/ELMM",
+      "sha256": "2d5df06329cb8447990b0d4b39327ddf803f9d3113036ca2db7d1998cb69300e"
+    },
+    "ELMM-full20": {
+      "path": "/tmp/fortran-local-host-setup-20261110-01/ELMM-full20",
+      "sha256": "51e2fc298bc7004e859f8592837fd018f9fcdc6ac9289ab0c489cc6d56c81984"
+    },
+    "ELMM-native": {
+      "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native",
+      "sha256": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9"
+    },
+    "ELMM-native-full20": {
+      "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20",
+      "sha256": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6"
+    }
+  },
+  "provider": {
+    "path": "/tmp/fortran-async-output-20261110-01/work/build/lib/libpoisson-solver.so.0.1",
+    "sha256": "4c6d1bd8d0d12c439910a57ca4e49b69ddb20f71772d4a3d0edebdd710a95d7c"
+  },
+  "receipts": {
+    "/tmp/fortran-phase-attribution-20261110-01/build.py": "1a45763d20abc235fb32320556b572a1bf48fe7f7169625e816defce63281d5a",
+    "/tmp/fortran-phase-attribution-20261110-01/build-result.json": "90d5a562e52b3ef7f9be49d2e1be348c197da7a6912b0a4ea92190110b93bb4a",
+    "/tmp/fortran-phase-attribution-20261110-01/phase.cpp": "79d8a03218701e9ef58676a19602fdc3962510ab20bbb8d63b3c4c777d99b8b7",
+    "/tmp/fortran-phase-attribution-20261110-01/ELMM-main.f90": "8386251574159c1882872e1996d8cb146445a9689d9a722aec2149ec06430910",
+    "/tmp/fortran-phase-attribution-20261110-01/ELMM-native-main.f90": "eeab6eb76b857742bcdacb4a999dd8505e29d5714a1f45e1a45db5135d747577",
+    "/tmp/fortran-phase-attribution-20261110-01/run.py": "b76f2ec3ec19218ea5380029729c9615ad893715956381fb89b539d264566f14",
+    "/tmp/fortran-phase-attribution-20261110-01/plan.json": "9379074275dc2fde5eaa4fe5402ff21b48184bab5f59f2bbad26e8d74939e879",
+    "/tmp/fortran-phase-attribution-20261110-01/result.json": "ae37177fc0fedccf4746d2646b3ae0cc826985747f10ecda53be1455e1e43c69",
+    "/tmp/fortran-phase-attribution-20261110-01/host/channel-simple/ELMM-native/stdout.log": "552494df92ce7d504e96206a3f44814da1ccf1d7437bf50a4785e4f04239d6bc",
+    "/tmp/fortran-phase-attribution-20261110-01/host/channel-simple/ELMM-native/stderr.log": "e8824210f1732c2094f6b9c062f742187ca7ac27ff1e38578f79caa8a09ecc8b",
+    "/tmp/fortran-phase-attribution-20261110-01/host/channel-simple/ELMM-native/fftw-plans.jsonl": "5b31e06250a7085f59859713f1950d2d7fa7e1ca172fb0781f5d6ae8e947f718",
+    "/tmp/fortran-phase-attribution-20261110-01/host/channel-simple/ELMM/stdout.log": "da434dbf51499b469d84ed1263fb6779ad317794c847d3feeced7161bd9a2372",
+    "/tmp/fortran-phase-attribution-20261110-01/host/channel-simple/ELMM/stderr.log": "bf96272f410ad90d4d89d93a2e49b2d58b475bdbd3b4478bd64e5824e8ba0c5a",
+    "/tmp/fortran-phase-attribution-20261110-01/host/channel/ELMM-native/stdout.log": "540ed5aa7c495456f1a32e8ddbca9b3282d4be306f6c9f392466a6e3c527f9a1",
+    "/tmp/fortran-phase-attribution-20261110-01/host/channel/ELMM-native/stderr.log": "f0cf4b19917e02726cf06256949fdf891304f0bf669197419d44f10eaca01787",
+    "/tmp/fortran-phase-attribution-20261110-01/host/channel/ELMM-native/fftw-plans.jsonl": "5b31e06250a7085f59859713f1950d2d7fa7e1ca172fb0781f5d6ae8e947f718",
+    "/tmp/fortran-phase-attribution-20261110-01/host/channel/ELMM/stdout.log": "19e5bad006faa6394be95c71a8593242eceaa6bc12306509877379884a271808",
+    "/tmp/fortran-phase-attribution-20261110-01/host/channel/ELMM/stderr.log": "b4345c97fc5b3267ef7954ecd6b9ed793de1fb21cb7494903b7c48aeb485dbfb",
+    "/tmp/fortran-phase-attribution-20261110-01/traced/channel-simple/ELMM/stdout.log": "b82bf5aa5fefcb47a2b8566b15371c4fe1d66e11ad236612a5989dd7e24cfe2b",
+    "/tmp/fortran-phase-attribution-20261110-01/traced/channel-simple/ELMM/stderr.log": "a454389f29deac5f531c4e28186f8020c6dbc94ca8be768127cbd9744c6477a7",
+    "/tmp/fortran-phase-attribution-20261110-01/traced/channel-simple/ELMM/timeline.nsys-rep": "ad3ce50f1eeb4859e8d286a9a251a4a6c6481436b96b028bea01c25c11ba5ea6",
+    "/tmp/fortran-phase-attribution-20261110-01/traced/channel-simple/ELMM/timeline.sqlite": "f0d19a068bc2f0ec28736e637256fde4a9f6cb697d3790e555a2810f3ee46d12",
+    "/tmp/fortran-phase-attribution-20261110-01/traced/channel/ELMM/stdout.log": "b2d6735c04c6d721ba701a0d755474a07d1bbbc7bd337bd59a1fc4d5523b77e6",
+    "/tmp/fortran-phase-attribution-20261110-01/traced/channel/ELMM/stderr.log": "5662b5f62822e694b89eb86787ef4c90fd9bf3fa1e89937f3434ab6e4d6f6641",
+    "/tmp/fortran-phase-attribution-20261110-01/traced/channel/ELMM/timeline.nsys-rep": "728d6713822404ec41706bf5a5595af347febd4613380e2f7b0e7d2bfb637d9b",
+    "/tmp/fortran-phase-attribution-20261110-01/traced/channel/ELMM/timeline.sqlite": "ae5c5fa93604927050be84aa4e92a8f591c39285f13498746cd3a1dee8afd5a2",
+    "/tmp/fortran-phase-attribution-20261110-01/ELMM": "98b0dcc85d1c747473e273c410eded1c4440a98f9e36142e81af03c28713357b",
+    "/tmp/fortran-phase-attribution-20261110-01/ELMM-native": "888e3cd13994b82967e93ea36edbc019d0b130913ab1074e9f0bbe5cc24bde31",
+    "/tmp/fortran-phase-attribution-20261110-02/build.py": "8d95c779de67c62f7247421e865878f1217fbecf639e6511292f4fedca6d26b5",
+    "/tmp/fortran-phase-attribution-20261110-02/build-result.json": "a8233fc344b08f0cfd7294283c75295e43e7d5f6641ce3ce1c5793827e991a6a",
+    "/tmp/fortran-phase-attribution-20261110-02/wrap.cpp": "7ce0ca70e353223d421cb87200eada477162765cb028bebe750c816d3f9f8349",
+    "/tmp/fortran-phase-attribution-20261110-02/run.py": "c849a81129e37f10f8036bcb3eedb2728eee0475b377ccac3b0d925e79c04148",
+    "/tmp/fortran-phase-attribution-20261110-02/plan.json": "178a20035aa68abfb3a33b7db412cf86c37a377f5fec5c8834a3368563c0fb41",
+    "/tmp/fortran-phase-attribution-20261110-02/result.json": "c4499a9e9872c9ff566fa81e07a4c94e67c4f6152e6c64e6b80a547d3bea4120",
+    "/tmp/fortran-phase-attribution-20261110-02/analyze.py": "ed30b2b1708a026bb7541b417d9c9d54f9f09e464aa3f600805067cf5e3f40b9",
+    "/tmp/fortran-phase-attribution-20261110-02/analysis.json": "fd0405b6b7720dc383d5dd381c0cdd26f8f5b8cf8245068c7ad5b92b495a9968",
+    "/tmp/fortran-phase-attribution-20261110-02/host/channel-simple/ELMM/stdout.log": "0a5dd2837a62bff4f16f7b6750d05aab4910c24100b9064ffe39793713b87210",
+    "/tmp/fortran-phase-attribution-20261110-02/host/channel-simple/ELMM/stderr.log": "c1974cfb570d73a1443b5fe37382865f493e15a533bce0f6752077232d62be75",
+    "/tmp/fortran-phase-attribution-20261110-02/host/channel/ELMM/stdout.log": "f18841faa37082693361bde8de4d76eac799683861b25ebecaf1efef8150595b",
+    "/tmp/fortran-phase-attribution-20261110-02/host/channel/ELMM/stderr.log": "f35b85f1892f74c6a2b0bf5fbda2522b425097113a60bb921504f222e38e6738",
+    "/tmp/fortran-phase-attribution-20261110-02/traced/channel-simple/ELMM/stdout.log": "c3150060fe9167fd5856c9250a58d4992a70281ded98a7afa3d5d9fd2b097e07",
+    "/tmp/fortran-phase-attribution-20261110-02/traced/channel-simple/ELMM/stderr.log": "999d59e48eee829d2c90163f81104c0b4e896c9a1005d9944f3b8a4b054f3513",
+    "/tmp/fortran-phase-attribution-20261110-02/traced/channel-simple/ELMM/timeline.nsys-rep": "7430d07397c304f40a75514f76fb13c296e19df734feda00fb894f02488556ba",
+    "/tmp/fortran-phase-attribution-20261110-02/traced/channel-simple/ELMM/timeline.sqlite": "61b71877d81dff7381603301ded5bc0977f462ada4afa58fbe78aae714c7ce0b",
+    "/tmp/fortran-phase-attribution-20261110-02/traced/channel/ELMM/stdout.log": "b74ef420f3f6668c0914d62e918b6237c9a2c612af321add8662650e8d2f54b8",
+    "/tmp/fortran-phase-attribution-20261110-02/traced/channel/ELMM/stderr.log": "085405cb41de02e60a5c7ba94a9ddcfbe971789d42fb0120fb7dfb275e713efe",
+    "/tmp/fortran-phase-attribution-20261110-02/traced/channel/ELMM/timeline.nsys-rep": "008f6ea8218e47aa3357e4350c8ffcb3f616e899709a4385ad2ca2140947873f",
+    "/tmp/fortran-phase-attribution-20261110-02/traced/channel/ELMM/timeline.sqlite": "01c80d213bd0a16d6680db78d7becdd1e0beec345b0448986acfd4315262f752",
+    "/tmp/fortran-phase-attribution-20261110-02/ELMM": "6829873a839b5b4bd7606642db4fabdc0ece52fd75d5e77be8d3ac955b27bb5d",
+    "/tmp/fortran-local-host-setup-20261110-01/ELMM": "2d5df06329cb8447990b0d4b39327ddf803f9d3113036ca2db7d1998cb69300e",
+    "/tmp/fortran-local-host-setup-20261110-01/ELMM-full20": "51e2fc298bc7004e859f8592837fd018f9fcdc6ac9289ab0c489cc6d56c81984",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6",
+    "/tmp/fortran-async-output-20261110-01/work/build/lib/libpoisson-solver.so.0.1": "4c6d1bd8d0d12c439910a57ca4e49b69ddb20f71772d4a3d0edebdd710a95d7c"
+  }
+}

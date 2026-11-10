@@ -1,0 +1,1915 @@
+{
+  "schema_version": 1,
+  "status": "TWO_OPTIMIZATIONS_REJECTED_SELECTED_GPU_PRESERVED",
+  "goal_complete": false,
+  "release_qualified": false,
+  "selected_GPU": "/tmp/fortran-async-output-20261110-01/work/build/ELMM",
+  "production_changes_retained": false,
+  "retained_test_changes": [
+    "CUDA full-width coordinate decoder differential test.",
+    "Scheduling test compares executable mapping/launch instead of explicit-plan provenance."
+  ],
+  "coordinate_experiment": {
+    "implementation": "Exact shifts for power-of-two extents, uint32 division for checked compact domains, full-width fallback. No floating arithmetic change.",
+    "build_scope": "All130 numerical entries regenerated/recompiled; Fortran interfaces and shared runtime headers exact selected build. Reused exact application/native/provider objects from preceding complete public build; not a fresh full native/provider rebuild.",
+    "build_seconds": 277.2731088319997,
+    "binaries": {
+      "ELMM": {
+        "path": "/tmp/fortran-coordinate-decode-20261110-01/ELMM",
+        "sha256": "8386b656d701cc4704965ec8b0a4bbc56fc43be6982f14bc3949d62be5fab3fc"
+      },
+      "ELMM-full20": {
+        "path": "/tmp/fortran-coordinate-decode-20261110-01/ELMM-full20",
+        "sha256": "94441b4d90766fec16c7d489999a68ddb95b443c0d46cbfa752efdac6a76ac7b"
+      },
+      "ELMM-native": {
+        "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native",
+        "sha256": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9"
+      },
+      "ELMM-native-full20": {
+        "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20",
+        "sha256": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6"
+      }
+    },
+    "provider": {
+      "path": "/tmp/fortran-async-output-20261110-01/work/build/lib/libpoisson-solver.so.0.1",
+      "sha256": "4c6d1bd8d0d12c439910a57ca4e49b69ddb20f71772d4a3d0edebdd710a95d7c"
+    },
+    "strict_application_cases": [
+      "simple2",
+      "channel2",
+      "simple109",
+      "channel100"
+    ],
+    "strict_processes": 8,
+    "strict_all20_fields_and_outputs": true,
+    "exact_prior_GPU_fields": true,
+    "natural_2458_approved_L2": true,
+    "natural_fields": 20,
+    "natural_outputs": 114,
+    "natural_worst_relative_L2": 0.0015489611183125967,
+    "natural_max_local_error_relative_peak": 0.014670614640088665,
+    "exact_prior_GPU_field_and_bounds_files": 40,
+    "milestone_tests": "Initial214pass/1pre-existing provenance failure; same failure verified with old emitter. Corrected assertion passes. After restoration150focused checks pass, including actual CUDA. Full maintained suites not claimed.",
+    "protocol": "One excluded warmup,seven rotated measurements,48processes,complete process timing,all outputs,all samples retained,no retry.",
+    "comparison_valid": true,
+    "max_external_CPU_cores": 0.36715060161447305,
+    "retention_gate": "At least1% lower median in BOTH cases",
+    "retention_gate_passed": false,
+    "cases": {
+      "channel-simple": {
+        "modes": {
+          "native": {
+            "samples": [
+              11.636920010998438,
+              11.370567445999768,
+              11.35102006499801,
+              11.460197539003275,
+              11.492505235000863,
+              11.443339036006364,
+              11.618823497999983
+            ],
+            "median": 11.460197539003275
+          },
+          "gpu-cached": {
+            "samples": [
+              2.959944059002737,
+              3.0302917910012184,
+              3.045939071002067,
+              3.0223668690014165,
+              3.0768016340007307,
+              2.984635652996076,
+              3.0525082620006287
+            ],
+            "median": 3.0302917910012184
+          },
+          "candidate": {
+            "samples": [
+              3.220080613005848,
+              3.0162833260037587,
+              3.2086685210015276,
+              3.01067906699609,
+              2.990809883995098,
+              3.0203811149985995,
+              3.0246643139980733
+            ],
+            "median": 3.0203811149985995
+          }
+        },
+        "paired_ratios": {
+          "native": [
+            0.2767124471047703,
+            0.26527113447314404,
+            0.2826766671742369,
+            0.26270743211446745,
+            0.26024002798680246,
+            0.263942290400992,
+            0.26032449107422334
+          ],
+          "gpu-cached": [
+            1.0878856318962853,
+            0.9953771894049743,
+            1.0534250509304919,
+            0.99613289765541,
+            0.9720515781533116,
+            1.0119764909886542,
+            0.9908783382016774
+          ]
+        },
+        "median_ratios": {
+          "native": 0.26355401856897576,
+          "gpu-cached": 0.9967294647888201
+        },
+        "selected_GPU_speedup_over_native": 3.781879214746111,
+        "candidate_speedup_over_native": 3.794288569112772,
+        "candidate_median_improvement_percent": 0.3270535211179926,
+        "paired_wins": {
+          "native": 7,
+          "gpu-cached": 4
+        },
+        "20x_budget_seconds": 0.5730098769501637
+      },
+      "channel": {
+        "modes": {
+          "native": {
+            "samples": [
+              12.896111620997544,
+              12.907361227997171,
+              13.011676925001666,
+              13.045518413004174,
+              12.938242007003282,
+              12.712210662997677,
+              13.192246729006001
+            ],
+            "median": 12.938242007003282
+          },
+          "gpu-cached": {
+            "samples": [
+              3.532703529999708,
+              3.554988782001601,
+              3.5884379999988596,
+              3.47279185399384,
+              3.4766084540024167,
+              3.4794573969993507,
+              3.492288750996522
+            ],
+            "median": 3.492288750996522
+          },
+          "candidate": {
+            "samples": [
+              3.5174234119986068,
+              3.5593915060017025,
+              3.4983781420014566,
+              3.5137036640007864,
+              3.5219087209989084,
+              3.497998049999296,
+              3.48720680000406
+            ],
+            "median": 3.5137036640007864
+          }
+        },
+        "paired_ratios": {
+          "native": [
+            0.27275069535467666,
+            0.27576446053753245,
+            0.2688645100985712,
+            0.26934181937133433,
+            0.27220921660705916,
+            0.27516835133806933,
+            0.2643375970475661
+          ],
+          "gpu-cached": [
+            0.9956746673273479,
+            1.0012384635423863,
+            0.9749027688377417,
+            1.0117806686167776,
+            1.0130300169247821,
+            1.0053286046887469,
+            0.9985448079025504
+          ]
+        },
+        "median_ratios": {
+          "native": 0.27157504567458773,
+          "gpu-cached": 1.006132056806057
+        },
+        "selected_GPU_speedup_over_native": 3.7048030473744085,
+        "candidate_speedup_over_native": 3.6822234440429424,
+        "candidate_median_improvement_percent": -0.6132056806056996,
+        "paired_wins": {
+          "native": 7,
+          "gpu-cached": 3
+        },
+        "20x_budget_seconds": 0.6469121003501641
+      }
+    }
+  },
+  "convergence_experiment": {
+    "implementation": "Terminate a sole integer-guarded serial device loop once its iterator-independent guard is false; preserve the Fortran terminal iterator.",
+    "build_scope": "Four numerical wall entries only; screening pilot, not full regeneration.",
+    "semantic_comparisons": 192,
+    "exact_primary_all20_fields": true,
+    "original_attempt": "Invalid cache protocol:0755 directories rejected by provider,zero cached cubins. Original timings and initial decision preserved.",
+    "corrected_attempt": "Same binaries;one corrected whole pilot with0700 directories and positive cubin counts every run.",
+    "pilot_protocol": "One excluded warmup,three rotated measurements;selected and candidate GPU;no native timing or release claim.",
+    "pilot_load_pass": true,
+    "pilot_summary": {
+      "channel-simple": {
+        "samples": {
+          "selected": [
+            3.1175002950039925,
+            3.034240116001456,
+            3.0078320590037038
+          ],
+          "candidate": [
+            2.9907068879983854,
+            2.994915363000473,
+            3.014165029999276
+          ]
+        },
+        "medians": {
+          "selected": 3.034240116001456,
+          "candidate": 2.994915363000473
+        },
+        "candidate_ratio": 0.9870396700664529
+      },
+      "channel": {
+        "samples": {
+          "selected": [
+            3.5293224209963228,
+            3.488544357001956,
+            3.4786196570057655
+          ],
+          "candidate": [
+            3.550375589002215,
+            3.504452176995983,
+            3.5379424769998877
+          ]
+        },
+        "medians": {
+          "selected": 3.488544357001956,
+          "candidate": 3.5379424769998877
+        },
+        "candidate_ratio": 1.0141600951407665
+      }
+    },
+    "promotion_gate": "At least2% lower median in BOTH cases before expanded qualification",
+    "promotion_gate_passed": false,
+    "production_restored": true
+  },
+  "selected_diagnostic_profiles": {
+    "status": "PASS",
+    "scope": "Diagnostic profiles only. CPU API spans, device work and OS runtime waits overlap; no additive wall-time decomposition is claimed.",
+    "cases": {
+      "channel-simple": {
+        "kernel_count": 58353,
+        "kernel_activity_sum_seconds": 1.990828605999998,
+        "kernel_union_seconds": 1.989289322,
+        "copy_union_seconds": 0.024547024,
+        "physical_transfers_by_cuda_kind": {
+          "1": {
+            "calls": 135,
+            "bytes": 60323112,
+            "device_seconds": 0.007168949
+          },
+          "2": {
+            "calls": 157,
+            "bytes": 115528416,
+            "device_seconds": 0.017378074999999982
+          }
+        },
+        "first_kernel_trace_seconds": 1.555839021,
+        "last_kernel_trace_seconds": 4.194679683,
+        "kernel_window_seconds": 2.638840662,
+        "gpu_activity_within_kernel_window_seconds": 1.998126959,
+        "gpu_idle_within_kernel_window_seconds": 0.6407137029999999,
+        "cuda_api_union_seconds": 1.570953629,
+        "cuda_api_overlap_gpu_seconds": 1.209575695,
+        "cuda_api_outside_gpu_inside_kernel_window_seconds": 0.16035532899999994,
+        "stages": {
+          "subgrid::sgs_sigma_uniform": {
+            "seconds": 0.4849962330000001,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_e8b12a912596::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, double, double, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "VkFFT_main": {
+            "seconds": 0.2600829130000005,
+            "launches": 1968,
+            "functions": [
+              "VkFFT_main"
+            ]
+          },
+          "momentumdiffusion::momentumdiffusion_nobranch_2ord": {
+            "seconds": 0.1658927859999997,
+            "launches": 981,
+            "functions": [
+              "generated_kernels::fort_shared_39b5d768874e::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_5d4eeb22ae63::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_88da98216620::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::stress1": {
+            "seconds": 0.0905258799999999,
+            "launches": 654,
+            "functions": [
+              "generated_kernels::fort_shared_ea373c1ecd71::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::stress2": {
+            "seconds": 0.087509749,
+            "launches": 654,
+            "functions": [
+              "generated_kernels::fort_shared_d6f64ea6ad4a::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::stress0": {
+            "seconds": 0.08645348199999993,
+            "launches": 654,
+            "functions": [
+              "generated_kernels::fort_shared_64760abedfaa::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "<unnamed>::plane_reference": {
+            "seconds": 0.08105048500000006,
+            "launches": 328,
+            "functions": [
+              "<unnamed>::plane_reference(const double *, <unnamed>::Shape)"
+            ]
+          },
+          "boundaries::bounduvw_do_bc": {
+            "seconds": 0.0785334159999979,
+            "launches": 29448,
+            "functions": [
+              "generated_kernels::fort_shared_126c357c532e::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_126c357c532e::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_126c357c532e::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_78c22618929d::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_78c22618929d::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_78c22618929d::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_7a673ca977de::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_7a673ca977de::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_7a673ca977de::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_cec962944411::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_cec962944411::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_cec962944411::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::stress3": {
+            "seconds": 0.07763188999999998,
+            "launches": 654,
+            "functions": [
+              "generated_kernels::fort_shared_6c4424d3b98e::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "dynamics::convection": {
+            "seconds": 0.05190165100000004,
+            "launches": 2289,
+            "functions": [
+              "generated_kernels::fort_shared_5202b8edade7::kernel_region_0_device(const double *, unsigned long, int, double, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_5202b8edade7::kernel_region_1_device(const double *, unsigned long, int, double, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_5202b8edade7::kernel_region_2_device(const double *, unsigned long, int, double, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_3_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_4_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_5_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ad3c5f8f4792::kernel_region_0_device(double, const double *, unsigned long, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ad3c5f8f4792::kernel_region_1_device(double, const double *, unsigned long, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ad3c5f8f4792::kernel_region_2_device(double, const double *, unsigned long, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "momentumadvection::cdudiv": {
+            "seconds": 0.03924976900000003,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_e472919d5aab::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "momentumadvection::cdwdiv": {
+            "seconds": 0.039047081,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_8cc87f4e9ebb::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "momentumadvection::cdvdiv": {
+            "seconds": 0.03903271900000002,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_58c3b821e116::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "dynamics::pressuregrad": {
+            "seconds": 0.03820090400000009,
+            "launches": 1308,
+            "functions": [
+              "generated_kernels::fort_shared_0779785f7ad7::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_80aa32c5945f::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_f6add30e2a96::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_f6add30e2a96::kernel_region_1_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "arrayutilities::add_3d": {
+            "seconds": 0.03710421300000001,
+            "launches": 981,
+            "functions": [
+              "generated_kernels::fort_shared_3c652b8368e4::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "pressure::correctpoissonvelocity": {
+            "seconds": 0.031013937000000047,
+            "launches": 984,
+            "functions": [
+              "generated_kernels::fort_shared_1ccc8a10209f::kernel_region_0_device(double, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_47c4e8838df9::kernel_region_0_device(double, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_47c4e8838df9::kernel_region_1_device(double, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "pressure_faces": {
+            "seconds": 0.02845330799999999,
+            "launches": 328,
+            "functions": [
+              "pressure_faces(double *, PressureShape, unsigned long)"
+            ]
+          },
+          "momentumadvection::cduadv": {
+            "seconds": 0.025756954000000012,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_800e87aa1f4b::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "momentumadvection::cdvadv": {
+            "seconds": 0.025597364999999997,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_769acb5e8937::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "momentumadvection::cdwadv": {
+            "seconds": 0.02552187999999997,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_99f65f1287e6::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "void poisson_solver::detail::kernels::DivideByDenoms<double, ": {
+            "seconds": 0.025379061999999973,
+            "launches": 328,
+            "functions": [
+              "void poisson_solver::detail::kernels::DivideByDenoms<double, (unsigned long)3, double2>(T3 *, std::array<unsigned long, T2>, std::array<unsigned long, T2>, std::array<const T1 *, T2>, bool)"
+            ]
+          },
+          "pressure::buildpoissonrhs": {
+            "seconds": 0.024796974999999926,
+            "launches": 328,
+            "functions": [
+              "generated_kernels::fort_shared_4ddfbcea0f1e::kernel_region_0_device(double, double, double, double, int, int, int, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_93236637ddfc::kernel_region_0_device(double, double, double, double, int, int, int, double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "arrayutilities::multiply_3d": {
+            "seconds": 0.02400017199999998,
+            "launches": 981,
+            "functions": [
+              "generated_kernels::fort_shared_35f616c3b9ba::kernel_region_0_device(double, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "arrayutilities::set_3d": {
+            "seconds": 0.016294155999999973,
+            "launches": 1308,
+            "functions": [
+              "generated_kernels::fort_shared_531e24459b5f::kernel_region_0_device(double, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_time::average": {
+            "seconds": 0.015680589,
+            "launches": 436,
+            "functions": [
+              "generated_kernels::fort_shared_b06d7354cd07::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "boundaries::periodic_corners_edges": {
+            "seconds": 0.014256535999999887,
+            "launches": 4908,
+            "functions": [
+              "generated_kernels::fort_shared_3078ba19731c::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "void poisson_solver::detail::kernels::common_cmplx::Normalize<double, ": {
+            "seconds": 0.010840655999999982,
+            "launches": 328,
+            "functions": [
+              "void poisson_solver::detail::kernels::common_cmplx::Normalize<double, (unsigned long)3>(T1 *, const poisson_solver::detail::CuComplexTraitImpl<T1>::Type *, std::array<unsigned long, T2>, T1)"
+            ]
+          },
+          "pressure::updatepoissonpressure": {
+            "seconds": 0.010676787999999993,
+            "launches": 328,
+            "functions": [
+              "generated_kernels::fort_shared_e1e0a36b22de::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "void poisson_solver::detail::kernels::common_cmplx::Init<double, ": {
+            "seconds": 0.009683178999999997,
+            "launches": 328,
+            "functions": [
+              "void poisson_solver::detail::kernels::common_cmplx::Init<double, (unsigned long)3>(poisson_solver::detail::CuComplexTraitImpl<T1>::Type *, const T1 *, std::array<unsigned long, T2>)"
+            ]
+          },
+          "resident_time::cfl": {
+            "seconds": 0.009630566999999998,
+            "launches": 108,
+            "functions": [
+              "generated_kernels::fort_shared_2fc4f7a5f1fc::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "<unnamed>::subtract_reference": {
+            "seconds": 0.007102831999999994,
+            "launches": 328,
+            "functions": [
+              "<unnamed>::subtract_reference(double *, <unnamed>::Shape, unsigned long)"
+            ]
+          },
+          "void poisson_solver::detail::kernels::PackPaddedGrid<double, ": {
+            "seconds": 0.006599202000000001,
+            "launches": 328,
+            "functions": [
+              "void poisson_solver::detail::kernels::PackPaddedGrid<double, (unsigned long)3>(T1 *, const T1 *, std::array<unsigned long, T2>, std::array<unsigned long, T2>)"
+            ]
+          },
+          "void poisson_solver::detail::kernels::UnpackPaddedGrid<double, ": {
+            "seconds": 0.006580840000000005,
+            "launches": 328,
+            "functions": [
+              "void poisson_solver::detail::kernels::UnpackPaddedGrid<double, (unsigned long)3>(T1 *, const T1 *, std::array<unsigned long, T2>, std::array<unsigned long, T2>)"
+            ]
+          },
+          "scalarboundaries::boundviscosity": {
+            "seconds": 0.0033669800000000315,
+            "launches": 1962,
+            "functions": [
+              "generated_kernels::fort_shared_1a43712f3746::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_2594d7cd604c::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_4765691b982a::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_af62316d4f3b::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_b0b41b603b6b::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_c793a925d493::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "<unnamed>::pressure_faces": {
+            "seconds": 0.003360293999999999,
+            "launches": 328,
+            "functions": [
+              "<unnamed>::pressure_faces(double *, <unnamed>::Shape, unsigned long)"
+            ]
+          },
+          "<unnamed>::partial_max": {
+            "seconds": 0.0028951,
+            "launches": 108,
+            "functions": [
+              "<unnamed>::partial_max(const double *, unsigned long, double, <unnamed>::Result *)"
+            ]
+          },
+          "resident_wall::correction2m": {
+            "seconds": 0.0012060930000000012,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_964ddb1ce320::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::correction1m": {
+            "seconds": 0.001205197,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_d455b2b40401::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::correction3m": {
+            "seconds": 0.0010678490000000007,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_f67523feaead::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::correction2p": {
+            "seconds": 0.0008072720000000011,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_2af6734fa291::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::correction1p": {
+            "seconds": 0.0008048409999999987,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_eea7a8391a84::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::correction3p": {
+            "seconds": 0.000702565000000001,
+            "launches": 327,
+            "functions": [
+              "generated_kernels::fort_shared_7b41b74c9862::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "<unnamed>::final_max": {
+            "seconds": 0.0003342459999999999,
+            "launches": 108,
+            "functions": [
+              "<unnamed>::final_max(const <unnamed>::Result *, unsigned int, double, <unnamed>::Result *)"
+            ]
+          }
+        },
+        "top_functions": [
+          {
+            "name": "generated_kernels::fort_shared_e8b12a912596::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, double, double, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "subgrid::sgs_sigma_uniform",
+            "seconds": 0.4849962330000001,
+            "launches": 327,
+            "registers_per_thread": 58,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "VkFFT_main",
+            "procedure": "VkFFT_main",
+            "seconds": 0.2600829130000005,
+            "launches": 1968,
+            "registers_per_thread": 56,
+            "local_bytes_per_thread": 0,
+            "block": [
+              24,
+              8,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_ea373c1ecd71::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "resident_wall::stress1",
+            "seconds": 0.0905258799999999,
+            "launches": 654,
+            "registers_per_thread": 54,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_d6f64ea6ad4a::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "resident_wall::stress2",
+            "seconds": 0.087509749,
+            "launches": 654,
+            "registers_per_thread": 54,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_64760abedfaa::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "resident_wall::stress0",
+            "seconds": 0.08645348199999993,
+            "launches": 654,
+            "registers_per_thread": 42,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "<unnamed>::plane_reference(const double *, <unnamed>::Shape)",
+            "procedure": "<unnamed>::plane_reference",
+            "seconds": 0.08105048500000006,
+            "launches": 328,
+            "registers_per_thread": 36,
+            "local_bytes_per_thread": 0,
+            "block": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_6c4424d3b98e::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "resident_wall::stress3",
+            "seconds": 0.07763188999999998,
+            "launches": 654,
+            "registers_per_thread": 54,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_88da98216620::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumdiffusion::momentumdiffusion_nobranch_2ord",
+            "seconds": 0.05553951900000001,
+            "launches": 327,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_39b5d768874e::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumdiffusion::momentumdiffusion_nobranch_2ord",
+            "seconds": 0.055263608000000006,
+            "launches": 327,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_5d4eeb22ae63::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumdiffusion::momentumdiffusion_nobranch_2ord",
+            "seconds": 0.055089659000000034,
+            "launches": 327,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_e472919d5aab::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumadvection::cdudiv",
+            "seconds": 0.03924976900000003,
+            "launches": 327,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_8cc87f4e9ebb::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumadvection::cdwdiv",
+            "seconds": 0.039047081,
+            "launches": 327,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_58c3b821e116::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumadvection::cdvdiv",
+            "seconds": 0.03903271900000002,
+            "launches": 327,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_3c652b8368e4::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "arrayutilities::add_3d",
+            "seconds": 0.03710421300000001,
+            "launches": 981,
+            "registers_per_thread": 26,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "pressure_faces(double *, PressureShape, unsigned long)",
+            "procedure": "pressure_faces",
+            "seconds": 0.02845330799999999,
+            "launches": 328,
+            "registers_per_thread": 37,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_800e87aa1f4b::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumadvection::cduadv",
+            "seconds": 0.025756954000000012,
+            "launches": 327,
+            "registers_per_thread": 38,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_769acb5e8937::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumadvection::cdvadv",
+            "seconds": 0.025597364999999997,
+            "launches": 327,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_99f65f1287e6::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumadvection::cdwadv",
+            "seconds": 0.02552187999999997,
+            "launches": 327,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "void poisson_solver::detail::kernels::DivideByDenoms<double, (unsigned long)3, double2>(T3 *, std::array<unsigned long, T2>, std::array<unsigned long, T2>, std::array<const T1 *, T2>, bool)",
+            "procedure": "void poisson_solver::detail::kernels::DivideByDenoms<double, ",
+            "seconds": 0.025379061999999973,
+            "launches": 328,
+            "registers_per_thread": 50,
+            "local_bytes_per_thread": 0,
+            "block": [
+              8,
+              8,
+              4
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_4ddfbcea0f1e::kernel_region_0_device(double, double, double, double, int, int, int, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "pressure::buildpoissonrhs",
+            "seconds": 0.02471146999999993,
+            "launches": 327,
+            "registers_per_thread": 31,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          }
+        ],
+        "cuda_apis": {
+          "cudaMemcpyAsync_v3020": {
+            "calls": 157,
+            "inclusive_seconds": 0.9096184480000001
+          },
+          "cudaLaunchKernel_v7000": {
+            "calls": 3552,
+            "inclusive_seconds": 0.1695505179999998
+          },
+          "cudaFree_v3020": {
+            "calls": 14,
+            "inclusive_seconds": 0.152665069
+          },
+          "cudaGraphLaunch_v10000": {
+            "calls": 1192,
+            "inclusive_seconds": 0.11526382100000007
+          },
+          "cudaGraphExecKernelNodeSetParams_v10010": {
+            "calls": 34606,
+            "inclusive_seconds": 0.08876645600000083
+          },
+          "cuLaunchKernel": {
+            "calls": 1968,
+            "inclusive_seconds": 0.051800416000000044
+          },
+          "cudaMallocFromPoolAsync_v11020": {
+            "calls": 41,
+            "inclusive_seconds": 0.030599854999999995
+          },
+          "cudaMemcpy3DAsync_v3020": {
+            "calls": 106,
+            "inclusive_seconds": 0.021620353000000005
+          },
+          "cuLibraryLoadData": {
+            "calls": 54,
+            "inclusive_seconds": 0.0070539610000000036
+          },
+          "cudaStreamSynchronize_v3020": {
+            "calls": 146,
+            "inclusive_seconds": 0.006767429
+          },
+          "cudaGraphInstantiate_v12000": {
+            "calls": 6,
+            "inclusive_seconds": 0.003965224
+          },
+          "cudaGraphAddKernelNode_v10000": {
+            "calls": 313,
+            "inclusive_seconds": 0.0018600840000000019
+          },
+          "cuModuleLoadDataEx": {
+            "calls": 12,
+            "inclusive_seconds": 0.001838968
+          },
+          "cudaEventRecord_v3020": {
+            "calls": 352,
+            "inclusive_seconds": 0.0016485349999999996
+          },
+          "cuKernelGetName": {
+            "calls": 3168,
+            "inclusive_seconds": 0.0012699590000000021
+          },
+          "cudaMalloc_v3020": {
+            "calls": 13,
+            "inclusive_seconds": 0.0012103139999999999
+          },
+          "cudaStreamWaitEvent_v3020": {
+            "calls": 327,
+            "inclusive_seconds": 0.0010809419999999997
+          },
+          "cudaMemcpy_v3020": {
+            "calls": 11,
+            "inclusive_seconds": 0.000821079
+          },
+          "cudaMemPoolCreate_v11020": {
+            "calls": 1,
+            "inclusive_seconds": 0.000742376
+          },
+          "cudaStreamCreateWithFlags_v5000": {
+            "calls": 1,
+            "inclusive_seconds": 0.000719148
+          },
+          "cudaMemcpy2DAsync_v3020": {
+            "calls": 18,
+            "inclusive_seconds": 0.0007170049999999999
+          },
+          "cudaEventCreateWithFlags_v3020": {
+            "calls": 3,
+            "inclusive_seconds": 0.000583014
+          },
+          "cudaGraphExecDestroy_v10000": {
+            "calls": 6,
+            "inclusive_seconds": 0.000286547
+          },
+          "cuModuleUnload": {
+            "calls": 12,
+            "inclusive_seconds": 0.000190413
+          },
+          "cudaGraphDestroy_v10000": {
+            "calls": 6,
+            "inclusive_seconds": 9.7351e-05
+          },
+          "cudaFreeAsync_v11020": {
+            "calls": 41,
+            "inclusive_seconds": 9.1352e-05
+          },
+          "cuLibraryGetKernel": {
+            "calls": 83,
+            "inclusive_seconds": 5.4060999999999996e-05
+          },
+          "cudaEventQuery_v3020": {
+            "calls": 21,
+            "inclusive_seconds": 3.542999999999999e-05
+          },
+          "cudaGraphCreate_v10000": {
+            "calls": 6,
+            "inclusive_seconds": 2.2170999999999998e-05
+          },
+          "cudaEventDestroy_v3020": {
+            "calls": 3,
+            "inclusive_seconds": 4.14e-06
+          },
+          "cuModuleGetLoadingMode": {
+            "calls": 1,
+            "inclusive_seconds": 3.22e-06
+          },
+          "cudaMemPoolSetAttribute_v11020": {
+            "calls": 1,
+            "inclusive_seconds": 1.82e-06
+          },
+          "cudaEventSynchronize_v3020": {
+            "calls": 1,
+            "inclusive_seconds": 1.75e-06
+          },
+          "cudaMemPoolGetAttribute_v11020": {
+            "calls": 2,
+            "inclusive_seconds": 1.37e-06
+          },
+          "cudaMemPoolTrimTo_v11020": {
+            "calls": 1,
+            "inclusive_seconds": 1.03e-06
+          }
+        }
+      },
+      "channel": {
+        "kernel_count": 70238,
+        "kernel_activity_sum_seconds": 2.5284988269999964,
+        "kernel_union_seconds": 2.526788309,
+        "copy_union_seconds": 0.025980678,
+        "physical_transfers_by_cuda_kind": {
+          "1": {
+            "calls": 204,
+            "bytes": 48174088,
+            "device_seconds": 0.006132510999999998
+          },
+          "2": {
+            "calls": 441,
+            "bytes": 115114800,
+            "device_seconds": 0.019848167000000007
+          }
+        },
+        "first_kernel_trace_seconds": 1.408901451,
+        "last_kernel_trace_seconds": 4.834649874,
+        "kernel_window_seconds": 3.425748423,
+        "gpu_activity_within_kernel_window_seconds": 2.536700822,
+        "gpu_idle_within_kernel_window_seconds": 0.8890476010000001,
+        "cuda_api_union_seconds": 1.630345394,
+        "cuda_api_overlap_gpu_seconds": 1.246112395,
+        "cuda_api_outside_gpu_inside_kernel_window_seconds": 0.15501593800000002,
+        "stages": {
+          "subgrid::sgs_sigma_uniform": {
+            "seconds": 0.4458593220000003,
+            "launches": 300,
+            "functions": [
+              "generated_kernels::fort_shared_e8b12a912596::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, double, double, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "filters::filter3ord": {
+            "seconds": 0.3263779839999988,
+            "launches": 5400,
+            "functions": [
+              "generated_kernels::fort_shared_44387ce13b31::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_7ce865c17eeb::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ec5c4fa10220::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_f90715bf94a5::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "VkFFT_main": {
+            "seconds": 0.23914839599999987,
+            "launches": 1806,
+            "functions": [
+              "VkFFT_main"
+            ]
+          },
+          "momentumadvection::cd4divw": {
+            "seconds": 0.17911544499999985,
+            "launches": 300,
+            "functions": [
+              "generated_kernels::fort_shared_1dcab06eb705::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "momentumadvection::cd4divv": {
+            "seconds": 0.17823840499999993,
+            "launches": 300,
+            "functions": [
+              "generated_kernels::fort_shared_42f1895f2eaa::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "momentumadvection::cd4divu": {
+            "seconds": 0.17780836299999983,
+            "launches": 300,
+            "functions": [
+              "generated_kernels::fort_shared_867be3cdca49::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "momentumdiffusion::momentumdiffusion_nobranch_2ord": {
+            "seconds": 0.15221873799999985,
+            "launches": 900,
+            "functions": [
+              "generated_kernels::fort_shared_39b5d768874e::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_5d4eeb22ae63::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_88da98216620::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "boundaries::bounduvw_do_bc": {
+            "seconds": 0.0995839829999978,
+            "launches": 37818,
+            "functions": [
+              "generated_kernels::fort_shared_126c357c532e::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_126c357c532e::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_126c357c532e::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_78c22618929d::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_78c22618929d::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_78c22618929d::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_7a673ca977de::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_7a673ca977de::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_7a673ca977de::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_cec962944411::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_cec962944411::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_cec962944411::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::stress1": {
+            "seconds": 0.08260257200000001,
+            "launches": 600,
+            "functions": [
+              "generated_kernels::fort_shared_ea373c1ecd71::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::stress2": {
+            "seconds": 0.07985023699999996,
+            "launches": 600,
+            "functions": [
+              "generated_kernels::fort_shared_d6f64ea6ad4a::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::stress0": {
+            "seconds": 0.07896242,
+            "launches": 600,
+            "functions": [
+              "generated_kernels::fort_shared_64760abedfaa::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "<unnamed>::plane_reference": {
+            "seconds": 0.07456223600000017,
+            "launches": 301,
+            "functions": [
+              "<unnamed>::plane_reference(const double *, <unnamed>::Shape)"
+            ]
+          },
+          "resident_wall::stress3": {
+            "seconds": 0.07117285,
+            "launches": 600,
+            "functions": [
+              "generated_kernels::fort_shared_6c4424d3b98e::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "dynamics::convection": {
+            "seconds": 0.04744795699999998,
+            "launches": 2100,
+            "functions": [
+              "generated_kernels::fort_shared_5202b8edade7::kernel_region_0_device(const double *, unsigned long, int, double, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_5202b8edade7::kernel_region_1_device(const double *, unsigned long, int, double, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_5202b8edade7::kernel_region_2_device(const double *, unsigned long, int, double, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_3_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_4_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_89ec147e5f79::kernel_region_5_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ad3c5f8f4792::kernel_region_0_device(double, const double *, unsigned long, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ad3c5f8f4792::kernel_region_1_device(double, const double *, unsigned long, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_ad3c5f8f4792::kernel_region_2_device(double, const double *, unsigned long, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "dynamics::pressuregrad": {
+            "seconds": 0.03503919900000006,
+            "launches": 1200,
+            "functions": [
+              "generated_kernels::fort_shared_0779785f7ad7::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_80aa32c5945f::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_f6add30e2a96::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_f6add30e2a96::kernel_region_1_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "arrayutilities::add_3d": {
+            "seconds": 0.034052107999999984,
+            "launches": 900,
+            "functions": [
+              "generated_kernels::fort_shared_3c652b8368e4::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "pressure::correctpoissonvelocity": {
+            "seconds": 0.028486158000000077,
+            "launches": 903,
+            "functions": [
+              "generated_kernels::fort_shared_1ccc8a10209f::kernel_region_0_device(double, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_47c4e8838df9::kernel_region_0_device(double, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_47c4e8838df9::kernel_region_1_device(double, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "pressure_faces": {
+            "seconds": 0.026130246000000013,
+            "launches": 301,
+            "functions": [
+              "pressure_faces(double *, PressureShape, unsigned long)"
+            ]
+          },
+          "void poisson_solver::detail::kernels::DivideByDenoms<double, ": {
+            "seconds": 0.023347918000000002,
+            "launches": 301,
+            "functions": [
+              "void poisson_solver::detail::kernels::DivideByDenoms<double, (unsigned long)3, double2>(T3 *, std::array<unsigned long, T2>, std::array<unsigned long, T2>, std::array<const T1 *, T2>, bool)"
+            ]
+          },
+          "pressure::buildpoissonrhs": {
+            "seconds": 0.022800890999999983,
+            "launches": 301,
+            "functions": [
+              "generated_kernels::fort_shared_4ddfbcea0f1e::kernel_region_0_device(double, double, double, double, int, int, int, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_93236637ddfc::kernel_region_0_device(double, double, double, double, int, int, int, double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "arrayutilities::multiply_3d": {
+            "seconds": 0.02142228500000004,
+            "launches": 900,
+            "functions": [
+              "generated_kernels::fort_shared_35f616c3b9ba::kernel_region_0_device(double, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "boundaries::periodic_corners_edges": {
+            "seconds": 0.01847251399999982,
+            "launches": 6303,
+            "functions": [
+              "generated_kernels::fort_shared_3078ba19731c::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "arrayutilities::set_3d": {
+            "seconds": 0.014927614000000013,
+            "launches": 1200,
+            "functions": [
+              "generated_kernels::fort_shared_531e24459b5f::kernel_region_0_device(double, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "pressure::updatepoissonpressure": {
+            "seconds": 0.010103226999999994,
+            "launches": 301,
+            "functions": [
+              "generated_kernels::fort_shared_e1e0a36b22de::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "void poisson_solver::detail::kernels::common_cmplx::Normalize<double, ": {
+            "seconds": 0.00996959399999998,
+            "launches": 301,
+            "functions": [
+              "void poisson_solver::detail::kernels::common_cmplx::Normalize<double, (unsigned long)3>(T1 *, const poisson_solver::detail::CuComplexTraitImpl<T1>::Type *, std::array<unsigned long, T2>, T1)"
+            ]
+          },
+          "void poisson_solver::detail::kernels::common_cmplx::Init<double, ": {
+            "seconds": 0.008893447000000004,
+            "launches": 301,
+            "functions": [
+              "void poisson_solver::detail::kernels::common_cmplx::Init<double, (unsigned long)3>(poisson_solver::detail::CuComplexTraitImpl<T1>::Type *, const T1 *, std::array<unsigned long, T2>)"
+            ]
+          },
+          "resident_time::cfl": {
+            "seconds": 0.008848794999999994,
+            "launches": 99,
+            "functions": [
+              "generated_kernels::fort_shared_2fc4f7a5f1fc::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "<unnamed>::subtract_reference": {
+            "seconds": 0.006509905000000001,
+            "launches": 301,
+            "functions": [
+              "<unnamed>::subtract_reference(double *, <unnamed>::Shape, unsigned long)"
+            ]
+          },
+          "void poisson_solver::detail::kernels::PackPaddedGrid<double, ": {
+            "seconds": 0.006057168999999999,
+            "launches": 301,
+            "functions": [
+              "void poisson_solver::detail::kernels::PackPaddedGrid<double, (unsigned long)3>(T1 *, const T1 *, std::array<unsigned long, T2>, std::array<unsigned long, T2>)"
+            ]
+          },
+          "void poisson_solver::detail::kernels::UnpackPaddedGrid<double, ": {
+            "seconds": 0.0060415020000000015,
+            "launches": 301,
+            "functions": [
+              "void poisson_solver::detail::kernels::UnpackPaddedGrid<double, (unsigned long)3>(T1 *, const T1 *, std::array<unsigned long, T2>, std::array<unsigned long, T2>)"
+            ]
+          },
+          "<unnamed>::pressure_faces": {
+            "seconds": 0.0031001060000000026,
+            "launches": 301,
+            "functions": [
+              "<unnamed>::pressure_faces(double *, <unnamed>::Shape, unsigned long)"
+            ]
+          },
+          "scalarboundaries::boundviscosity": {
+            "seconds": 0.003075907000000022,
+            "launches": 1800,
+            "functions": [
+              "generated_kernels::fort_shared_1a43712f3746::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_2594d7cd604c::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_4765691b982a::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_af62316d4f3b::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_b0b41b603b6b::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+              "generated_kernels::fort_shared_c793a925d493::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "<unnamed>::partial_max": {
+            "seconds": 0.0026538450000000006,
+            "launches": 99,
+            "functions": [
+              "<unnamed>::partial_max(const double *, unsigned long, double, <unnamed>::Result *)"
+            ]
+          },
+          "resident_wall::correction2m": {
+            "seconds": 0.001109416,
+            "launches": 300,
+            "functions": [
+              "generated_kernels::fort_shared_964ddb1ce320::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::correction1m": {
+            "seconds": 0.0011082090000000008,
+            "launches": 300,
+            "functions": [
+              "generated_kernels::fort_shared_d455b2b40401::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::correction3m": {
+            "seconds": 0.0009825360000000009,
+            "launches": 300,
+            "functions": [
+              "generated_kernels::fort_shared_f67523feaead::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::correction2p": {
+            "seconds": 0.0007398110000000005,
+            "launches": 300,
+            "functions": [
+              "generated_kernels::fort_shared_2af6734fa291::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::correction1p": {
+            "seconds": 0.0007370959999999995,
+            "launches": 300,
+            "functions": [
+              "generated_kernels::fort_shared_eea7a8391a84::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "resident_wall::correction3p": {
+            "seconds": 0.0006436820000000005,
+            "launches": 300,
+            "functions": [
+              "generated_kernels::fort_shared_7b41b74c9862::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+            ]
+          },
+          "<unnamed>::final_max": {
+            "seconds": 0.00029673900000000013,
+            "launches": 99,
+            "functions": [
+              "<unnamed>::final_max(const <unnamed>::Result *, unsigned int, double, <unnamed>::Result *)"
+            ]
+          }
+        },
+        "top_functions": [
+          {
+            "name": "generated_kernels::fort_shared_e8b12a912596::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, double, double, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "subgrid::sgs_sigma_uniform",
+            "seconds": 0.4458593220000003,
+            "launches": 300,
+            "registers_per_thread": 58,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "VkFFT_main",
+            "procedure": "VkFFT_main",
+            "seconds": 0.23914839599999987,
+            "launches": 1806,
+            "registers_per_thread": 56,
+            "local_bytes_per_thread": 0,
+            "block": [
+              24,
+              8,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_1dcab06eb705::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumadvection::cd4divw",
+            "seconds": 0.17911544499999985,
+            "launches": 300,
+            "registers_per_thread": 44,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_42f1895f2eaa::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumadvection::cd4divv",
+            "seconds": 0.17823840499999993,
+            "launches": 300,
+            "registers_per_thread": 56,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_867be3cdca49::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumadvection::cd4divu",
+            "seconds": 0.17780836299999983,
+            "launches": 300,
+            "registers_per_thread": 52,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_f90715bf94a5::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "filters::filter3ord",
+            "seconds": 0.08654996100000002,
+            "launches": 900,
+            "registers_per_thread": 34,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_ec5c4fa10220::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "filters::filter3ord",
+            "seconds": 0.08628033200000014,
+            "launches": 900,
+            "registers_per_thread": 32,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_7ce865c17eeb::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "filters::filter3ord",
+            "seconds": 0.08493407699999998,
+            "launches": 900,
+            "registers_per_thread": 29,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_ea373c1ecd71::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "resident_wall::stress1",
+            "seconds": 0.08260257200000001,
+            "launches": 600,
+            "registers_per_thread": 54,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_d6f64ea6ad4a::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "resident_wall::stress2",
+            "seconds": 0.07985023699999996,
+            "launches": 600,
+            "registers_per_thread": 54,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_64760abedfaa::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "resident_wall::stress0",
+            "seconds": 0.07896242,
+            "launches": 600,
+            "registers_per_thread": 42,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "<unnamed>::plane_reference(const double *, <unnamed>::Shape)",
+            "procedure": "<unnamed>::plane_reference",
+            "seconds": 0.07456223600000017,
+            "launches": 301,
+            "registers_per_thread": 36,
+            "local_bytes_per_thread": 0,
+            "block": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_6c4424d3b98e::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, double *, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "resident_wall::stress3",
+            "seconds": 0.07117285,
+            "launches": 600,
+            "registers_per_thread": 54,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_44387ce13b31::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "filters::filter3ord",
+            "seconds": 0.06861361400000011,
+            "launches": 2700,
+            "registers_per_thread": 24,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_39b5d768874e::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumdiffusion::momentumdiffusion_nobranch_2ord",
+            "seconds": 0.050830609000000034,
+            "launches": 300,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_88da98216620::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumdiffusion::momentumdiffusion_nobranch_2ord",
+            "seconds": 0.050743803000000004,
+            "launches": 300,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_5d4eeb22ae63::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "momentumdiffusion::momentumdiffusion_nobranch_2ord",
+            "seconds": 0.050644325999999996,
+            "launches": 300,
+            "registers_per_thread": 40,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "generated_kernels::fort_shared_3c652b8368e4::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "procedure": "arrayutilities::add_3d",
+            "seconds": 0.034052107999999984,
+            "launches": 900,
+            "registers_per_thread": 26,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "pressure_faces(double *, PressureShape, unsigned long)",
+            "procedure": "pressure_faces",
+            "seconds": 0.026130246000000013,
+            "launches": 301,
+            "registers_per_thread": 37,
+            "local_bytes_per_thread": 0,
+            "block": [
+              256,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "void poisson_solver::detail::kernels::DivideByDenoms<double, (unsigned long)3, double2>(T3 *, std::array<unsigned long, T2>, std::array<unsigned long, T2>, std::array<const T1 *, T2>, bool)",
+            "procedure": "void poisson_solver::detail::kernels::DivideByDenoms<double, ",
+            "seconds": 0.023347918000000002,
+            "launches": 301,
+            "registers_per_thread": 50,
+            "local_bytes_per_thread": 0,
+            "block": [
+              8,
+              8,
+              4
+            ]
+          }
+        ],
+        "cuda_apis": {
+          "cudaMemcpyAsync_v3020": {
+            "calls": 441,
+            "inclusive_seconds": 0.9753210539999991
+          },
+          "cudaFree_v3020": {
+            "calls": 14,
+            "inclusive_seconds": 0.18261052200000003
+          },
+          "cudaGraphLaunch_v10000": {
+            "calls": 3185,
+            "inclusive_seconds": 0.1688870870000001
+          },
+          "cudaLaunchKernel_v7000": {
+            "calls": 3385,
+            "inclusive_seconds": 0.09715442800000001
+          },
+          "cudaGraphExecKernelNodeSetParams_v10010": {
+            "calls": 32525,
+            "inclusive_seconds": 0.09576474200000176
+          },
+          "cudaMallocFromPoolAsync_v11020": {
+            "calls": 42,
+            "inclusive_seconds": 0.033854537999999997
+          },
+          "cuLaunchKernel": {
+            "calls": 1806,
+            "inclusive_seconds": 0.025161681999999932
+          },
+          "cudaMemcpy3DAsync_v3020": {
+            "calls": 158,
+            "inclusive_seconds": 0.02314323300000002
+          },
+          "cuLibraryLoadData": {
+            "calls": 54,
+            "inclusive_seconds": 0.006615738
+          },
+          "cudaGraphInstantiate_v12000": {
+            "calls": 14,
+            "inclusive_seconds": 0.005342166
+          },
+          "cudaEventRecord_v3020": {
+            "calls": 630,
+            "inclusive_seconds": 0.0027261200000000016
+          },
+          "cudaGraphAddKernelNode_v10000": {
+            "calls": 411,
+            "inclusive_seconds": 0.0025248740000000016
+          },
+          "cudaMemcpy2DAsync_v3020": {
+            "calls": 35,
+            "inclusive_seconds": 0.001632594
+          },
+          "cudaStreamSynchronize_v3020": {
+            "calls": 136,
+            "inclusive_seconds": 0.001254713
+          },
+          "cudaMalloc_v3020": {
+            "calls": 13,
+            "inclusive_seconds": 0.001210586
+          },
+          "cuModuleLoadDataEx": {
+            "calls": 12,
+            "inclusive_seconds": 0.001209596
+          },
+          "cuKernelGetName": {
+            "calls": 2907,
+            "inclusive_seconds": 0.0010376580000000027
+          },
+          "cudaStreamWaitEvent_v3020": {
+            "calls": 300,
+            "inclusive_seconds": 0.0009242610000000003
+          },
+          "cudaMemPoolCreate_v11020": {
+            "calls": 1,
+            "inclusive_seconds": 0.000717671
+          },
+          "cudaStreamCreateWithFlags_v5000": {
+            "calls": 1,
+            "inclusive_seconds": 0.000679304
+          },
+          "cudaEventQuery_v3020": {
+            "calls": 327,
+            "inclusive_seconds": 0.0006455840000000002
+          },
+          "cudaMemcpy_v3020": {
+            "calls": 11,
+            "inclusive_seconds": 0.000535764
+          },
+          "cudaEventCreateWithFlags_v3020": {
+            "calls": 3,
+            "inclusive_seconds": 0.000460739
+          },
+          "cudaGraphExecDestroy_v10000": {
+            "calls": 14,
+            "inclusive_seconds": 0.00042487700000000005
+          },
+          "cuModuleUnload": {
+            "calls": 12,
+            "inclusive_seconds": 0.000194303
+          },
+          "cudaGraphDestroy_v10000": {
+            "calls": 14,
+            "inclusive_seconds": 0.000155455
+          },
+          "cuLibraryGetKernel": {
+            "calls": 83,
+            "inclusive_seconds": 5.748099999999999e-05
+          },
+          "cudaFreeAsync_v11020": {
+            "calls": 42,
+            "inclusive_seconds": 5.3222999999999995e-05
+          },
+          "cudaGraphCreate_v10000": {
+            "calls": 14,
+            "inclusive_seconds": 3.3060000000000005e-05
+          },
+          "cudaEventDestroy_v3020": {
+            "calls": 3,
+            "inclusive_seconds": 3.941e-06
+          },
+          "cuModuleGetLoadingMode": {
+            "calls": 1,
+            "inclusive_seconds": 2.98e-06
+          },
+          "cudaEventSynchronize_v3020": {
+            "calls": 1,
+            "inclusive_seconds": 1.87e-06
+          },
+          "cudaMemPoolSetAttribute_v11020": {
+            "calls": 1,
+            "inclusive_seconds": 1.52e-06
+          },
+          "cudaMemPoolGetAttribute_v11020": {
+            "calls": 2,
+            "inclusive_seconds": 1.3499999999999998e-06
+          },
+          "cudaMemPoolTrimTo_v11020": {
+            "calls": 1,
+            "inclusive_seconds": 6.8e-07
+          }
+        }
+      }
+    }
+  },
+  "calibration": {
+    "status": "PASS",
+    "GPU_renderer_files": 43,
+    "exact_selected_GPU_renderer": true,
+    "sources": {
+      "emission/c/__init__.py": "7cc287537276f95b4acced3d299817a60f0173cc8fbbc60d1eeb714ab21e560c",
+      "emission/c/declarations.py": "ef94d8d1ab656be78ed6edc4bcd2f6dcaf2cc12e37f33850823393be131e752f",
+      "emission/c/generator.py": "f2d6f694ca50e874e896787c1e2bc29fc78aace183c321ae222be0c9c2d36ed7",
+      "emission/c/sessions.py": "be1d81c700134c1cdd4f61484ac47d2f62766956034fcfa255091edef1a96897",
+      "emission/common/__init__.py": "830f52858053e2fcea6c1ec98998f068641b0c0f05222bd3a82bccf87384e50d",
+      "emission/common/abi.py": "6de146a3ab5f399397af01bc8028705c2765a84534bbcd9b673d7cb52292ccdd",
+      "emission/common/c_family.py": "31f1dc79e706998fc844388696c550d75b1d7e9146acafe4918e1fb164ffc402",
+      "emission/common/loops.py": "ab37ae28ae56114e307a9d625223ab9e1a9d3f75633e39c807855dc99a55e90d",
+      "emission/common/memory.py": "1f82d0a3bd699759fbb71e48128ed57e366190c10f30061a1aa260a62972d7cf",
+      "emission/common/resources.py": "6b7aa981b37c6cedf03ce1526cc83ab7d1dd8e93e370a00d98bc097a916c32fa",
+      "emission/common/schedules.py": "147a08363861b1e1e799f04ee249dccc7aa312db79b2b0f949842d02279f2100",
+      "emission/common/sessions.py": "f7d957abdc93721ba709fee005bff5a9b836dd4fd784e76c717f88cdd4e3b00a",
+      "emission/common/symbols.py": "c0200756cf3f80ed91dd83a4921d638372b4d57efbb418e967b9496eb94fb87b",
+      "emission/common/templates/common_functions.cuh": "c54cbd38ade172294d785b57c715e45f2f9310eac332ee9d3c2b61bd84f401b2",
+      "emission/cuda/__init__.py": "8d76c03424d90806d71356e011e935487e4856f65be52cb74a355890b30c8507",
+      "emission/cuda/atomic_team_provider.py": "c30124a83e3a0af4c157027f4f8f661dfde88d1e0ebc32ebf17b0261ae4814d9",
+      "emission/cuda/batch.py": "51fdbe86fa2ef0f830d4c24510d53673fa72aadaf8c3d6df14fba1461860e415",
+      "emission/cuda/compute_memory.py": "30e94fea34f8b89f5087fccc9489a79f99bee6a1e922dedfb07860fd8db13924",
+      "emission/cuda/conditional_affine.py": "04f74bd7b6d982be4d1a1fc8bb006920b112ac2de370f5b8f88b3aceb68f5a0c",
+      "emission/cuda/generator.py": "667e84c90b81f6bffae3bdcaecc92cb3bdc5cf11220ae4fd33feae1d9ed2f3de",
+      "emission/cuda/graphs.py": "cfde27fb9867f992b62489dfe3acc04864ef10a5543a1c6396da3241e97dbd27",
+      "emission/cuda/hybrid.py": "e8f92085714b51bdd2b17822ae76b877f1e2273a02b2a070c79a5ceceea9b13c",
+      "emission/cuda/kernels.py": "299afba4a70cac556aafe41300f1b800086c60e00bfcb47424fb9d6fe5c48031",
+      "emission/cuda/line_snapshot.py": "d2a0ad75fa50e328aa2430462fbb753549a5c01887094e40457a84b48f5496e4",
+      "emission/cuda/native_preflight.py": "4c4f36f4c7be99ebc12a9ab5cc311e756d9ad5d3bbfca45a41598396902b504a",
+      "emission/cuda/offload.py": "87f6c42837c9125e86e06f5b89cb32428dbe764193be9ed34c830ae064064d25",
+      "emission/cuda/queued_team_task_provider.py": "0a3067298b916848cfe12b7d7784708f8710ae85efc7eb8922d3bc1da0f95b67",
+      "emission/cuda/queued_tile_task_provider.py": "1f1c26c98b7ba79fa6b23cb133f9b85127d7453e57d61c9de406dd2babde0d1e",
+      "emission/cuda/scalar_bytes.py": "b300a33d3cd2db26d9066f78629d49a317fd7dd072894c1a0c38f6c84412b55b",
+      "emission/cuda/scoped.py": "9f8b2dd527047292c843eb22dea28314aa3aa5e509c2dfb59de7c9218b07fcd0",
+      "emission/cuda/scoped_tile_private.py": "e5760958fc43999d59a93d9e084e0bebe663336e4d8eeacfc31e5c112a80cc72",
+      "emission/cuda/structured.py": "6e8b4435c5b6ec21664154d415bae25c12aa032c6ab88a0da3ecfd08b8a3da69",
+      "emission/cuda/tile_access.py": "911359639276f731bcb91048cce7306434af414cfbd6cfc87cfc7cb0eaf12788",
+      "emission/cuda/tile_costs.py": "bc6e04d528aaefc4f516d788f919ce1a0890f831a12566d4a459fb853fdafc5c",
+      "emission/cuda/tile_pricing.py": "aaf41144928825f0b0fb0172f890ec5fdd8b4f36ced8d16c6064d25056665455",
+      "emission/cuda/tile_private.py": "acb373a6a904cacc90b338f40ec4f7755c4cadc8e73bd3b8e9de3a15cecc1d73",
+      "emission/cuda/tile_task_provider.py": "c367f7adc86b233d887e7892b2497261ed9b13dbabdbf0885b741241b0cf2c96",
+      "emission/cuda/working_set.py": "30830f72e32e764948107493d5360450ae75a58d0a4d0e0551893f9a3a1c4174",
+      "numerical_contract.py": "877672fec46a46eacfb567a9239129a53af76679a5a99fcfe0fc41c3ec65c1ba",
+      "offload/numerical_gpu_execution.py": "4e02e64f3140a03d070e65d959d7df02ebcbfa9c8397596267f479a7ff404c53",
+      "offload/numerical_gpu_execution_calibration.py": "918611b4a269522127f947a4891e71a8470d59b764aa974e3683abaf87a96023",
+      "offload/numerical_gpu_execution_driver.cu": "1a1c3ed4f1176839bf5b49bd093e89ff8e5aeac4a56e5ac1ca373933e2486ca7",
+      "runtime/numeric.hpp": "b6ee824986a7a09d31d74ba5a5aa6cc93ebfb4976b517fb601deb673813cbdb2"
+    },
+    "new_numerical_calibration_claimed": false,
+    "rejected_candidates_changed_renderer_identity": true,
+    "selected_restoration_keeps_previous_calibration_status": true
+  },
+  "remaining": [
+    "Measure and reduce boundary-kernel fragmentation;37,818 BoundUVW launches in channel100 before any fusion claim. Preserve face/edge/corner dependencies.",
+    "Attribute remaining actual graph parameter changes and stage-specific reuse; equality-based node-update suppression already exists and must not be reimplemented.",
+    "Profile selected SGS,CD4,filter,wall kernels before further numerical optimization; tiny decoder/convergence changes did not improve both primary cases.",
+    "Full graph/queue/driver and host-memory budgeting,residual legacy/test migration,current FD4/operator qualification and fresh four-control release remain open.",
+    "20x target remains unmet;native medians imply total budgets0.573/0.647s."
+  ],
+  "receipts": {
+    "/tmp/fortran-coordinate-decode-20261110-01/build.py": "c8189e7ba414c7095fd593cb450067ed1b51e495c020145bc53c55e0bd35d583",
+    "/tmp/fortran-coordinate-decode-20261110-01/build-plan.json": "755712da8dd2eddbfec954536c35c83938555fd72cfddc29111826d842958aaf",
+    "/tmp/fortran-coordinate-decode-20261110-01/build-result.json": "2c432db90cc99bf7a601977eb25ebc0c74afdc64825fd523e3fcbbe952e04b3e",
+    "/tmp/fortran-coordinate-decode-20261110-01/rejected-source.json": "5cc27ef8dafb1c2d07066d658338f240b79d43e18172a7f12ce919a4b43925d6",
+    "/tmp/fortran-coordinate-decode-20261110-01/reject.py": "2fa5ccb8e8dfda4fb22a88acf5449c78f7584564c4d4909ad2155317e5d07015",
+    "/tmp/fortran-coordinate-decode-20261110-01/decision.json": "cbb7332f81fa0c2e501e6b0335bc62d51d0ae492a502eb96367815b1fd0a744d",
+    "/tmp/fortran-coordinate-decode-20261110-01/coordinate-tests.log": "0c17349d1424811e895f7e2299c1d5e3fa8aac2788f2479062ff3a6fc848b6f7",
+    "/tmp/fortran-coordinate-decode-20261110-01/milestone.xml": "9e130e91ce078cf1051cd669543965e2793407eec6762dad2e60fb4a122e9b11",
+    "/tmp/fortran-coordinate-decode-20261110-01/milestone.log": "2aced6949dd6319c64eaa2241e01f9e6755f59b58b500cc71c5b4ad755ca9cbf",
+    "/tmp/fortran-coordinate-decode-20261110-01/unscheduled-package-reference.json": "2b8802b77d900a67711fa283e3650a74e35b964b9a1899af688aec3b0891e363",
+    "/tmp/fortran-coordinate-decode-20261110-01/provenance-check.xml": "e7ce1c1c1d5e7ba9b997fe354e808378b7d1ba4a74251556924f77d9d5588043",
+    "/tmp/fortran-coordinate-decode-20261110-01/restored-tests.xml": "4d3bf1db6193364ed7e0f8f911060eefafdbcbcfd16f22ee812a089b9213288d",
+    "/tmp/fortran-coordinate-decode-20261110-01/restored-tests.log": "9c6db8d74ca06f1ae5c7985176f24b50d05faf5810cd48918d670ccd48f5763e",
+    "/tmp/fortran-coordinate-decode-20261110-01/renderer-restoration.json": "82fb67451cfb79a7ec343c02664172cc9e74c1c86107c64ca07ca8bb7f59f56d",
+    "/tmp/fortran-coordinate-decode-20261110-01/qualify.py": "4df9efe1c09a56b3e44fe82b308157f3c941bb1996a362638819ad0e5fa8fb21",
+    "/tmp/fortran-coordinate-decode-20261110-01/qualification/plan.json": "fdeb347a5cf2e23d983c7d7cc158a3952e26f05a6416712a604a4b6bea9443d1",
+    "/tmp/fortran-coordinate-decode-20261110-01/qualification/result.json": "31264f78d6d7d2c935a65a62ee95ee598f239e1004e1feb3ff014a7318030ca4",
+    "/tmp/fortran-coordinate-decode-20261110-01/long/run.py": "5c2fd0e7c4a22cdbaa63ef5d6eaa8f7ff7b4b38f8f75dfba95079198c699bf2a",
+    "/tmp/fortran-coordinate-decode-20261110-01/long/analyze.py": "5883c8768168cdb2244ed4dd666f7affd6ef715b9d81fb5a3b1a4dfbb02f54a2",
+    "/tmp/fortran-coordinate-decode-20261110-01/long/result.json": "659c5a58e4ee8306699435c7c921daefaa6961061f87b254e7b7080e062b4320",
+    "/tmp/fortran-coordinate-decode-20261110-01/long/execution.json": "8aa2010ab168f27a413129ee9c8603064820a71d30709cc9d891cd8e05957b1b",
+    "/tmp/fortran-coordinate-decode-20261110-01/long/selected-gpu-parity.json": "850a7c6f3296e83cf8928faf3ac6c14aea4507107037e1fcae0018825c563481",
+    "/tmp/fortran-coordinate-decode-20261110-01/comparison/plan.json": "422381414f1397899e3b406cbc17a226c1ff71bc308eb208b884f4de091ac86d",
+    "/tmp/fortran-coordinate-decode-20261110-01/comparison/result.json": "4e833c48beb788379a709a68ff48e0e9b8c44b9e00c9b130eab816f5c36dce4b",
+    "/tmp/fortran-coordinate-decode-20261110-01/comparison/execution.json": "04bb51cf8f958c41919fcf915b99a416163c20f44da14ec1c83bd6419a8e4d5b",
+    "/tmp/fortran-coordinate-decode-20261110-01/comparison/run.py": "88068691c9feb7e02e35ec20274c8c83189088cc3f74936e5ac2528926be8155",
+    "/tmp/fortran-coordinate-decode-20261110-01/comparison/execute.py": "9e80c84eb5b86b5b76429569b4e3bba648413533103453863763b90b2057526f",
+    "/tmp/fortran-coordinate-decode-20261110-01/quiet-probe.json": "f8593bbfc5e5de151f239242e90d057cd542c1abe3fcf94b6f7b608187e3bde0",
+    "/tmp/fortran-coordinate-decode-20261110-01/profile/plan.json": "25af648f1d23280b96c6c13ac8e4ccaf7fae437789602ae4a84cbe9e4f480997",
+    "/tmp/fortran-coordinate-decode-20261110-01/profile/result.json": "b1137de9a016db6da319382d2ef04eda2d8efa142b18ee81fe4053f0fb5b3aa0",
+    "/tmp/fortran-coordinate-decode-20261110-01/profile/analysis.json": "1885a30c2b66e8bc0ae20aecebae5daf5f43cacf9369d2aab8e35d6b109a4f45",
+    "/tmp/fortran-coordinate-decode-20261110-01/selected-profile/plan.json": "13fe0d3da6af03056a0e50f2ef7288018f51c3ce94321c6faee539b0c21f71ed",
+    "/tmp/fortran-coordinate-decode-20261110-01/selected-profile/result.json": "957963bba8abeda3e73203fa05aeffffb4c407fa3dd0151bf5deaec62ae6dc37",
+    "/tmp/fortran-coordinate-decode-20261110-01/selected-profile/analysis.json": "271b90db6da0bf30d598413181acb9cf9d0e0e6dbf1c272c672ac821b213b6ec",
+    "/tmp/fortran-coordinate-decode-20261110-01/report.py": "21c2184eb1abb68f4969a0adfd4a73caacae91783fe58c700072480e8de1324a",
+    "/tmp/fortran-converged-loop-20261110-01/build.py": "69f0b354d2d8978dd2af38ebc9a46d7a85fdda853168efbeafc436f3c414dbf6",
+    "/tmp/fortran-converged-loop-20261110-01/build-result.json": "219cb28b7e3aac015d898a6bfcb69dcd65fe426e01bc399e0d9064498bafbb9f",
+    "/tmp/fortran-converged-loop-20261110-01/check_semantics.py": "a5ab3ec4e2dd0062b0c115fee97ec5bd713b542069cfa730a587f4ad9cab27e5",
+    "/tmp/fortran-converged-loop-20261110-01/semantics.json": "62581743eb0cccc584cfeeb58c7e61785278d98187deb17d2856a0cbae726ed1",
+    "/tmp/fortran-converged-loop-20261110-01/pilot.py": "5064fed710de887d77824126c053536d4df763d8cf1bb89dc28fdd4cab863497",
+    "/tmp/fortran-converged-loop-20261110-01/pilot-plan.json": "7f5c860db74e08a7c950db9b93ba69a52f06c4b1a5cfa3c0e98c43f6f7b056bc",
+    "/tmp/fortran-converged-loop-20261110-01/pilot-result.json": "6c82812a5cc6238769d2e1ef5bbf6b3c65b4c7c76d98227ac962e82cedb00b4e",
+    "/tmp/fortran-converged-loop-20261110-01/rejected-source.json": "316ccad43494dd6ab2bbc73b12a0b42967a7598a7872e07b0cde80549fc1de4c",
+    "/tmp/fortran-converged-loop-20261110-01/decision-initial.json": "84b61394ae0ad2ad568ba97f8458d4a292446f634a06f10995a8247c7c6375a4",
+    "/tmp/fortran-converged-loop-20261110-01/decision.json": "99dea1d5e8ec718175d5b1f3d5f59818065adc6c9a6d797f038a81e60ba59bfd",
+    "/tmp/fortran-converged-loop-20261110-01/reject.py": "cb4e42537d3e32562a1b15b9689b0d3a6f8ddb088ddb0c7adbebda2e48f7ff51",
+    "/tmp/fortran-converged-loop-20261110-02/pilot.py": "42596ff8259e065c7076ab014744c589402d2364bdc29f98bd79c934612bc9e5",
+    "/tmp/fortran-converged-loop-20261110-02/pilot-plan.json": "641e5e9443ec7179777417a8a4eed30cf2364082ec4b9715800d33d3cb2d788a",
+    "/tmp/fortran-converged-loop-20261110-02/pilot-result.json": "2efb687db6797e8cc8b14c696a777bc0198bd4eeb28a62a2a814849a49f251d7",
+    "/tmp/fortran-converged-loop-20261110-02/decision.json": "3451fb774f629d3e69de7b7dc97f914311efa1d8eb0f25257590a1a72d54a1f0",
+    "/tmp/fortran-coordinate-decode-20261110-01/ELMM": "8386b656d701cc4704965ec8b0a4bbc56fc43be6982f14bc3949d62be5fab3fc",
+    "/tmp/fortran-coordinate-decode-20261110-01/ELMM-full20": "94441b4d90766fec16c7d489999a68ddb95b443c0d46cbfa752efdac6a76ac7b",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6",
+    "/tmp/fortran-async-output-20261110-01/work/build/lib/libpoisson-solver.so.0.1": "4c6d1bd8d0d12c439910a57ca4e49b69ddb20f71772d4a3d0edebdd710a95d7c",
+    "/tmp/fortran-converged-loop-20261110-01/ELMM": "e3a36034ab995c7ce9116c860f478a3081aeacf12ff1f582c4ff2a7a12ab9897",
+    "/tmp/fortran-converged-loop-20261110-01/ELMM-full20": "fa195a11df18ae04ed24ad5a39e02c63e350d585ed7c135e4caae2013931da65",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM": "2d5df06329cb8447990b0d4b39327ddf803f9d3113036ca2db7d1998cb69300e"
+  }
+}

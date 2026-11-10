@@ -95,6 +95,7 @@ class _Declaration:
     bounds: tuple[tuple[int, int], ...] = ()
     initializer: Any = None
     constant: bool = False
+    by_value: bool = False
 
 
 @dataclass(frozen=True)
@@ -475,6 +476,7 @@ class _Lowerer:
         dimensions = None
         contiguous = False
         parameter = False
+        by_value = False
         for attribute in attributes.items if attributes is not None else ():
             kind = type(attribute).__name__
             if kind == "Intent_Attr_Spec":
@@ -491,6 +493,8 @@ class _Lowerer:
                 continue
             elif kind == "Attr_Spec" and str(attribute).upper() == "PARAMETER":
                 parameter = True
+            elif kind == "Attr_Spec" and str(attribute).upper() == "VALUE":
+                by_value = True
             else:
                 raise self.error(f"unsupported declaration attribute {attribute}", node)
         result: list[_Declaration] = []
@@ -537,6 +541,8 @@ class _Lowerer:
                 raise self.error(f"INTENT is only valid for dummy arguments: {name}", node)
             if parameter and (name in arguments or initializer is None or rank and (rank != 1 or not bounds)):
                 raise self.error("PARAMETER declarations require initialized scalars or bounded rank-one vectors", node)
+            if by_value and (name not in arguments or rank or entity_intent != "in"):
+                raise self.error("VALUE currently requires a read-only scalar dummy", node)
             result.append(
                 _Declaration(
                     name,
@@ -549,6 +555,7 @@ class _Lowerer:
                     bounds,
                     initializer.items[1] if initializer else None,
                     parameter,
+                    by_value,
                 )
             )
         return result
@@ -557,7 +564,7 @@ class _Lowerer:
                    *, private_array_origin: PrivateArrayOrigin | None = None) -> Symbol:
         symbol = Symbol(
             len(self.symbols), declaration.spelling, declaration.dtype, declaration.rank, declaration.intent, parameter,
-            private_array_origin
+            private_array_origin, declaration.by_value
         )
         self.symbols.append(symbol)
         return symbol
@@ -743,8 +750,15 @@ class _Lowerer:
                 else:
                     branches = []
                     children = []
-                    header = node.content[0]
-                    for child in node.content[1:]:
+                    branch_nodes = list(node.content)
+                    # fparser can attach a preceding ordinary comment to the
+                    # construct. It is not the IF header or an executable arm.
+                    while branch_nodes and type(branch_nodes[0]).__name__ == "Comment":
+                        lower_branch((branch_nodes.pop(0),))
+                    if not branch_nodes or type(branch_nodes[0]).__name__ != "If_Then_Stmt":
+                        raise CompilationError("IF construct has no original header", location)
+                    header = branch_nodes[0]
+                    for child in branch_nodes[1:]:
                         child_kind = type(child).__name__
                         if child_kind in {"Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
                             branches.append((header, lower_branch(children)))

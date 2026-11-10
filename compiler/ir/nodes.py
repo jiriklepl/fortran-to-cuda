@@ -61,13 +61,16 @@ class Symbol:
     parameter: bool = False
     # Cost metadata must not change numerical symbol identity or legality.
     private_array_origin: PrivateArrayOrigin | None = field(default=None, compare=False)
+    # VALUE scalar dummies are defined on entry, including on untaken paths.
+    by_value: bool = False
 
     @property
     def cpp_name(self) -> str:
-        # Leave room for extent suffixes in the Fortran C interface (63
-        # characters maximum). The identity prefix prevents truncation collisions.
+        # Leave room for the seven-character shared "_handle" suffix in the
+        # Fortran C interface (63 characters maximum). The identity prefix
+        # prevents truncation collisions even for long, similarly named arrays.
         prefix = f"fort_v{self.id}_"
-        return prefix + self.name.lower()[: 57 - len(prefix)]
+        return prefix + self.name.lower()[: 56 - len(prefix)]
 
 
 @dataclass(frozen=True)

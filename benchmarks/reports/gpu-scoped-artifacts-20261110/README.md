@@ -1,0 +1,17 @@
+# Scoped-only compiler artifacts — 2026-11-10
+
+Scoped numerical generation now emits the shared entry and common runtime directly. It no longer runs the ordinary memory planner or generates an unused ordinary CUDA/C++ backend, owned-session interface or fallback-query contract. ELMM consumes artifact schema 2 and rejects old combined packages with an explicit regeneration error. Ordinary output-name flags are rejected for scoped generation. The shared runtime ABI (1) and entry ABI (3) are unchanged.
+
+The public build regenerates all 130 entries and rebuilds native/GPU executables plus the local Poisson provider. The inventory avoids **390 unused source files (26,817,892 bytes)**. All 130 interfaces and 229 numerical kernel bodies match the selected GPU implementation after generated-name/diagnostic-path normalization; all 130 common headers match byte for byte. This comparison does not establish coordinator or performance identity. The 518 build-time input sources are archived.
+
+The focused suite passes **74 checks and 16 subtests**; the shared-entry CUDA suite passes **20 checks**. The first CUDA run exposed three stale region-count assertions: earlier fusion already merged a protected-host fixture's two loops. The archived previous compiler reproduces that result. The fixture now explicitly disables fusion for that case so it still exercises protected host access followed by GPU continuation. Initial failures remain recorded.
+
+Eight fresh native/GPU processes cover simple2, channel2, natural simple109 and channel100. All 20 fields and original outputs pass the unchanged strict primary tolerances against fresh four-thread native builds; GPU fields also match the selected GPU baseline exactly. Short traces retain 31/28 required GPU procedures, no generated CPU numerical events and zero CPU FFTW plans. Native controls retain their four expected plans.
+
+A fresh natural channel2458 GPU run passes the approved independent 1% relative L2 rule across 20 fields and 114 outputs. Worst L2 remains **0.154896%**; largest local error remains **1.467061% of reference peak**. Bounds, structures, coordinates, labels, inventories and original time checks remain required. All 40 field/bounds files exactly match the selected GPU trajectory. The earlier immutable four-thread native long reference is reused with verified identities; historical pointwise failures remain recorded.
+
+No new timing campaign is claimed. The [selected measured baseline](../gpu-host-preparation-20261110/README.md) remains **3.033684/3.523741 seconds**, or **3.83×/3.73× native**, for simple109/channel100. Its latest incremental gains pass median acceptance but fail the all-seven-pairs robustness gate. The unchanged runtime still validates the earlier base, transfer and physical-copy calibration; rejected collective/source-submit models remain unavailable. No calibration measurements were repeated here.
+
+This removes duplicate generation from the resident path. Ordinary-call backends and their four-unit placement policy still exist, and production numerical preparation still accepts private legacy configuration types. Their removal, bounded asynchronous output, complete graph/snapshot accounting, solver/release qualification and fresh four-control timing remain open. The 20× objective remains a research target.
+
+Commands, source/binary identities and complete receipts are in [summary.json](summary.json). Rebuilt artifacts: `/tmp/fortran-scoped-artifacts-20261110-01/work`.

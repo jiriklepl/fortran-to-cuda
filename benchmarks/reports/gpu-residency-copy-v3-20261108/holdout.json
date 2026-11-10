@@ -1,0 +1,436 @@
+{
+  "status": "PASS",
+  "protocol": {
+    "kind": "scoped_copy_protocol",
+    "version": 3,
+    "geometries": 8,
+    "records": 48,
+    "verified_batches": 384,
+    "copy_kernel_launches": 256,
+    "transfer_dma_calls": 384,
+    "excluded_warmups_per_path": 1,
+    "retained_rotated_rounds": 7
+  },
+  "profile_sha256": "471aab90098f6184d6137904ea084c1cf09574f4d214c88b6edde5a0a0ef62e2",
+  "independent_of_fit": true,
+  "canaries_and_exact_payloads": "all verified by complete-path executable",
+  "selection_scope": "nominal warm/no-pending cost; application trace must establish actual admission",
+  "rows": [
+    {
+      "operations": [
+        [
+          0,
+          24,
+          64,
+          64,
+          1072,
+          70
+        ]
+      ],
+      "direction": "h2d",
+      "measured_seconds": {
+        "none": 0.000469602,
+        "cold": 0.002327126,
+        "reuse": 0.000183645
+      },
+      "predicted_seconds": {
+        "direct": 0.00011969594079652356,
+        "compact_cold": 0.0019020445164765003,
+        "compact_reuse": 0.000130729522372542
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 0.3910651998926751,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          24,
+          64,
+          64,
+          1072,
+          70
+        ]
+      ],
+      "direction": "d2h",
+      "measured_seconds": {
+        "none": 0.001090447,
+        "cold": 0.002305371,
+        "reuse": 0.000153629
+      },
+      "predicted_seconds": {
+        "direct": 0.0002497837321035444,
+        "compact_cold": 0.0018592160721917768,
+        "compact_reuse": 0.00010115400917204389
+      },
+      "warm_selected_no_pending": true,
+      "measured_warm_over_direct": 0.1408862604051366,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          24,
+          58,
+          58,
+          1072,
+          70
+        ]
+      ],
+      "direction": "h2d",
+      "measured_seconds": {
+        "none": 0.000342428,
+        "cold": 0.002254226,
+        "reuse": 0.000181454
+      },
+      "predicted_seconds": {
+        "direct": 0.00010891062236641628,
+        "compact_cold": 0.0018695625169861743,
+        "compact_reuse": 0.00012430101180991294
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 0.5299040966276123,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          24,
+          58,
+          58,
+          1072,
+          70
+        ]
+      ],
+      "direction": "d2h",
+      "measured_seconds": {
+        "none": 0.000861011,
+        "cold": 0.002191485,
+        "reuse": 9.3152e-05
+      },
+      "predicted_seconds": {
+        "direct": 0.0002174812676888898,
+        "compact_cold": 0.0018249162886189198,
+        "compact_reuse": 9.460240121804728e-05
+      },
+      "warm_selected_no_pending": true,
+      "measured_warm_over_direct": 0.10818909398370057,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          24,
+          64,
+          63,
+          1072,
+          70
+        ]
+      ],
+      "direction": "h2d",
+      "measured_seconds": {
+        "none": 0.00039895,
+        "cold": 0.002234256,
+        "reuse": 0.000130914
+      },
+      "predicted_seconds": {
+        "direct": 0.00011875296213596773,
+        "compact_cold": 0.001899204560236909,
+        "compact_reuse": 0.0001301674668042247
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 0.328146384258679,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          24,
+          64,
+          63,
+          1072,
+          70
+        ]
+      ],
+      "direction": "d2h",
+      "measured_seconds": {
+        "none": 0.001022155,
+        "cold": 0.002353846,
+        "reuse": 0.000124375
+      },
+      "predicted_seconds": {
+        "direct": 0.00024695947291974947,
+        "compact_cold": 0.0018562171840105434,
+        "compact_reuse": 0.00010058119099027369
+      },
+      "warm_selected_no_pending": true,
+      "measured_warm_over_direct": 0.12167919738200174,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          24,
+          58,
+          57,
+          1072,
+          70
+        ]
+      ],
+      "direction": "h2d",
+      "measured_seconds": {
+        "none": 0.000359749,
+        "cold": 0.00220131,
+        "reuse": 0.000128703
+      },
+      "predicted_seconds": {
+        "direct": 0.00010805604795528756,
+        "compact_cold": 0.0018669888066440447,
+        "compact_reuse": 0.0001237916489511254
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 0.35775777000075054,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          24,
+          58,
+          57,
+          1072,
+          70
+        ]
+      ],
+      "direction": "d2h",
+      "measured_seconds": {
+        "none": 0.00079437,
+        "cold": 0.002167504,
+        "reuse": 8.9593e-05
+      },
+      "predicted_seconds": {
+        "direct": 0.00021492178280357562,
+        "compact_cold": 0.0018221985462046769,
+        "compact_reuse": 9.408328474081804e-05
+      },
+      "warm_selected_no_pending": true,
+      "measured_warm_over_direct": 0.11278497425632891,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          24,
+          58,
+          3,
+          1072,
+          70
+        ]
+      ],
+      "direction": "h2d",
+      "measured_seconds": {
+        "none": 8.4792e-05,
+        "cold": 0.002360919,
+        "reuse": 0.000141564
+      },
+      "predicted_seconds": {
+        "direct": 6.19090297543368e-05,
+        "compact_cold": 0.001728008448169043,
+        "compact_reuse": 9.628605457659782e-05
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 1.6695442966317577,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          24,
+          58,
+          3,
+          1072,
+          70
+        ]
+      ],
+      "direction": "d2h",
+      "measured_seconds": {
+        "none": 0.000103323,
+        "cold": 0.002482329,
+        "reuse": 0.000168544
+      },
+      "predicted_seconds": {
+        "direct": 7.670959899661078e-05,
+        "compact_cold": 0.0016754404558355673,
+        "compact_reuse": 6.605099497043912e-05
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 1.6312340911510506,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          1024,
+          3,
+          3,
+          1072,
+          70
+        ]
+      ],
+      "direction": "h2d",
+      "measured_seconds": {
+        "none": 7.8712e-05,
+        "cold": 0.002306305,
+        "reuse": 0.000120863
+      },
+      "predicted_seconds": {
+        "direct": 6.045460539120956e-05,
+        "compact_cold": 0.0017333265620353992,
+        "compact_reuse": 9.63826735668233e-05
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 1.5355091980892366,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          1024,
+          3,
+          3,
+          1072,
+          70
+        ]
+      ],
+      "direction": "d2h",
+      "measured_seconds": {
+        "none": 4.9051e-05,
+        "cold": 0.002187518,
+        "reuse": 5.8742e-05
+      },
+      "predicted_seconds": {
+        "direct": 7.081073857888373e-05,
+        "compact_cold": 0.0016809164602515476,
+        "compact_reuse": 6.629444954159052e-05
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 1.1975698762512488,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          1024,
+          64,
+          64,
+          1072,
+          70
+        ]
+      ],
+      "direction": "h2d",
+      "measured_seconds": {
+        "none": 0.000481162,
+        "cold": 0.006955194,
+        "reuse": 0.000869922
+      },
+      "predicted_seconds": {
+        "direct": 0.0005641995479187818,
+        "compact_cold": 0.007654592548329809,
+        "compact_reuse": 0.0008341804318607865
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 1.8079607284033237,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          1024,
+          64,
+          64,
+          1072,
+          70
+        ]
+      ],
+      "direction": "d2h",
+      "measured_seconds": {
+        "none": 0.000651686,
+        "cold": 0.007283713,
+        "reuse": 0.00081117
+      },
+      "predicted_seconds": {
+        "direct": 0.0008789442554218327,
+        "compact_cold": 0.007870101992378465,
+        "compact_reuse": 0.0008840595561642014
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 1.244725220428243,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          8,
+          64,
+          64,
+          1072,
+          70
+        ]
+      ],
+      "direction": "h2d",
+      "measured_seconds": {
+        "none": 8.3563e-05,
+        "cold": 0.002242206,
+        "reuse": 0.000122163
+      },
+      "predicted_seconds": {
+        "direct": 0.00011258388308256741,
+        "compact_cold": 0.0018100037479668474,
+        "compact_reuse": 0.00011947430782073008
+      },
+      "warm_selected_no_pending": false,
+      "measured_warm_over_direct": 1.4619269293826216,
+      "selected_path_faster": true
+    },
+    {
+      "operations": [
+        [
+          0,
+          8,
+          64,
+          64,
+          1072,
+          70
+        ]
+      ],
+      "direction": "d2h",
+      "measured_seconds": {
+        "none": 0.000220826,
+        "cold": 0.002212025,
+        "reuse": 8.9213e-05
+      },
+      "predicted_seconds": {
+        "direct": 0.0002397171637304518,
+        "compact_cold": 0.0017630418974687897,
+        "compact_reuse": 8.862752042016936e-05
+      },
+      "warm_selected_no_pending": true,
+      "measured_warm_over_direct": 0.403996811969605,
+      "selected_path_faster": true
+    }
+  ]
+}

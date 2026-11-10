@@ -1,0 +1,441 @@
+{
+  "all_timing_outputs_passed": true,
+  "candidate": "qualified2619 basis plus03c695d generic copy-v3 policy; normal regeneration/public build",
+  "candidate_natural109_2458": true,
+  "cases": {
+    "channel": {
+      "descriptive_thresholds": {
+        "candidate_vs_7a612_ratio": 1.4619839077116559,
+        "median_ten_percent_gain": false,
+        "native_20x": false,
+        "native_2x": false,
+        "native_speedup": 0.8026704089199237,
+        "robust_vs_7a612": false,
+        "scope": "overall checkpoint requires both cases; all seven pairs retained"
+      },
+      "paired": {
+        "baseline-7a612": {
+          "candidate_over_control": [
+            1.393433847229506,
+            1.45496454953759,
+            1.4779913051914755,
+            1.423124270948893,
+            1.4798090505286345,
+            1.3654162830775252,
+            1.487059431510062
+          ],
+          "median_ratio": 1.4619839077116559,
+          "ten_percent_wins": 0,
+          "wins": 0
+        },
+        "be58": {
+          "candidate_over_control": [
+            1.4220243075716836,
+            1.4420527563546424,
+            1.4803441257420025,
+            1.4732385589617227,
+            1.5190569265673073,
+            1.480518630211449,
+            1.5022453339631574
+          ],
+          "median_ratio": 1.4769137380466542,
+          "ten_percent_wins": 0,
+          "wins": 0
+        },
+        "native": {
+          "candidate_over_control": [
+            1.2335327116352912,
+            1.2305786510767214,
+            1.2601328552800481,
+            1.2628434527321195,
+            1.2556126358281308,
+            1.2352411289217111,
+            1.2761600366297943
+          ],
+          "median_ratio": 1.245841367623859,
+          "ten_percent_wins": 0,
+          "wins": 0
+        }
+      },
+      "statistics": {
+        "baseline-7a612": {
+          "Q1": 11.084453708999717,
+          "Q3": 11.56320937000055,
+          "inclusive_IQR": 0.47875566100083233,
+          "max": 11.789429069000107,
+          "median_seconds": 11.105196894000983,
+          "min": 10.984921964000023,
+          "samples_seconds": [
+            11.457743892000508,
+            11.07817905400043,
+            10.984921964000023,
+            11.668674848000592,
+            11.090728363999006,
+            11.789429069000107,
+            11.105196894000983
+          ]
+        },
+        "be58": {
+          "Q1": 10.920163644499553,
+          "Q3": 11.202375511000355,
+          "inclusive_IQR": 0.282211866500802,
+          "max": 11.271748410999862,
+          "median_seconds": 10.992936643999201,
+          "min": 10.804177198999241,
+          "samples_seconds": [
+            11.227380620000986,
+            11.177370401999724,
+            10.9674628140001,
+            11.271748410999862,
+            10.804177198999241,
+            10.872864474999005,
+            10.992936643999201
+          ]
+        },
+        "candidate": {
+          "Q1": 16.107918108000376,
+          "Q3": 16.463123995000387,
+          "inclusive_IQR": 0.355205887000011,
+          "max": 16.605974386000526,
+          "median_seconds": 16.2356191509989,
+          "min": 15.965608152000641,
+          "samples_seconds": [
+            15.965608152000641,
+            16.1183577970005,
+            16.2356191509989,
+            16.605974386000526,
+            16.412160210000366,
+            16.097478419000254,
+            16.51408778000041
+          ]
+        },
+        "native": {
+          "Q1": 12.941723707499477,
+          "Q3": 13.084615850500086,
+          "inclusive_IQR": 0.14289214300060848,
+          "max": 13.14966977900076,
+          "median_seconds": 13.031851063000431,
+          "min": 12.884053521000169,
+          "samples_seconds": [
+            12.942995350998899,
+            13.098193912999704,
+            12.884053521000169,
+            13.14966977900076,
+            13.071037788000467,
+            13.031851063000431,
+            12.940452064000056
+          ]
+        }
+      }
+    },
+    "channel-simple": {
+      "descriptive_thresholds": {
+        "candidate_vs_7a612_ratio": 0.6724441160638,
+        "median_ten_percent_gain": true,
+        "native_20x": false,
+        "native_2x": false,
+        "native_speedup": 1.0357969923127053,
+        "robust_vs_7a612": true,
+        "scope": "overall checkpoint requires both cases; all seven pairs retained"
+      },
+      "paired": {
+        "baseline-7a612": {
+          "candidate_over_control": [
+            0.6848830405812362,
+            0.6378852544098451,
+            0.6698789277421644,
+            0.6792531770589573,
+            0.6770661511175258,
+            0.6615326993440205,
+            0.6919800459896253
+          ],
+          "median_ratio": 0.6724441160638,
+          "ten_percent_wins": 7,
+          "wins": 7
+        },
+        "be58": {
+          "candidate_over_control": [
+            1.2052556568766373,
+            1.1977561813901954,
+            1.1866651691749601,
+            1.2072523250458111,
+            1.1976109443788105,
+            1.1084502444385225,
+            1.1818652657439108
+          ],
+          "median_ratio": 1.1816043761726323,
+          "ten_percent_wins": 0,
+          "wins": 0
+        },
+        "native": {
+          "candidate_over_control": [
+            0.9780315224720071,
+            0.9558257556744922,
+            0.9612568489597938,
+            0.9481995264360976,
+            0.983284363547512,
+            0.95486740533056,
+            0.9801133783452601
+          ],
+          "median_ratio": 0.9654401464974537,
+          "ten_percent_wins": 0,
+          "wins": 7
+        }
+      },
+      "statistics": {
+        "baseline-7a612": {
+          "Q1": 16.488623673501024,
+          "Q3": 16.735616020000634,
+          "inclusive_IQR": 0.24699234649961,
+          "max": 17.207616333998885,
+          "median_seconds": 16.63437064699974,
+          "min": 16.41043010100111,
+          "samples_seconds": [
+            16.659165691000453,
+            17.207616333998885,
+            16.812066349000816,
+            16.456432287001007,
+            16.52081506000104,
+            16.63437064699974,
+            16.41043010100111
+          ]
+        },
+        "be58": {
+          "Q1": 9.299555112500457,
+          "Q3": 9.549390405501072,
+          "inclusive_IQR": 0.2498352930006149,
+          "max": 9.92753636999987,
+          "median_seconds": 9.466522713999439,
+          "min": 9.164206283001477,
+          "samples_seconds": [
+            9.466522713999439,
+            9.164206283001477,
+            9.490502689001005,
+            9.259111523000684,
+            9.33999870200023,
+            9.92753636999987,
+            9.608278122001138
+          ]
+        },
+        "candidate": {
+          "Q1": 11.091132014999857,
+          "Q3": 11.308869577499536,
+          "inclusive_IQR": 0.21773756249967846,
+          "max": 11.409580051999,
+          "median_seconds": 11.18568466599936,
+          "min": 10.976484722999885,
+          "samples_seconds": [
+            11.409580051999,
+            10.976484722999885,
+            11.262048978998791,
+            11.178083914001036,
+            11.18568466599936,
+            11.004180115998679,
+            11.35569017600028
+          ]
+        },
+        "native": {
+          "Q1": 11.504036706999614,
+          "Q3": 11.690911769000195,
+          "inclusive_IQR": 0.18687506200058124,
+          "max": 11.788746569000068,
+          "median_seconds": 11.586098534000485,
+          "min": 11.375839056001496,
+          "samples_seconds": [
+            11.665861262999897,
+            11.483771657998659,
+            11.715962275000493,
+            11.788746569000068,
+            11.375839056001496,
+            11.524301756000568,
+            11.586098534000485
+          ]
+        }
+      }
+    }
+  },
+  "excluded_warmups": 8,
+  "fresh_controls_natural109_2458": false,
+  "measured_gates": {
+    "median_ten_percent_gain": false,
+    "native_20x": false,
+    "native_2x": false,
+    "robust_vs_7a612": false
+  },
+  "processes": 64,
+  "production": {
+    "application_executed": false,
+    "binary": {
+      "bytes": 15464192,
+      "path": "/tmp/fortran-copy-v3-rk-build-20261108-01/work/build/ELMM",
+      "sha256": "f7c4d84f03343a1c572e0a2642442e50faf7c98bf656ec335dd3e3bf79cece45"
+    },
+    "build_receipt": {
+      "bytes": 688573,
+      "path": "/tmp/fortran-copy-v3-rk-build-20261108-01/work/build/build-receipts.json",
+      "sha256": "ca08da5ce7306e2e59d432a5a53fbfdce9e83b5f6469a87e7c3e9cd091ceb239"
+    },
+    "build_units": 147,
+    "initial_SGS_coverage": "native original call outside TMarchRK3",
+    "managed_RK_SGS_invocations": "3*N reached primary timesteps",
+    "parent_qualification": {
+      "bytes": 1747,
+      "path": "/tmp/fortran-copy-v3-parent-20261108-01/result.json",
+      "sha256": "b2ffe735168b84d772f20bc9a88ed5058374069ddc2635ac1f0d548ad5d35d95"
+    },
+    "physical_originals": 232,
+    "pressure_backend": null,
+    "pressure_implementation": "original pinned CPU PoisFFT",
+    "runtime_id": "6f32137c39a5a76dd5a5b57b087240efa364a407049fd5792703951f7b75e65e",
+    "scope_manifest": {
+      "bytes": 277756369,
+      "path": "/tmp/fortran-copy-v3-parent-20261108-01/package/scope-manifest.json",
+      "sha256": "5b15ee873283faa0e95519596e78c691656434819d6ea8b3ef2ab5290de3074c"
+    },
+    "source_count": 69
+  },
+  "protocol": {
+    "CPU": [
+      0,
+      2,
+      4,
+      6
+    ],
+    "FFTW": "All four modes require exactly the same four imported wisdom plans and verifier preload.",
+    "GPU_UUID": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+    "all_samples_retained": true,
+    "applications": 64,
+    "applications_per_case": 32,
+    "bounds_seconds": {
+      "application": 120,
+      "case": 1800,
+      "outer_all_cases": 3700
+    },
+    "cache": "No GPU-pressure backend or provider code cache in any mode; no cold OS-page/driver-cache claim.",
+    "campaigns": [
+      {
+        "case": "channel-simple",
+        "identity": {
+          "bytes": 92,
+          "path": "/tmp/fortran-copy-v3-speedup-20261108-01/campaigns/channel-simple/identity.json",
+          "sha256": "7c58c2c31c68ad3b35335ef69753d6d7a68e63f2ad8aafe43e83a2f237e3c18b"
+        },
+        "root": "/tmp/fortran-copy-v3-speedup-20261108-01/campaigns/channel-simple",
+        "state": {
+          "bytes": 1064907,
+          "path": "/tmp/fortran-copy-v3-speedup-20261108-01/campaigns/channel-simple/campaign.json",
+          "sha256": "d9ebcc107ea79e32621889d6fddcf1037b956080e181dee4005d4e59789312c0"
+        }
+      },
+      {
+        "case": "channel",
+        "identity": {
+          "bytes": 92,
+          "path": "/tmp/fortran-copy-v3-speedup-20261108-01/campaigns/channel/identity.json",
+          "sha256": "8d8a2133e8b3521ef4c6cdc5cadfdb7a1c24ebbfa4876b57710b58ff8c0b2fd3"
+        },
+        "root": "/tmp/fortran-copy-v3-speedup-20261108-01/campaigns/channel",
+        "state": {
+          "bytes": 1064743,
+          "path": "/tmp/fortran-copy-v3-speedup-20261108-01/campaigns/channel/campaign.json",
+          "sha256": "89adf0162cea136f066f93aa72d82404b4fb2cd128082081f861b265a80cdbcb"
+        }
+      }
+    ],
+    "candidate_build": {
+      "bytes": 1241,
+      "path": "/tmp/fortran-copy-v3-rk-build-20261108-01/work/production.json",
+      "sha256": "6a56013952239b3617d44e33819c5e15dc3d0c271bc87b726135d47700592480"
+    },
+    "candidate_natural": null,
+    "candidate_snapshot": "2619b7f basis plus 03c695d copy-policy files",
+    "clock": "Unchanged public run_one perf_counter around GNU-time wrapped production process. Includes startup, CPU PoisFFT, transfers, all original outputs, fixed FFTW verification and teardown. Input hashing and output comparisons are outside the clock.",
+    "controls": "Same-day fresh native/be58/7a builds on current toolchain; fresh 7a runtime calibration. Candidate regenerated and rebuilt with production copy-v3 costs. All timing samples newly measured.",
+    "controls_build": {
+      "bytes": 14910,
+      "path": "/tmp/fortran-copy-owner-controls-20261108-01/controls/qualification.json",
+      "sha256": "650c4c46233c535da5ff7de79499401578b156986bb2616a8184688bb9f68fc6"
+    },
+    "correctness": "New candidate and fresh controls require natural109/2458 requalification; four-mode two-step full20 qualification required before timing; all timing outputs compared to same-case native warmup. No release or research-checkpoint acceptance.",
+    "excluded_round": 0,
+    "field_policy": {
+      "atol": 1e-06,
+      "dtype": "float64",
+      "metadata_format": "storage-shape-bounds-v1",
+      "rtol": 1e-05
+    },
+    "four_threads": true,
+    "inputs": {
+      "bytes": 1045607,
+      "path": "/tmp/fortran-copy-v3-speedup-20261108-01/frozen-inputs.json",
+      "sha256": "33819ecd71b8d9c3613ce866f07c4236659d97423fd5910ec9f6ec1e454b4b98"
+    },
+    "kind": "COPY_V3_SNAPSHOT_COMPARISON",
+    "measured_rounds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "mode_order": [
+      "native",
+      "be58",
+      "baseline-7a612",
+      "candidate"
+    ],
+    "outlier_filtering": false,
+    "preliminary": true,
+    "prior_candidate_natural": {
+      "bytes": 8221,
+      "path": "/tmp/fortran-empty-native-rk-natural-20261108-02/qualification.json",
+      "sha256": "0bad033ea67c529ff563b7be6401deecda18d7951f15cfc0d8eae0528602209f"
+    },
+    "release_accepted": false,
+    "reruns": false,
+    "research_checkpoint_accepted": false,
+    "research_checkpoints": {
+      "application_gain": "candidate median <= 0.9 * fresh 7a612 median in both cases",
+      "combined_acceleration": "candidate median <= 0.5 * fresh native median in both cases",
+      "research_objective": "candidate median <= 0.05 * fresh native median in both cases",
+      "robust_improvement": "wins in all seven round-paired comparisons, separately from median acceptance"
+    },
+    "resource_contract": "No concurrent compilation/tests/applications on any CPU or GPU; exact parent quiet lease required before execution. No automatic launch by staging/preflight.",
+    "rotation": "modes[round%4:] + modes[:round%4]",
+    "rounds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "runtime_library_directories": [
+      "/usr/lib/x86_64-linux-gnu",
+      "/usr/lib/x86_64-linux-gnu/blas",
+      "/usr/lib/x86_64-linux-gnu/lapack",
+      "/usr/local/cuda-13.5/targets/x86_64-linux/lib"
+    ],
+    "samples": 56,
+    "schema_version": 1,
+    "scientific_scope": "Original CPU PoisFFT for all modes, approved deterministic reference, unchanged physics/tolerances.",
+    "statistics": [
+      "all seven values, median/min/max/Q1/Q3/inclusive IQR",
+      "round-paired ratios and wins against native, be58 and 7a612"
+    ],
+    "status": "STAGED_NO_TIMING_APPLICATIONS",
+    "topology_calibration": "Same-day fresh pinned 7a calibration and new candidate copy-v3 calibration on CPU0,2,4,6 and current GPU/driver.",
+    "untraced": true,
+    "warmups": 8
+  },
+  "raw_root": "/tmp/fortran-copy-v3-speedup-20261108-01",
+  "release_accepted": false,
+  "research_checkpoint_accepted": false,
+  "samples": 56,
+  "short_full20": true,
+  "status": "PASS_PRELIMINARY_FOUR_MODE_COMPARISON"
+}

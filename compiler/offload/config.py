@@ -1,4 +1,4 @@
-"""Explicit, opt-in ordinary-call GPU execution policies."""
+"""Shared graph execution configuration; historical policies are private."""
 
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class OffloadConfig:
-    policy: str = "always"
+    policy: str = "sections"
     profile: dict | None = None
     host_threads: int = 4
     collective: bool = False
@@ -25,12 +25,10 @@ class OffloadConfig:
     # This describes cost applicability only; it cannot authorize execution.
     source_applicability: "SourceComputeApplicability | None" = None
     def __post_init__(self):
-        if self.policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
-            raise ValueError("Unknown GPU execution policy")
+        self._validate_policy()
         if type(self.host_threads) is not int or self.host_threads < 1:
             raise ValueError("Host thread budget must be positive")
-        if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto", "coalesced"}:
-            raise ValueError("Unknown scope transfer mode")
+        self._validate_transfers()
         self._validate_scope_execution()
         if self.native_participation not in {None, "serial", "fork_join", "fork_join_runtime", "existing_team", "unknown"}:
             raise ValueError("Unknown native Fortran participation")
@@ -48,6 +46,16 @@ class OffloadConfig:
                 # Reading legacy evidence does not authorize a changed backend.
                 object.__setattr__(self, "profile", None)
                 object.__setattr__(self, "profile_reason", "hardware profile " + str(error))
+
+    def _validate_policy(self):
+        if self.policy not in {"sections", "auto"}:
+            raise ValueError("Ordinary GPU policies were removed; use sections or auto")
+
+    def _validate_transfers(self):
+        if self.scope_transfers == "pipelined":
+            raise ValueError("Pipelined slab batching was removed; use shared graph execution")
+        if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
+            raise ValueError("Unknown scope transfer mode")
 
     @property
     def reached_execution(self):

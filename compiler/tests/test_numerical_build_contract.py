@@ -13,9 +13,9 @@ from types import SimpleNamespace
 import pytest
 
 from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources
+from compiler._legacy.emission import generate_sources
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.frontend import lower_source
 from compiler.numerical_contract import (
@@ -165,17 +165,18 @@ def test_source_scopes_publish_contract_on_every_cuda_artifact(tmp_path):
         assert (item.get("numerical_contract") == numerical_build_contract()) == (item["language"] == "cuda")
 
 
-def test_ordinary_json_build_metadata_uses_actual_output_names(tmp_path):
+def test_default_json_build_metadata_covers_shared_entry_and_runtime(tmp_path):
     path = tmp_path / "source.f90"
     path.write_text(SOURCE)
     result = subprocess.run([sys.executable, "-m", "compiler", "-i", str(path), "-k", "advance",
-        "--json", "--cuda-output", "custom.cu", "--cpp-output", "custom.cpp",
-        "--fortran-output", "custom.f90", "--output-dir", str(tmp_path / "generated")],
+        "--json", "--output-dir", str(tmp_path / "generated")],
         text=True, capture_output=True, check=False, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads(result.stdout)
     assert report["numerical_contract"] == numerical_build_contract()
     units = {item["path"]: item for item in report["build_sources"]}
-    assert units["custom.cu"]["numerical_contract"] == numerical_build_contract()
-    assert units["custom.cpp"]["numerical_contract"] == numerical_build_contract()
-    assert "numerical_contract" not in units["custom.f90"]
+    assert report["memory_model"] == "scoped"
+    assert {u["role"] for u in units.values()} == {"shared_entry", "common_runtime"}
+    assert units["shared_entry.cu"]["numerical_contract"] == numerical_build_contract()
+    assert units["scoped_runtime.cu"]["numerical_contract"] == numerical_build_contract()
+    assert "numerical_contract" not in units["shared_interface.f90"]

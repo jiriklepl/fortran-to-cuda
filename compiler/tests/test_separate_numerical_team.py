@@ -41,7 +41,7 @@ real(8)::s
 """ + BODY + "end subroutine\nend module\n"
 
 
-def group_fixture(directory, source=SOURCE):
+def group_fixture(directory, source=SOURCE, *, opt_level=1):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "bounded_team.f90"
     path.write_text(source)
@@ -49,7 +49,7 @@ def group_fixture(directory, source=SOURCE):
     facts = {"schema_version": 1, "participation": "serial",
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::" + name: dict(fact) for name in ("a", "b", "c")}}
-    builder = ScopeBuilder([path], ENTRY, facts=facts, options=CompilerOptions(),
+    builder = ScopeBuilder([path], ENTRY, facts=facts, options=CompilerOptions(opt_level=opt_level),
                            config=OffloadConfig(policy="sections", scope_execution="reached"))
     group, = (item for item in grouped_original_sequence(builder.entry.execution.content, {})
               if isinstance(item, NativeGroupCandidate))
@@ -109,7 +109,8 @@ def test_native_separate_fallback_preserves_each_original_do_and_nowait(separate
 
 
 def test_whole_nowait_group_keeps_ordered_units_but_requires_entry_reads(tmp_path):
-    builder, selection = group_fixture(tmp_path)
+    # Keep distinct units so the test covers group-entry read obligations.
+    builder, selection = group_fixture(tmp_path, opt_level=0)
     assert is_combined_group(builder, selection)
     partition = _source_partition(builder, selection)
     assert partition["group_kind"] == "separate_parallel"

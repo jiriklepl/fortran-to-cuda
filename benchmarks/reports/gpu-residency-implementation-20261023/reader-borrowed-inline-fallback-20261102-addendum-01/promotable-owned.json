@@ -1,0 +1,35 @@
+{
+  "files": [
+    {
+      "path": "elmm-pipeline/elmm_pipeline/gpu_validation.py",
+      "postimage_sha256": "83d4677c976a46f99e446e5c49b9269e11a432e1a08f1a69ae2cdaf0fb5765ca",
+      "preimage_sha256": "d86056a5acc549c24f928f2321cae01dcea3721a568be6c165e9a7a22efa2da3",
+      "qualified_intermediate_sha256": "9624c59cd492926c64202f0b83543b81371af296159d6dd208b4b82d5f98243d"
+    },
+    {
+      "path": "elmm-pipeline/tests/test_inline_offload_fallback.py",
+      "postimage_sha256": "268ce070556f671f10d822321dbc1454e3bc0586f59bb3d27387fecd36a7cab7",
+      "preimage_sha256": null,
+      "qualified_intermediate_sha256": "c6a6cd83a6d051eb161b27c1a3caa38891ea05d9b280ab43dffce93bb7740a7b"
+    }
+  ],
+  "kind": "paired_reader_additive_promotion_manifest",
+  "limits": "Only final paired reader and test; no compiler/runtime/source/build/numerical mutation.",
+  "postimages_root": "/tmp/fortran-inline-policy-trace-02/candidate-04",
+  "qualified_chain": [
+    {
+      "path": "/tmp/fortran-inline-policy-trace-01/qualification.json",
+      "sha256": "feea9f3a2f7cd7518b9688953b660514da83179152ec27d4df188668580ac377"
+    },
+    {
+      "path": "/tmp/fortran-inline-policy-trace-02/qualification.json",
+      "sha256": "abd4e016c68587a883c7b2d8cada62f38131ffd1cf2ef07d55fcb4bfd5b850ce"
+    },
+    {
+      "path": "/tmp/fortran-startup-application-short-10/qualification.json",
+      "sha256": "aff732fa0c4845825feea908499214ffdf1d23187d6bfd09c53c885e7a82fb35"
+    }
+  ],
+  "schema_version": 1,
+  "status": "REVIEWABLE_NOT_PROMOTED"
+}

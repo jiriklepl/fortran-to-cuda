@@ -1,0 +1,425 @@
+{
+  "schema_version": 1,
+  "status": "BOUNDED_ASYNC_OUTPUT_MILESTONE_PASS",
+  "goal_complete": false,
+  "release_qualified": false,
+  "root": "/tmp/fortran-async-output-20261110-01",
+  "build": {
+    "initial_public_build_seconds": 562.7951185829952,
+    "GPU_entries_regenerated": 130,
+    "followup_build": "Frame grouping regenerated through current time/wall/workspace adapters, then dependency-managed incremental rebuild; two changed application units, unchanged numerical entries/runtime. Initial sources and binaries preserved.",
+    "followup_build_seconds": 30.010188131003815,
+    "binaries": {
+      "ELMM": {
+        "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM",
+        "sha256": "2d5df06329cb8447990b0d4b39327ddf803f9d3113036ca2db7d1998cb69300e"
+      },
+      "ELMM-native": {
+        "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native",
+        "sha256": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9"
+      },
+      "ELMM-full20": {
+        "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-full20",
+        "sha256": "51e2fc298bc7004e859f8592837fd018f9fcdc6ac9289ab0c489cc6d56c81984"
+      },
+      "ELMM-native-full20": {
+        "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20",
+        "sha256": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6"
+      }
+    },
+    "provider": {
+      "path": "/tmp/fortran-async-output-20261110-01/work/build/lib/libpoisson-solver.so.0.1",
+      "sha256": "4c6d1bd8d0d12c439910a57ca4e49b69ddb20f71772d4a3d0edebdd710a95d7c"
+    }
+  },
+  "interface": {
+    "snapshot_ABI": 1,
+    "core_runtime_ABI": 1,
+    "entry_ABI": 3,
+    "slots": 2,
+    "pinned_budget_bytes": 268435456,
+    "capture": "read-only checked external transaction, device-to-device on runtime stream",
+    "DMA": "separate nonblocking stream waits for capture event",
+    "writer": "one serial worker; waits for DMA; immutable frame clones; frees slot only after serialization",
+    "teardown": "writer join and workspace lease release before pressure domain, native final output, field dumps and deallocation",
+    "scope": "Primary initialized VTK frames; unsupported frame types, lambda2 and active thermodynamic/scalar paths retain coherent native output after waiting for earlier snapshots.",
+    "batching": "Frames from one checked SaveVTKFrames call share one snapshot."
+  },
+  "verification": {
+    "CUDA_tests": 2,
+    "strict_primary_processes": 8,
+    "strict_primary_all20_fields": true,
+    "strict_primary_all_outputs": true,
+    "short_required_GPU_procedures": [
+      31,
+      28
+    ],
+    "CPU_FFTW_plans": {
+      "GPU": 0,
+      "native": 4
+    },
+    "natural_steps": 2458,
+    "natural_fields": 20,
+    "natural_outputs": 114,
+    "natural_VTK_frames": 102,
+    "natural_approved_L2_pass": true,
+    "worst_relative_L2": 0.0015489611183125967,
+    "max_local_error_relative_to_peak": 0.014670614640088665,
+    "exact_previous_GPU_field_and_bounds_files": 40,
+    "exact_previous_GPU_output_files": 113,
+    "remaining_output": "Retau.unf: maxabs2.2282620193436742e-11, relativeL2 6.372483562567218e-16; passes strict tolerances.",
+    "preserved_initial_issue": "The first qualification controller incorrectly required snapshots at channel100, which ends at time0.57 before the first postinitial frame at1.0. All8 processes completed; immutable results were revalidated with the correct output schedule. No numerical tolerance changed."
+  },
+  "timing": {
+    "protocol": "One excluded warmup + seven rotated complete-process measurements;48 processes; all outputs compared; all samples retained; no retry.",
+    "comparison_valid": true,
+    "max_external_CPU_cores": 0.4076121971021993,
+    "scope": "Fresh native and candidate builds, freshly executed previous scoped-artifact GPU build. No fresh be58/7a612e4 controls; not full release qualification.",
+    "cases": {
+      "channel-simple": {
+        "modes": {
+          "native": {
+            "samples": [
+              11.314468519994989,
+              11.75753820600221,
+              11.350143900999683,
+              11.662293403998774,
+              11.513238574996649,
+              11.277993654999591,
+              11.525441666002735
+            ],
+            "median": 11.513238574996649
+          },
+          "gpu-cached": {
+            "samples": [
+              2.9857165189969237,
+              2.9542944630011334,
+              3.069182307997835,
+              3.0512634639962926,
+              3.053634694995708,
+              3.0206511489959667,
+              2.9823113409947837
+            ],
+            "median": 3.0206511489959667
+          },
+          "candidate": {
+            "samples": [
+              2.9677046520009753,
+              2.997686615002749,
+              3.0041668600024423,
+              3.0587612699964666,
+              3.1534369610017166,
+              3.1000241809961153,
+              2.9795070589971147
+            ],
+            "median": 3.0041668600024423
+          }
+        },
+        "paired_ratios": {
+          "native": [
+            0.26229289044875875,
+            0.25495869649587305,
+            0.2646809490880415,
+            0.2622778525660893,
+            0.27389660523929815,
+            0.27487372983419434,
+            0.2585156513165079
+          ],
+          "gpu-cached": [
+            0.9939673217864636,
+            1.0146878222685818,
+            0.9788166874851416,
+            1.0024572791201563,
+            1.03268310586383,
+            1.0262767953282297,
+            0.9990596950898045
+          ]
+        },
+        "median_ratios": {
+          "native": 0.26093152160736116,
+          "gpu-cached": 0.9945428027996535
+        },
+        "speedup_over_native": 3.8324231347746407,
+        "median_improvement_over_previous_gpu_percent": 0.5457197200346542,
+        "paired_wins_over_previous_gpu": 3,
+        "twenty_times_native_budget_seconds": 0.5756619287498325
+      },
+      "channel": {
+        "modes": {
+          "native": {
+            "samples": [
+              13.191366710001603,
+              12.962291768999421,
+              12.94238684699667,
+              13.374725474001025,
+              13.223929570005566,
+              13.168485607006005,
+              12.977441882001585
+            ],
+            "median": 13.168485607006005
+          },
+          "gpu-cached": {
+            "samples": [
+              3.581108915997902,
+              3.5554766799978097,
+              3.467169002004084,
+              3.4965984850059613,
+              3.564896256000793,
+              3.533879513001011,
+              3.5227870070011704
+            ],
+            "median": 3.533879513001011
+          },
+          "candidate": {
+            "samples": [
+              3.5214513750033802,
+              3.5367432910061325,
+              3.5285401859946433,
+              3.5237086019988055,
+              3.560348946004524,
+              3.6044017450039973,
+              3.449940553997294
+            ],
+            "median": 3.5285401859946433
+          }
+        },
+        "paired_ratios": {
+          "native": [
+            0.26695121532277927,
+            0.2728486099552702,
+            0.27263442421468453,
+            0.26346025635056974,
+            0.2692353227651851,
+            0.2737142183673994,
+            0.2658413411029809
+          ],
+          "gpu-cached": [
+            0.9833410425670067,
+            0.9947311174625145,
+            1.0177006612469959,
+            1.007753282828754,
+            0.9987244201037787,
+            1.0199560374776608,
+            0.9793213575333672
+          ]
+        },
+        "median_ratios": {
+          "native": 0.2679533768193786,
+          "gpu-cached": 0.9984891032683133
+        },
+        "speedup_over_native": 3.731992527468978,
+        "median_improvement_over_previous_gpu_percent": 0.1510896731686695,
+        "paired_wins_over_previous_gpu": 4,
+        "twenty_times_native_budget_seconds": 0.6584242803503002
+      }
+    },
+    "robust_incremental_speedup": false,
+    "primary_workloads_reach_async_output": false,
+    "twenty_times_native_met": false
+  },
+  "profile": {
+    "status": "PASS",
+    "profile_steps": 200,
+    "timing_claim": false,
+    "snapshot_field_bytes": {
+      "U": 5252800,
+      "V": 5252800,
+      "W": 5177760,
+      "Pr": 4882944,
+      "Viscosity": 4882944
+    },
+    "snapshot_payload_bytes": 25449248,
+    "device_snapshot_capacity_bytes": 50898496,
+    "pinned_snapshot_capacity_bytes": 50898496,
+    "noninitial_frames": 2,
+    "snapshots": 1,
+    "capture_copies": [
+      {
+        "start": 6837360890,
+        "end": 6837388378,
+        "bytes": 4882944,
+        "streamId": 13
+      },
+      {
+        "start": 6837234873,
+        "end": 6837262777,
+        "bytes": 4882944,
+        "streamId": 13
+      },
+      {
+        "start": 6837054679,
+        "end": 6837083351,
+        "bytes": 5177760,
+        "streamId": 13
+      },
+      {
+        "start": 6836924597,
+        "end": 6836954230,
+        "bytes": 5252800,
+        "streamId": 13
+      },
+      {
+        "start": 6836805268,
+        "end": 6836832820,
+        "bytes": 5252800,
+        "streamId": 13
+      }
+    ],
+    "download": {
+      "start": 6837503387,
+      "end": 6839512304,
+      "deviceId": 0,
+      "contextId": 1,
+      "greenContextId": 0,
+      "streamId": 28,
+      "correlationId": 90854,
+      "globalPid": 286375450509312,
+      "bytes": 25449248,
+      "copyKind": 2,
+      "deprecatedSrcId": null,
+      "srcKind": 2,
+      "dstKind": 1,
+      "srcDeviceId": null,
+      "srcContextId": null,
+      "dstDeviceId": null,
+      "dstContextId": null,
+      "migrationCause": null,
+      "graphNodeId": null,
+      "virtualAddress": null,
+      "copyCount": 1
+    },
+    "kernel_streams": [
+      13
+    ],
+    "download_seconds": 0.002008917,
+    "overlap_with_kernel_union_seconds": 0.000118337,
+    "overlap_fraction": 0.05890586818668964,
+    "traffic": [
+      {
+        "label": "Host-to-Device",
+        "copies": 222,
+        "bytes": 48560072,
+        "activity_seconds": 0.006658592
+      },
+      {
+        "label": "Device-to-Host",
+        "copies": 842,
+        "bytes": 160226448,
+        "activity_seconds": 0.022662744
+      },
+      {
+        "label": "Device-to-Device",
+        "copies": 5,
+        "bytes": 25449248,
+        "activity_seconds": 0.000141249
+      }
+    ],
+    "top_kernels": [
+      {
+        "name": "generated_kernels::fort_shared_e8b12a912596::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, double, double, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+        "registersPerThread": 58,
+        "localMemoryPerThread": 0,
+        "blockX": 256,
+        "blockY": 1,
+        "blockZ": 1,
+        "launches": 600,
+        "activity_seconds": 0.886185991
+      },
+      {
+        "name": "generated_kernels::fort_shared_1dcab06eb705::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+        "registersPerThread": 44,
+        "localMemoryPerThread": 0,
+        "blockX": 256,
+        "blockY": 1,
+        "blockZ": 1,
+        "launches": 600,
+        "activity_seconds": 0.355172828
+      },
+      {
+        "name": "generated_kernels::fort_shared_42f1895f2eaa::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+        "registersPerThread": 56,
+        "localMemoryPerThread": 0,
+        "blockX": 256,
+        "blockY": 1,
+        "blockZ": 1,
+        "launches": 600,
+        "activity_seconds": 0.353531555
+      },
+      {
+        "name": "generated_kernels::fort_shared_867be3cdca49::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+        "registersPerThread": 52,
+        "localMemoryPerThread": 0,
+        "blockX": 256,
+        "blockY": 1,
+        "blockZ": 1,
+        "launches": 600,
+        "activity_seconds": 0.353161035
+      },
+      {
+        "name": "VkFFT_main",
+        "registersPerThread": 56,
+        "localMemoryPerThread": 0,
+        "blockX": 24,
+        "blockY": 8,
+        "blockZ": 1,
+        "launches": 1202,
+        "activity_seconds": 0.176373911
+      },
+      {
+        "name": "generated_kernels::fort_shared_f90715bf94a5::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+        "registersPerThread": 34,
+        "localMemoryPerThread": 0,
+        "blockX": 256,
+        "blockY": 1,
+        "blockZ": 1,
+        "launches": 1800,
+        "activity_seconds": 0.171932275
+      }
+    ],
+    "inputs": {
+      "/tmp/fortran-async-output-20261110-01/profile/analyze_output200.py": "137de532e026c839e44e8b0ff65324011fb6ec6290bdb56b70def9e10835fb13",
+      "/tmp/fortran-async-output-20261110-01/profile/output200.sqlite": "83336c788266190c571ca83177a9eea1f13db87ea1947c54e5c5baeb860c3227",
+      "/tmp/fortran-async-output-20261110-01/profile/output200-result.json": "6606f1a8e6af554ce6ea481b02574967dcdd49c7556bad63768f21846e95f1ec"
+    },
+    "limits": "One diagnostic frame group. Snapshot slots are statically reserved/charged through the runtime lease; opaque driver graph/event allocations and all host metadata are not claimed fully accounted. DMA/kernel overlap is union intersection, not a sum of overlapping API/device spans."
+  },
+  "remaining": [
+    "Substantial further primary speedup: measured SGS and CD4 advection kernel/runtime work;20x remains unmet.",
+    "Full graph/queued-argument/opaque-driver allocation and host metadata accounting. Snapshot payload and pinned limits are implemented.",
+    "Residual private legacy implementation/frontend coupling and maintained-suite migration/execution.",
+    "Independent current FD4 operator/manufactured solver qualification and release checks.",
+    "Fresh native/be58/7a612e4/candidate four-control release protocol."
+  ],
+  "receipts": {
+    "/tmp/fortran-async-output-20261110-01/build-result.json.initial": "a310f940d770bfd77a1023975ce24311fb836386d492baea9a8471a9dbb26196",
+    "/tmp/fortran-async-output-20261110-01/initial-archive.json": "7d68fcd1d57d577feb8e0bee8ccabac7d8b1d4a5f408a7c3f7be4ecc91ce7f44",
+    "/tmp/fortran-async-output-20261110-01/build-result.json": "abaccd16e4209dbe53b79294e193a39f9a147c640aef16a1704dc5c0ee510f63",
+    "/tmp/fortran-async-output-20261110-01/build-plan.json": "9e831f058aa10b4e4acbeb2048662e04003d4768948e8c776f76d2f53b9355a5",
+    "/tmp/fortran-async-output-20261110-01/source-archive.json": "2f557d4c89013abcdfb2365318677c7e06215570f453a5630fc539a4b868aa88",
+    "/tmp/fortran-async-output-20261110-01/work/prepared.json": "b7dfaf51a29f5e61a20b1f19e113381a9829b5d9a9a1d1794e2efba15a09f112",
+    "/tmp/fortran-async-output-20261110-01/work/build-inputs.json": "6032bb4a5605d8a5950725bc1ab56c28d74e8a300485fbe11a870d8363249f1d",
+    "/tmp/fortran-async-output-20261110-01/runtime-milestone.xml": "2fe8787d19989d1a41cef730fab0d1d8f787c92b2f0cc8ce374113241161dccf",
+    "/tmp/fortran-async-output-20261110-01/runtime-milestone.log": "89f2be0ea235381e2fdf9b3d9ada8f0f31e5368dd448cf683cbcee79dde5ba31",
+    "/tmp/fortran-async-output-20261110-01/qualification/result.json": "3d7c8fd15a929e6eab137966d3f7b1eb05d4fbbad79c62aa967a1044d4ee8b41",
+    "/tmp/fortran-async-output-20261110-01/qualification/result-initial-trace-assertion.json": "36fd5ff61f2df230671718754fbfe8eb9d67c13f4f8c268f8a7518dbdba471f6",
+    "/tmp/fortran-async-output-20261110-01/qualification/fftw-audit.json": "fdef2dd84c4b3626cba262ac68c361474a7ff1754f5f96e9fb648ee2e7e1dcec",
+    "/tmp/fortran-async-output-20261110-01/revalidate_primary.py": "66961412d68c0982494013128038dd71141baefdedb6e0d755da12a1c00bc049",
+    "/tmp/fortran-async-output-20261110-01/long/result.json": "eb14a3fa9aaf50b2e1c56696a0b7d8e1565b8d66dd375b98ca443de017a9bd75",
+    "/tmp/fortran-async-output-20261110-01/long/execution.json": "6fbef7c71cba1855892a2d1f6c5b09664b869dd8ada92d8a8300a3aa761c6ab8",
+    "/tmp/fortran-async-output-20261110-01/long/selected-gpu-parity.json": "850a7c6f3296e83cf8928faf3ac6c14aea4507107037e1fcae0018825c563481",
+    "/tmp/fortran-async-output-20261110-01/long/output-byte-comparison.json": "149149dca3dd15b52ac47774e0d23a26b40623d8cff1e3cec10f7ac2a6dc8a45",
+    "/tmp/fortran-async-output-20261110-01/comparison/plan.json": "e493c9f461c193361daa96575441f9d7239d8de3bdc3d43d2ff9223ab2a3fc7e",
+    "/tmp/fortran-async-output-20261110-01/comparison/result.json": "9ea8a66b681f39b97c0b4ad33821aa6c4838500294a6276fae8b9a399b1f4f0b",
+    "/tmp/fortran-async-output-20261110-01/comparison/execution.json": "5de96621cdd2b00a7b6fabeec6658d56281cf0036d4b70c42104e290d2ebb6e4",
+    "/tmp/fortran-async-output-20261110-01/quiet-probe.json": "0ea1d02d64b3a98b6404125976299bef9cc4caf2b41bcf2343c3c61bbe3c679a",
+    "/tmp/fortran-async-output-20261110-01/profile/output200-plan.json": "559de4ffa36e942795d64aaa68fcc7ac11067c9ff31f9971e04bcad4c6e440e0",
+    "/tmp/fortran-async-output-20261110-01/profile/output200-result.json": "6606f1a8e6af554ce6ea481b02574967dcdd49c7556bad63768f21846e95f1ec",
+    "/tmp/fortran-async-output-20261110-01/profile/output200-analysis.json": "068f88fbb4094b007c8aa685663aea9120e70793e00c5eed1fac7fbbf0b3647b",
+    "/tmp/fortran-async-output-20261110-01/report.py": "8b2cf316e6c81dfc7474a550ead364331799ee2d97f572c0fbe6e5c96c1e6af9",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM": "2d5df06329cb8447990b0d4b39327ddf803f9d3113036ca2db7d1998cb69300e",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM-full20": "51e2fc298bc7004e859f8592837fd018f9fcdc6ac9289ab0c489cc6d56c81984",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6",
+    "/tmp/fortran-async-output-20261110-01/work/build/lib/libpoisson-solver.so.0.1": "4c6d1bd8d0d12c439910a57ca4e49b69ddb20f71772d4a3d0edebdd710a95d7c"
+  }
+}

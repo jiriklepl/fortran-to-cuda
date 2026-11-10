@@ -12,8 +12,8 @@ class CompilerOptions:
     tile_sizes: tuple[int, ...] = ()
     fallback: str = "error"
     indexing: str | None = None
-    gpu_policy: str = "always"
-    memory_model: str = "call"
+    gpu_policy: str = "sections"
+    memory_model: str = "scoped"
     scope_transfers: str = "direct"
     scope_execution: str | None = None
 
@@ -28,17 +28,23 @@ class CompilerOptions:
             raise CompilationError("fallback must be error or host")
         if self.indexing not in (None, "source", "auto"):
             raise CompilationError("indexing must be source or auto")
-        if self.gpu_policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
-            raise CompilationError("GPU policy must be always, sections, auto, chunked, or hybrid")
-        if self.memory_model not in {"call", "scoped"}:
-            raise CompilationError("memory model must be call or scoped")
-        if self.memory_model == "scoped" and self.gpu_policy not in {"sections", "auto"}:
-            raise CompilationError("scoped memory currently requires sections or auto GPU policy")
-        if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto", "coalesced"}:
-            raise CompilationError("scope transfers must be direct, pinned, pipelined, auto, or coalesced")
+        self._validate_execution_configuration()
+        self._validate_transfers()
         if self.scope_transfers != "direct" and self.memory_model != "scoped":
             raise CompilationError("nondefault scope transfers require scoped memory")
         self._validate_scope_execution()
+
+    def _validate_execution_configuration(self) -> None:
+        if self.memory_model != "scoped":
+            raise CompilationError("ordinary-call generation was removed; use caller-owned scoped memory")
+        if self.gpu_policy not in {"sections", "auto"}:
+            raise CompilationError("ordinary GPU policies were removed; use sections or auto")
+
+    def _validate_transfers(self) -> None:
+        if self.scope_transfers == "pipelined":
+            raise CompilationError("pipelined slab batching was removed; use shared graph execution")
+        if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
+            raise CompilationError("scope transfers must be direct, pinned, auto, or coalesced")
 
     def _validate_scope_execution(self) -> None:
         if self.scope_execution not in {None, "graph"}:

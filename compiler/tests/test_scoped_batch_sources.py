@@ -5,7 +5,7 @@ from hashlib import sha256
 import pytest
 
 from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.emission.cuda.scoped import generate_scoped

@@ -1,0 +1,122 @@
+{
+  "status": "DIAGNOSTIC_COMPLETE_LONG_GATE_UNCHANGED",
+  "wall": {
+    "cases": 16,
+    "values": 229376,
+    "different": 44,
+    "max_ulp": 3,
+    "max_abs": 1.6653345369377348e-16,
+    "zero_disagreements": 0,
+    "replay_matches_application": true
+  },
+  "pressure": [
+    {
+      "file": "/tmp/fortran-pressure-operands-20261110-01/runs/gpu-solver/channel100/pressure-input-n1.bin",
+      "shape": [
+        128,
+        64,
+        64
+      ],
+      "lengths": [
+        12.0,
+        4.0,
+        2.0
+      ],
+      "boundary_conditions": [
+        0,
+        0,
+        0,
+        0,
+        4,
+        4
+      ],
+      "order": 2,
+      "operator_mode_relative_error": 6.821457712062713e-16,
+      "rhs_mean": 1.0333801956502464e-18,
+      "CPU_GPU_max_abs": 3.885780586188048e-16,
+      "CPU_GPU_relative_l2": 4.688183542749876e-16,
+      "CPU_GPU_strict_pointwise_pass": true,
+      "CPU_GPU_provider_differential_pass": true,
+      "rhs_preserved": "CPU shadow asserts bitwise equality of the complete RHS; actual application RHS is read-only",
+      "CPU": {
+        "solution_mean": 1.5129861322533923e-18,
+        "relative_residual_l2": 4.849416507418238e-15,
+        "relative_residual_linf": 6.593696683477331e-15,
+        "max_abs_residual": 4.565228403641264e-13
+      },
+      "GPU": {
+        "solution_mean": 6.872084180192545e-19,
+        "relative_residual_l2": 5.346617926240275e-15,
+        "relative_residual_linf": 7.532294014297523e-15,
+        "max_abs_residual": 5.215078010005394e-13
+      }
+    },
+    {
+      "file": "/tmp/fortran-pressure-operands-20261110-01/runs/gpu-solver/channel100/pressure-input-n256.bin",
+      "shape": [
+        128,
+        64,
+        64
+      ],
+      "lengths": [
+        12.0,
+        4.0,
+        2.0
+      ],
+      "boundary_conditions": [
+        0,
+        0,
+        0,
+        0,
+        4,
+        4
+      ],
+      "order": 2,
+      "operator_mode_relative_error": 6.821457712062713e-16,
+      "rhs_mean": 1.2869416259931894e-16,
+      "CPU_GPU_max_abs": 2.7755575615628914e-17,
+      "CPU_GPU_relative_l2": 9.706342098187004e-16,
+      "CPU_GPU_strict_pointwise_pass": true,
+      "CPU_GPU_provider_differential_pass": true,
+      "rhs_preserved": "CPU shadow asserts bitwise equality of the complete RHS; actual application RHS is read-only",
+      "CPU": {
+        "solution_mean": -2.7106708673362717e-21,
+        "relative_residual_l2": 1.2576559444239005e-15,
+        "relative_residual_linf": 7.4265595925033e-16,
+        "max_abs_residual": 2.233478159363589e-14
+      },
+      "GPU": {
+        "solution_mean": 1.5919090888583018e-21,
+        "relative_residual_l2": 1.13899775290028e-15,
+        "relative_residual_linf": 1.4152722102632865e-15,
+        "max_abs_residual": 4.256317520656694e-14
+      }
+    }
+  ],
+  "alternative_norm_review": {
+    "status": "NOT_ADOPTED",
+    "all_under_proposed_limit": true,
+    "rule": "Only natural channel2458 numerical fields: <=1% relative L2 independently per stored field, output scalar/vector component and Retau series. Zero references require max abs<=1e-6. Preserve exact bounds, layouts, output/frame inventories, coordinates and labels. Timing columns retain original pointwise criterion. Primary/short/operator gates stay unchanged. Local maxima remain reported, not concealed."
+  },
+  "production_change": false,
+  "performance_claim": false,
+  "receipts": {
+    "/tmp/fortran-wall-operands-20261110-01/build-result.json": "02f59430643fe4daaad0c56524353eacc046b2b0df732e312c30ed0221466f55",
+    "/tmp/fortran-wall-operands-20261110-01/source.diff": "51e32f18189bbbdc177ca2002a4965dc2b95559cc1e3c629d6418bb5b5450a59",
+    "/tmp/fortran-wall-operands-20261110-01/runs/plan.json": "61857a7ec8578b46088db6ef060e8f73d01639eb40b82391c60665c09cfa1192",
+    "/tmp/fortran-wall-operands-20261110-01/runs/result.json": "9d15c1c337332c329bf188e74a550a3519958d05c92a8e591a08d4001e737a85",
+    "/tmp/fortran-wall-operands-20261110-01/capture-identity.json": "fafa400188a86bac1168a230881b333af242198977e8946a6a2852d31baf8595",
+    "/tmp/fortran-wall-operands-20261110-01/replay-plan.json": "f59ed76207ee14558289b0e223e91b04430863ce5188bb227f11ac2d02757d9e",
+    "/tmp/fortran-wall-operands-20261110-01/replay-results/plan.json": "7e64509995275ae860d35d9ea4360a1dbf41dfc8db592c6af7b45155625df942",
+    "/tmp/fortran-wall-operands-20261110-01/replay-results/result.json": "13c281d75d8b29851bf4168d1d6fb5f3cf65ef952251a9429ca3c07f0abadc2f",
+    "/tmp/fortran-wall-operands-20261110-01/failed-replay-build-01/result.json": "3b0f3b4e1eae01e7b6304470289c7c3439b5b99b71b430af9433ea09c01caf26",
+    "/tmp/fortran-pressure-operands-20261110-01/build-result.json": "1d8394cb3e7f31572b2cc65f3c8a82c38be45908144ee87776476b0d15e77fc9",
+    "/tmp/fortran-pressure-operands-20261110-01/source.diff": "4c818ff424fa7db5e691a6ff70b305e81fb54192c9f317041be87c8314b53c86",
+    "/tmp/fortran-pressure-operands-20261110-01/runs/plan.json": "798380c394e4372009ff94ee6bd80f76119e878b8e8924bf5331fce3ccf199e3",
+    "/tmp/fortran-pressure-operands-20261110-01/runs/result.json": "fafa3884bbf72dbc561996e06de7f618b3c676cb1bc635e65fe3430df48775e9",
+    "/tmp/fortran-pressure-operands-20261110-01/analysis.json": "4b3afd1be99af5057d001626c426193ccbd9a5c9b58f459b0fed3623d872cc34",
+    "/tmp/fortran-long-norm-review-20261110-01/analyze.py": "d1a134123a270efcbbca89d8156d8cd0a5036e1140924153776ab64b004aaf3a",
+    "/tmp/fortran-long-norm-review-20261110-01/result.json": "da4b2e076b800e8ea21c97c664e137b37c0474647e71b17c9a195723f40cbdb9",
+    "/tmp/fortran-poisson-cpu-ulp-sensitivity-01/summary.json": "02aa48a857414a3be2066626d4d4b836ef894d465596c276e7a288f73fe6cfcb"
+  }
+}

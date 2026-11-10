@@ -39,6 +39,7 @@ from compiler.ir import (
     Symbol,
     Unary,
     block_writes,
+    referenced_symbols,
     walk_expr,
 )
 from compiler.ir.integers import constant_integer
@@ -697,12 +698,19 @@ def _unit_footprints(unit, parameters):
     retained_loop = False
     intrinsic_work = {}
     used_symbols = set()
+    # A same-point read after an unconditional assignment in this iteration
+    # consumes the value just produced by the kernel, not an incoming replica.
+    # Keep exact expressions, not bounding boxes: reversed/shifted accesses can
+    # cover the same rectangle while reading different iteration values.
+    defined_points = []
 
     def record(access, kind, definitions, conditional, unknown):
         access = _resolve(access, definitions)
         box = None if unknown else _access_box(access, unit, parameters)
         reason = "retained-loop footprint" if unknown else "nonrectangular or non-affine physical subscript"
         is_read = kind == "read"
+        if is_read and not conditional and not unknown and box and access in defined_points:
+            return
         accesses.append(
             Footprint(
                 symbol=access.symbol,
@@ -716,6 +724,8 @@ def _unit_footprints(unit, parameters):
                 write_units=(unit.index,) if not is_read else (),
             )
         )
+        if not is_read and not conditional and not unknown and box and access not in defined_points:
+            defined_points.append(access)
 
     def reads(expression, definitions, conditional, unknown):
         nonlocal work
@@ -744,6 +754,11 @@ def _unit_footprints(unit, parameters):
                     record(statement.target, "write", definitions, conditional, unknown)
                 else:
                     symbol = statement.target.symbol
+                    # Retire only points whose resolved coordinates depend on
+                    # the changed scalar. Unrelated numerical temporaries do
+                    # not erase an earlier same-iteration array definition.
+                    defined_points[:] = [point for point in defined_points
+                                         if symbol not in referenced_symbols(point)]
                     value = _resolve(statement.value, definitions)
                     # Only scalar integer expressions can affect physical maps.
                     if (
@@ -757,13 +772,16 @@ def _unit_footprints(unit, parameters):
                     else:
                         definitions.pop(symbol, None)
             elif isinstance(statement, If):
+                defined_points.clear()
                 upper_bound = True
                 reads(statement.condition, definitions, conditional, unknown)
                 visit(statement.then_body, definitions, True, unknown)
                 visit(statement.else_body, definitions, True, unknown)
                 for symbol in block_writes(statement.then_body) | block_writes(statement.else_body):
                     definitions.pop(symbol, None)
+                defined_points.clear()
             else:
+                defined_points.clear()
                 retained_loop = True
                 reads(statement.lower, definitions, conditional, True)
                 reads(statement.upper, definitions, conditional, True)
@@ -772,6 +790,7 @@ def _unit_footprints(unit, parameters):
                 visit(statement.body, definitions, conditional, True)
                 for symbol in block_writes(Block((statement,))):
                     definitions.pop(symbol, None)
+                defined_points.clear()
         return definitions
 
     for loop in unit.region.loops:
@@ -1002,7 +1021,7 @@ def _protected_scalar_inputs(region, parameters):
     for loop in region.loops:
         header(loop, False)
     visit(region.body)
-    return protected - unconditional, protected | unconditional
+    return {symbol for symbol in protected - unconditional if not symbol.by_value}, protected | unconditional
 
 
 def analyze_offload(function: FunctionIR, plan: ExecutionPlan, *, max_interval: int = 4) -> OffloadAnalysis:
@@ -1037,7 +1056,7 @@ def analyze_offload(function: FunctionIR, plan: ExecutionPlan, *, max_interval: 
                 return OffloadAnalysis(False, "mapped bounds require descriptor sizes or immutable scalar arithmetic")
             if not isinstance(loop.step, int) and not _safe_query(loop.step, parameters):
                 return OffloadAnalysis(False, "mapped strides require immutable scalar arithmetic")
-    unused = {symbol for symbol in parameters if not symbol.rank} - used_scalar_inputs
+    unused = {symbol for symbol in parameters if not symbol.rank and not symbol.by_value} - used_scalar_inputs
     if unused:
         names = ", ".join(symbol.name for symbol in sorted(unused, key=lambda symbol: symbol.id))
         return OffloadAnalysis(False, "unused scalar inputs are not safe through the numerical value ABI: " + names)

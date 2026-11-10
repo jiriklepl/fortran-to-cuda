@@ -1,0 +1,127 @@
+{
+  "status": "GPU_PRESSURE_INTEGRATED_NOT_A_SPEEDUP",
+  "performance_gate": false,
+  "build": {
+    "ELMM": {
+      "path": "/tmp/fortran-resident-hot-path-20261109-01/integration-build-03/ELMM",
+      "sha256": "3fd2a572ac20b329ac4d7986bf43c34bfb34177b3bd217014a14639f72aae2e2"
+    },
+    "ELMM-full20": {
+      "path": "/tmp/fortran-resident-hot-path-20261109-01/integration-build-03/ELMM-full20",
+      "sha256": "290f03d7e6794bc787db046371061791db684d19caf32825a56ef9eb9da83a93"
+    }
+  },
+  "comparison": {
+    "channel-simple": {
+      "modes": {
+        "native": {
+          "samples": [
+            11.809509471000638
+          ],
+          "median": 11.809509471000638
+        },
+        "candidate": {
+          "samples": [
+            13.100247035000393
+          ],
+          "median": 13.100247035000393
+        },
+        "be58": {
+          "samples": [
+            9.898989874000108
+          ],
+          "median": 9.898989874000108
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          1.1092964586860514
+        ],
+        "be58": [
+          1.3233923058562218
+        ]
+      },
+      "median_ratios": {
+        "native": 1.1092964586860514,
+        "be58": 1.3233923058562218
+      }
+    },
+    "channel": {
+      "modes": {
+        "native": {
+          "samples": [
+            13.280829068999992
+          ],
+          "median": 13.280829068999992
+        },
+        "candidate": {
+          "samples": [
+            14.380754912999691
+          ],
+          "median": 14.380754912999691
+        },
+        "be58": {
+          "samples": [
+            11.389117103999524
+          ],
+          "median": 11.389117103999524
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          1.0828205707855345
+        ],
+        "be58": [
+          1.2626751293960785
+        ]
+      },
+      "median_ratios": {
+        "native": 1.0828205707855345,
+        "be58": 1.2626751293960785
+      }
+    }
+  },
+  "max_external_cpu_cores": 0.3866744619141005,
+  "correctness": {
+    "channel-simple": {
+      "field_count": 20,
+      "max_absolute_error": 4.366383671294827e-09,
+      "copies": {
+        "upload_bytes": 224215040,
+        "upload_events": 88,
+        "download_bytes": 157794688,
+        "download_events": 68
+      },
+      "external_commits": 21,
+      "cpu_fftw_plans": 0
+    },
+    "channel": {
+      "field_count": 20,
+      "max_absolute_error": 2.72425086933481e-08,
+      "copies": {
+        "upload_bytes": 224215040,
+        "upload_events": 88,
+        "download_bytes": 157794688,
+        "download_events": 68
+      },
+      "external_commits": 21,
+      "cpu_fftw_plans": 0
+    }
+  },
+  "artifacts": {
+    "build": "/tmp/fortran-resident-hot-path-20261109-01/integration-build-03/result.json",
+    "short_milestone": "/tmp/fortran-resident-hot-path-20261109-01/milestone-03/result.json",
+    "comparison": "/tmp/fortran-resident-hot-path-20261109-01/comparison/result.json",
+    "comparison_controller": "/tmp/fortran-resident-hot-path-20261109-01/comparison/execution.json",
+    "preceding_invalid_pilot": "/tmp/fortran-resident-hot-path-20261109-01/timing/assessment.json",
+    "physical_ledger": "/tmp/fortran-resident-hot-path-20261109-01/pressure-chain-ledger-03.json"
+  },
+  "open": [
+    "resident RK domain connecting SGS/Convection/diffusion/pressure",
+    "velocity boundaries and mass-flux preparation on GPU",
+    "native allocation exchanges and timestep controls",
+    "natural109/2458 full20 and maintained-suite release qualification",
+    "fresh control rebuilds and seven rotated measurements",
+    "obsolete compatibility removal after replacement integration"
+  ]
+}

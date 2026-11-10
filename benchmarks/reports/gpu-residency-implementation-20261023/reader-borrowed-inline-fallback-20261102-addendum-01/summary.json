@@ -1,0 +1,30 @@
+{
+  "channel_outputs": 10,
+  "distinct_original_applications": 4,
+  "embedded_paths": 1007,
+  "external_fingerprints": 3597,
+  "fields_per_case": 20,
+  "historical_failures_preserved": true,
+  "live_promotion_in_packet_builder": false,
+  "natural_or_performance_acceptance": false,
+  "new_applications": 0,
+  "new_over_reader2": 24,
+  "pressure_implementation": "original CPU PoisFFT",
+  "reader_qualification_GPU_queries": 0,
+  "reader_qualification_applications": 0,
+  "reader_tests": 293,
+  "runtime_id": "6d8484fead4315163df6a7b9c2396677f6344487a872a86a96afdc5e63813254",
+  "saved_native_fallbacks": {
+    "channel": 103,
+    "channel_borrowed": 30,
+    "simple": 139
+  },
+  "saved_observer_recoveries": 3,
+  "schema_version": 1,
+  "short_recipe": "short10_four_original_no_new",
+  "simple_outputs": 6,
+  "status": "SAVED_READER_AND_FOUR_CASE_SHORT_QUALIFICATION",
+  "steps_per_case": 2,
+  "subtests": 309,
+  "whole_modules": 6
+}

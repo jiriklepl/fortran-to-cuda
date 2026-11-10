@@ -1,0 +1,2540 @@
+{
+  "all_inputs_exact": true,
+  "packed_over_original": 0.8986873309750393,
+  "paired_ratios": [
+    0.9065435322984766,
+    0.8461587203762946,
+    0.9015415690909261
+  ],
+  "performance_checkpoint": false,
+  "runs": [
+    {
+      "all_outputs": {
+        "files": {
+          "Retau.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 7.585185812786222e-10,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 202
+          },
+          "U.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "U": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "V.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "V": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "W.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "W": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 516096
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 63
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "frame-z-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-z-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "out.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 1.4901161193847656e-08,
+                "values": 524288
+              },
+              "ptype": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 524288
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "times.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 1.3100631690576847e-14,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 101
+          }
+        },
+        "output_count": 10,
+        "passed": true
+      },
+      "argv": [
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "directory": "/tmp/fortran-single-copy-pack-pilot-20261108-01/original/round-00",
+      "environment": {
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "GOMP_CPU_AFFINITY": null,
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PLACES": null,
+        "OMP_PROC_BIND": "false"
+      },
+      "mode": "original",
+      "openmp_launch_environment": {
+        "GOMP_SPINCOUNT": null,
+        "OMP_THREAD_LIMIT": null,
+        "OMP_WAIT_POLICY": null
+      },
+      "peak_host_rss_bytes": 323342336,
+      "pressure_kernel_cache": {
+        "environment_variable": "POISSON_SOLVER_KERNEL_CACHE_DIR",
+        "path": null,
+        "policy": "disabled",
+        "precompiled_outside_application": false,
+        "reason": "no_pressure_backend",
+        "schema_version": 1
+      },
+      "process_measurement_argv": [
+        "/usr/bin/time",
+        "--format=%M",
+        "--output=/tmp/fortran-single-copy-pack-pilot-20261108-01/original/round-00/peak-rss-kib.txt",
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "round": 0,
+      "timing": {
+        "completed_steps": 100,
+        "natural_end": false,
+        "poisson_seconds": 0.81,
+        "time_steps_seconds": 15.72
+      },
+      "traced": false,
+      "validation": {
+        "atol": 1e-06,
+        "fields": {
+          "X_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 128
+          },
+          "Y_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "Z_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "p": {
+            "failed_values": 0,
+            "max_absolute_error": 1.4901161193847656e-08,
+            "values": 524288
+          },
+          "ptype": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 524288
+          },
+          "u": {
+            "failed_values": 0,
+            "max_absolute_error": 1.1920928955078125e-07,
+            "values": 1572864
+          }
+        },
+        "note": "ELMM final VTK values are float32, including double-precision builds.",
+        "passed": true,
+        "rtol": 1e-05
+      },
+      "wall_seconds": 15.978031762999308,
+      "warmup": true
+    },
+    {
+      "all_outputs": {
+        "files": {
+          "Retau.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 7.576090865768492e-10,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 202
+          },
+          "U.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "U": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "V.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "V": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "W.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "W": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 516096
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 63
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "frame-z-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-z-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "out.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 1.4901161193847656e-08,
+                "values": 524288
+              },
+              "ptype": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 524288
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "times.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 1.3100631690576847e-14,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 101
+          }
+        },
+        "output_count": 10,
+        "passed": true
+      },
+      "argv": [
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "directory": "/tmp/fortran-single-copy-pack-pilot-20261108-01/packed/round-00",
+      "environment": {
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "GOMP_CPU_AFFINITY": null,
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PLACES": null,
+        "OMP_PROC_BIND": "false"
+      },
+      "mode": "packed",
+      "openmp_launch_environment": {
+        "GOMP_SPINCOUNT": null,
+        "OMP_THREAD_LIMIT": null,
+        "OMP_WAIT_POLICY": null
+      },
+      "packed_copies": {
+        "packed_bytes": 0,
+        "packed_calls": 0,
+        "workspace_bytes": 0
+      },
+      "peak_host_rss_bytes": 323616768,
+      "pressure_kernel_cache": {
+        "environment_variable": "POISSON_SOLVER_KERNEL_CACHE_DIR",
+        "path": null,
+        "policy": "disabled",
+        "precompiled_outside_application": false,
+        "reason": "no_pressure_backend",
+        "schema_version": 1
+      },
+      "process_measurement_argv": [
+        "/usr/bin/time",
+        "--format=%M",
+        "--output=/tmp/fortran-single-copy-pack-pilot-20261108-01/packed/round-00/peak-rss-kib.txt",
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "round": 0,
+      "timing": {
+        "completed_steps": 100,
+        "natural_end": false,
+        "poisson_seconds": 0.81,
+        "time_steps_seconds": 14.74
+      },
+      "traced": false,
+      "validation": {
+        "atol": 1e-06,
+        "fields": {
+          "X_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 128
+          },
+          "Y_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "Z_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "p": {
+            "failed_values": 0,
+            "max_absolute_error": 1.4901161193847656e-08,
+            "values": 524288
+          },
+          "ptype": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 524288
+          },
+          "u": {
+            "failed_values": 0,
+            "max_absolute_error": 1.1920928955078125e-07,
+            "values": 1572864
+          }
+        },
+        "note": "ELMM final VTK values are float32, including double-precision builds.",
+        "passed": true,
+        "rtol": 1e-05
+      },
+      "wall_seconds": 14.983832844000062,
+      "warmup": true
+    },
+    {
+      "all_outputs": {
+        "files": {
+          "Retau.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 7.576090865768492e-10,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 202
+          },
+          "U.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "U": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "V.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "V": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "W.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "W": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 516096
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 63
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "frame-z-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-z-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "out.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 1.4901161193847656e-08,
+                "values": 524288
+              },
+              "ptype": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 524288
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "times.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 1.3100631690576847e-14,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 101
+          }
+        },
+        "output_count": 10,
+        "passed": true
+      },
+      "argv": [
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "directory": "/tmp/fortran-single-copy-pack-pilot-20261108-01/packed/round-01",
+      "environment": {
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "GOMP_CPU_AFFINITY": null,
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PLACES": null,
+        "OMP_PROC_BIND": "false"
+      },
+      "mode": "packed",
+      "openmp_launch_environment": {
+        "GOMP_SPINCOUNT": null,
+        "OMP_THREAD_LIMIT": null,
+        "OMP_WAIT_POLICY": null
+      },
+      "packed_copies": {
+        "packed_bytes": 0,
+        "packed_calls": 0,
+        "workspace_bytes": 0
+      },
+      "peak_host_rss_bytes": 323321856,
+      "pressure_kernel_cache": {
+        "environment_variable": "POISSON_SOLVER_KERNEL_CACHE_DIR",
+        "path": null,
+        "policy": "disabled",
+        "precompiled_outside_application": false,
+        "reason": "no_pressure_backend",
+        "schema_version": 1
+      },
+      "process_measurement_argv": [
+        "/usr/bin/time",
+        "--format=%M",
+        "--output=/tmp/fortran-single-copy-pack-pilot-20261108-01/packed/round-01/peak-rss-kib.txt",
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "round": 1,
+      "timing": {
+        "completed_steps": 100,
+        "natural_end": false,
+        "poisson_seconds": 0.81,
+        "time_steps_seconds": 14.33
+      },
+      "traced": false,
+      "validation": {
+        "atol": 1e-06,
+        "fields": {
+          "X_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 128
+          },
+          "Y_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "Z_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "p": {
+            "failed_values": 0,
+            "max_absolute_error": 1.4901161193847656e-08,
+            "values": 524288
+          },
+          "ptype": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 524288
+          },
+          "u": {
+            "failed_values": 0,
+            "max_absolute_error": 1.1920928955078125e-07,
+            "values": 1572864
+          }
+        },
+        "note": "ELMM final VTK values are float32, including double-precision builds.",
+        "passed": true,
+        "rtol": 1e-05
+      },
+      "wall_seconds": 14.592455874000734,
+      "warmup": false
+    },
+    {
+      "all_outputs": {
+        "files": {
+          "Retau.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 7.576090865768492e-10,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 202
+          },
+          "U.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "U": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "V.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "V": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "W.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "W": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 516096
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 63
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "frame-z-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-z-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "out.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 1.4901161193847656e-08,
+                "values": 524288
+              },
+              "ptype": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 524288
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "times.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 1.3100631690576847e-14,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 101
+          }
+        },
+        "output_count": 10,
+        "passed": true
+      },
+      "argv": [
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "directory": "/tmp/fortran-single-copy-pack-pilot-20261108-01/original/round-01",
+      "environment": {
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "GOMP_CPU_AFFINITY": null,
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PLACES": null,
+        "OMP_PROC_BIND": "false"
+      },
+      "mode": "original",
+      "openmp_launch_environment": {
+        "GOMP_SPINCOUNT": null,
+        "OMP_THREAD_LIMIT": null,
+        "OMP_WAIT_POLICY": null
+      },
+      "peak_host_rss_bytes": 323407872,
+      "pressure_kernel_cache": {
+        "environment_variable": "POISSON_SOLVER_KERNEL_CACHE_DIR",
+        "path": null,
+        "policy": "disabled",
+        "precompiled_outside_application": false,
+        "reason": "no_pressure_backend",
+        "schema_version": 1
+      },
+      "process_measurement_argv": [
+        "/usr/bin/time",
+        "--format=%M",
+        "--output=/tmp/fortran-single-copy-pack-pilot-20261108-01/original/round-01/peak-rss-kib.txt",
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "round": 1,
+      "timing": {
+        "completed_steps": 100,
+        "natural_end": false,
+        "poisson_seconds": 0.83,
+        "time_steps_seconds": 15.86
+      },
+      "traced": false,
+      "validation": {
+        "atol": 1e-06,
+        "fields": {
+          "X_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 128
+          },
+          "Y_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "Z_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "p": {
+            "failed_values": 0,
+            "max_absolute_error": 1.4901161193847656e-08,
+            "values": 524288
+          },
+          "ptype": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 524288
+          },
+          "u": {
+            "failed_values": 0,
+            "max_absolute_error": 1.1920928955078125e-07,
+            "values": 1572864
+          }
+        },
+        "note": "ELMM final VTK values are float32, including double-precision builds.",
+        "passed": true,
+        "rtol": 1e-05
+      },
+      "wall_seconds": 16.096806555999137,
+      "warmup": false
+    },
+    {
+      "all_outputs": {
+        "files": {
+          "Retau.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 7.576090865768492e-10,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 202
+          },
+          "U.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "U": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "V.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "V": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "W.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "W": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 516096
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 63
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "frame-z-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-z-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "out.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 1.4901161193847656e-08,
+                "values": 524288
+              },
+              "ptype": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 524288
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "times.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 1.3100631690576847e-14,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 101
+          }
+        },
+        "output_count": 10,
+        "passed": true
+      },
+      "argv": [
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "directory": "/tmp/fortran-single-copy-pack-pilot-20261108-01/original/round-02",
+      "environment": {
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "GOMP_CPU_AFFINITY": null,
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PLACES": null,
+        "OMP_PROC_BIND": "false"
+      },
+      "mode": "original",
+      "openmp_launch_environment": {
+        "GOMP_SPINCOUNT": null,
+        "OMP_THREAD_LIMIT": null,
+        "OMP_WAIT_POLICY": null
+      },
+      "peak_host_rss_bytes": 323461120,
+      "pressure_kernel_cache": {
+        "environment_variable": "POISSON_SOLVER_KERNEL_CACHE_DIR",
+        "path": null,
+        "policy": "disabled",
+        "precompiled_outside_application": false,
+        "reason": "no_pressure_backend",
+        "schema_version": 1
+      },
+      "process_measurement_argv": [
+        "/usr/bin/time",
+        "--format=%M",
+        "--output=/tmp/fortran-single-copy-pack-pilot-20261108-01/original/round-02/peak-rss-kib.txt",
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "round": 2,
+      "timing": {
+        "completed_steps": 100,
+        "natural_end": false,
+        "poisson_seconds": 0.81,
+        "time_steps_seconds": 16.53
+      },
+      "traced": false,
+      "validation": {
+        "atol": 1e-06,
+        "fields": {
+          "X_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 128
+          },
+          "Y_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "Z_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "p": {
+            "failed_values": 0,
+            "max_absolute_error": 1.4901161193847656e-08,
+            "values": 524288
+          },
+          "ptype": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 524288
+          },
+          "u": {
+            "failed_values": 0,
+            "max_absolute_error": 1.1920928955078125e-07,
+            "values": 1572864
+          }
+        },
+        "note": "ELMM final VTK values are float32, including double-precision builds.",
+        "passed": true,
+        "rtol": 1e-05
+      },
+      "wall_seconds": 16.810902270999577,
+      "warmup": false
+    },
+    {
+      "all_outputs": {
+        "files": {
+          "Retau.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 7.576090865768492e-10,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 202
+          },
+          "U.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "U": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "V.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "V": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "W.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "W": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 516096
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 63
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "frame-z-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-z-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "out.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 1.4901161193847656e-08,
+                "values": 524288
+              },
+              "ptype": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 524288
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "times.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 1.3100631690576847e-14,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 101
+          }
+        },
+        "output_count": 10,
+        "passed": true
+      },
+      "argv": [
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "directory": "/tmp/fortran-single-copy-pack-pilot-20261108-01/packed/round-02",
+      "environment": {
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "GOMP_CPU_AFFINITY": null,
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PLACES": null,
+        "OMP_PROC_BIND": "false"
+      },
+      "mode": "packed",
+      "openmp_launch_environment": {
+        "GOMP_SPINCOUNT": null,
+        "OMP_THREAD_LIMIT": null,
+        "OMP_WAIT_POLICY": null
+      },
+      "packed_copies": {
+        "packed_bytes": 0,
+        "packed_calls": 0,
+        "workspace_bytes": 0
+      },
+      "peak_host_rss_bytes": 323362816,
+      "pressure_kernel_cache": {
+        "environment_variable": "POISSON_SOLVER_KERNEL_CACHE_DIR",
+        "path": null,
+        "policy": "disabled",
+        "precompiled_outside_application": false,
+        "reason": "no_pressure_backend",
+        "schema_version": 1
+      },
+      "process_measurement_argv": [
+        "/usr/bin/time",
+        "--format=%M",
+        "--output=/tmp/fortran-single-copy-pack-pilot-20261108-01/packed/round-02/peak-rss-kib.txt",
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "round": 2,
+      "timing": {
+        "completed_steps": 100,
+        "natural_end": false,
+        "poisson_seconds": 0.78,
+        "time_steps_seconds": 13.9
+      },
+      "traced": false,
+      "validation": {
+        "atol": 1e-06,
+        "fields": {
+          "X_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 128
+          },
+          "Y_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "Z_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "p": {
+            "failed_values": 0,
+            "max_absolute_error": 1.4901161193847656e-08,
+            "values": 524288
+          },
+          "ptype": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 524288
+          },
+          "u": {
+            "failed_values": 0,
+            "max_absolute_error": 1.1920928955078125e-07,
+            "values": 1572864
+          }
+        },
+        "note": "ELMM final VTK values are float32, including double-precision builds.",
+        "passed": true,
+        "rtol": 1e-05
+      },
+      "wall_seconds": 14.224691553999946,
+      "warmup": false
+    },
+    {
+      "all_outputs": {
+        "files": {
+          "Retau.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 7.566995918750763e-10,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 202
+          },
+          "U.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "U": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "V.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "V": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "W.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "W": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 516096
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 63
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "frame-z-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-z-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "out.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 1.4901161193847656e-08,
+                "values": 524288
+              },
+              "ptype": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 524288
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "times.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 1.3100631690576847e-14,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 101
+          }
+        },
+        "output_count": 10,
+        "passed": true
+      },
+      "argv": [
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "directory": "/tmp/fortran-single-copy-pack-pilot-20261108-01/packed/round-03",
+      "environment": {
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "GOMP_CPU_AFFINITY": null,
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PLACES": null,
+        "OMP_PROC_BIND": "false"
+      },
+      "mode": "packed",
+      "openmp_launch_environment": {
+        "GOMP_SPINCOUNT": null,
+        "OMP_THREAD_LIMIT": null,
+        "OMP_WAIT_POLICY": null
+      },
+      "packed_copies": {
+        "packed_bytes": 0,
+        "packed_calls": 0,
+        "workspace_bytes": 0
+      },
+      "peak_host_rss_bytes": 323481600,
+      "pressure_kernel_cache": {
+        "environment_variable": "POISSON_SOLVER_KERNEL_CACHE_DIR",
+        "path": null,
+        "policy": "disabled",
+        "precompiled_outside_application": false,
+        "reason": "no_pressure_backend",
+        "schema_version": 1
+      },
+      "process_measurement_argv": [
+        "/usr/bin/time",
+        "--format=%M",
+        "--output=/tmp/fortran-single-copy-pack-pilot-20261108-01/packed/round-03/peak-rss-kib.txt",
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "round": 3,
+      "timing": {
+        "completed_steps": 100,
+        "natural_end": false,
+        "poisson_seconds": 0.79,
+        "time_steps_seconds": 14.4
+      },
+      "traced": false,
+      "validation": {
+        "atol": 1e-06,
+        "fields": {
+          "X_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 128
+          },
+          "Y_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "Z_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "p": {
+            "failed_values": 0,
+            "max_absolute_error": 1.4901161193847656e-08,
+            "values": 524288
+          },
+          "ptype": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 524288
+          },
+          "u": {
+            "failed_values": 0,
+            "max_absolute_error": 1.1920928955078125e-07,
+            "values": 1572864
+          }
+        },
+        "note": "ELMM final VTK values are float32, including double-precision builds.",
+        "passed": true,
+        "rtol": 1e-05
+      },
+      "wall_seconds": 14.638801629998852,
+      "warmup": false
+    },
+    {
+      "all_outputs": {
+        "files": {
+          "Retau.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 7.566995918750763e-10,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 202
+          },
+          "U.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "U": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "V.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "V": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 524288
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "W.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "W": {
+                "failed_values": 0,
+                "max_absolute_error": 5.960464477539063e-08,
+                "values": 516096
+              },
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 63
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-y-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "frame-z-0.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 1
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 8192
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 24576
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "frame-z-times.txt": {
+            "atol": 1e-06,
+            "format": "indexed frame times",
+            "max_absolute_error": 0.0,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 2
+          },
+          "out.vtk": {
+            "atol": 1e-06,
+            "fields": {
+              "X_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 64
+              },
+              "p": {
+                "failed_values": 0,
+                "max_absolute_error": 1.4901161193847656e-08,
+                "values": 524288
+              },
+              "ptype": {
+                "failed_values": 0,
+                "max_absolute_error": 0.0,
+                "values": 524288
+              },
+              "u": {
+                "failed_values": 0,
+                "max_absolute_error": 1.1920928955078125e-07,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds.",
+            "passed": true,
+            "rtol": 1e-05
+          },
+          "times.unf": {
+            "atol": 1e-06,
+            "format": "DPREC streamfloat64",
+            "max_absolute_error": 1.3100631690576847e-14,
+            "passed": true,
+            "rtol": 1e-05,
+            "values": 101
+          }
+        },
+        "output_count": 10,
+        "passed": true
+      },
+      "argv": [
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "directory": "/tmp/fortran-single-copy-pack-pilot-20261108-01/original/round-03",
+      "environment": {
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "GOMP_CPU_AFFINITY": null,
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PLACES": null,
+        "OMP_PROC_BIND": "false"
+      },
+      "mode": "original",
+      "openmp_launch_environment": {
+        "GOMP_SPINCOUNT": null,
+        "OMP_THREAD_LIMIT": null,
+        "OMP_WAIT_POLICY": null
+      },
+      "peak_host_rss_bytes": 323305472,
+      "pressure_kernel_cache": {
+        "environment_variable": "POISSON_SOLVER_KERNEL_CACHE_DIR",
+        "path": null,
+        "policy": "disabled",
+        "precompiled_outside_application": false,
+        "reason": "no_pressure_backend",
+        "schema_version": 1
+      },
+      "process_measurement_argv": [
+        "/usr/bin/time",
+        "--format=%M",
+        "--output=/tmp/fortran-single-copy-pack-pilot-20261108-01/original/round-03/peak-rss-kib.txt",
+        "/tmp/fortran-empty-native-rk-build-20261108-02/work/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "round": 3,
+      "timing": {
+        "completed_steps": 100,
+        "natural_end": false,
+        "poisson_seconds": 0.79,
+        "time_steps_seconds": 15.99
+      },
+      "traced": false,
+      "validation": {
+        "atol": 1e-06,
+        "fields": {
+          "X_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 128
+          },
+          "Y_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "Z_COORDINATES": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 64
+          },
+          "p": {
+            "failed_values": 0,
+            "max_absolute_error": 1.4901161193847656e-08,
+            "values": 524288
+          },
+          "ptype": {
+            "failed_values": 0,
+            "max_absolute_error": 0.0,
+            "values": 524288
+          },
+          "u": {
+            "failed_values": 0,
+            "max_absolute_error": 1.1920928955078125e-07,
+            "values": 1572864
+          }
+        },
+        "note": "ELMM final VTK values are float32, including double-precision builds.",
+        "passed": true,
+        "rtol": 1e-05
+      },
+      "wall_seconds": 16.237522629999148,
+      "warmup": false
+    }
+  ],
+  "seconds": 133.3631151919999,
+  "status": "PASS",
+  "summary": {
+    "original": {
+      "median": 16.237522629999148,
+      "samples": [
+        16.096806555999137,
+        16.810902270999577,
+        16.237522629999148
+      ]
+    },
+    "packed": {
+      "median": 14.592455874000734,
+      "samples": [
+        14.592455874000734,
+        14.224691553999946,
+        14.638801629998852
+      ]
+    }
+  }
+}

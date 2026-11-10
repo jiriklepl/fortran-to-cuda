@@ -13,7 +13,21 @@ from compiler.offload.config import OffloadConfig
 
 @dataclass(frozen=True)
 class LegacyCompilerOptions(CompilerOptions):
+    gpu_policy: str = "always"
+    memory_model: str = "call"
     scope_execution: str | None = "bounded"
+
+    def _validate_transfers(self):
+        if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto", "coalesced"}:
+            raise CompilationError("Unknown historical scope transfer mode")
+
+    def _validate_execution_configuration(self):
+        if self.gpu_policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
+            raise CompilationError("Unknown historical GPU policy")
+        if self.memory_model not in {"call", "scoped"}:
+            raise CompilationError("Unknown historical memory model")
+        if self.memory_model == "scoped" and self.gpu_policy not in {"sections", "auto"}:
+            raise CompilationError("scoped memory requires sections or auto GPU policy")
 
     def _validate_scope_execution(self):
         if self.scope_execution not in {None, "bounded", "reached", "graph"}:
@@ -24,9 +38,18 @@ class LegacyCompilerOptions(CompilerOptions):
 
 @dataclass(frozen=True)
 class LegacyOffloadConfig(OffloadConfig):
+    policy: str = "always"
     scope_execution: str = "bounded"
     exact_window: dict | None = None
     scope_measurement: str | None = None
+
+    def _validate_transfers(self):
+        if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto", "coalesced"}:
+            raise ValueError("Unknown historical scope transfer mode")
+
+    def _validate_policy(self):
+        if self.policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
+            raise ValueError("Unknown historical GPU policy")
 
     def _validate_scope_execution(self):
         if self.scope_execution not in {"bounded", "reached", "graph"}:

@@ -1,0 +1,569 @@
+{
+  "all_timing_outputs_passed": true,
+  "candidate": "2619b7f frozen qualified empty-native CALL snapshot",
+  "candidate_binary_sha256": "e10f456e272061036a8f5dd61c9772ab9241ed0e5be4704c86b835a3e2071340",
+  "candidate_natural109_2458": true,
+  "cases": {
+    "channel": {
+      "descriptive_thresholds": {
+        "candidate_vs_7a612_ratio": 1.439182819582848,
+        "median_ten_percent_gain": false,
+        "native_20x": false,
+        "native_2x": false,
+        "native_speedup": 0.807956481412454,
+        "robust_vs_7a612": false,
+        "scope": "overall checkpoint requires both cases; all seven pairs retained"
+      },
+      "paired": {
+        "baseline-7a612": {
+          "candidate_over_control": [
+            1.400629573961394,
+            1.439182819582848,
+            1.441995486391308,
+            1.5045661033718953,
+            1.4603946496258113,
+            1.500798775341448,
+            1.3642542665494692
+          ],
+          "median_ratio": 1.439182819582848,
+          "ten_percent_wins": 0,
+          "wins": 0
+        },
+        "be58": {
+          "candidate_over_control": [
+            1.4319346467027694,
+            1.449799144671548,
+            1.432528370800183,
+            1.5238671342765826,
+            1.4426512233589346,
+            1.5484638776947157,
+            1.4133156584257431
+          ],
+          "median_ratio": 1.449799144671548,
+          "ten_percent_wins": 0,
+          "wins": 0
+        },
+        "native": {
+          "candidate_over_control": [
+            1.2310294839624094,
+            1.2379488003990786,
+            1.222553992517076,
+            1.2556443556570922,
+            1.244647521544755,
+            1.3144287570297821,
+            1.219607023453235
+          ],
+          "median_ratio": 1.237690423934491,
+          "ten_percent_wins": 0,
+          "wins": 0
+        }
+      },
+      "statistics": {
+        "baseline-7a612": {
+          "Q1": 11.261031661000288,
+          "Q3": 11.498263138999846,
+          "inclusive_IQR": 0.23723147799955768,
+          "max": 11.788685024000188,
+          "median_seconds": 11.340620902999945,
+          "min": 11.193290627000351,
+          "samples_seconds": [
+            11.466094600999895,
+            11.340620902999945,
+            11.193290627000351,
+            11.20960222100075,
+            11.312461100999826,
+            11.530431676999797,
+            11.788685024000188
+          ]
+        },
+        "be58": {
+          "Q1": 11.19546084500007,
+          "Q3": 11.323359901999993,
+          "inclusive_IQR": 0.12789905699992232,
+          "max": 11.45159509000041,
+          "median_seconds": 11.257577870000205,
+          "min": 11.067623386999912,
+          "samples_seconds": [
+            11.215421900000365,
+            11.257577870000205,
+            11.267263456000364,
+            11.067623386999912,
+            11.45159509000041,
+            11.175499789999776,
+            11.379456347999621
+          ]
+        },
+        "candidate": {
+          "Q1": 16.111719201500364,
+          "Q3": 16.69312260000015,
+          "inclusive_IQR": 0.5814033984997877,
+          "max": 17.304857739999534,
+          "median_seconds": 16.321226766999644,
+          "min": 16.059751195999524,
+          "samples_seconds": [
+            16.059751195999524,
+            16.321226766999644,
+            16.14067456200064,
+            16.865587534000042,
+            16.52065766600026,
+            17.304857739999534,
+            16.082763841000087
+          ]
+        },
+        "native": {
+          "Q1": 13.174697697500505,
+          "Q3": 13.237892562500292,
+          "inclusive_IQR": 0.06319486499978666,
+          "max": 13.431818856999598,
+          "median_seconds": 13.186840950999795,
+          "min": 13.045789239999976,
+          "samples_seconds": [
+            13.045789239999976,
+            13.184088681000503,
+            13.202422683000805,
+            13.431818856999598,
+            13.27336244199978,
+            13.165306714000508,
+            13.186840950999795
+          ]
+        }
+      }
+    },
+    "channel-simple": {
+      "descriptive_thresholds": {
+        "candidate_vs_7a612_ratio": 0.670870269566284,
+        "median_ten_percent_gain": true,
+        "native_20x": false,
+        "native_2x": false,
+        "native_speedup": 1.0441003342587913,
+        "robust_vs_7a612": true,
+        "scope": "overall checkpoint requires both cases; all seven pairs retained"
+      },
+      "paired": {
+        "baseline-7a612": {
+          "candidate_over_control": [
+            0.683769417547946,
+            0.659761016270075,
+            0.6688422141730263,
+            0.6857474792441298,
+            0.6702484288460931,
+            0.6636282418013638,
+            0.6800424988369692
+          ],
+          "median_ratio": 0.670870269566284,
+          "ten_percent_wins": 7,
+          "wins": 7
+        },
+        "be58": {
+          "candidate_over_control": [
+            1.241703819279084,
+            1.173886708544427,
+            1.1414392533265607,
+            1.1772682509470116,
+            1.1789614635226573,
+            1.1867059785682963,
+            1.147507062419331
+          ],
+          "median_ratio": 1.1929322501686912,
+          "ten_percent_wins": 0,
+          "wins": 0
+        },
+        "native": {
+          "candidate_over_control": [
+            0.9951840197409828,
+            0.9565301575561805,
+            0.9421333548205971,
+            0.952092207385574,
+            0.9548744037772153,
+            0.9490175539752038,
+            0.948834501920052
+          ],
+          "median_ratio": 0.9577623597926552,
+          "ten_percent_wins": 0,
+          "wins": 7
+        }
+      },
+      "statistics": {
+        "baseline-7a612": {
+          "Q1": 16.60264672800031,
+          "Q3": 16.854330728499917,
+          "inclusive_IQR": 0.2516840004996084,
+          "max": 16.92319450100058,
+          "median_seconds": 16.80120157700003,
+          "min": 16.436701515000095,
+          "samples_seconds": [
+            16.92319450100058,
+            16.80120157700003,
+            16.879188752999653,
+            16.436701515000095,
+            16.619842883000274,
+            16.82947270400018,
+            16.585450573000344
+          ]
+        },
+        "be58": {
+          "Q1": 9.42707857700043,
+          "Q3": 9.701595053500114,
+          "inclusive_IQR": 0.27451647649968436,
+          "max": 9.89059553199968,
+          "median_seconds": 9.44850525200036,
+          "min": 9.31910063199939,
+          "samples_seconds": [
+            9.31910063199939,
+            9.44280035400061,
+            9.89059553199968,
+            9.574221187000148,
+            9.44850525200036,
+            9.411356800000249,
+            9.82896892000008
+          ]
+        },
+        "candidate": {
+          "Q1": 11.15396848049977,
+          "Q3": 11.284162615500463,
+          "inclusive_IQR": 0.13019413500069277,
+          "max": 11.571562846999768,
+          "median_seconds": 11.271426630999485,
+          "min": 11.084777826999925,
+          "samples_seconds": [
+            11.571562846999768,
+            11.084777826999925,
+            11.28951397900073,
+            11.271426630999485,
+            11.139423579999857,
+            11.168513380999684,
+            11.278811252000196
+          ]
+        },
+        "native": {
+          "Q1": 11.646706531500513,
+          "Q3": 11.862801788499837,
+          "inclusive_IQR": 0.2160952569993242,
+          "max": 11.98292568799934,
+          "median_seconds": 11.768500313000004,
+          "min": 11.588529372999801,
+          "samples_seconds": [
+            11.627560951000305,
+            11.588529372999801,
+            11.98292568799934,
+            11.838587211999766,
+            11.66585211200072,
+            11.768500313000004,
+            11.887016364999909
+          ]
+        }
+      }
+    }
+  },
+  "complete_processes": 64,
+  "excluded_warmups": 8,
+  "fresh_controls_natural109_2458": false,
+  "measured_gates": {
+    "median_ten_percent_gain": false,
+    "native_20x": false,
+    "native_2x": false,
+    "robust_vs_7a612": false
+  },
+  "measured_samples": 56,
+  "protocol": {
+    "CPU": [
+      0,
+      2,
+      4,
+      6
+    ],
+    "FFTW": "All four modes require exactly the same four imported wisdom plans and verifier preload.",
+    "GPU_UUID": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+    "all_samples_retained": true,
+    "applications": 64,
+    "applications_per_case": 32,
+    "bounds_seconds": {
+      "application": 120,
+      "case": 1800,
+      "outer_all_cases": 3700
+    },
+    "cache": "No GPU-pressure backend or provider code cache in any mode; no cold OS-page/driver-cache claim.",
+    "campaigns": [
+      {
+        "case": "channel-simple",
+        "identity": {
+          "bytes": 92,
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel-simple/identity.json",
+          "sha256": "16d3b7966799e83a09c9064b1dea05124a4ffd0f6aaf93918ebecd8dd7a72523"
+        },
+        "root": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel-simple",
+        "state": {
+          "bytes": 1064706,
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel-simple/campaign.json",
+          "sha256": "02088e5da201c7d9280d54cafd9a80fb30636020ab429bfd3d4a41bfebe234ef"
+        }
+      },
+      {
+        "case": "channel",
+        "identity": {
+          "bytes": 92,
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel/identity.json",
+          "sha256": "8bf5ef49372594e09e21d67aa5736f26c4ffc9267bc4fc8181e5acf1cd7ac100"
+        },
+        "root": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel",
+        "state": {
+          "bytes": 1064542,
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel/campaign.json",
+          "sha256": "126988e29f29f83e5f53a119fba5f86c375d675a16d436ecaac348987b3e8e04"
+        }
+      }
+    ],
+    "candidate_build": {
+      "bytes": 1273,
+      "path": "/tmp/fortran-empty-native-rk-build-20261108-02/work/production.json",
+      "sha256": "c5566693278a8f7d8e03a0057fd559d1aa918006e0a30ff48e3d1104b6ae4357"
+    },
+    "candidate_natural": {
+      "bytes": 8221,
+      "path": "/tmp/fortran-empty-native-rk-natural-20261108-02/qualification.json",
+      "sha256": "0bad033ea67c529ff563b7be6401deecda18d7951f15cfc0d8eae0528602209f"
+    },
+    "candidate_snapshot": "2619b7f",
+    "clock": "Unchanged public run_one perf_counter around GNU-time wrapped production process. Includes startup, CPU PoisFFT, transfers, all original outputs, fixed FFTW verification and teardown. Input hashing and output comparisons are outside the clock.",
+    "controls": "New native/be58/7a builds on current toolchain; genuine fresh 7a runtime calibration. Candidate is the existing application-qualified build from this date.",
+    "controls_build": {
+      "bytes": 14910,
+      "path": "/tmp/fortran-copy-owner-controls-20261108-01/controls/qualification.json",
+      "sha256": "650c4c46233c535da5ff7de79499401578b156986bb2616a8184688bb9f68fc6"
+    },
+    "correctness": "Candidate natural109/2458 all20 fields/bounds/halos PASS; fresh four-mode two-step full20 qualification required before timing; all timing outputs compared to same-case fresh native warmup. Fresh-control natural109/2458 requalification pending; no release or research-checkpoint acceptance.",
+    "excluded_round": 0,
+    "field_policy": {
+      "atol": 1e-06,
+      "dtype": "float64",
+      "metadata_format": "storage-shape-bounds-v1",
+      "rtol": 1e-05
+    },
+    "four_threads": true,
+    "inputs": {
+      "bytes": 1045407,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/frozen-inputs.json",
+      "sha256": "65de6b5f29c81c77c76ce427766a19c61e7cda9fb91fbf76ccf618473752e90a"
+    },
+    "kind": "FRESH_CONTROLS_EMPTY_NATIVE_SNAPSHOT_COMPARISON",
+    "measured_rounds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "mode_order": [
+      "native",
+      "be58",
+      "baseline-7a612",
+      "candidate"
+    ],
+    "outlier_filtering": false,
+    "preliminary": true,
+    "release_accepted": false,
+    "reruns": false,
+    "research_checkpoint_accepted": false,
+    "research_checkpoints": {
+      "application_gain": "candidate median <= 0.9 * fresh 7a612 median in both cases",
+      "combined_acceleration": "candidate median <= 0.5 * fresh native median in both cases",
+      "research_objective": "candidate median <= 0.05 * fresh native median in both cases",
+      "robust_improvement": "wins in all seven round-paired comparisons, separately from median acceptance"
+    },
+    "resource_contract": "No concurrent compilation/tests/applications on any CPU or GPU; exact parent quiet lease required before execution. No automatic launch by staging/preflight.",
+    "rotation": "modes[round%4:] + modes[:round%4]",
+    "rounds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "runtime_library_directories": [
+      "/usr/lib/x86_64-linux-gnu",
+      "/usr/lib/x86_64-linux-gnu/blas",
+      "/usr/lib/x86_64-linux-gnu/lapack",
+      "/usr/local/cuda-13.5/targets/x86_64-linux/lib"
+    ],
+    "samples": 56,
+    "schema_version": 1,
+    "scientific_scope": "Original CPU PoisFFT for all modes, approved deterministic reference, unchanged physics/tolerances.",
+    "statistics": [
+      "all seven values, median/min/max/Q1/Q3/inclusive IQR",
+      "round-paired ratios and wins against native, be58 and 7a612"
+    ],
+    "status": "STAGED_NO_TIMING_APPLICATIONS",
+    "topology_calibration": "Fresh pinned 7a calibration on CPU0,2,4,6 and current GPU/driver; candidate matching runtime profile retained.",
+    "untraced": true,
+    "warmups": 8
+  },
+  "raw_root": "/tmp/fortran-speedup-empty-native-20261108-01",
+  "release_accepted": false,
+  "research_checkpoint_accepted": false,
+  "separate_short_trace_summary": {
+    "CUDA_activity_profile": false,
+    "candidate_policy": {
+      "GPU_source_compute_pricing_qualified": false,
+      "gpu_collective": false,
+      "gpu_policy": "sections",
+      "scope_transfers": "auto"
+    },
+    "claim": "Compact runtime records only. Launch records are not a CUPTI kernel count; no exclusive-time or causal attribution.",
+    "includes_initialization": true,
+    "kind": "separate short diagnostic runtime records",
+    "rows": [
+      {
+        "case": "channel-simple",
+        "domain_events": {},
+        "download_bytes": 29360128,
+        "download_records": 7,
+        "launch_records": 7,
+        "mode": "be58",
+        "raw_logs": [
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/be58/stdout.log",
+            "sha256": "4ed6c1193f5968889878f5d1a466de5ff9f59d3ae669c098865c4844524dbd79"
+          },
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/be58/stderr.log",
+            "sha256": "748193f00b80771a77d248bea9e0eab70bd72b9f59a0f228416543936af61f56"
+          }
+        ],
+        "upload_bytes": 93872128,
+        "upload_records": 63
+      },
+      {
+        "case": "channel-simple",
+        "domain_events": {},
+        "download_bytes": 123460288,
+        "download_records": 169,
+        "launch_records": 97,
+        "mode": "baseline-7a612",
+        "raw_logs": [
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/baseline-7a612/stdout.log",
+            "sha256": "b5eb5b81f5c2e31d16806da17bb3d6063104c85fce91a95cdfd65c5192ed843d"
+          },
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/baseline-7a612/stderr.log",
+            "sha256": "a8142b7dc65653dd8c608400398d7a83658cb97e87304829463d6e0a1cdc22ec"
+          }
+        ],
+        "upload_bytes": 202040320,
+        "upload_records": 189
+      },
+      {
+        "case": "channel-simple",
+        "domain_events": {
+          "domain_attach": 16,
+          "domain_create": 16,
+          "domain_detach": 16,
+          "domain_retire": 16
+        },
+        "download_bytes": 146316352,
+        "download_records": 30,
+        "launch_records": 126,
+        "mode": "candidate",
+        "raw_logs": [
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/candidate/stdout.log",
+            "sha256": "41135dd1ea1b9b03483f42d45b96b86ed18c68abce0c4dea69e5ddb41371b082"
+          },
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/candidate/stderr.log",
+            "sha256": "963691cadeed22e0a22f9c738a66ef18fb8037bf712fea22140eb6b66b2fcb90"
+          }
+        ],
+        "upload_bytes": 134664192,
+        "upload_records": 118
+      },
+      {
+        "case": "channel",
+        "domain_events": {},
+        "download_bytes": 29360128,
+        "download_records": 7,
+        "launch_records": 7,
+        "mode": "be58",
+        "raw_logs": [
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/be58/stdout.log",
+            "sha256": "9c1ac4d9d5028a4c8fad3b5730efa696555054eb9ca8b185866d1f619ab41a42"
+          },
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/be58/stderr.log",
+            "sha256": "b06e5ea105d18de1290521acd8b6e691e4f646419ff14e161e7f4487de3b18d8"
+          }
+        ],
+        "upload_bytes": 93872128,
+        "upload_records": 63
+      },
+      {
+        "case": "channel",
+        "domain_events": {},
+        "download_bytes": 29360128,
+        "download_records": 7,
+        "launch_records": 7,
+        "mode": "baseline-7a612",
+        "raw_logs": [
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/baseline-7a612/stdout.log",
+            "sha256": "4851acf55f29a0f7ba1ea02f3a39fa57a5414b61b9004bfb8372bcbb2cead097"
+          },
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/baseline-7a612/stderr.log",
+            "sha256": "196c526298036801b845e28388a7140ce1393eb586b39b450fc789d6d60c7c01"
+          }
+        ],
+        "upload_bytes": 93872128,
+        "upload_records": 63
+      },
+      {
+        "case": "channel",
+        "domain_events": {
+          "domain_attach": 70,
+          "domain_create": 70,
+          "domain_detach": 70,
+          "domain_retire": 70
+        },
+        "download_bytes": 146316352,
+        "download_records": 442,
+        "launch_records": 402,
+        "mode": "candidate",
+        "raw_logs": [
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/candidate/stdout.log",
+            "sha256": "a777f58ceb806fe50de7dbad8945eb9784308f38b8f77bde768067c475fc8268"
+          },
+          {
+            "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/candidate/stderr.log",
+            "sha256": "adfa53743a369d6654cb8060563b5e5912cadcdca197d55db5adb5b21255085e"
+          }
+        ],
+        "upload_bytes": 184158208,
+        "upload_records": 288
+      }
+    ],
+    "steps": 2,
+    "timing_sample": false
+  },
+  "short_full20": true,
+  "status": "PASS_PRELIMINARY_FOUR_MODE_COMPARISON",
+  "target_gap": {
+    "channel": {
+      "20x_budget_seconds": 0.6593420475499897,
+      "candidate_over_20x_budget": 24.753808478689823,
+      "native_median_seconds": 13.186840950999795
+    },
+    "channel-simple": {
+      "20x_budget_seconds": 0.5884250156500002,
+      "candidate_over_20x_budget": 19.155247195853104,
+      "native_median_seconds": 11.768500313000004
+    }
+  },
+  "timing_seconds": 1089.5460319200001
+}

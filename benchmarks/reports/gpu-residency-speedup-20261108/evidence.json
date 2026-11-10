@@ -1,0 +1,138 @@
+{
+  "all_outputs_passed": true,
+  "all_postguards_passed": true,
+  "counts": {
+    "measured": 56,
+    "short_full20_checks": 8,
+    "total_processes": 64,
+    "warmups": 8
+  },
+  "evidence": [
+    {
+      "bytes": 5337,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/protocol.json",
+      "sha256": "f57f30582e142b76ba76642d4f5e72a8ae625522223e2d456fadc90ecf0fe317"
+    },
+    {
+      "bytes": 1045407,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/frozen-inputs.json",
+      "sha256": "65de6b5f29c81c77c76ce427766a19c61e7cda9fb91fbf76ccf618473752e90a"
+    },
+    {
+      "bytes": 838,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/root-quiet-window.json",
+      "sha256": "887efb987a9fcd012293667101d7b6252996bae76892b519520eeeb9a84774c2"
+    },
+    {
+      "bytes": 1942,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/quiet-preflight.json",
+      "sha256": "2a2a10e4424ed5bd1807aba17c40ec2270b7cc82b3522fa6413ff21a475d46dc"
+    },
+    {
+      "bytes": 198,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/quiescence-end.json",
+      "sha256": "958e88d478de2622f4789803b65bfedc76c547530adad98387e3ec5560f6402c"
+    },
+    {
+      "bytes": 1566,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/completion.json",
+      "sha256": "603ed9b28330b2c4a7d34b95bd933902fe50f6b4aea9eb281f95a2389a5b6240"
+    },
+    {
+      "bytes": 181580,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/short-qualification.json",
+      "sha256": "1e581f6db91436d9f189ea1815660dae10d72b6ea8625a0184c41f0f3192aef2"
+    },
+    {
+      "bytes": 4942,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/short-trace-summary.json",
+      "sha256": "23f41be7259a40ea7f982aae45af85f6e1c48313df70fc49348c334e8c3e7c6f"
+    },
+    {
+      "bytes": 19637,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/summary.json",
+      "sha256": "21c6efce41bfcf3eef21563fb72708430a463c045e8ba117a46800a6e2a2e43d"
+    },
+    {
+      "bytes": 6663,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/stage.py",
+      "sha256": "1dd839e5abb8c7d6882ea2c5337fedd0d48dc6f2fd152ec94c7e1c1d36991302"
+    },
+    {
+      "bytes": 10018,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/run_timing.py",
+      "sha256": "2016bb3647a82989d0887982a39b2f9ab89bb88f36354479e2269ad3918b89bc"
+    },
+    {
+      "bytes": 4118,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/execute.py",
+      "sha256": "c7e93a38833d6f1db85958c95bbb3aa33a95517416d6b2b9892a0e198bcfb2f3"
+    },
+    {
+      "bytes": 4586,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/short_check.py",
+      "sha256": "43f45686de60648083b7029d9c2b89664c35767e097009e3b48d388c509cd9f3"
+    },
+    {
+      "bytes": 6879,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/finalize.py",
+      "sha256": "cc5e03122c1fea4943f9c92f795413e221c3b5599eb0576e38ed30e45ab9e0d2"
+    },
+    {
+      "bytes": 3755,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/attach_trace_summary.py",
+      "sha256": "50b0cd1e408638e2e5a3417d50ff2fd4cd46f5af3fd614a427b796f61a6ce16b"
+    },
+    {
+      "bytes": 1064706,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel-simple/campaign.json",
+      "sha256": "02088e5da201c7d9280d54cafd9a80fb30636020ab429bfd3d4a41bfebe234ef"
+    },
+    {
+      "bytes": 92,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel-simple/identity.json",
+      "sha256": "16d3b7966799e83a09c9064b1dea05124a4ffd0f6aaf93918ebecd8dd7a72523"
+    },
+    {
+      "bytes": 500005,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel-simple/report.json",
+      "sha256": "4016a3c4a33f17929b8f934cf366cfc61c2c46e50a417b334f13a134f1fee8a5"
+    },
+    {
+      "bytes": 1064542,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel/campaign.json",
+      "sha256": "126988e29f29f83e5f53a119fba5f86c375d675a16d436ecaac348987b3e8e04"
+    },
+    {
+      "bytes": 92,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel/identity.json",
+      "sha256": "8bf5ef49372594e09e21d67aa5736f26c4ffc9267bc4fc8181e5acf1cd7ac100"
+    },
+    {
+      "bytes": 578217,
+      "path": "/tmp/fortran-speedup-empty-native-20261108-01/campaigns/channel/report.json",
+      "sha256": "3b768c85ed9835ae8cdde8776754a7f5f1c61d2e26f3a6d286ea744637b86500"
+    },
+    {
+      "bytes": 8134,
+      "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-residency-speedup-20261108/README.md",
+      "sha256": "951507bcfa4e3854cbc9ecb234183756b04cc814e204e51f11c2cbee68d414d0"
+    },
+    {
+      "bytes": 19637,
+      "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-residency-speedup-20261108/summary.json",
+      "sha256": "21c6efce41bfcf3eef21563fb72708430a463c045e8ba117a46800a6e2a2e43d"
+    },
+    {
+      "bytes": 4942,
+      "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-residency-speedup-20261108/short-trace-summary.json",
+      "sha256": "23f41be7259a40ea7f982aae45af85f6e1c48313df70fc49348c334e8c3e7c6f"
+    }
+  ],
+  "fresh_controls_natural_correctness": "NOT_RUN",
+  "native_2x_20x": "FAIL",
+  "no_process_groups_remain": true,
+  "performance_checkpoint_10percent": "FAIL",
+  "release_accepted": false,
+  "status": "PASS_PRELIMINARY_COMPARISON_PACKET"
+}

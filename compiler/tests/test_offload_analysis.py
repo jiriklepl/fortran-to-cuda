@@ -67,6 +67,19 @@ RANK1 = "real, intent(inout) :: a(:)\nreal, intent(in) :: b(:)\ninteger :: i,j,t
 RANK2 = "real, intent(inout) :: a(:,:)\nreal, intent(in) :: b(:,:)\ninteger :: i,j,k,t"
 
 
+@pytest.mark.parametrize("body,incoming", [
+    ("a(i)=b(i)\na(i)=a(i)*2", False),
+    ("a(i)=a(i)+b(i)\na(i)=a(i)*2", True),
+    ("if (b(i)>0) then\na(i)=b(i)\nendif\na(i)=a(i)*2", True),
+    ("a(i)=b(i)\nt=i\na(t)=a(t)*2", False),
+])
+def test_same_iteration_definition_does_not_require_an_incoming_replica(tmp_path, body, incoming):
+    analysis = analyze(tmp_path, RANK1, "do i=1,n\n" + body + "\nend do")
+    result = footprint(analysis, "a")
+    assert bool(result.reads or result.full_read) is incoming
+    assert result.writes
+
+
 def test_scalar_math_has_explicit_counts_and_cannot_use_ordinary_fma_rate(tmp_path):
     analysis = analyze(tmp_path, RANK1, "do i=1,n\na(i)=sqrt(abs(b(i)))+cos(acos(b(i)))\nend do")
     unit = analysis.units[0]

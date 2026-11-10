@@ -1,0 +1,259 @@
+{
+  "status": "SCOPED_ONLY_ARTIFACT_MILESTONE_PASS",
+  "full_release_qualified": false,
+  "new_performance_claim": false,
+  "build": {
+    "status": "PASS",
+    "command": [
+      "/tmp/fortran-native-runtime-env-20261102/bin/python",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/pipeline.py",
+      "resident-build",
+      "--elmm",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/repos/elmm",
+      "--poisfft",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/repos/PoisFFT",
+      "--compiler",
+      "/home/jirka/research/fortran-abomination",
+      "--solver",
+      "/home/jirka/research/fortran-abomination/poisson-solver",
+      "--vkfft",
+      "/tmp/fortran-poisson-api-24/vkfft-cache",
+      "--output",
+      "/tmp/fortran-scoped-artifacts-20261110-01/work",
+      "--fortran",
+      "/usr/bin/gfortran-15",
+      "--cxx",
+      "/usr/bin/g++-14",
+      "--nvcc",
+      "/usr/local/cuda-13.5/bin/nvcc",
+      "--architecture",
+      "86",
+      "--jobs",
+      "4"
+    ],
+    "owned_group": 253592,
+    "returncode": 0,
+    "group_absent": true,
+    "binaries": {
+      "ELMM": {
+        "path": "/tmp/fortran-scoped-artifacts-20261110-01/work/build/ELMM",
+        "sha256": "aedc58634d480785c778b842675b681ed75954e55ca03c9222e24baa83d9f617"
+      },
+      "ELMM-native": {
+        "path": "/tmp/fortran-scoped-artifacts-20261110-01/work/build/ELMM-native",
+        "sha256": "28c5fbcefe5989672cc9e2614bf35a353526faa799ccc4674ef72e5cef8ac5ab"
+      },
+      "ELMM-full20": {
+        "path": "/tmp/fortran-scoped-artifacts-20261110-01/work/build/ELMM-full20",
+        "sha256": "32dd590511473fd0448cdbc5da8443b59d5a16c76a450df18f696f5270596bc8"
+      },
+      "ELMM-native-full20": {
+        "path": "/tmp/fortran-scoped-artifacts-20261110-01/work/build/ELMM-native-full20",
+        "sha256": "62fa739f9bbebfafef5214635ab11a95502090d506ef40d5cb04c6b3392754b0"
+      }
+    },
+    "provider": {
+      "path": "/tmp/fortran-scoped-artifacts-20261110-01/work/build/lib/libpoisson-solver.so.0.1",
+      "sha256": "23c60c3e0f10baac2b0f44a3257ae6ee2779078aab45558b81441503ba5a24d8"
+    },
+    "seconds": 582.2713498189987
+  },
+  "tests": {
+    "focused": {
+      "tests": 90,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "cuda-entry-final": {
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "initial_CUDA_failure": "17 passed, 3 stale guarded_value region-count assertions failed. Prior archived compiler reproduces merged native worker. Fixture now explicitly uses opt0 for guarded_value to preserve protected native then GPU continuation; final20 checks pass.",
+  "artifacts": {
+    "status": "PASS",
+    "entries": 130,
+    "artifact_schema_version": 2,
+    "runtime_abi_version": 1,
+    "entry_abi_version": 3,
+    "runtime_id": "9e05267fe9ddc62156f273e86b3b43f30f16a07d3bf6910cc852c92c7bee9ddc",
+    "unused_ordinary_sources_avoided": 390,
+    "unused_ordinary_bytes_avoided": 26817892,
+    "scope": "Generated-source inventory only; no build-time, execution-time or full legacy-removal claim."
+  },
+  "generated_comparison": {
+    "interface_normalized": {
+      "identical_multiset": true,
+      "current_count": 130,
+      "selected_count": 130,
+      "new": {},
+      "missing": {}
+    },
+    "kernels": {
+      "identical_multiset": true,
+      "current_count": 229,
+      "selected_count": 229,
+      "new": {},
+      "missing": {}
+    },
+    "header": {
+      "identical_multiset": true,
+      "current_count": 130,
+      "selected_count": 130,
+      "new": {},
+      "missing": {}
+    }
+  },
+  "generated_comparison_limits": "Multiset comparison of numerical kernel bodies, Fortran ABIs and common headers. Does not equate host coordinator logic, trace/cache identities, actual execution or performance.",
+  "primary_processes": 8,
+  "primary_all_pass": true,
+  "coverage": {
+    "simple2": {
+      "gpu_kernels_by_procedure": {
+        "arrayutilities::add_3d": 18,
+        "arrayutilities::multiply_3d": 18,
+        "arrayutilities::set_3d": 24,
+        "boundaries::bounduvw_do_bc": 558,
+        "boundaries::periodic_corners_edges": 93,
+        "dynamics::convection": 42,
+        "dynamics::pressuregrad": 24,
+        "momentumadvection::cduadv": 6,
+        "momentumadvection::cdudiv": 6,
+        "momentumadvection::cdvadv": 6,
+        "momentumadvection::cdvdiv": 6,
+        "momentumadvection::cdwadv": 6,
+        "momentumadvection::cdwdiv": 6,
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+        "pressure::buildpoissonrhs": 7,
+        "pressure::correctpoissonvelocity": 21,
+        "pressure::updatepoissonpressure": 7,
+        "resident_time::average": 8,
+        "resident_time::cfl": 1,
+        "resident_wall::correction1m": 6,
+        "resident_wall::correction1p": 6,
+        "resident_wall::correction2m": 6,
+        "resident_wall::correction2p": 6,
+        "resident_wall::correction3m": 6,
+        "resident_wall::correction3p": 6,
+        "resident_wall::stress0": 12,
+        "resident_wall::stress1": 12,
+        "resident_wall::stress2": 12,
+        "resident_wall::stress3": 12,
+        "scalarboundaries::boundviscosity": 36,
+        "subgrid::sgs_sigma_uniform": 6
+      },
+      "generated_cpu_events": {},
+      "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"
+    },
+    "channel2": {
+      "gpu_kernels_by_procedure": {
+        "arrayutilities::add_3d": 18,
+        "arrayutilities::multiply_3d": 18,
+        "arrayutilities::set_3d": 24,
+        "boundaries::bounduvw_do_bc": 774,
+        "boundaries::periodic_corners_edges": 129,
+        "dynamics::convection": 42,
+        "dynamics::pressuregrad": 24,
+        "filters::filter3ord": 108,
+        "momentumadvection::cd4divu": 6,
+        "momentumadvection::cd4divv": 6,
+        "momentumadvection::cd4divw": 6,
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+        "pressure::buildpoissonrhs": 7,
+        "pressure::correctpoissonvelocity": 21,
+        "pressure::updatepoissonpressure": 7,
+        "resident_time::cfl": 1,
+        "resident_wall::correction1m": 6,
+        "resident_wall::correction1p": 6,
+        "resident_wall::correction2m": 6,
+        "resident_wall::correction2p": 6,
+        "resident_wall::correction3m": 6,
+        "resident_wall::correction3p": 6,
+        "resident_wall::stress0": 12,
+        "resident_wall::stress1": 12,
+        "resident_wall::stress2": 12,
+        "resident_wall::stress3": 12,
+        "scalarboundaries::boundviscosity": 36,
+        "subgrid::sgs_sigma_uniform": 6
+      },
+      "generated_cpu_events": {},
+      "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"
+    }
+  },
+  "long": {
+    "fields": 20,
+    "outputs": 114,
+    "worst_relative_l2": [
+      0.0015489611183125967,
+      "frame-y-49.vtk:p"
+    ],
+    "worst_peak_scaled_local": [
+      0.014670614640088665,
+      "fields-Pr.bin"
+    ],
+    "exact_selected_GPU_field_and_shape_files": 40,
+    "native_reference_rerun": false,
+    "approved_rule": "Only natural channel2458 numerical fields: <=1% relative L2 independently per stored field, output scalar/vector component and Retau series. Zero references require max abs<=1e-6. Preserve exact bounds, layouts, output/frame inventories, coordinates and labels. Timing columns retain original pointwise criterion. Primary/short/operator gates stay unchanged. Local maxima remain reported, not concealed."
+  },
+  "calibration": {
+    "status": "PASS",
+    "runtime_id": "9e05267fe9ddc62156f273e86b3b43f30f16a07d3bf6910cc852c92c7bee9ddc",
+    "fresh_measurements": false,
+    "base_cost_count": 11,
+    "transfer_cost_count": 10,
+    "physical_copy_model_valid": true,
+    "collective_rejection": "collective synchronization calibration is unavailable",
+    "source_submit_rejection": "source submit model failed independent coverage and is unavailable",
+    "complete_automatic_placement_qualified": false,
+    "inputs": {
+      "/tmp/fortran-scoped-artifacts-20261110-01/check_calibration.py": "ab0a4b052cafb82396060fd0b7afe5a3ed3f03fcbf35591771da47abbc0c81e9",
+      "/tmp/fortran-current-public-20261110-01/calibration/hardware.json": "33c2bf7e36522b10b3f4ac8b2df1d8f7dea1cd241274a8e0e92e90b34c92d076",
+      "/tmp/fortran-scoped-artifacts-20261110-01/artifact-audit.json": "94c11f709444f6dab4f27b4fd70b3ee023a08662bf7388c0918c94a42efa6e42"
+    }
+  },
+  "source_archive_count": 518,
+  "selected_timing_baseline": "/tmp/fortran-index-conversion-20261110-01",
+  "timing_report": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-host-preparation-20261110/summary.json",
+  "remaining": "Ordinary call facade/policies and production legacy configuration imports; bounded asynchronous output and complete graph/snapshot budgeting; current solver/operator and maintained release suites; fresh four-control timing;20x research gap.",
+  "receipts": {
+    "/tmp/fortran-scoped-artifacts-20261110-01/build.py": "3d985da625818dc54359c2969b548d6b8a0c083d0924e1d3b3273036259a9d01",
+    "/tmp/fortran-scoped-artifacts-20261110-01/build-plan.json": "17daf83cf75218a02daedc2922f7dc29feef53901309a36c1856309d62570c15",
+    "/tmp/fortran-scoped-artifacts-20261110-01/build-result.json": "34a2ffb823b3f834d36021d350bf6dd4d32eeebc33d35adde291e15c68ac414f",
+    "/tmp/fortran-scoped-artifacts-20261110-01/build.log": "feaaaca8d73da23b297003d91234a5620a914681c0a994dcfbdf6c00f06df31f",
+    "/tmp/fortran-scoped-artifacts-20261110-01/source-archive.json": "6dd24a6da55aa0052ce4e2017d8e708dcf8d85f8739716e0c3c6f51470ee1a3c",
+    "/tmp/fortran-scoped-artifacts-20261110-01/test-inputs.json": "d77063358e04bf5eb24eaf31bde6395ccc2cfcbad1404710c4aaec5c827ce0e1",
+    "/tmp/fortran-scoped-artifacts-20261110-01/focused.log": "03bdd17768a6bdcf8681d10752565e838735cfcbf614ca2ccbca5316bd13eedb",
+    "/tmp/fortran-scoped-artifacts-20261110-01/focused.xml": "20a74e90ab734b094e94384c03cbbd2921ca0686bf59e8b85ef9a758a89a8db6",
+    "/tmp/fortran-scoped-artifacts-20261110-01/cuda-entry.log": "d742201f2538e28a47346800649a7b768d3d752fc99be2370d2293f825ea3586",
+    "/tmp/fortran-scoped-artifacts-20261110-01/cuda-entry.xml": "c5f1c4d11cf87818b2140f6f2b47ad1b94bd3ad1927b2ed7c1fe46275b6deb45",
+    "/tmp/fortran-scoped-artifacts-20261110-01/cuda-entry-final.log": "38d97fadb1dd9f9440ae3d7bc9273685216f69c1a79492fdf6d5dab89c4e3702",
+    "/tmp/fortran-scoped-artifacts-20261110-01/cuda-entry-final.xml": "62e37aaecd11de7478e7aaf7743660ad94243a461622bb9384d2605c93e1ecab",
+    "/tmp/fortran-scoped-artifacts-20261110-01/previous-guarded-value.json": "f05390b6c57eb9fa8505f11e6c579bb42d9f7305cdd652415c11d92c69bd0a48",
+    "/tmp/fortran-scoped-artifacts-20261110-01/compare_generated.py": "344b2bcffbd561f095b564b3970d2e7287c3254881783d58d3616484b48c0464",
+    "/tmp/fortran-scoped-artifacts-20261110-01/generated-comparison.json": "157a5a2ab9e1ec8f03bf280797ec1cce272b438fad769fb34df26ff106a02d08",
+    "/tmp/fortran-scoped-artifacts-20261110-01/audit_artifacts.py": "9a0edb58a1306bd9fbc9e1ae2777d2e5a7db343e86e44cdff3b569f595fde347",
+    "/tmp/fortran-scoped-artifacts-20261110-01/artifact-audit.json": "94c11f709444f6dab4f27b4fd70b3ee023a08662bf7388c0918c94a42efa6e42",
+    "/tmp/fortran-scoped-artifacts-20261110-01/check_calibration.py": "ab0a4b052cafb82396060fd0b7afe5a3ed3f03fcbf35591771da47abbc0c81e9",
+    "/tmp/fortran-scoped-artifacts-20261110-01/calibration-reuse.json": "c174a89090bf719559007d2d7c05ac735def572ca02d30d83f453790e9be82cb",
+    "/tmp/fortran-scoped-artifacts-20261110-01/qualify.py": "51947a36e7132f595a4b00dcd03210f86eb156a082676a5ee57cf0a88e52d606",
+    "/tmp/fortran-scoped-artifacts-20261110-01/qualification/plan.json": "ebc360f86e3ecf0f3f8755c9245647dc6ce18d3ccf1a4ddca91c65d01bd1124b",
+    "/tmp/fortran-scoped-artifacts-20261110-01/qualification/result.json": "7479cb54ce0f79e221432676ae0b03158d163d4c273236862a21dc55d5ee812f",
+    "/tmp/fortran-scoped-artifacts-20261110-01/long/run.py": "0cc9daf6b0cb472ebc53045e54999431a62766e2de20af5728370750e480c0d1",
+    "/tmp/fortran-scoped-artifacts-20261110-01/long/analyze.py": "5883c8768168cdb2244ed4dd666f7affd6ef715b9d81fb5a3b1a4dfbb02f54a2",
+    "/tmp/fortran-scoped-artifacts-20261110-01/long/plan.json": "339a2ba5c41f117df33b74b0105f497b5da5c87786efbc26d34b24fef4c043d4",
+    "/tmp/fortran-scoped-artifacts-20261110-01/long/result.json": "ba7bddd11eaba458ee028b524b0ece4911e89762263d0b143d9b1b4e7c5ea4c4",
+    "/tmp/fortran-scoped-artifacts-20261110-01/long/execution.json": "689047965d08a864f63554d899429552ac7b30c091d90912e4c76c8b29122012",
+    "/tmp/fortran-scoped-artifacts-20261110-01/long/analysis.log": "06c3610f0bc09c964905f8f8641d617aedb96f9f343d9e9ba1caca4870fdc97a",
+    "/tmp/fortran-scoped-artifacts-20261110-01/long/compare_selected.py": "74fe5d449c399314adec2c801849ca7468d960dd1c11d24a826798ff5cc6cd02",
+    "/tmp/fortran-scoped-artifacts-20261110-01/long/selected-gpu-parity.json": "850a7c6f3296e83cf8928faf3ac6c14aea4507107037e1fcae0018825c563481",
+    "/tmp/fortran-scoped-artifacts-20261110-01/work/prepared.json": "07aaffb122df3d6b783deed3cdcb31847e996a27a6438ee47507a96f6b87bcfa",
+    "/tmp/fortran-scoped-artifacts-20261110-01/work/build-inputs.json": "af91629da533b246d2a32b7eefefe0e923ab833d14680abea026f9aef8a7a4a0",
+    "/tmp/fortran-scoped-artifacts-20261110-01/work/built.json": "ed21e52ae581a411a2e570457db77cf6e6b769b98ace63142c5097fdf15b4a2b",
+    "/tmp/fortran-scoped-artifacts-20261110-01/work/compile.log": "505b34dd01433ee0688d1a73cf8acb6fdf0194d6955bcf2827209d50bc33f73a",
+    "/tmp/fortran-scoped-artifacts-20261110-01/work/configure.log": "b3e17c0a90268156dcd260347046847eb80d29104a266e52305eba4f250f6712",
+    "/tmp/fortran-scoped-artifacts-20261110-01/report.py": "9ea2483c418743ef2ad683b023c9414c9069e5431d605b037de6196b0433d76b"
+  }
+}

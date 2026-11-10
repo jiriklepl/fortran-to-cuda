@@ -1,0 +1,307 @@
+{
+  "assessment": {
+    "all_outputs_pass": true,
+    "cases": {
+      "channel": {
+        "change_vs_be58_percent": 6.036629809731875,
+        "change_vs_gpu_convection_percent": -27.471795502084127,
+        "median_seconds": {
+          "be58": 12.9348064170008,
+          "candidate": 13.71563279700058,
+          "native": 14.84663239800284,
+          "original": 18.910757396999543
+        },
+        "native_speedup": 1.0824606212299293,
+        "paired_samples": 3,
+        "paired_wins": {
+          "be58": 0,
+          "native": 3,
+          "original": 3
+        }
+      },
+      "channel-simple": {
+        "change_vs_be58_percent": 6.964881112814192,
+        "change_vs_gpu_convection_percent": -1.6634899964481975,
+        "median_seconds": {
+          "be58": 10.945415071000753,
+          "candidate": 11.707750218000001,
+          "native": 13.012988074002351,
+          "original": 11.905802043998847
+        },
+        "native_speedup": 1.1114849421706676,
+        "paired_samples": 3,
+        "paired_wins": {
+          "be58": 0,
+          "native": 3,
+          "original": 2
+        }
+      }
+    },
+    "decision": "Added forced Convection offloading causes a substantial channel regression under the current shared SGS path. Do not encode a named ELMM CPU placement rule. Evaluate the existing public AUTO policy on the same original graph; retain be58 reference and all correctness/performance gates.",
+    "max_external_cpu_cores": 0.42023779213283113,
+    "performance_checkpoint": false,
+    "status": "COMPLETE_DIAGNOSTIC_NOT_PROMOTED"
+  },
+  "short_transfers": [
+    {
+      "candidate": {
+        "compact_events": 0,
+        "copies": {
+          "download_bytes": 27181440,
+          "download_events": 6,
+          "upload_bytes": 80461824,
+          "upload_events": 54
+        },
+        "numerical_launches": {
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 27181440
+        },
+        "trace_events": {
+          "allocate": 24,
+          "close": 6,
+          "create": 6,
+          "download": 6,
+          "host_commit": 366,
+          "launch": 42,
+          "release": 24,
+          "upload": 54
+        }
+      },
+      "candidate_bytes": 107643264,
+      "case": "channel-simple",
+      "d2h_reduced": true,
+      "execution_changed": true,
+      "h2d_reduced": true,
+      "native_convection_only": true,
+      "numerical_launch_inventory_equal": false,
+      "payload_reduced": true,
+      "prior": {
+        "compact_events": 0,
+        "copies": {
+          "download_bytes": 146316352,
+          "download_events": 30,
+          "upload_bytes": 81051648,
+          "upload_events": 66
+        },
+        "numerical_launches": {
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_int_3d": 18,
+          "dynamics::convection": 12,
+          "momentumadvection::cduadv": 6,
+          "momentumadvection::cdudiv": 6,
+          "momentumadvection::cdvadv": 6,
+          "momentumadvection::cdvdiv": 6,
+          "momentumadvection::cdwadv": 6,
+          "momentumadvection::cdwdiv": 6,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 146316352
+        },
+        "trace_events": {
+          "allocate": 48,
+          "close": 12,
+          "create": 12,
+          "download": 30,
+          "host_commit": 516,
+          "launch": 126,
+          "release": 48,
+          "upload": 66
+        }
+      },
+      "prior_bytes": 227368000
+    },
+    {
+      "candidate": {
+        "compact_events": 0,
+        "copies": {
+          "download_bytes": 27181440,
+          "download_events": 6,
+          "upload_bytes": 80461824,
+          "upload_events": 54
+        },
+        "numerical_launches": {
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 27181440
+        },
+        "trace_events": {
+          "allocate": 24,
+          "close": 6,
+          "create": 6,
+          "download": 6,
+          "host_commit": 366,
+          "launch": 42,
+          "release": 24,
+          "upload": 54
+        }
+      },
+      "candidate_bytes": 107643264,
+      "case": "channel",
+      "d2h_reduced": true,
+      "execution_changed": true,
+      "h2d_reduced": true,
+      "native_convection_only": true,
+      "numerical_launch_inventory_equal": false,
+      "payload_reduced": true,
+      "prior": {
+        "compact_events": 28,
+        "copies": {
+          "download_bytes": 146316352,
+          "download_events": 442,
+          "upload_bytes": 130516992,
+          "upload_events": 324
+        },
+        "numerical_launches": {
+          "arrayutilities::multiply_3d": 12,
+          "arrayutilities::set_3d": 12,
+          "dynamics::convection": 12,
+          "momentumadvection::cd4divu": 108,
+          "momentumadvection::cd4divv": 108,
+          "momentumadvection::cd4divw": 108,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 143696704
+        },
+        "trace_events": {
+          "allocate": 66,
+          "close": 36,
+          "create": 36,
+          "download": 442,
+          "host_commit": 642,
+          "launch": 402,
+          "observe": 18,
+          "release": 66,
+          "upload": 324
+        }
+      },
+      "prior_bytes": 276833344
+    }
+  ],
+  "timings": {
+    "channel": {
+      "median_ratios": {
+        "be58": 1.0603662980973187,
+        "native": 0.9238211352795129,
+        "original": 0.7252820449791587
+      },
+      "modes": {
+        "be58": {
+          "median": 12.9348064170008,
+          "samples": [
+            12.937209972002165,
+            12.667771199998242,
+            12.9348064170008
+          ]
+        },
+        "candidate": {
+          "median": 13.71563279700058,
+          "samples": [
+            13.795480787997803,
+            13.695486978002009,
+            13.71563279700058
+          ]
+        },
+        "native": {
+          "median": 14.84663239800284,
+          "samples": [
+            14.935081550000177,
+            14.831100473998958,
+            14.84663239800284
+          ]
+        },
+        "original": {
+          "median": 18.910757396999543,
+          "samples": [
+            18.910757396999543,
+            18.731274100999144,
+            18.955207671002427
+          ]
+        }
+      },
+      "paired_ratios": {
+        "be58": [
+          1.0663412604304212,
+          1.0811283817633137,
+          1.0603662980973187
+        ],
+        "native": [
+          0.923696381691176,
+          0.9234302607559134,
+          0.9238211352795129
+        ],
+        "original": [
+          0.7295044031492176,
+          0.7311561885302548,
+          0.7235812466450938
+        ]
+      }
+    },
+    "channel-simple": {
+      "median_ratios": {
+        "be58": 1.069648811128142,
+        "native": 0.8996972986849973,
+        "original": 0.983365100035518
+      },
+      "modes": {
+        "be58": {
+          "median": 10.945415071000753,
+          "samples": [
+            11.197845708000386,
+            10.739520191997144,
+            10.945415071000753
+          ]
+        },
+        "candidate": {
+          "median": 11.707750218000001,
+          "samples": [
+            11.831584004001343,
+            11.688811833999353,
+            11.707750218000001
+          ]
+        },
+        "native": {
+          "median": 13.012988074002351,
+          "samples": [
+            13.179206581000471,
+            13.012988074002351,
+            12.77635258599912
+          ]
+        },
+        "original": {
+          "median": 11.905802043998847,
+          "samples": [
+            11.905802043998847,
+            11.919835513999715,
+            11.632312522997381
+          ]
+        }
+      },
+      "paired_ratios": {
+        "be58": [
+          1.0565946622704558,
+          1.0883923699598423,
+          1.069648811128142
+        ],
+        "native": [
+          0.8977463044746639,
+          0.8982419539253657,
+          0.9163609206300286
+        ],
+        "original": [
+          0.993766229295328,
+          0.9806185513441836,
+          1.0064851846830523
+        ]
+      }
+    }
+  }
+}

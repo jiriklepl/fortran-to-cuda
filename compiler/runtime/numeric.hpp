@@ -3,6 +3,47 @@
 // Scalar intrinsic folds evaluate each argument once without widening its type.
 namespace generated_kernels::numeric {
 
+// A normal power of two with a normal reciprocal has an exactly representable
+// inverse. Multiplication then has the same exact real result and single
+// rounding as division, including subnormal results and signed zero. Keep the
+// numerical build contract (no contraction, no flush-to-zero). Exceptional
+// numerators and all other divisors retain the original operation and its NaNs.
+CUDA_CALLABLE inline double power_of_two_divide(double a, double b) {
+#if defined(__CUDA_ARCH__)
+    const unsigned long long bits = __double_as_longlong(b);
+    const unsigned exponent = static_cast<unsigned>((bits >> 52) & 2047);
+    if ((bits & 0x000fffffffffffffULL) == 0 && exponent > 0 && exponent < 2046 &&
+            (__double_as_longlong(a) & 0x7ff0000000000000ULL) != 0x7ff0000000000000ULL) {
+        const double reciprocal = __longlong_as_double((bits & 0x8000000000000000ULL) |
+            (static_cast<unsigned long long>(2046 - exponent) << 52));
+        return a * reciprocal;
+    }
+#endif
+    return a / b;
+}
+
+CUDA_CALLABLE inline float power_of_two_divide(float a, float b) {
+#if defined(__CUDA_ARCH__)
+    const unsigned bits = __float_as_uint(b), exponent = (bits >> 23) & 255;
+    if ((bits & 0x007fffffU) == 0 && exponent > 0 && exponent < 254 &&
+            (__float_as_uint(a) & 0x7f800000U) != 0x7f800000U) {
+        const float reciprocal = __uint_as_float((bits & 0x80000000U) | ((254 - exponent) << 23));
+        return a * reciprocal;
+    }
+#endif
+    return a / b;
+}
+
+// Apply the ordinary C++ arithmetic conversion before inspecting bits. This
+// preserves mixed REAL/INTEGER and REAL32/REAL division and evaluates each
+// operand once. Integer division and compile-time constant divisors do not use
+// this helper. The host implementation remains ordinary division.
+template <typename Left, typename Right>
+CUDA_CALLABLE auto divide(Left a, Right b) -> decltype(a / b) {
+    using Result = decltype(a / b);
+    return power_of_two_divide(static_cast<Result>(a), static_cast<Result>(b));
+}
+
 template <typename T, typename... Rest>
 CUDA_CALLABLE T minimum(T value, Rest... remaining) {
     ((value = value < remaining ? value : remaining), ...);

@@ -1,0 +1,325 @@
+{
+  "assessment": {
+    "all_outputs_pass": true,
+    "cases": {
+      "channel": {
+        "change_vs_be58_percent": 45.129691308976085,
+        "change_vs_previous_percent": -0.34366658650059057,
+        "median_seconds": {
+          "be58": 13.092735152000387,
+          "candidate": 19.00144610999996,
+          "native": 14.809713779999583,
+          "original": 19.0669729250003
+        },
+        "native_speedup": 0.7793992990989049,
+        "no_regression_vs_be58": false,
+        "paired_samples": 3,
+        "paired_wins": {
+          "be58": 0,
+          "native": 0,
+          "original": 3
+        },
+        "ten_percent_lower_than_immediate_previous": false
+      },
+      "channel-simple": {
+        "change_vs_be58_percent": 10.519157345485407,
+        "change_vs_previous_percent": -4.654776156630103,
+        "median_seconds": {
+          "be58": 10.726356312999997,
+          "candidate": 11.854678611001873,
+          "native": 12.95179828899927,
+          "original": 12.43342679700072
+        },
+        "native_speedup": 1.0925473995540633,
+        "no_regression_vs_be58": false,
+        "paired_samples": 3,
+        "paired_wins": {
+          "be58": 0,
+          "native": 3,
+          "original": 3
+        },
+        "ten_percent_lower_than_immediate_previous": false
+      }
+    },
+    "decision": "Do not promote or spend a full production regeneration on this experiment for performance: 4.65%/0.34% lower median vs previous but 10.52%/45.13% slower than be58; unchanged D2H and launch inventory. Keep the generic read-admission implementation as unqualified work in progress.",
+    "max_external_cpu_cores": 0.46392449989692836,
+    "performance_checkpoint": false,
+    "pilot_status": "PASS",
+    "public_generation_required": true,
+    "status": "COMPLETE_NOT_PROMOTED"
+  },
+  "pilot": "/tmp/fortran-joined-entry-pilot-20261109-01",
+  "short_transfers": [
+    {
+      "candidate": {
+        "compact_events": 0,
+        "copies": {
+          "download_bytes": 146316352,
+          "download_events": 30,
+          "upload_bytes": 81051648,
+          "upload_events": 66
+        },
+        "numerical_launches": {
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_int_3d": 18,
+          "dynamics::convection": 12,
+          "momentumadvection::cduadv": 6,
+          "momentumadvection::cdudiv": 6,
+          "momentumadvection::cdvadv": 6,
+          "momentumadvection::cdvdiv": 6,
+          "momentumadvection::cdwadv": 6,
+          "momentumadvection::cdwdiv": 6,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 146316352
+        },
+        "trace_events": {
+          "allocate": 48,
+          "close": 12,
+          "create": 12,
+          "download": 30,
+          "host_commit": 516,
+          "launch": 126,
+          "release": 48,
+          "upload": 66
+        }
+      },
+      "candidate_bytes": 227368000,
+      "case": "channel-simple",
+      "execution_changed": true,
+      "numerical_launch_inventory_equal": true,
+      "payload_reduced": true,
+      "prior": {
+        "compact_events": 0,
+        "copies": {
+          "download_bytes": 146316352,
+          "download_events": 30,
+          "upload_bytes": 134664192,
+          "upload_events": 118
+        },
+        "numerical_launches": {
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_int_3d": 18,
+          "dynamics::convection": 12,
+          "momentumadvection::cduadv": 6,
+          "momentumadvection::cdudiv": 6,
+          "momentumadvection::cdvadv": 6,
+          "momentumadvection::cdvdiv": 6,
+          "momentumadvection::cdwadv": 6,
+          "momentumadvection::cdwdiv": 6,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 146316352
+        },
+        "trace_events": {
+          "allocate": 60,
+          "close": 16,
+          "create": 16,
+          "download": 30,
+          "host_commit": 492,
+          "launch": 126,
+          "release": 60,
+          "upload": 118
+        }
+      },
+      "prior_bytes": 280980544
+    },
+    {
+      "candidate": {
+        "compact_events": 28,
+        "copies": {
+          "download_bytes": 146316352,
+          "download_events": 442,
+          "upload_bytes": 130516992,
+          "upload_events": 324
+        },
+        "numerical_launches": {
+          "arrayutilities::multiply_3d": 12,
+          "arrayutilities::set_3d": 12,
+          "dynamics::convection": 12,
+          "momentumadvection::cd4divu": 108,
+          "momentumadvection::cd4divv": 108,
+          "momentumadvection::cd4divw": 108,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 143696704
+        },
+        "trace_events": {
+          "allocate": 66,
+          "close": 36,
+          "create": 36,
+          "download": 442,
+          "host_commit": 642,
+          "launch": 402,
+          "observe": 18,
+          "release": 66,
+          "upload": 324
+        }
+      },
+      "candidate_bytes": 276833344,
+      "case": "channel",
+      "execution_changed": true,
+      "numerical_launch_inventory_equal": true,
+      "payload_reduced": true,
+      "prior": {
+        "compact_events": 28,
+        "copies": {
+          "download_bytes": 146316352,
+          "download_events": 442,
+          "upload_bytes": 184158208,
+          "upload_events": 288
+        },
+        "numerical_launches": {
+          "arrayutilities::multiply_3d": 12,
+          "arrayutilities::set_3d": 12,
+          "dynamics::convection": 12,
+          "momentumadvection::cd4divu": 108,
+          "momentumadvection::cd4divv": 108,
+          "momentumadvection::cd4divw": 108,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "retirement": {
+          "download_bytes": 143696704
+        },
+        "trace_events": {
+          "allocate": 78,
+          "close": 40,
+          "create": 40,
+          "download": 442,
+          "host_commit": 622,
+          "launch": 402,
+          "observe": 18,
+          "observe_all": 4,
+          "release": 78,
+          "upload": 288
+        }
+      },
+      "prior_bytes": 330474560
+    }
+  ],
+  "timings": {
+    "channel": {
+      "median_ratios": {
+        "be58": 1.4512969130897608,
+        "native": 1.283039388354776,
+        "original": 0.9965633341349941
+      },
+      "modes": {
+        "be58": {
+          "median": 13.092735152000387,
+          "samples": [
+            12.674866654000652,
+            13.100978188002045,
+            13.092735152000387
+          ]
+        },
+        "candidate": {
+          "median": 19.00144610999996,
+          "samples": [
+            19.088432734999515,
+            18.918804136999825,
+            19.00144610999996
+          ]
+        },
+        "native": {
+          "median": 14.809713779999583,
+          "samples": [
+            14.803497450000577,
+            14.809713779999583,
+            14.928644003000954
+          ]
+        },
+        "original": {
+          "median": 19.0669729250003,
+          "samples": [
+            19.21478402199864,
+            19.010694554999645,
+            19.0669729250003
+          ]
+        }
+      },
+      "paired_ratios": {
+        "be58": [
+          1.50600659210679,
+          1.4440756915636863,
+          1.4512969130897608
+        ],
+        "native": [
+          1.2894542522448822,
+          1.27745913378485,
+          1.272817953605183
+        ],
+        "original": [
+          0.9934242671239777,
+          0.9951663829149443,
+          0.9965633341349941
+        ]
+      }
+    },
+    "channel-simple": {
+      "median_ratios": {
+        "be58": 1.105191573454854,
+        "native": 0.9152920966249724,
+        "original": 0.953452238433699
+      },
+      "modes": {
+        "be58": {
+          "median": 10.726356312999997,
+          "samples": [
+            10.669413836996682,
+            11.311045910999383,
+            10.726356312999997
+          ]
+        },
+        "candidate": {
+          "median": 11.854678611001873,
+          "samples": [
+            11.979261139997107,
+            11.854678611001873,
+            11.780898647000868
+          ]
+        },
+        "native": {
+          "median": 12.95179828899927,
+          "samples": [
+            12.93407450900122,
+            13.17725445600081,
+            12.95179828899927
+          ]
+        },
+        "original": {
+          "median": 12.43342679700072,
+          "samples": [
+            12.509491636003077,
+            12.43342679700072,
+            12.197345814998698
+          ]
+        }
+      },
+      "paired_ratios": {
+        "be58": [
+          1.1227665664685784,
+          1.048062107101328,
+          1.0983131925911132
+        ],
+        "native": [
+          0.9261784545666851,
+          0.8996319112289247,
+          0.9095955931468669
+        ],
+        "original": [
+          0.9576137455114535,
+          0.953452238433699,
+          0.9658575583316054
+        ]
+      }
+    }
+  }
+}

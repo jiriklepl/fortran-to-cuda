@@ -1,0 +1,146 @@
+{
+  "CUDA_activity_profile": false,
+  "candidate_policy": {
+    "GPU_source_compute_pricing_qualified": false,
+    "gpu_collective": false,
+    "gpu_policy": "sections",
+    "scope_transfers": "auto"
+  },
+  "claim": "Compact runtime records only. Launch records are not a CUPTI kernel count; no exclusive-time or causal attribution.",
+  "includes_initialization": true,
+  "kind": "separate short diagnostic runtime records",
+  "rows": [
+    {
+      "case": "channel-simple",
+      "domain_events": {},
+      "download_bytes": 29360128,
+      "download_records": 7,
+      "launch_records": 7,
+      "mode": "be58",
+      "raw_logs": [
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/be58/stdout.log",
+          "sha256": "4ed6c1193f5968889878f5d1a466de5ff9f59d3ae669c098865c4844524dbd79"
+        },
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/be58/stderr.log",
+          "sha256": "748193f00b80771a77d248bea9e0eab70bd72b9f59a0f228416543936af61f56"
+        }
+      ],
+      "upload_bytes": 93872128,
+      "upload_records": 63
+    },
+    {
+      "case": "channel-simple",
+      "domain_events": {},
+      "download_bytes": 123460288,
+      "download_records": 169,
+      "launch_records": 97,
+      "mode": "baseline-7a612",
+      "raw_logs": [
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/baseline-7a612/stdout.log",
+          "sha256": "b5eb5b81f5c2e31d16806da17bb3d6063104c85fce91a95cdfd65c5192ed843d"
+        },
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/baseline-7a612/stderr.log",
+          "sha256": "a8142b7dc65653dd8c608400398d7a83658cb97e87304829463d6e0a1cdc22ec"
+        }
+      ],
+      "upload_bytes": 202040320,
+      "upload_records": 189
+    },
+    {
+      "case": "channel-simple",
+      "domain_events": {
+        "domain_attach": 16,
+        "domain_create": 16,
+        "domain_detach": 16,
+        "domain_retire": 16
+      },
+      "download_bytes": 146316352,
+      "download_records": 30,
+      "launch_records": 126,
+      "mode": "candidate",
+      "raw_logs": [
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/candidate/stdout.log",
+          "sha256": "41135dd1ea1b9b03483f42d45b96b86ed18c68abce0c4dea69e5ddb41371b082"
+        },
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel-simple/candidate/stderr.log",
+          "sha256": "963691cadeed22e0a22f9c738a66ef18fb8037bf712fea22140eb6b66b2fcb90"
+        }
+      ],
+      "upload_bytes": 134664192,
+      "upload_records": 118
+    },
+    {
+      "case": "channel",
+      "domain_events": {},
+      "download_bytes": 29360128,
+      "download_records": 7,
+      "launch_records": 7,
+      "mode": "be58",
+      "raw_logs": [
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/be58/stdout.log",
+          "sha256": "9c1ac4d9d5028a4c8fad3b5730efa696555054eb9ca8b185866d1f619ab41a42"
+        },
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/be58/stderr.log",
+          "sha256": "b06e5ea105d18de1290521acd8b6e691e4f646419ff14e161e7f4487de3b18d8"
+        }
+      ],
+      "upload_bytes": 93872128,
+      "upload_records": 63
+    },
+    {
+      "case": "channel",
+      "domain_events": {},
+      "download_bytes": 29360128,
+      "download_records": 7,
+      "launch_records": 7,
+      "mode": "baseline-7a612",
+      "raw_logs": [
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/baseline-7a612/stdout.log",
+          "sha256": "4851acf55f29a0f7ba1ea02f3a39fa57a5414b61b9004bfb8372bcbb2cead097"
+        },
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/baseline-7a612/stderr.log",
+          "sha256": "196c526298036801b845e28388a7140ce1393eb586b39b450fc789d6d60c7c01"
+        }
+      ],
+      "upload_bytes": 93872128,
+      "upload_records": 63
+    },
+    {
+      "case": "channel",
+      "domain_events": {
+        "domain_attach": 70,
+        "domain_create": 70,
+        "domain_detach": 70,
+        "domain_retire": 70
+      },
+      "download_bytes": 146316352,
+      "download_records": 442,
+      "launch_records": 402,
+      "mode": "candidate",
+      "raw_logs": [
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/candidate/stdout.log",
+          "sha256": "a777f58ceb806fe50de7dbad8945eb9784308f38b8f77bde768067c475fc8268"
+        },
+        {
+          "path": "/tmp/fortran-speedup-empty-native-20261108-01/short/channel/candidate/stderr.log",
+          "sha256": "adfa53743a369d6654cb8060563b5e5912cadcdca197d55db5adb5b21255085e"
+        }
+      ],
+      "upload_bytes": 184158208,
+      "upload_records": 288
+    }
+  ],
+  "steps": 2,
+  "timing_sample": false
+}

@@ -33,11 +33,12 @@ def test_generate_trivial_kernel(kernel: str, tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
     for filename in (
-        "generated_code.cu",
-        "generated_cpp_impl.cpp",
-        "generated_interface.f90",
+        "shared_entry.cu",
+        "scoped_runtime.cu",
+        "shared_interface.f90",
+        "fort_scoped_memory.f90",
         "common_functions.cuh",
     ):
         assert (tmp_path / filename).read_text().strip(), filename
 
-    assert "__global__" in (tmp_path / "generated_code.cu").read_text()
+    assert "__global__" in (tmp_path / "shared_entry.cu").read_text()

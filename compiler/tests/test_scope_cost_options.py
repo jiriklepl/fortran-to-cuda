@@ -67,10 +67,10 @@ def test_form_scopes_defaults_to_graph_scoped_memory_and_sections(monkeypatch):
     assert (args.scope_execution, args.memory_model, args.gpu_policy) == ("graph", "scoped", "sections")
 
 
-def test_standalone_defaults_retain_numerical_call_interface(monkeypatch):
+def test_standalone_defaults_use_shared_graph_interface(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["compiler", "--input", "source.f90", "--kernel", "advance"])
     args = _parse_args()
-    assert (args.scope_execution, args.memory_model, args.gpu_policy) == (None, "call", "always")
+    assert (args.scope_execution, args.memory_model, args.gpu_policy) == (None, "scoped", "sections")
 
 
 def test_default_source_cli_emits_graph_artifacts(tmp_path):

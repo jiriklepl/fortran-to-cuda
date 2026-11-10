@@ -9,13 +9,917 @@ the large `gpu-residency-implementation-20261023` report archive. Earlier notes
 below describe their original checkpoints; links into that archive are historical
 references, not currently available report files. The cleanup is preserved.
 
-## Current checkpoint: 2026-11-08
+## Current-state wrap: 2026-11-10
+
+At the user's request, this pass stops after resolving the current issues.
+The [wrap report](benchmarks/reports/gpu-current-state-wrap-20261110/README.md)
+records the shared-backend initialization fix, migration of the native harness
+to the public shared runtime, **316 passing CPU/CUDA checks** and **126 passing
+focused analysis checks**, with no skips in those final runs. Unrelated scalar
+assignments no longer erase proved same-iteration array definitions; coordinate
+dependencies still invalidate those proofs.
+
+All 130 ELMM entries regenerate with zero changed CUDA sources; all four
+executables and the local provider match the selected build exactly. The latest
+measured speedups remain **3.78×/3.70× native**. No new timing campaign was run.
+This is a current-issue closure, not full current-source release qualification or
+completion of the 20× research objective. Further memory budgeting, residual
+legacy coupling, full release checks, calibration and four-control comparison
+are deferred. No further research work is running.
+
+## Latest solver and release milestone: 2026-11-10
+
+The [solver-residual milestone](benchmarks/reports/gpu-solver-residual-20261110/README.md)
+adds independent real-space FD2/FD4 residual checks and manufactured solutions.
+FD4 uses the composed staggered seven-point stencil, reconstructing third
+neighbors from boundary conditions without touching Phi's two-layer ghosts.
+All 18 cases pass against the exact selected GPU provider and native PoisFFT
+objects, including the 128×64×64 channel grid with lengths 12×4×2. Worst relative
+residual is 9.00e-14. A wrong-FD2 negative check distinguishes the FD4 operator.
+Three C/Fortran ABI and allocation-contract checks also pass. Production solver
+and application arithmetic are unchanged; this is not full release qualification.
+
+The [phase-attribution report](benchmarks/reports/gpu-phase-attribution-20261110/README.md)
+locates the main extra cost outside step timers in initialization. Untraced
+device visibility costs about 70 ms; nested solver creation costs 227–251 ms.
+Nsight substantially inflates visibility initialization. Channel output waits
+overlap preceding queued kernels, so its host duration is not removable output
+work. All ten diagnostic processes pass strict output checks. These diagnostics
+do not replace performance samples or establish a hardware ceiling.
+
+The [release-repair milestone](benchmarks/reports/gpu-release-repair-20261110/README.md)
+started with six pipeline failures: retired interface fixtures,
+a stale serial-loop completion record reader, and a broken default SCons
+environment. The reader now accepts the compiler's grouped-loop completion
+record under the same exact ownership checks, while retaining frozen historical
+single-loop report interpretation. Retired production policies remain removed.
+Migrated native ABI tests also exposed a real shared Fortran identifier overflow:
+canonical names now reserve all seven characters needed by `_handle`. The focused
+compiler checks pass, including actual CUDA execution. All 130 ELMM numerical
+entries and all four executable identities remain exact against the selected
+build; no new speedup or unchanged numerical-cost fingerprint is claimed.
+
+The full pipeline rerun passes 4,695 tests and 519 subtests, with 87 explicit
+skips. The first serial compiler analysis audit hit its declared 20-minute
+deadline and is incomplete. The four-process compiler analysis cohort under
+`/tmp/fortran-release-audit-20261110-02` is now terminal: 9,877 passes, 33 failures
+and four skips, with two shards stopped at their failure limit. Follow-up repairs
+and the current-state wrap supersede that audit status. Complete
+graph/queue/driver and host-memory accounting, residual legacy migration, full
+native/CUDA release qualification, fresh calibration where identities changed,
+and fresh four-control timing remain open. The selected measured result remains
+**3.78×/3.70× native**, and the 20× research objective remains unmet.
+
+## Previous boundary and packaging screening: 2026-11-10
+
+The [boundary-grouping report](benchmarks/reports/gpu-boundary-grouping-20261110/README.md)
+rejects both boundary-domain fusion and CUDA translation-unit aggregation. Fusion
+cuts measured boundary launches by two thirds, but initially regresses wall time
+by more than 11%. Removing empty coherence transactions around private integer
+bound snapshots removes that regression; the combined change still fails its
+predeclared 2% improvement gate in both primary cases. Fusion is removed.
+Aggregation improves simple109 by 1.62% and regresses channel100 by 1.94%, so no
+production packaging change is retained. All three complete screening pilots,
+exact primary-field checks, diagnostic profiles and the initial failed interface
+assertion are preserved.
+
+The generic local INTEGER/LOGICAL setup fix is retained. It passes 63 milestone
+checks, including eight new CPU/GPU cases. All 130 ELMM numerical CUDA sources
+regenerate byte for byte; all four executable identities and the local provider
+match the selected asynchronous-output build. This is numerical regeneration and
+object reuse, not a new complete application rebuild or an ELMM speedup claim.
+The scoped emitter fingerprint changed; no fresh numerical-cost calibration is
+claimed. The selected seven-round result remains **3.78×/3.70× native**.
+
+The selected logs show median complete-process time outside the printed step
+timers of 0.735/0.693 seconds, already above the entire 20× budgets of 0.573/0.647
+seconds. This residual includes initialization, final output/teardown, untimed
+control and possibly deferred GPU work; it is not an exclusive startup estimate
+or a hardware ceiling. Attribute those phases before another startup experiment.
+Further kernel work needs measured SGS/CD4/filter or host graph-preparation
+evidence; reducing boundary launch count alone did not improve both cases.
+Complete memory accounting, residual legacy/test migration, current FD4/operator
+qualification, maintained release suites and fresh four-control timing remain
+open. The approved independent 1% long-run L2 rule leaves primary/operator
+tolerances and exact layout/output-inventory/time checks unchanged.
+
+## Previous performance screening: 2026-11-10
+
+The [kernel-screening report](benchmarks/reports/gpu-kernel-screening-20261110/README.md)
+rejects two optimizations that failed to improve both primary cases. All production
+changes from these experiments were removed; the selected asynchronous-output
+build remains in place. Its fresh seven-round medians are 3.030292/3.492289 seconds,
+or **3.78×/3.70× native**. This is a three-control comparison, not the outstanding
+four-control release campaign.
+
+Exact shift/32-bit coordinate decoding passed all four strict application cases
+and approved natural channel2458 qualification, with unchanged GPU fields. It
+improved simple109 by only 0.33% and regressed channel100 by 0.61%, failing the
+predeclared 1% retention gate. A generic convergence-loop shortcut failed its
+smaller screening pilot: +1.30% improvement in simple109, -1.42% in channel100.
+The first pilot's incorrect cache permissions and complete corrected attempt are
+preserved. All 43 selected GPU-renderer identities are restored; no new numerical
+calibration is claimed. After restoration, 150 focused checks pass. The complete
+maintained suites remain pending.
+
+Separate profiles of the retained build show 58,353/70,238 kernel launches,
+including 29,448/37,818 BoundUVW launches. The next substantial compiler experiment
+should reduce boundary-kernel fragmentation while preserving face/edge/corner
+dependencies, and attribute actual graph-argument changes. The runtime already
+suppresses updates for equal argument values. Further source-level arithmetic or
+loop micro-optimizations need a measured kernel justification before full rebuilds.
+Full memory accounting, residual legacy/test migration, current FD4/operator
+qualification, release controls and the 20× objective remain open.
+
+## Previous bounded-output milestone: 2026-11-10
+
+The [asynchronous-output milestone](benchmarks/reports/gpu-async-output-20261110/README.md)
+adds two immutable device/pinned snapshot pairs, event-ordered DMA and one serial
+writer. Frames from one VTK call share a capture. Slot reuse waits for serialization;
+finalization joins the writer before domain retirement, native final output and
+field deallocation. Snapshot device storage uses the existing workspace budget;
+pinned storage has an explicit cap. Unsupported output retains coherent native
+execution after waiting for earlier snapshots.
+
+The complete public build regenerates 130 entries and the local provider. A
+subsequent frame-grouping refinement regenerates the current source adapters and
+incrementally rebuilds two changed Fortran units and their dependents. Two CUDA
+milestone checks pass. Eight fresh short/primary processes pass strict all-field
+and output comparison. Natural channel2458 passes the approved independent L2
+criterion, including 102 VTK frames; fields and frames match the previous GPU
+trajectory exactly. Retau differs only at roundoff level. The incorrect initial
+assertion expecting a frame before channel100's time0.57 is preserved and corrected.
+
+A clean 48-process comparison measures 3.004167/3.528540 seconds for the candidate,
+or **3.83×/3.73× native**. Median differences from the preceding GPU build are
+0.55%/0.15%, with only 3/7 and 4/7 paired wins: no robust incremental gain is claimed.
+Neither primary case reaches postinitial asynchronous output. A separate channel200
+profile proves that two slices share one 25.45 MB snapshot; DMA on a separate stream
+overlaps kernels. This does not replace primary timing.
+
+The next primary performance work is measured SGS/CD4 kernel and runtime cost.
+Full graph/queued-argument/opaque-driver and host metadata accounting, residual
+legacy/test migration, current FD4/operator qualification and fresh four-control
+release timing remain open. The full goal and 20× target remain incomplete.
+
+## Previous production-backend consolidation: 2026-11-10
+
+The [single-backend milestone](benchmarks/reports/gpu-single-backend-20261110/README.md)
+makes the caller-owned shared backend the public default. Ordinary `call`
+ownership, `always`/`chunked`/`hybrid` policies, ordinary output files and the
+owned-session application API are retired. The old pipeline call-region adapter
+is removed from production; local integration uses `resident-build` or checked
+source graphs. Native baseline runs remain available independently.
+
+A new 12-pass check found and closed a hidden call from shared generation into
+the four-unit slab planner. Graph numerical generation and owner dispatch now
+bypass that prototype. The public `pipelined` slab switch is retired as well.
+Historical numerical/slab implementations remain explicit private references;
+their final removal and frontend legacy-configuration coupling are still open.
+
+The focused milestone passes 131 checks plus 21 subtests, with four optional
+historical/full-source-build cases skipped. The default interface passed 20
+CUDA/native checks before final slab isolation; afterward, all 130 qualified
+ELMM entries regenerate 2,990 complete source files byte for byte, without
+normalization. Both maintained suites collect successfully, but their complete
+execution is pending. This does not claim a fresh full application rebuild.
+The last complete build and application qualification remain the scoped-artifact
+milestone below; the selected measured baseline remains 3.83×/3.73× native.
+
+Base runtime/transfer/physical-copy costs still validate. The collective emitter
+fingerprint changed; the already rejected collective/source-submit models remain
+unavailable. No new timing or calibration measurements are claimed. Remaining
+work includes bounded asynchronous output and full graph/snapshot budgeting,
+residual legacy/test migration, current solver/operator and maintained release
+qualification, and a fresh full build plus four-control timing. The complete
+architecture and 20× research objective remain open.
+
+## Previous scoped-artifact consolidation: 2026-11-10
+
+The [scoped-artifact milestone](benchmarks/reports/gpu-scoped-artifacts-20261110/README.md)
+removes unused ordinary backend generation and planning from scoped numerical
+packages. Artifact schema 2 publishes only shared entries and common runtime
+sources; ELMM rejects old combined packages with a regeneration error. Ordinary
+output-name switches no longer apply to scoped generation. Shared runtime and
+entry ABIs remain unchanged. The full 130-entry public build avoids 390 unused
+source files (26,817,892 bytes), rebuilds the local Poisson provider and preserves
+the selected numerical kernel bodies and interfaces.
+
+The focused milestone passes 74 checks plus 16 subtests and 20 shared-entry CUDA
+checks. One older fixture now explicitly retains separate passes to test protected
+host access followed by GPU continuation; initial stale assertions are recorded.
+All four short/primary cases pass strict comparison against fresh native controls
+and exactly match the selected GPU fields. Natural channel2458 passes the approved
+componentwise L2 criterion; all 40 field/bounds files remain exact. Worst L2 stays
+0.154896%, with local pressure error 1.467061% of peak.
+
+The current public build is `/tmp/fortran-scoped-artifacts-20261110-01/work`.
+No new timing campaign is claimed; the measured baseline remains 3.83×/3.73×
+native below. Existing runtime/transfer/physical-copy calibration still validates;
+rejected collective/source-submit models remain unavailable. Ordinary-call
+backends, the four-unit placement policy and production legacy-configuration
+coupling still need migration. Bounded asynchronous output, complete graph/snapshot
+budgeting, solver/release qualification and fresh four-control timing remain open.
+
+## Previous public regeneration and audit: 2026-11-10
+
+The [public regeneration milestone](benchmarks/reports/gpu-public-regeneration-20261110/README.md)
+rebuilds all 130 GPU entries, native controls and the local Poisson provider from
+current sources, without historical objects. All four short/primary cases pass
+the strict native comparison and exactly reproduce the selected GPU fields.
+Natural channel2458 passes the approved componentwise L2 rule; all 40 field/bounds
+files match the selected GPU trajectory. The full public build is available at
+`/tmp/fortran-current-public-20261110-01/work`; the measured timing baseline remains
+the index-conversion build below. No new performance campaign is claimed.
+
+Fresh runtime, transfer and physical-copy costs validate. All 32 graph measurement
+cases pass. The collective model fails one public AUTO holdout, and the source
+submit model fails three independent holdouts; both remain unavailable at their
+unchanged thresholds. Their consumers reject cost/quote requests. This closes
+the current measurement gap, not complete automatic-placement qualification.
+
+The source-backed 26-group audit identifies the next implementation work:
+consolidate ordinary/scoped generation and remove the remaining four-unit policy
+and production legacy-configuration coupling; implement bounded asynchronous
+output with complete graph/snapshot memory accounting; then finish maintained
+release suites, current solver/operator qualification and the four-control
+comparison. The pipeline README no longer recommends retired source modes or
+owner-timing flags. Full completion and the 20× research objective remain open.
+
+## Previous host-preparation milestone: 2026-11-10
+
+The [host-preparation milestone](benchmarks/reports/gpu-host-preparation-20261110/README.md)
+replaces redundant truncation in generic section-coordinate validation with a
+checked integer round trip. Finite/range rejection and floating exception flags
+are preserved on the tested GNU/x86 target; a low-precision endpoint guard also
+prevents an out-of-range conversion. Collective cost identities now bind the
+offload runtime header, requiring fresh calibration after changes to this code.
+All 130 numerical CUDA objects were rebuilt, retaining exact numerical source
+and Fortran interfaces. The focused milestone passes 162 checks.
+
+The selected comparison baseline is now
+`/tmp/fortran-index-conversion-20261110-01`. Its clean seven-round medians are
+3.033684/3.523741 seconds versus four-thread native 11.612853/13.133487 seconds:
+**3.83×/3.73× native**. The preceding GPU control takes 3.080063/3.620017 seconds.
+Median gains of **1.51%/2.66%** pass the declared incremental acceptance gate.
+Paired wins are only **5/7 and 6/7**, so the stricter all-pairs robustness condition
+does not pass. The first complete timing cohort exceeded the load limit in one
+sample and remains invalid for promotion; it is retained separately. One fresh
+cohort followed three passing quiet-system probes. No samples were pooled.
+
+Strict primary/short checks pass with all 20 fields exact against the previous
+GPU result. A fresh natural channel2458 run passes the approved componentwise
+L2 rule across 20 fields and 114 outputs, preserving all 40 field/bounds files
+exactly. Worst L2 is 0.154896%; local pressure error remains 1.467061% of peak.
+
+The address-sharing prototype was rejected: lower register use produced only
+about 0.3% combined kernel improvement. Existing profiles instead put most GPU
+idle time before entry to the next launch/copy API. CPU samples identify section
+validation, allocation/coherence work and OpenMP runtime activity; counts are
+not exclusive wall-time attribution. New diagnostic kernel unions remain
+1.994/2.527 seconds against entire 20× budgets of 0.581/0.657 seconds. Channel
+profile idle time increased, so a consistent idle-time reduction is not claimed.
+
+Next complete public regeneration, current calibration, the remaining generic
+policy/legacy audit and maintained release qualification. The full approved
+architecture and 20× research objective remain open; this is not a full release
+or a fresh be58/7a campaign.
+
+## Previous measured compiler-kernel milestone: 2026-11-10
+
+The [exact-division milestone](benchmarks/reports/gpu-exact-division-20261110/README.md)
+passes the predeclared retention gate and becomes the selected performance
+baseline at `/tmp/fortran-exact-divide-20261110-01`. Generic floating-division
+lowering uses an exact reciprocal only for proved-at-runtime normal powers of
+two with normal reciprocals and finite numerators. Other operands retain ordinary
+division. No approximate arithmetic or relaxed numerical flags are introduced.
+All 21 affected numerical CUDA entries were regenerated and recompiled against
+the preceding fresh public build, preserving their Fortran interfaces exactly.
+
+One excluded warmup plus seven rotated complete-process measurements give
+3.095687/3.640654 seconds for channel-simple/channel versus fresh four-thread
+native 11.494660/13.096450 seconds: **3.71×/3.60× native**. The previous selected
+GPU control takes 3.188409/3.805290 seconds. Median reductions are **2.91%/4.33%**,
+with all seven paired wins in both cases. All 48 processes, output checks and
+the external-load gate pass. This measures the combined candidate, including
+earlier grouping/private-scalar fusion, against the selected cached control.
+
+The focused milestone passes 170 source/contract checks and a CUDA check with
+180,224 bitwise division comparisons. All primary/short application checks pass
+the original tolerances, with all 20 fields exactly matching the previous GPU
+result. Runtime ledgers retain 31/28 required GPU procedures and no generated CPU
+numerical execution or CPU FFTW plans. A fresh natural channel2458 run passes the
+approved independent componentwise 1% L2 rule across 20 fields and 114 outputs.
+Worst L2 remains 0.154897%; the 1.4671% peak-scaled local pressure error stays
+reported. All 40 field/bounds files match the preceding GPU trajectory exactly.
+
+Separate profiles show about 9% less SGS time, 19% less channel filter time and
+8–9% less CD4 time than the preceding build. Kernel unions remain 2.007/2.517
+seconds against entire 20× budgets of 0.575/0.655 seconds; copy activity is only
+0.025/0.024 seconds. GPU idle intervals inside the kernel window are
+0.801/0.782 seconds. These overlapping diagnostic categories are not summed.
+Prioritize checked load/address reuse and profitable fusion or tiling in the
+remaining expensive kernels, alongside measured runtime submission gaps.
+Current automatic-placement recalibration, full public regeneration of the new
+lowering, remaining generic cleanup and maintained release suites stay open.
+This is not a full release qualification or a fresh be58/7a comparison.
+
+## Previous full-build and private-scalar fusion milestone: 2026-11-10
+
+The [full regeneration milestone](benchmarks/reports/gpu-full-fusion-20261110/README.md)
+builds 130 grouped numerical interfaces, the local Poisson provider and a fresh
+native control. A subsequent generic private-scalar fusion fix combines each
+channel CD4 routine's three directional passes. Its three entries and coordinator
+were rebuilt against the fresh application; the qualified compiler snapshot and
+production fusion implementation have identical ASTs. Runtime traces establish
+31/28 GPU procedures, 75% fewer periodic launches and 67% fewer CD4 launches.
+
+All primary/short checks pass, preserving all 20 fields exactly against the GPU
+control. A fresh natural channel2458 execution passes the explicitly approved
+componentwise 1% L2 criterion across 20 fields and 114 outputs. Worst L2 is
+0.154897%; the 1.4671% peak-scaled local pressure error remains reported. All 40
+field/bounds files match the preceding GPU trajectory. Historical strict failures
+remain unchanged.
+
+Seven rotated complete-process measurements give candidate medians of
+3.137491/3.738645 seconds versus fresh native 11.814167/13.115184 seconds:
+3.77×/3.51× native. The selected cached GPU control is 3.140862/3.775469 seconds.
+Incremental median reductions are only 0.11%/0.98%, with 5/7 paired wins in both
+cases. All 48 processes and the load gate pass, but the declared promotion gate
+fails. The selected cached baseline remains unchanged.
+
+The focused compiler/trace milestone passes 123 checks. A broad suite was stopped
+after 878 passes and three stale V2 trace-reader failures; those three pass after
+requiring the runtime's V3 copy model. The full maintained suite remains open.
+This is not an all-tests-passing release or a fresh be58/7a four-control campaign.
+
+Separate profiles show 2.059/2.695 seconds of kernel activity against entire 20×
+budgets of 0.591/0.656 seconds. CD4 kernel time remains about 0.194 seconds per
+component despite fewer launches. Holding current profiled kernels fixed, even
+zero other overhead would cap speedup at 5.74×/4.87×; this is not a hardware limit.
+Prioritize SGS, filtering, CD4 and wall-kernel throughput, followed by measured
+idle time and remaining policy cleanup. The 20× research objective remains open.
+
+## Latest grouping/fusion and approved long-run milestone: 2026-11-10
+
+The [grouping/fusion milestone](benchmarks/reports/gpu-grouped-fusion-20261110/README.md)
+removes the single-loop/32-loop extraction restriction for consecutive original
+serial nests, adds checked constant-width domain translation for fusion, and
+stops silently disabling optimization in explicit scoped placement. Boundary
+and periodic interfaces shrink from 148 to 50 without dropping source nests.
+Periodic GPU kernels fall by 75% in both short ledgers; other procedure counts
+remain unchanged. The focused milestone passes 133 tests, and both short cases
+plus simple109/channel100 preserve all 20 fields exactly against the GPU control.
+
+The fused candidate's full-process medians are 3.116725/3.814604 seconds versus
+3.146443/3.827718 seconds for the cached GPU control: only 0.94%/0.34% lower,
+with 4/7 and 3/7 paired wins. The declared promotion gate fails. All 48 processes
+and the load gate pass, with every sample retained. The preceding grouping-only
+48-process campaign also fails its promotion gate. The selected 3.60×/3.45×
+cached performance baseline below remains unchanged. Generic grouping/fusion is
+implementation work under evaluation, not a claimed substantial new speedup.
+
+After the user's explicit approval of the channel2458 L2 criterion, a **new**
+fused-candidate process completes the natural 2,458 steps and passes all 20 fields
+and 114 outputs. Worst componentwise relative L2 error is **0.154897%**; largest
+local error is **1.4671% of peak pressure**, reported rather than concealed.
+All 40 field/bounds files match the earlier GPU trajectory byte for byte. The
+native reference is the immutable earlier four-thread run, verified against its
+original receipts. The criterion and inputs were declared before execution;
+historical pointwise failures and the review-only result remain unchanged.
+Full public source regeneration, maintained release suites, remaining generic
+policy cleanup and the measured 20× gap remain open.
+
+## Latest source consolidation and numerical investigation: 2026-11-10
+
+The [provider migration milestone](benchmarks/reports/gpu-local-provider-migration-20261110/README.md)
+removes the 95-file duplicate vendored Poisson implementation. Both production
+build paths use the caller's explicit local solver and one source snapshot
+implementation. Prepared pressure manifests are v2; v1 requests require an
+explicit rebuild. Historical vendor bytes are archived with verified identities.
+The focused set totals 112 passing checks. A fresh public provider build/relink
+passes both short cases, simple109 and channel100, with all 20 fields exact
+against the retained GPU control and outputs within original native tolerances.
+This is source consolidation, not another performance gain or a full release.
+
+The [identical-input investigation](benchmarks/reports/gpu-operator-parity-20261110/README.md)
+replays 16 reached wall inputs: GPU replay exactly matches application output;
+CPU/GPU differ in 44 of 229,376 values by at most three floating-point steps.
+Two reached pressure solves differ by at most 3.9e-16 and both solvers have
+relative residuals around 1e-15. The actual captured channel pressure operator
+is FD2; this evidence does not establish FD4 residual qualification. Sampling
+preserves the original GPU application's field bytes.
+
+On 2026-11-10 the user approved a **1% relative L2 limit independently per
+field/output component for natural channel2458**. Zero-reference components
+require maximum absolute error at most 1e-6. Exact bounds, layouts, coordinates,
+labels and frame inventories remain required; time checks and primary/operator
+pointwise checks remain unchanged. Local maximum errors remain reported.
+The original pointwise failure and the review-only evidence are preserved;
+the old run is not retroactively relabeled as qualification. The subsequent
+run above uses the declared approved rule. The earlier review's worst L2 error was
+0.154897%, while its largest local error was 1.4671% of peak reference pressure.
+
+## Latest implementation checkpoint: local solver cache, 2026-11-10
+
+The [local Poisson cache comparison](benchmarks/reports/gpu-local-solver-cache-20261110/README.md)
+reduces complete-process GPU medians to **3.190/3.778 seconds** for
+simple109/channel100, versus **4.057/4.701 seconds** without caching:
+**21.36%/19.62% lower time**, with all seven pairs won in both cases.
+Four-thread native medians in the same campaign are **11.480/13.016 seconds**,
+so speedups are **3.60×/3.45×**. All 48 timed processes pass output comparison
+and the external-load gate. Each case starts with a fresh private cache;
+the excluded warmup populates it. These are explicitly warm-cache results.
+Empty-cache startup remains recorded separately; all loading and misses are
+inside the process clock.
+
+The existing bounded cubin cache is migrated into the explicitly supplied
+local `poisson-solver`, preserving its current stream and memory handling.
+Five host/API checks pass. Disabled, empty, warm and corrupted-cache milestones
+preserve all 20 fields bit for bit against the GPU control in both primary
+cases. All outputs pass the original native tolerances. A stricter Retau
+byte-exact assertion failed at approximately 1e-11; repeated unchanged control
+runs show the same diagnostic variability. That failure remains recorded.
+Warm runs perform zero NVRTC compilations, versus twelve without the cache.
+This is an isolated provider rebuild/relink using the exact qualified
+application objects; a second complete compiler regeneration is not claimed.
+
+Full primary profiles show **2.040/2.710 seconds** of GPU kernel activity and
+only **0.023/0.024 seconds** of device copies. Prioritize measured SGS,
+channel filtering/advection and submission gaps. The profiles are diagnostic;
+overlapping host API and device durations are not summed into wall time.
+
+The newly repeated natural **2,458-step** native/GPU milestone **fails** at the
+original tolerances: **15 of 20 fields and 48 of 114 outputs** differ, without
+nonfinite values. Both processes complete normally. That historical pointwise
+failure remains recorded; the later user-approved L2 criterion and fresh passing
+milestone are described above. Prior native low-bit perturbation evidence shows
+sensitivity but does not itself qualify the GPU solver. The 20× objective,
+full release qualification and remaining migration/cleanup stay open.
+
+The [long-run isolation follow-up](benchmarks/reports/gpu-long-isolation-20261110/README.md)
+localizes the discrepancy: returning only wall stress or only PoisFFT to CPU
+still fails, while returning both passes all 20 fields and 114 outputs at the
+original tolerances. The combined diagnostic matches the reviewed historical
+GPU control's 40 field/bounds files byte for byte; current native likewise
+matches historical native. The remaining numerical stages still execute on GPU.
+This is a diagnostic control, not a production fallback or a new speed claim.
+A synchronization-only follow-up waits before and after each wall-stress entry
+and pressure solve. All 40 field/bounds files remain byte-identical to the
+original GPU run at both two and 2,458 steps; waits at those boundaries do not
+repair the discrepancy. Next compare identical reached inputs through CPU/GPU
+wall arithmetic and both solvers before changing either implementation.
+An isolated SGS block-size sweep found no useful gain (all medians within 0.6%);
+the production launch geometry remains unchanged.
+
+### Earlier fresh four-control checkpoint: 2026-11-10
+
+The [fresh four-control comparison](benchmarks/reports/gpu-resident-four-controls-20261110/README.md)
+passes the primary performance checkpoint. One excluded warmup and seven rotated
+measurements give **4.032/4.673 seconds** for simple109/channel100, versus fresh
+four-thread native **11.673/13.190 seconds**: **2.89×/2.82× native**. Time is
+**57.09%/58.61% lower than be58** and **75.83%/58.68% lower than 7a612e4**.
+The candidate wins all seven paired rounds against every control in both cases.
+All 64 timed processes pass output comparison; the predeclared external-CPU
+bound passes. Startup, solver planning, computation, output and teardown remain
+inside the measured interval. Every sample and failed preparation is retained.
+
+The candidate regenerates all 248 numerical entries and manifests and compiles
+all objects afresh through `resident-build`. All four variants pass all 20
+fields, bounds, halos and outputs for both two-step cases, natural simple109
+and channel100 at the unchanged tolerances. Runtime ledgers establish the
+supported numerical stages on GPU, including the supplied local Poisson solver.
+The initial fresh 7a control rejected the system G++ update and is excluded
+from timing; its replacement uses genuinely refreshed calibration and the
+unchanged pinned compiler/policy. The report records its banner normalization.
+The current compiler accepts GCC snapshot-date banners; 159 profile tests pass.
+
+The **≥10% improvement over 7a** and **≥2× native** primary timing gates pass.
+The **20× research target is not achieved**. Natural channel2458 qualification,
+the complete maintained suites, generic scheduling migration and remaining
+legacy-policy deletion remain open. The separate 32-case queue calibration is
+raw runtime evidence, not a refreshed automatic-placement model. This complete
+path comparison does not replace the failed isolated packed-argument pilot.
+
+### Earlier packed-argument pilot and source build
+
+The [packed-argument candidate](benchmarks/reports/gpu-packed-arguments-20261110/README.md)
+replaces per-argument queue payload allocations with one aligned buffer and
+skips CUDA graph parameter updates when complete argument bytes and launch
+geometry are unchanged. It shares the existing coherence engine and introduces
+no public ABI or configuration switch. The 47-case runtime milestone and a
+clean 1,083-step source build pass. Fresh native/GPU pairs pass all 20 fields,
+bounds, halos and outputs for both short cases, natural simple109 and channel100.
+All field-data/bounds files are bit-identical to the respective retained builds.
+
+The isolated three-round pilot gives **4.194/4.692 seconds**, versus the retained
+GPU control's **4.340/5.014 seconds**: median improvements of **3.37%/6.42%**.
+Paired wins are 3/3 and 2/3; one channel pair is 0.62% slower. The predeclared
+all-pairs gate therefore fails, and the candidate remains **unpromoted**. The
+clean source build is a separate integration milestone, not a timing retry or
+a replacement for that failed gate. Refresh generated manifests/runtime costs
+and complete the fresh four-control/seven-round protocol before release claims.
+Natural channel2458 qualification and the 20× objective remain open.
+
+Both [index-width experiments](benchmarks/reports/gpu-index32-rejected-20261110/README.md)
+were slower on simple109 and have been removed. Their evidence remains intact.
+The supported numerical GPU path and local Poisson implementation remain in
+place; continue work from measured kernel, submission and output costs.
+
+## Selected source-build baseline: 2026-11-09
+
+The [source-build milestone](benchmarks/reports/gpu-resident-source-build-20261109/README.md)
+now exposes the complete supported numerical GPU path through
+`elmm-pipeline/pipeline.py resident-build`. It regenerates 248 numerical entries,
+builds the supplied local Poisson source, and compiles fresh native/GPU and
+full-field diagnostic executables without importing historical objects or
+modules. A previously hidden scalar callback `TARGET` interface mismatch is
+fixed in source preparation. Old placement/window switches do not configure
+this application path; generic compiler and runtime mechanisms remain shared.
+
+One excluded warmup plus three rotated measurements give **4.247/5.120 seconds**
+for simple109/channel100, versus fresh native **12.830/14.014 seconds**:
+**3.02×/2.74×**. All 24 timing output comparisons pass, with 3/3 paired wins
+against native in each case. The retained workspace candidate measures
+4.523/5.104 seconds in the same campaign. The new build wins only 1/3 pairs
+against it in each case, so this is a reproducibility milestone, not evidence
+of another implementation speed gain. All samples and failed build attempts
+remain recorded.
+
+Separate integration checks pass all 20 fields, bounds, halos and outputs for
+two steps in both cases, natural simple109 and channel100. Traces establish
+the intended numerical stages on GPU; the candidate creates zero CPU FFTW
+plans. The natural2458 discrepancy, fresh four-control/seven-round protocol,
+full maintained suites, generic graph scheduling and remaining legacy-policy
+migration are still open. The 20× target is not achieved. Use the source-build
+path for further measured kernel, launch, startup and output work.
+
+### Earlier workspace and filter experiments
+
+The [resident workspace milestone](benchmarks/reports/gpu-resident-workspace-20261109/README.md)
+retains the across-timestep GPU numerical path and local Poisson solver, and adds
+generic domain-owned temporary storage plus explicit lifetime for RK coefficient
+inputs. Filter snapshots and coefficients no longer retire at each source call.
+
+The latest isolated one-warmup/one-measurement scout gives **4.074/4.670 seconds**
+for simple109/channel100, versus **11.643/12.966 native**, **9.318/11.087 be58**,
+and **4.669/6.128 for the preserved GPU-wall build** in the same comparison.
+This is **2.86×/2.78× native** and **12.7%/23.8% lower wall time than the previous
+candidate**. Seven-round/fresh-control qualification remains open. Both primary
+cases pass all 20 fields, bounds, halos and outputs at the unchanged tolerances;
+natural2458 and the prior long GPU-Poisson trajectory mismatch remain unresolved.
+
+A separate 20-step channel profile reduces stream synchronizations **694→56**,
+pool allocations **678→42** and graph launches **804→625**. Kernel activity
+remains approximately **0.566 s**, with unchanged numerical kernel count.
+Some blocking moves into copy/free APIs; API durations overlap device work.
+The untraced application comparison establishes the gain, not summed API spans.
+
+The [alternating-filter experiment](benchmarks/reports/gpu-resident-filter-20261109/README.md)
+was rejected and removed. Although it reduced filter kernels 1,080→720 and graph
+submissions 625→271 in the 20-step trace, its focused channel100 follow-up was
+**2.65% slower**, with **0/3 paired wins**. Numerical correctness passed. All
+versions, failures and samples are preserved; the workspace build remains the
+selected candidate. Fewer submissions alone are not a useful acceptance rule.
+Execution batching needs measured submission latency and overlap costs, while
+storage residency must remain independent of batch boundaries.
+
+Next work prioritizes a reproducible production build of the retained complete
+numerical GPU path, replacing the manual artifact chain. Critical-path profiling
+must guide further kernel, launch, startup and output work. Generic graph
+scheduling, obsolete-policy removal, fresh controls and release qualification
+remain unfinished. The
+[preceding wall checkpoint](benchmarks/reports/gpu-resident-walls-20261109/README.md)
+and all earlier evidence remain preserved. Continue milestone testing and isolated
+whole-process comparisons. The 20× objective remains a research target.
+
+### Earlier checkpoint: CPU-Convection placement
+
+
+**At this earlier checkpoint the redesign had not beaten be58.** Treat
+recovery from a slower candidate separately from acceleration beyond be58.
+More generated GPU code, fewer transferred bytes and passing compiler tests
+are useful evidence, but none establishes application speedup.
+
+The [complete-Convection placement diagnostic](benchmarks/reports/gpu-residency-convection-placement-pilot-20261109/README.md)
+identifies forced Convection offloading as a substantial source of the channel
+regression. Keeping the current generic GPU SGS path and executing the original
+Convection call on CPU after checked publication yields:
+
+| Primary case | Native | GPU Convection | CPU Convection | be58 | CPU vs GPU Convection |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| simple109 | 13.012988 s | 11.905802 s | 11.707750 s | 10.945415 s | 1.66% faster |
+| channel100 | 14.846632 s | 18.910757 s | 13.715633 s | 12.934806 s | 27.47% faster |
+
+The CPU-Convection diagnostic remains 6.96%/6.04% slower than be58, with 0/3
+paired wins against it. Against GPU Convection, wins are 2/3 in simple and 3/3
+in channel. All 32 process/output checks pass, with one excluded warmup and
+three rotated measurements per case/mode. Maximum external CPU activity is
+0.420238 core; all owned timing processes are reaped. No seven-round research
+gate is qualified, and no application-specific CPU placement rule is promoted.
+
+Six separate short runs pass all 20 fields, bounds, halos and outputs. The
+diagnostic retains SGS and viscosity-boundary GPU execution. Initialization
+plus two steps moves 107,643,264 bytes in 60 copies in each case, a reduction
+of 52.66%/61.12% against the preceding GPU-Convection candidate. Numerical
+launches fall 126→42 and 402→42. Only the parent's Convection call placement
+and checked publication differ; the other objects/runtime/calibration remain
+identical. This private source slice establishes the counterfactual's cost,
+not a new production compiler result or a rule that Convection is always
+better on CPU.
+
+The **existing public AUTO policy** generation at
+`/tmp/fortran-auto-placement-20261109-01` was interrupted without a completion
+receipt. Its tool session no longer exists, and a host-namespace process audit
+found no matching process. The saved RUNNING file is stale; the separate
+`interruption-audit.json` preserves this observation. No successful package or
+build is claimed, and no replacement generation has been started. Earlier
+AUTO builds already kept Convection native: reproducing that result would be
+integration validation, not new acceleration. The current calibration contains
+no source-task protocol prices. Missing prices must not mean free execution.
+
+The [recovered-candidate profile](benchmarks/reports/gpu-residency-recovered-gap-20261109/README.md)
+now compares this CPU-Convection diagnostic directly with be58. Four profiles
+pass their output checks. On channel, bulk-copy API counts are almost equal;
+the candidate moves 5.382 GB versus 5.299 GB over the complete run. Its six
+viscosity boundary kernels per SGS invocation raise launches from 301 to 2,100,
+but those boundary kernels execute for only 0.003736 seconds total. The extra
+launch API spans alone cannot explain the remaining application regression.
+CPU samples show increased allocation/free and coherence work; incomplete
+stacks prevent assigning all allocations to the runtime. Profile spans overlap
+and must not be added or substituted for untraced timing.
+
+GCC and the C++ runtime changed externally after the preceding timing pilot.
+The profile preflight caught that change before application execution. The
+successful profiles record the current environment for both binaries; they
+do not revise historical timings.
+
+### Immediate priorities after the user's implementation redirect
+
+The user explicitly authorized more aggressive compiler redesign, minor ELMM
+source transformations, use of `./poisson-solver`, removal of obsolete features
+and compatibility, and testing at integration milestones. Prioritize building
+the complete resident hot path over further isolated runtime experiments.
+
+1. Compose RHS construction, the external GPU solver, Phi halos, velocity
+   correction and pressure update in one domain. Preserve original arithmetic
+   and control flow while outlining numerical bodies for compiler generation.
+   Retain plans and saved scratch; explicitly publish borrowed fields only at
+   host consumers that have not yet been ported.
+2. Port the remaining pressure reference, pressure and velocity boundaries,
+   then connect this group to SGS, Convection and diffusion in the RK stage.
+   Support an explicit GPU hot-path implementation; the old AUTO policy and
+   source-sized work units must not constrain this implementation. Measure the
+   complete group, including startup and the remaining host transitions.
+3. Run build checks during implementation and focused application correctness
+   plus timing at integrated milestones. Comprehensive suites, natural 109/2458
+   checks and seven rotated measurements remain release/research gates. Testing
+   less frequently does not waive tolerances or qualify incomplete coverage.
+4. Keep be58, native and fresh `7a612e4` controls. Publish measured speedup or
+   regression promptly; do not describe recovery against a slower candidate as
+   acceleration beyond the fastest control. Remove duplicate compiler policies
+   and obsolete compatibility code as their replacements become operational.
+
+The allocation diagnostic attributed 20,193,011 C++ allocations to the recovered
+candidate versus 907,821 for be58 on channel100. A region-temporary optimization
+was built and parked when the user redirected implementation; it has no
+application timing claim. Its patch and build evidence remain in
+`/tmp/fortran-region-temporaries-20261109-01`.
+
+The current pressure integration lives in
+`elmm-pipeline/elmm_pipeline/gpu_hot_path.py` and uses the existing coherence
+runtime and checked external solver interface. Fourteen shared numerical
+entries compile, and the integrated application links against
+`poisson-solver/install-sm86/lib/libpoisson-solver.so`. It now also executes the
+approved serial TOP/BOTTOM pressure reference and `Bound_Pr` face formulas on
+GPU, with a source-checked adapter and one external access transaction. A generic
+compiler fix removes false incoming reads after unconditional same-point
+definitions; its 33 focused tests pass. The arbitrary extraction closure limits
+of eight levels and 64 procedures have been removed.
+
+The second integrated pressure milestone passes all 20 fields, bounds, halos
+and outputs for two steps in both configurations at unchanged tolerances.
+Each case records seven GPU solves, seven Phi-halo operations and seven GPU
+pressure-tail transactions, with zero CPU FFTW plans. Saved Phi/RHS and solver
+plans persist; no generated RHS or Phi payload goes through the host between
+producer and consumer. Inputs such as Pr are still uploaded when first needed.
+Velocity/mass-flux preparation and the unmanaged RK return remain host boundaries;
+the whole timestep is not yet resident. This slice increases total traffic and
+has not established a speedup. A 31-process timing pilot of the preceding slice
+was invalidated by external CPU activity; its slower observations are retained.
+Evidence is under `/tmp/fortran-resident-hot-path-20261109-01`.
+
+The remaining gap to be58 needs separate attribution; the controlled comparison
+does not assign it specifically to SGS kernels or runtime overhead. Complete
+resident pressure projection, broader profitable GPU coverage, timestep-wide
+lifetimes, launch reduction and all release/research gates remain open.
+
+## Earlier checkpoint: 2026-11-09, joined native entry reads
+
+The [latest four-mode pilot](benchmarks/reports/gpu-residency-joined-entry-pilot-20261109/README.md)
+confirms that the broader candidate remains a regression against be58. Exact
+joined-native entry-read admission now removes redundant ELMM uploads, but the
+wall-time benefit is insufficient:
+
+| Primary case | Native | Previous candidate | Experimental fix | be58 | Fix vs previous | Fix vs be58 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| simple109 | 12.951798 s | 12.433427 s | 11.854679 s | 10.726356 s | 4.65% faster | 10.52% slower |
+| channel100 | 14.809714 s | 19.066973 s | 19.001446 s | 13.092735 s | 0.34% faster | 45.13% slower |
+
+One excluded warmup and three rotated measurements per case/mode complete all
+32 processes. All original outputs and FFTW plans pass. The fix wins 3/3 pairs
+against the previous candidate in each case and 0/3 against be58. Native speedups
+are 1.093x and 0.779x. The seven-round research gates remain unqualified. These
+are fresh measurements of frozen controls, not fresh control builds. Maximum
+external CPU activity is 0.463924 core, below the declared 0.5-core limit; no
+build, test or profile overlapped timing. All owned process groups are reaped.
+
+The generic compiler change admits only exact original reads of complete joined
+native groups with unconditional independent input/output assignments. It uses
+existing coherence and completion authority, with no runtime or ABI change.
+The compiled regression preserves both host and device read-only replicas and
+rejects unauthenticated proofs. Ninety related source tests, CUDA-enabled and
+hidden-device regressions, lint and whitespace checks pass.
+
+The actual ELMM source consumer passes. Six separate short native/previous/fix
+runs pass all 20 fields, bounds, halos and outputs. The four stage-2/3 initializer
+retirements disappear. Initialization-plus-two-step payload falls 19.08% in
+simple and 16.23% in channel. Downloads remain 146,316,352 bytes in each case;
+numerical launch inventories remain 126 and 402. Channel's copy count rises
+730→766 despite fewer bytes. There is still no GPU consumer after the first
+diffusion/boundary cut before the next RK stage, and channel's three CD4div
+routines each still launch 18 kernels per stage.
+
+This application experiment is a private generated-source slice, not a normally
+regenerated production package. Keep it unpromoted. The full maintained suite
+and current natural 2,458-step all20 qualification remain open. Do not spend
+another full regeneration or seven-round campaign on this fix alone for
+performance. The implementation remains work in progress; a lower byte count
+does not satisfy the acceleration objective.
+
+Next, compare a complete native Convection call with its complete GPU group,
+including scratch, host preparation, transfers and launches. Use that bounded
+comparison to price groups and coarsen profitable work; stop extending forced,
+unpriced partial coverage. The remaining CPU consumers require their downloads.
+Removing that cost requires a resident dependent consumer chain or a proved
+longer lifetime, not weaker publication rules. Keep be58 as the fastest measured
+reference. The complete GPU pressure chain and automatic group placement remain
+open workstreams.
+
+## Earlier checkpoint: 2026-11-09
+
+The [new four-mode pilot](benchmarks/reports/gpu-residency-native-group-pilot-20261109/README.md)
+shows a partial recovery from the recent regression, with no substantial two-case
+gain. Every measured candidate run still loses to be58:
+
+| Primary case | Native | Previous candidate | New candidate | be58 | New vs be58 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| simple109 | 12.950160 s | 12.578384 s | 12.577033 s | 10.709479 s | 17.44% slower |
+| channel100 | 14.803092 s | 19.984053 s | 18.497837 s | 13.017861 s | 42.10% slower |
+
+Against the immediate previous candidate, median wall time falls by only 0.01%
+in simple and 7.44% in channel; paired wins are 2/3 and 3/3. Against be58 they
+are 0/3 in both cases. Native speedups are 1.030x and 0.800x. These are fresh
+complete-process measurements of frozen binaries, with one excluded warmup and
+three rotated measurements per case/mode: 32 processes, all output comparisons
+passing. The seven-round research checkpoints remain unqualified. The maximum
+observed external CPU load is 0.4593 core, below the declared 0.5-core limit.
+No build, test or profile overlapped timing.
+
+Six short native/previous/new controls pass all 20 fields, bounds, halos, outputs
+and the four verified FFTW plans at unchanged tolerances. **Transfer bytes and
+copy counts remain exactly unchanged in both cases.** Over initialization plus
+two steps, simple still transfers 280,980,544 bytes in 148 copies and channel
+330,474,560 bytes in 730 copies. Numerical launches and allocation counts also
+match. Channel context creation/closure falls from 70 to 40; simple remains at
+16. This is an overhead change, not the intended payload-residency improvement.
+
+Normal generation passes in 2,046.40 seconds, versus 1,275.68 seconds for the
+previous candidate; the public build and diagnostic relink pass in 246.35 seconds.
+The GPU leaf inventory is unchanged. The new original-host may-access mechanism
+still fails to retain the targeted ELMM groups: reservations for child-local
+scalars (`tnz` in diffusion and `reg` in boundary handling) cannot span the lexical
+owner. Those groups become explicit reached retirements. The compiled small
+regression did not cover this application integration case.
+
+The shared CALL/group implementation retains the existing coherence engine and
+runtime ABI; its matching proof issuer/reader use version 2. The 144 focused
+source/reader checks and six CUDA/hidden-device cases pass. Those cases demonstrate
+preserved read-only replicas, removal of a 1,728-byte redundant interior upload,
+precise 24-byte partial updates and child-handle forwarding. They do not establish
+ELMM retention. The full maintained suite and this candidate's natural 2,458-step
+qualification remain pending; the candidate is not a performance promotion.
+
+The [completed runtime diagnosis and private pilot](benchmarks/reports/gpu-residency-runtime-gap-20261109/README.md)
+now identify a larger copy-related gap. Four separate CPU/CUDA profiles pass
+output checks. Channel's host copy-API interval union is 6.696 seconds in the
+candidate versus 0.966 seconds in be58; GPU copy activity is 2.747 versus 0.691
+seconds. These durations overlap and must not be added. `cudaMemcpy3DAsync`
+calls rise from 1,204 to 22,996. The profiled full channel100 run moves 16.524 GB
+versus 5.299 GB in be58, including initialization. This remains a forced-sections
+diagnostic: source-issued tile tasks and scratch preparation are unpriced.
+
+An exact periodic-overlap shortcut reduces the copy planner's main-thread CPU
+leaf-sample share from 4.443% to 0.109%, preserving copy choices and counts.
+All 64 focused CPU checks, 23 CUDA checks and six short full20 controls pass.
+However, its separate 24-process untraced pilot gives only 0.54% lower median
+wall time in simple109 and 0.12% in channel100, with 2/3 paired wins in each.
+This does not establish a meaningful application gain. The tested source is
+archived at `/tmp/fortran-periodic-copy-private-20261109-01/runtime-experiment.patch`;
+the runtime header is restored to HEAD. No production runtime-ID or calibration
+change is promoted. This pilot has no fresh native controls and cannot be
+combined with the earlier campaign to claim a new native speedup.
+
+Existing traces also correct the next retention priority. At RK stages 2 and 3,
+the original velocity-initialization group in Convection (lines 267–295) retires
+the domain **between SGS and advection**, releasing the unchanged `U/V/W` device
+replicas before later GPU readers. Each two-step case contains four such cuts.
+Diagnose that native transaction and preserve those replicas through the actual
+emitted child path first. The final velocity accumulation is still CPU. After
+the first diffusion cut in simple, or first velocity-boundary cut in channel,
+neither short trace records another GPU launch before the next RK stage. Merely
+fixing the later child-local scalar reservation rejection therefore cannot be
+assumed to remove the payload round trip. Evidence and source attribution are
+in `/tmp/fortran-runtime-gap-profile-20261109-02/domain-attribution.json`.
+
+Require a bounded compiled reproducer with the actual nested owner and ordinary
+local scalars, then a short full20 check with fewer redundant uploads, before
+another expensive full regeneration. Preserve lifetime and definition guards.
+The other viable direction is a complete GPU group with priced host boundaries,
+launches and shared transfers; stop treating broader forced coverage as a gain.
+Keep be58 as the performance reference. Source-proof acceptance, context-count
+reduction and a smaller sampled hotspot are not application speedups. The
+complete pressure chain, automatic group placement, current natural 2,458-step
+qualification and full maintained-suite completion remain open.
+
+## Previous checkpoint: 2026-11-08
+
+The preceding narrow-retention follow-up also **fails the performance gate**.
+A fresh three-rotation pilot (24 complete processes including excluded warmups)
+passes every output comparison but gives these medians:
+
+| Primary case | Prior candidate | Current candidate | be58 | Current vs be58 |
+| --- | ---: | ---: | ---: | ---: |
+| simple109 | 11.475700 s | 11.392340 s | 9.983604 s | 14.11% slower |
+| channel100 | 16.843643 s | 17.526326 s | 11.823843 s | 48.23% slower |
+
+The current candidate improves simple by only 0.73% and regresses channel by
+4.05% against the prior candidate. It loses all three paired comparisons with
+be58 in each case. This is a small pilot, not the seven-round research gate;
+the earlier seven-round results below remain intact. The first pilot was
+invalidated by its external-CPU guard, with all samples retained. The fresh
+pilot keeps the same guard and reuses no samples. Evidence:
+`/tmp/fortran-retention-comments-pilot-20261109-02/assessment.json`.
+
+Six short controls pass all 20 fields, bounds, halos and outputs, but physical
+transfers, allocation counts and numerical launches are unchanged. Source-level
+admission removes two diffusion return cuts without removing the reached
+runtime cuts: ordered-definition preflight still reports `uninitialized_read`
+16 times in simple and 70 times in channel, matching the closed domains. The
+first failures are second-order diffusion and velocity-boundary work,
+respectively. This is a missing established definition in the checked plan;
+it does not prove an uninitialized read in the original application. Evidence:
+`/tmp/fortran-retention-comments-short-20261109-01/reached-fallbacks.json`.
+
+Immediate work is to identify why the first reached read region lacks an
+established definition in a compiled reproducer, retain the correctness guard, and show an
+actual copy-ledger reduction before another full application regeneration.
+Do not expand coverage or introduce another interface to fix a source proof
+whose runtime transaction still declines. Retain be58 as the performance
+reference; the current forced-sections candidate is not a performance promotion.
 
 The latest [64-process copy-policy comparison](benchmarks/reports/gpu-residency-copy-v3-speedup-20261108/README.md)
 does **not** deliver a new application gain. The candidate is 18.16% slower than
 be58 on simple109 and 47.69% slower on channel100. Stop coverage expansion until
 an isolated change improves complete-process performance. The detailed results
 and the failed single-copy admission gate are recorded below.
+
+The preceding current-tree regeneration and public build also pass, using fresh
+runtime-matched calibration. Six short native/prior/current controls pass all 20
+fields, halos, bounds, outputs and the four verified FFTW plans. **Traffic and
+numerical launch counts are exactly unchanged in both primary cases.** The
+transfer-reduction gate fails; this package is not promoted or sent through
+another full timing campaign. Evidence:
+`/tmp/fortran-retention-short-20261108-01/result.json`.
+Diffusion and velocity-boundary replacements remain byte-identical to the timed
+candidate. The bounded source diagnosis identifies an earlier failure: graph
+IDs omit ordinary comments, so rebuilding an original OpenMP selection from
+those IDs loses its exact joined-team match. The original cuts therefore remain.
+Evidence: `/tmp/fortran-native-descriptor-consumer-20261108-02/result.json`.
+A small correction now recovers the complete original group before requesting
+the unchanged exact proof; 96 relevant source checks pass, including normal
+emission. The new regression fails against the previous frozen source as
+expected. The full native fragment consumer, with its normal metadata/read
+options and original child source mapping, now accepts second-order diffusion
+and all three velocity-boundary groups. The earlier summary-only diagnosis
+omitted those consumer options and does not establish a remaining record-access
+blocker. Fourth-order five-point diffusion still rejects local scratch `fl`.
+The subsequent application checks and failed pilot are recorded above. Exact
+consumer evidence: `/tmp/fortran-comment-fix-original-fragment-20261109-02/result.json`.
+A broader whole-group host-interface prototype was isolated under `/tmp` and
+removed from the worktree before generation. The current normal generation at
+`/tmp/fortran-retention-comments-20261109-01` contains the narrow comment-selection
+correction and preserved external draft only.
 
 The [local empty native CALL checkpoint](benchmarks/reports/gpu-residency-empty-call-20261108/README.md)
 passes normal generation, the public build, four short controls and both natural
@@ -47,11 +951,12 @@ through the native-effect consumer. Its first ten focused and 414 affected
 checks passed, but both subsequent ELMM generations declined `SGS_Vreman`.
 Descriptor stability unnecessarily depended on the payload graph's control-depth
 budget. The revised draft first consumes the existing complete joined-storage
-proof; its 11 focused checks pass and full regeneration remains pending.
+proof; its 11 focused checks pass. Full regeneration and the six short controls
+now pass, but the actual transfer-reduction gate fails as recorded above.
 The earlier generation, before the consumer fix, changed only a local guard
 name and its manifest: 292 of 294 artifacts were byte-identical. That package
-was not rebuilt or timed. None of these drafts has application execution or
-traffic-reduction qualification.
+was not rebuilt or timed. The latest draft has short application correctness
+qualification, but no traffic reduction or qualified performance gain.
 
 The effect graph also now recognizes nested conditional worksharing directives
 covered by its authenticated complete original join. It retains both branches'
@@ -71,8 +976,9 @@ metadata without starting another speculative fork of a completed private
 analysis, which previously invalidated its exact registry receipts. An isolated
 snapshot excluding the descriptor draft passes 282 source/reader/transaction
 checks and one compiled hidden-device test covering six field/bounds/swap cases.
-The enabled-CUDA copy-ledger case is pending; neither application qualification
-nor a performance gain follows from these checks. Evidence:
+The enabled-CUDA copy-ledger case now passes with the source and hidden-device
+cases (three checks in `fortran-native-call-retention-current-20261108-01.xml`).
+The latest ELMM short controls nevertheless show unchanged traffic. Evidence:
 `/tmp/fortran-native-call-isolated-integration-20261108-01.xml` and
 `/tmp/fortran-ordinary-native-call-hidden-20261108-03/execution.json`.
 
@@ -2439,8 +3345,12 @@ RHS preservation, ghost canaries, nondefault streams, workspace exhaustion and
 complete pressure/velocity projection.
 
 Retain approved deterministic pressure reference, four native threads, unchanged
-physics and `atol=1e-6`, `rtol=1e-5`. Validate all 20 fields, bounds, halos and
-outputs at natural 109/2,458 steps. Run maintained suites before releases.
+physics and `atol=1e-6`, `rtol=1e-5` for primary cases and operator checks.
+The user-approved 2026-11-10 exception uses a 1% relative L2 limit independently
+per field/output component at natural channel2458, with maximum absolute error
+1e-6 for zero references. Validate all 20 fields, bounds, halos and outputs at
+natural 109/2,458 steps; retain exact structural checks, original time checks
+and reported local maxima. Run maintained suites before releases.
 
 Performance uses fresh native, be58, `7a612e4` and candidate builds; one excluded
 warmup and seven rotated measurements, complete-process timing and all samples.

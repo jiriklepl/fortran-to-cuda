@@ -1,0 +1,17 @@
+{
+  "status": "COMPLETE_DIAGNOSTIC_NO_PERFORMANCE_PROMOTION",
+  "profile_root": "/tmp/fortran-recovered-gap-profile-20261109-02",
+  "all_four_output_checks_pass": true,
+  "all_owned_groups_absent": true,
+  "timing_samples_collected": 0,
+  "compiler_or_runtime_changes_in_this_followup": false,
+  "evidence_sha256": {
+    "/tmp/fortran-recovered-gap-profile-20261109-02/plan.json": "de54dc3839c5e41972fa1310d81c34a06df08f5c908504de41360ccd716dc30f",
+    "/tmp/fortran-recovered-gap-profile-20261109-02/result.json": "5e35580740759e97973ed395c7e0da174c228cd326c1451efefd5da220a2924a",
+    "/tmp/fortran-recovered-gap-profile-20261109-02/analysis.json": "3890b36783b0f5a4139bfd50867e93ca5e8706c70b574f75c47be813d1796cb4",
+    "/tmp/fortran-recovered-gap-profile-20261109-02/cpu-analysis.json": "f6e4974d2405bedf2fc26b1689dc4533d850112e32db4841140bb29eda51b151",
+    "/tmp/fortran-recovered-gap-profile-20261109-02/environment-delta.json": "8214d25182282defcb3f50a59c7b8d8a37154ded992a3337a7fba11a9c1b0159",
+    "/tmp/fortran-recovered-gap-profile-20261109-02/analyze.py": "f8d1b59d9ce287dd09067886d0ac62424ab3b7e27e90745d8c121342ef55cff1",
+    "/tmp/fortran-recovered-gap-profile-20261109-02/resolve_cpu.py": "60e6fa604aab8022658e3e2249fc75882816000635c5a1a87aeb801ed6bada34"
+  }
+}

@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission.common.resources import read_common_header
-from compiler.emission.driver import generate_sources
+from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.offload.profile import load_profile
 from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 

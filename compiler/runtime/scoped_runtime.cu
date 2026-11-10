@@ -111,7 +111,7 @@ struct QueuedTask {
     // Numerical work may be submitted by a later native access. Retain its
     // original diagnostic position independently of that flush boundary.
     std::unique_ptr<fort_scope_trace_state_v1> provenance;
-    std::vector<std::vector<unsigned char>> values;
+    fort_scoped::graphs::ArgumentValues values;
     std::vector<void *> arguments;
     std::vector<QueuedBinding> bindings;
     std::vector<fort_scope_plan_binding> binding_views;
@@ -1600,7 +1600,7 @@ void begin_accesses(Context &c, const fort_scope_plan_binding *bindings, size_t 
 }
 #ifndef FORT_SCOPE_CPU_TEST
 void submit_graph(Context &c, uint64_t key, const fort_scope_kernel_v1 *kernels, size_t count,bool resource_fallback=false,
-                  KernelTracePositions positions={}) {
+                  KernelTracePositions positions={},const fort_scoped::graphs::ArgumentValues *const *values=nullptr) {
     seal_uploads(c);
     initialize(c);
     DeviceGuard guard(c);
@@ -1609,7 +1609,7 @@ void submit_graph(Context &c, uint64_t key, const fort_scope_kernel_v1 *kernels,
         bool warmup = false;
         auto status = c.graphs.observe(key,kernels,count,c.graph_stats,warmup);
         if (status == cudaSuccess && !warmup)
-            status = c.graphs.submit(key,kernels,count,c.stream,c.graph_stats,launch_attempted);
+            status = c.graphs.submit(key,kernels,count,c.stream,c.graph_stats,launch_attempted,values);
         if (status == cudaSuccess && !warmup) {
             c.stats.launches += count; mark_context_pending(c);
             trace(c,"graph_submit",nullptr,count);
@@ -1641,7 +1641,7 @@ void submit_graph(Context &c, uint64_t key, const fort_scope_kernel_v1 *kernels,
 }
 #endif
 void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tasks, size_t count,bool resource_fallback=false,
-                   KernelTracePositions positions={}) {
+                   KernelTracePositions positions={},const fort_scoped::graphs::ArgumentValues *const *values=nullptr) {
     require(!count || (key && tasks),FORT_SCOPE_ARGUMENT,"missing graph tasks or stable group key");
     if (!count) return;
     std::vector<fort_scope_kernel_v1> kernels;
@@ -1692,6 +1692,7 @@ void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tas
 #ifdef FORT_SCOPE_CPU_TEST
     (void)resource_fallback;
     (void)positions;
+    (void)values;
     throw Error(FORT_SCOPE_RESOURCE,"CUDA graphs unavailable in the CPU reference backend");
 #else
     std::vector<fort_buffer_t> handles;
@@ -1700,7 +1701,7 @@ void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tas
     reserve_devices(c,handles.data(),handles.size());
     for (auto &resource : resources)
         for (const auto &parts : resource.uploads) copy_region(c,*resource.actual,parts,true);
-    submit_graph(c,key,kernels.data(),count,resource_fallback,positions);
+    submit_graph(c,key,kernels.data(),count,resource_fallback,positions,values);
     for (auto &resource : resources) {
         auto &b = *resource.actual;
         b.initialized = std::move(resource.state.initialized);
@@ -1750,6 +1751,8 @@ void flush_commands(Context &c,const std::vector<bool> *selected,bool conflict) 
     if (c.commands.empty()) return;
     std::vector<fort_scope_graph_task_v1> tasks;
     tasks.reserve(c.commands.size());
+    std::vector<const fort_scoped::graphs::ArgumentValues *> values;
+    values.reserve(c.commands.size());
     const bool tracing=trace_enabled();
     const fort_scope_trace_state_v1 unknown{};
     std::unique_ptr<const fort_scope_trace_state_v1 *[]> positions;
@@ -1758,12 +1761,13 @@ void flush_commands(Context &c,const std::vector<bool> *selected,bool conflict) 
     uint64_t key=1469598103934665603ULL;
     for (size_t i=0; i<c.commands.size(); ++i) if (!selected || (*selected)[i]) {
         tasks.push_back(c.commands[i]->view());
+        values.push_back(&c.commands[i]->values);
         if (positions) positions[tasks.size()-1]=c.commands[i]->provenance ? c.commands[i]->provenance.get() : &unknown;
         key=(key^c.commands[i]->key)*1099511628211ULL;
     }
     if (tasks.empty()) return;
     // Diagnostic allocation failure loses attribution, never numerical work.
-    execute_graph(c,key?key:1,tasks.data(),tasks.size(),true,{positions.get(),&unknown});
+    execute_graph(c,key?key:1,tasks.data(),tasks.size(),true,{positions.get(),&unknown},values.data());
     // No numerical work is replayable once submit has succeeded. Remove it
     // before any later source operation can query virtual definitions.
     if (!selected) c.commands.clear();
@@ -1820,14 +1824,14 @@ void enqueue_graph(Context &c,uint64_t key,const fort_scope_graph_task_v1 *task,
     auto owned=std::make_unique<QueuedTask>(); owned->key=key; owned->kernel=task->kernel;
     if (trace_enabled() && trace_allocation_allowed("enqueue"))
         owned->provenance.reset(new(std::nothrow) fort_scope_trace_state_v1(c.provenance));
-    owned->values.reserve(task->kernel.argument_count); owned->arguments.reserve(task->kernel.argument_count);
+    owned->arguments.reserve(task->kernel.argument_count);
     uint64_t bytes=0;
     for (size_t i=0; i<task->kernel.argument_count; ++i) {
         require(sizes[i] && sizes[i]<=std::numeric_limits<uint64_t>::max()-bytes,FORT_SCOPE_ARGUMENT,"invalid queued argument size");
-        owned->values.emplace_back(sizes[i]);
-        std::memcpy(owned->values.back().data(),task->kernel.arguments[i],sizes[i]);
-        owned->arguments.push_back(owned->values.back().data()); bytes+=sizes[i];
+        bytes+=sizes[i];
     }
+    require(owned->values.capture(task->kernel,sizes),FORT_SCOPE_ARGUMENT,"queued argument padding overflows size_t");
+    for (size_t i=0;i<task->kernel.argument_count;++i) owned->arguments.push_back(owned->values.argument(i));
     std::unordered_set<fort_buffer_t> seen;
     for (size_t i=0; i<task->binding_count; ++i) {
         const auto &binding=task->bindings[i]; auto &b=buffer(c,binding.buffer);

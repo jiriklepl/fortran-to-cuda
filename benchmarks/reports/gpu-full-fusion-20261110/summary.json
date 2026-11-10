@@ -1,0 +1,533 @@
+{
+  "status": "CORRECTNESS_AND_COMPARISON_PASS_PROMOTION_GATE_NOT_MET",
+  "scope": "Fresh full public build plus three fused CD4 entries and their coordinator; current compiler fusion AST matches the immutable candidate snapshot. Not a full release suite or a fresh be58/7a four-control campaign.",
+  "performance": {
+    "channel-simple": {
+      "modes": {
+        "native": {
+          "samples": [
+            11.838071808997483,
+            11.782223111003987,
+            11.817790182998579,
+            11.622354247992916,
+            11.814167365002504,
+            11.773678133999056,
+            11.829988633005996
+          ],
+          "median": 11.814167365002504
+        },
+        "gpu-cached": {
+          "samples": [
+            3.2031106210051803,
+            3.1863849699948332,
+            3.1037111089972313,
+            3.117064432000916,
+            3.1334945739945397,
+            3.165804151001794,
+            3.140862426997046
+          ],
+          "median": 3.140862426997046
+        },
+        "candidate": {
+          "samples": [
+            3.1707233050037757,
+            3.088381062996632,
+            3.0853134360004333,
+            3.077123536997533,
+            3.1374906819983153,
+            3.165583683003206,
+            3.1905023349972907
+          ],
+          "median": 3.1374906819983153
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          0.2678411954380847,
+          0.2621220998702905,
+          0.2610736345987134,
+          0.26475905581082476,
+          0.2655701908619144,
+          0.26886956199880263,
+          0.2696961454464716
+        ],
+        "gpu-cached": [
+          0.9898887925415324,
+          0.9692429169980801,
+          0.994072362938849,
+          0.987186374913096,
+          1.0012752879921798,
+          0.9999303595585601,
+          1.0158045470484693
+        ]
+      },
+      "median_ratios": {
+        "native": 0.2655701908619144,
+        "gpu-cached": 0.9989264907084917
+      }
+    },
+    "channel": {
+      "modes": {
+        "native": {
+          "samples": [
+            13.11101101100212,
+            12.977550887997495,
+            13.172050970002601,
+            13.40112914799829,
+            12.994512569996004,
+            13.11518417300249,
+            13.35159941099846
+          ],
+          "median": 13.11518417300249
+        },
+        "gpu-cached": {
+          "samples": [
+            3.787237623000692,
+            3.7692138269994757,
+            3.726062523004657,
+            3.9170221140011563,
+            3.7754685930049163,
+            3.759127762998105,
+            3.77990283100371
+          ],
+          "median": 3.7754685930049163
+        },
+        "candidate": {
+          "samples": [
+            3.71984250999958,
+            3.691636680996453,
+            3.765267260001565,
+            3.74630241599516,
+            3.7871952980058268,
+            3.7386450310004875,
+            3.6917650749965105
+          ],
+          "median": 3.7386450310004875
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          0.2837189677346827,
+          0.2844632791546766,
+          0.2858527702767325,
+          0.27955125084028765,
+          0.29144573739151736,
+          0.2850623355100465,
+          0.27650358293070093
+        ],
+        "gpu-cached": [
+          0.9822046779975444,
+          0.9794182156906766,
+          1.010521760371668,
+          0.9564159473606827,
+          1.0031060263678626,
+          0.9945512008931344,
+          0.9766825339306948
+        ]
+      },
+      "median_ratios": {
+        "native": 0.2850623355100465,
+        "gpu-cached": 0.99024662473086
+      }
+    }
+  },
+  "performance_gates": {
+    "comparison_valid": true,
+    "median_checkpoints": {
+      "one_percent_below_cached_gpu": false,
+      "twice_native": true,
+      "twenty_times_native": false
+    },
+    "paired_wins": {
+      "channel-simple": {
+        "native": 7,
+        "gpu-cached": 5
+      },
+      "channel": {
+        "native": 7,
+        "gpu-cached": 5
+      }
+    },
+    "all_seven_pairs_won": false,
+    "retention_gate_passed": false
+  },
+  "processes": 48,
+  "external_cpu_max": 0.3775250560421281,
+  "long": {
+    "status": "PASS",
+    "steps": 2458,
+    "fields": 20,
+    "outputs": 114,
+    "worst_relative_l2": [
+      0.0015489611183125967,
+      "frame-y-49.vtk:p"
+    ],
+    "worst_local_error_relative_to_peak": [
+      0.014670614640088665,
+      "fields-Pr.bin"
+    ],
+    "native_reference_reused": true,
+    "prior_GPU_trajectory_exact_files": 40
+  },
+  "coverage": {
+    "channel-simple": {
+      "old": {
+        "arrayutilities::add_3d": 18,
+        "arrayutilities::multiply_3d": 18,
+        "arrayutilities::set_3d": 24,
+        "boundaries::bounduvw_do_bc": 558,
+        "boundaries::periodic_corners_edges": 372,
+        "dynamics::convection": 42,
+        "dynamics::pressuregrad": 24,
+        "momentumadvection::cduadv": 6,
+        "momentumadvection::cdudiv": 6,
+        "momentumadvection::cdvadv": 6,
+        "momentumadvection::cdvdiv": 6,
+        "momentumadvection::cdwadv": 6,
+        "momentumadvection::cdwdiv": 6,
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+        "pressure::buildpoissonrhs": 7,
+        "pressure::correctpoissonvelocity": 21,
+        "pressure::updatepoissonpressure": 7,
+        "resident_time::average": 8,
+        "resident_time::cfl": 1,
+        "resident_wall::correction1m": 6,
+        "resident_wall::correction1p": 6,
+        "resident_wall::correction2m": 6,
+        "resident_wall::correction2p": 6,
+        "resident_wall::correction3m": 6,
+        "resident_wall::correction3p": 6,
+        "resident_wall::stress0": 12,
+        "resident_wall::stress1": 12,
+        "resident_wall::stress2": 12,
+        "resident_wall::stress3": 12,
+        "scalarboundaries::boundviscosity": 36,
+        "subgrid::sgs_sigma_uniform": 6
+      },
+      "new": {
+        "arrayutilities::add_3d": 18,
+        "arrayutilities::multiply_3d": 18,
+        "arrayutilities::set_3d": 24,
+        "boundaries::bounduvw_do_bc": 558,
+        "boundaries::periodic_corners_edges": 93,
+        "dynamics::convection": 42,
+        "dynamics::pressuregrad": 24,
+        "momentumadvection::cduadv": 6,
+        "momentumadvection::cdudiv": 6,
+        "momentumadvection::cdvadv": 6,
+        "momentumadvection::cdvdiv": 6,
+        "momentumadvection::cdwadv": 6,
+        "momentumadvection::cdwdiv": 6,
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+        "pressure::buildpoissonrhs": 7,
+        "pressure::correctpoissonvelocity": 21,
+        "pressure::updatepoissonpressure": 7,
+        "resident_time::average": 8,
+        "resident_time::cfl": 1,
+        "resident_wall::correction1m": 6,
+        "resident_wall::correction1p": 6,
+        "resident_wall::correction2m": 6,
+        "resident_wall::correction2p": 6,
+        "resident_wall::correction3m": 6,
+        "resident_wall::correction3p": 6,
+        "resident_wall::stress0": 12,
+        "resident_wall::stress1": 12,
+        "resident_wall::stress2": 12,
+        "resident_wall::stress3": 12,
+        "scalarboundaries::boundviscosity": 36,
+        "subgrid::sgs_sigma_uniform": 6
+      },
+      "changes": {
+        "boundaries::periodic_corners_edges": [
+          372,
+          93
+        ]
+      },
+      "procedures": 31,
+      "generated_cpu_events": {}
+    },
+    "channel": {
+      "old": {
+        "arrayutilities::add_3d": 18,
+        "arrayutilities::multiply_3d": 18,
+        "arrayutilities::set_3d": 24,
+        "boundaries::bounduvw_do_bc": 774,
+        "boundaries::periodic_corners_edges": 516,
+        "dynamics::convection": 42,
+        "dynamics::pressuregrad": 24,
+        "filters::filter3ord": 108,
+        "momentumadvection::cd4divu": 18,
+        "momentumadvection::cd4divv": 18,
+        "momentumadvection::cd4divw": 18,
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+        "pressure::buildpoissonrhs": 7,
+        "pressure::correctpoissonvelocity": 21,
+        "pressure::updatepoissonpressure": 7,
+        "resident_time::cfl": 1,
+        "resident_wall::correction1m": 6,
+        "resident_wall::correction1p": 6,
+        "resident_wall::correction2m": 6,
+        "resident_wall::correction2p": 6,
+        "resident_wall::correction3m": 6,
+        "resident_wall::correction3p": 6,
+        "resident_wall::stress0": 12,
+        "resident_wall::stress1": 12,
+        "resident_wall::stress2": 12,
+        "resident_wall::stress3": 12,
+        "scalarboundaries::boundviscosity": 36,
+        "subgrid::sgs_sigma_uniform": 6
+      },
+      "new": {
+        "arrayutilities::add_3d": 18,
+        "arrayutilities::multiply_3d": 18,
+        "arrayutilities::set_3d": 24,
+        "boundaries::bounduvw_do_bc": 774,
+        "boundaries::periodic_corners_edges": 129,
+        "dynamics::convection": 42,
+        "dynamics::pressuregrad": 24,
+        "filters::filter3ord": 108,
+        "momentumadvection::cd4divu": 6,
+        "momentumadvection::cd4divv": 6,
+        "momentumadvection::cd4divw": 6,
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+        "pressure::buildpoissonrhs": 7,
+        "pressure::correctpoissonvelocity": 21,
+        "pressure::updatepoissonpressure": 7,
+        "resident_time::cfl": 1,
+        "resident_wall::correction1m": 6,
+        "resident_wall::correction1p": 6,
+        "resident_wall::correction2m": 6,
+        "resident_wall::correction2p": 6,
+        "resident_wall::correction3m": 6,
+        "resident_wall::correction3p": 6,
+        "resident_wall::stress0": 12,
+        "resident_wall::stress1": 12,
+        "resident_wall::stress2": 12,
+        "resident_wall::stress3": 12,
+        "scalarboundaries::boundviscosity": 36,
+        "subgrid::sgs_sigma_uniform": 6
+      },
+      "changes": {
+        "boundaries::periodic_corners_edges": [
+          516,
+          129
+        ],
+        "momentumadvection::cd4divu": [
+          18,
+          6
+        ],
+        "momentumadvection::cd4divv": [
+          18,
+          6
+        ],
+        "momentumadvection::cd4divw": [
+          18,
+          6
+        ]
+      },
+      "procedures": 28,
+      "generated_cpu_events": {}
+    }
+  },
+  "budget": {
+    "channel-simple": {
+      "native_median": 11.814167365002504,
+      "candidate_median": 3.1374906819983153,
+      "target_20x_seconds": 0.5907083682501252,
+      "profiled_kernel_union_seconds": 2.058982003,
+      "kernel_only_budget_ratio": 3.485615091418783,
+      "upper_bound_speedup_holding_profiled_kernels_fixed": 5.737868202727804,
+      "profiled_copy_union_seconds": 0.02783108,
+      "profiled_gpu_idle_inside_kernel_window_seconds": 0.6691465940000003,
+      "assumption": "Diagnostic durations, not wall-time samples. Hypothetical bound sets all non-kernel overhead to zero while keeping these measured kernel durations; not an ultimate hardware limit.",
+      "stages": {
+        "subgrid::sgs_sigma_uniform": {
+          "previous_seconds": 0.5251050030000001,
+          "current_seconds": 0.5364492660000001,
+          "previous_launches": 327,
+          "current_launches": 327
+        },
+        "boundaries::periodic_corners_edges": {
+          "previous_seconds": 0.03052868799999787,
+          "current_seconds": 0.014324704999999925,
+          "previous_launches": 19632,
+          "current_launches": 4908
+        }
+      }
+    },
+    "channel": {
+      "native_median": 13.11518417300249,
+      "candidate_median": 3.7386450310004875,
+      "target_20x_seconds": 0.6557592086501245,
+      "profiled_kernel_union_seconds": 2.695102349,
+      "kernel_only_budget_ratio": 4.109896305608652,
+      "upper_bound_speedup_holding_profiled_kernels_fixed": 4.866302824406202,
+      "profiled_copy_union_seconds": 0.031626294,
+      "profiled_gpu_idle_inside_kernel_window_seconds": 0.7980052290000001,
+      "assumption": "Diagnostic durations, not wall-time samples. Hypothetical bound sets all non-kernel overhead to zero while keeping these measured kernel durations; not an ultimate hardware limit.",
+      "stages": {
+        "subgrid::sgs_sigma_uniform": {
+          "previous_seconds": 0.48516093999999993,
+          "current_seconds": 0.4872002200000004,
+          "previous_launches": 300,
+          "current_launches": 300
+        },
+        "filters::filter3ord": {
+          "previous_seconds": 0.40194377800000036,
+          "current_seconds": 0.40372340100000037,
+          "previous_launches": 5400,
+          "current_launches": 5400
+        },
+        "momentumadvection::cd4divu": {
+          "previous_seconds": 0.19432314099999998,
+          "current_seconds": 0.19438323300000007,
+          "previous_launches": 900,
+          "current_launches": 300
+        },
+        "momentumadvection::cd4divv": {
+          "previous_seconds": 0.19414119899999985,
+          "current_seconds": 0.19416615400000004,
+          "previous_launches": 900,
+          "current_launches": 300
+        },
+        "momentumadvection::cd4divw": {
+          "previous_seconds": 0.1940428920000002,
+          "current_seconds": 0.1925199209999999,
+          "previous_launches": 900,
+          "current_launches": 300
+        },
+        "boundaries::periodic_corners_edges": {
+          "previous_seconds": 0.03968823300000519,
+          "current_seconds": 0.018358479999999903,
+          "previous_launches": 25212,
+          "current_launches": 6303
+        }
+      }
+    }
+  },
+  "focused_checks": 123,
+  "broad_suite": "Stopped after 878 passes and three stale V2 reader failures; those three pass after the V3 fix. 12,508 selected cases were not completed. Initial missing PYTHONPATH collection failure is retained.",
+  "selected_performance_baseline": "/tmp/fortran-local-solver-cache-20261110-01",
+  "receipts": [
+    {
+      "path": "/tmp/fortran-fused-regenerated-20261110-01/build-plan.json",
+      "sha256": "e6c764842455d71c33f8c345f7334bd5fb5502a94a759d2b6e0bc187e2b4fc66"
+    },
+    {
+      "path": "/tmp/fortran-fused-regenerated-20261110-01/build-result.json",
+      "sha256": "b0255e344c5ce2e10102f04d93f2209659681358bd86deb6a14a6b0fe4108ad4"
+    },
+    {
+      "path": "/tmp/fortran-fused-regenerated-20261110-01/work/built.json",
+      "sha256": "f4abe20b75dc530e7b6113ee3c68ac10131758958b947810356c867c540d5b5f"
+    },
+    {
+      "path": "/tmp/fortran-fused-regenerated-20261110-01/work/build-inputs.json",
+      "sha256": "70cd6e6d9e956c60e7e6ce148a923bafa60b5cbb3386c8d5e03774511a8af084"
+    },
+    {
+      "path": "/tmp/fortran-fused-regenerated-20261110-01/original-source/receipt.json",
+      "sha256": "36cc43d71b04f2b21793c2800f0f7af9030c861200eb4a594bb79897483137fb"
+    },
+    {
+      "path": "/tmp/fortran-fused-regenerated-20261110-01/verification/compiler-cpu-retry.xml",
+      "sha256": "d3fa3410126b1a173de1738e91b03b665c7d755520d52c3ee84c00e1413f89e4"
+    },
+    {
+      "path": "/tmp/fortran-fused-regenerated-20261110-01/verification/compiler-cpu-retry.log",
+      "sha256": "cffe72bc4e6d17c4ed446cae858437e1bd1444cf950cf8702af0e25db28fe2e1"
+    },
+    {
+      "path": "/tmp/fortran-fused-regenerated-20261110-01/verification/compiler-cpu-stop.json",
+      "sha256": "de615261cb9d07d43cbd7f181c3e16f970f2b184aea09aa2e679253721aa84e0"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/prepared.json",
+      "sha256": "a4abe363028a229155bb0035dddb6411990f33f76c984c7ffcdc3a84b9a8fad8"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/build-plan.json",
+      "sha256": "5fd1ca02964e01acdcc499c3bb0730ee81b39ef1692b2a6411f7e8fb6d54843b"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/build-failed.json",
+      "sha256": "f4927abc4dbc649a02b2d2246cf5457737ce5f2caa6929b8a3b9e839d8573cde"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/build-result.json",
+      "sha256": "3ceb2679a86ad91e0e38c8f777924aa6c391434f5233cbdbdc86a103b9c48244"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/build-audit.json",
+      "sha256": "46bb7b5422037ce64317813a673c742894df598fea62542f05a57c3e7600428e"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/tests-final.xml",
+      "sha256": "34d2b9efa9f7460c32f6af6a1fde29ae2b6fcdb0b1a4032e898f33f02125c7ec"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/production-tests.xml",
+      "sha256": "4766a2f68bdaecae126d6f70305b5e006ebc08936642346cf44927a2d5014023"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/removed-model-test.log",
+      "sha256": "5b19689a97d618d5cdfce632de67285a8efa3c57100a80350a5bb7ca9e05ae34"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/qualification/plan.json",
+      "sha256": "1d2ac35cec7e40730c74ddb2d4c2c1773d4a02fa12bbd8c6c9f2fba12f452dc8"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/qualification/result.json",
+      "sha256": "45fd3ed68d454b046b59ad2373f654a2648ce11ace87afe6f9f1cfd4f7c15102"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/execution-coverage.json",
+      "sha256": "d6998bc8c6d5f6bf45bc1f4ddbf6658c85c6469f6e059e36b572ab6f0db0a5e1"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/comparison/plan.json",
+      "sha256": "6a69ecd66093f2f1007968a476d0f2c495c4c879103681c04a4c7f20fc1e269a"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/comparison/result.json",
+      "sha256": "8290ebe26044b5d46e02034b4183e4be98f0a7bbbf9f47aefaf7855ee37542dc"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/comparison/execution.json",
+      "sha256": "6c4c1dd2754173fd6a7e1292846d37e74d8e09297d204a56b4434bdc28d3f6f1"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/profile/plan.json",
+      "sha256": "a30862815bd204818fce889f10c0290efe7e6016166f8113f648f289f921739b"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/profile/result.json",
+      "sha256": "fa00a8b893f8e2706dcece830a28ed3a4064d433fe746c9394d80e2dc3e4f589"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/profile/analysis.json",
+      "sha256": "8999a6848cf9384984d61255bf95c3206ca9eb90175be5f0b68768d957d175d1"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/feasibility.json",
+      "sha256": "56957da4bda5c511a840b4b67ee98488f4fdc22496d853d75e5de10bdaddd8a8"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/long/plan.json",
+      "sha256": "36a8756a8accf428980102196dc04a28d214e1168e84fd64ec3c245e43b2dba8"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/long/execution.json",
+      "sha256": "3aeaef124bfc23f507851883d20f1d47cb45a03beb8a6decfd87328faf57e1cf"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/long/result.json",
+      "sha256": "d823d1dee26c69c66e35f21fe4fd56fbae34626eb5f7c1f91954d9647c6719c5"
+    },
+    {
+      "path": "/tmp/fortran-private-fusion-20261110-01/long/trajectory-identity.json",
+      "sha256": "e1b5ec2bd5f7c256092c308d27c6c1786c9b4567e122a439790d58ad8e954546"
+    }
+  ]
+}

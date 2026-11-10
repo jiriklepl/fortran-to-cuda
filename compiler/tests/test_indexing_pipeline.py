@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources
+from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
 from compiler.ir import CompilationError
 from compiler.scheduling import schedule_plan
@@ -40,6 +40,9 @@ def test_indexing_policy_defaults_and_explicit_overrides(tmp_path, opt_level, in
 
 @pytest.mark.parametrize(("opt_level", "indexing", "expected"), POLICIES)
 def test_cli_exposes_indexing_policy_and_proof_reports(tmp_path, opt_level, indexing, expected):
+    from compiler.driver.options import CompilerOptions
+    from compiler.emission import generate_sources
+
     function = lower(tmp_path, "do i=2,n\na(i)=i\nenddo")
     output = tmp_path / "generated"
     command = [
@@ -64,10 +67,9 @@ def test_cli_exposes_indexing_policy_and_proof_reports(tmp_path, opt_level, inde
     assert expected in result.stdout.lower()
     prepared, plan = prepare_function(function, options=CompilerOptions(opt_level=opt_level, indexing=indexing))
     sources = generate_sources(prepared, plan)
-    assert (output / OUTPUTS[0]).read_text() == sources.cuda
-    assert (output / OUTPUTS[1]).read_text() == sources.cpp
-    assert (output / OUTPUTS[2]).read_text() == sources.fortran
-    assert (output / OUTPUTS[3]).exists()
+    assert sources.cuda is sources.cpp is sources.fortran is None
+    for name, text in sources.artifacts.items():
+        assert (output / name).read_text() == text, name
 
 
 @pytest.mark.parametrize("indexing", ["wide", "", 1])

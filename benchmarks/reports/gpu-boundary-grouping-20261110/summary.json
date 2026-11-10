@@ -1,0 +1,554 @@
+{
+  "schema_version": 1,
+  "status": "LOCAL_HOST_SETUP_RETAINED_PERFORMANCE_EXPERIMENTS_REJECTED",
+  "goal_complete": false,
+  "release_qualified": false,
+  "selected_GPU": "/tmp/fortran-async-output-20261110-01/work/build/ELMM",
+  "retained_implementation": {
+    "source": "compiler/emission/cuda/scoped.py",
+    "behavior": "Private scalar INTEGER/LOGICAL HostBlocks in already validated array-bearing entries omit empty coherent host transactions. Preserve execution ordering and work-started tracking. Managed-array access, scalar outputs and floating arithmetic retain transactions.",
+    "milestone_passed": 63,
+    "new_CPU_GPU_cases": 8,
+    "public_entries_regenerated": 130,
+    "changed_CUDA_sources": 0,
+    "all_four_binaries_and_provider_exact_selected": true,
+    "build_scope": "Public numerical regeneration and byte-identical object reuse/relink. Not a fresh complete application/native/provider build.",
+    "application_speedup_claim": false,
+    "binaries": {
+      "ELMM": {
+        "path": "/tmp/fortran-local-host-setup-20261110-01/ELMM",
+        "sha256": "2d5df06329cb8447990b0d4b39327ddf803f9d3113036ca2db7d1998cb69300e"
+      },
+      "ELMM-full20": {
+        "path": "/tmp/fortran-local-host-setup-20261110-01/ELMM-full20",
+        "sha256": "51e2fc298bc7004e859f8592837fd018f9fcdc6ac9289ab0c489cc6d56c81984"
+      },
+      "ELMM-native": {
+        "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native",
+        "sha256": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9"
+      },
+      "ELMM-native-full20": {
+        "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20",
+        "sha256": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6"
+      }
+    },
+    "provider": {
+      "path": "/tmp/fortran-async-output-20261110-01/work/build/lib/libpoisson-solver.so.0.1",
+      "sha256": "4c6d1bd8d0d12c439910a57ca4e49b69ddb20f71772d4a3d0edebdd710a95d7c"
+    }
+  },
+  "experiments": {
+    "boundary_union": {
+      "status": "REJECTED_BY_PREDECLARED_PROMOTION_GATE",
+      "promoted": false,
+      "gate": "Both medians at least2% below selected GPU; all outputs exact and every external-load observation<0.5 cores. Then rebuild the complete public application without diagnostic aliases and run full correctness/timing milestone.",
+      "scope": "Screening pilot only. Six reached boundary entries with independent-domain union fusion; diagnostic C-symbol link aliases to existing application; other objects reused. No native timing or release claim. Complete process, unchanged primary cases/outputs.",
+      "summary": {
+        "channel-simple": {
+          "samples": {
+            "selected": [
+              3.1547802929999307,
+              2.9711321970025892,
+              2.987291716002801
+            ],
+            "candidate": [
+              3.3927000440016855,
+              3.2914641889947234,
+              3.3230492849979782
+            ]
+          },
+          "medians": {
+            "selected": 2.987291716002801,
+            "candidate": 3.3230492849979782
+          },
+          "candidate_ratio": 1.112395306824753,
+          "median_improvement_percent": -11.239530682475296,
+          "paired_wins": 0
+        },
+        "channel": {
+          "samples": {
+            "selected": [
+              3.6093549170036567,
+              3.5104327340013697,
+              3.4728490880006575
+            ],
+            "candidate": [
+              3.9058613009983674,
+              3.9251985009977943,
+              3.9376903980009956
+            ]
+          },
+          "medians": {
+            "selected": 3.5104327340013697,
+            "candidate": 3.9251985009977943
+          },
+          "candidate_ratio": 1.1181523186526505,
+          "median_improvement_percent": -11.815231865265051,
+          "paired_wins": 0
+        }
+      },
+      "all_primary_fields_exact_selected": true,
+      "load_pass": true,
+      "native_timing_or_release_claim": false,
+      "directory": "/tmp/fortran-domain-union-20261110-02",
+      "build_seconds": 22.91703104499902,
+      "binaries": {
+        "ELMM": {
+          "path": "/tmp/fortran-domain-union-20261110-02/ELMM",
+          "sha256": "e8e0a56ac7fffd6b65908cbdc94cc8047afafce015c27bd37930bd235969a44b"
+        },
+        "ELMM-full20": {
+          "path": "/tmp/fortran-domain-union-20261110-02/ELMM-full20",
+          "sha256": "f56cc8494d2efc2e008820cccd3472ad384cd8662b69933d942cd8b5fd86a534"
+        },
+        "ELMM-native": {
+          "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native",
+          "sha256": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9"
+        },
+        "ELMM-native-full20": {
+          "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20",
+          "sha256": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6"
+        }
+      },
+      "one_excluded_warmup": true,
+      "rotated_rounds": 3
+    },
+    "boundary_union_local_setup": {
+      "status": "REJECTED_BY_PREDECLARED_PROMOTION_GATE",
+      "promoted": false,
+      "gate": "Both medians at least2% below selected GPU; all outputs exact and every external-load observation<0.5 cores. Then rebuild the complete public application without diagnostic aliases and run full correctness/timing milestone.",
+      "scope": "Screening pilot only. Six reached boundary entries with independent-domain union fusion and transaction-free local integer setup; diagnostic C-symbol link aliases to existing application; other objects reused. No native timing or release claim. Complete process, unchanged primary cases/outputs.",
+      "summary": {
+        "channel-simple": {
+          "samples": {
+            "selected": [
+              2.9813172049980494,
+              2.969321594995563,
+              2.9461352989965235
+            ],
+            "candidate": [
+              2.9815563859956455,
+              3.0366980209946632,
+              2.948067463003099
+            ]
+          },
+          "medians": {
+            "selected": 2.969321594995563,
+            "candidate": 2.9815563859956455
+          },
+          "candidate_ratio": 1.0041203994274999,
+          "median_improvement_percent": -0.41203994274998657,
+          "paired_wins": 0
+        },
+        "channel": {
+          "samples": {
+            "selected": [
+              3.566629353997996,
+              3.6378012240020325,
+              3.512207382998895
+            ],
+            "candidate": [
+              3.465002346994879,
+              3.5712633529983577,
+              3.5524245990018244
+            ]
+          },
+          "medians": {
+            "selected": 3.566629353997996,
+            "candidate": 3.5524245990018244
+          },
+          "candidate_ratio": 0.9960173167474639,
+          "median_improvement_percent": 0.39826832525361455,
+          "paired_wins": 2
+        }
+      },
+      "all_primary_fields_exact_selected": true,
+      "load_pass": true,
+      "native_timing_or_release_claim": false,
+      "directory": "/tmp/fortran-domain-union-20261110-03",
+      "build_seconds": 21.740956891997484,
+      "binaries": {
+        "ELMM": {
+          "path": "/tmp/fortran-domain-union-20261110-03/ELMM",
+          "sha256": "a2f590f8fe89e7838ca0d4d566c84e0f8e2e1df038d5318273fc9ead3bcbc786"
+        },
+        "ELMM-full20": {
+          "path": "/tmp/fortran-domain-union-20261110-03/ELMM-full20",
+          "sha256": "34b5ff714323433ecc2917a11bab9ff2086834ffac05572b068d18e9cfe30ef4"
+        },
+        "ELMM-native": {
+          "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native",
+          "sha256": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9"
+        },
+        "ELMM-native-full20": {
+          "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20",
+          "sha256": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6"
+        }
+      },
+      "one_excluded_warmup": true,
+      "rotated_rounds": 3
+    },
+    "cuda_aggregation": {
+      "status": "REJECTED_BY_PREDECLARED_PROMOTION_GATE",
+      "promoted": false,
+      "gate": "Both medians at least2% below selected GPU; all outputs exact and every external-load observation<0.5 cores. Then integrate aggregation into the public build pipeline and run complete-build correctness/timing milestone.",
+      "scope": "Screening pilot only. All130 byte-identical current numerical CUDA sources compiled as one translation unit;unchanged arithmetic contract and original Fortran/application/native/provider objects;no diagnostic symbol aliases. No native timing or release claim. Complete process, unchanged primary cases/outputs.",
+      "summary": {
+        "channel-simple": {
+          "samples": {
+            "selected": [
+              3.084898745000828,
+              3.0648274490013137,
+              3.0114634199999273
+            ],
+            "candidate": [
+              3.0150754700007383,
+              3.014271590996941,
+              3.0227177859997028
+            ]
+          },
+          "medians": {
+            "selected": 3.0648274490013137,
+            "candidate": 3.0150754700007383
+          },
+          "candidate_ratio": 0.9837667928036904,
+          "median_improvement_percent": 1.6233207196309607,
+          "paired_wins": 2
+        },
+        "channel": {
+          "samples": {
+            "selected": [
+              3.4941966729966225,
+              3.5241449140012264,
+              3.4648026779977954
+            ],
+            "candidate": [
+              3.561997810997127,
+              3.6358385479979916,
+              3.47687607199623
+            ]
+          },
+          "medians": {
+            "selected": 3.4941966729966225,
+            "candidate": 3.561997810997127
+          },
+          "candidate_ratio": 1.0194039272386917,
+          "median_improvement_percent": -1.9403927238691665,
+          "paired_wins": 0
+        }
+      },
+      "all_primary_fields_exact_selected": true,
+      "load_pass": true,
+      "native_timing_or_release_claim": false,
+      "directory": "/tmp/fortran-cuda-aggregate-20261110-01",
+      "build_seconds": 306.43103347700526,
+      "binaries": {
+        "ELMM": {
+          "path": "/tmp/fortran-cuda-aggregate-20261110-01/ELMM",
+          "sha256": "cb7e1abe3996e58d7dbe1d68944bce7d5afde0539c460435a95ee1491a7ad513"
+        },
+        "ELMM-full20": {
+          "path": "/tmp/fortran-cuda-aggregate-20261110-01/ELMM-full20",
+          "sha256": "a6e5c5a0040d75a17e993a318be57bdb7e647f1b221e610a926e6d65af02de31"
+        },
+        "ELMM-native": {
+          "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native",
+          "sha256": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9"
+        },
+        "ELMM-native-full20": {
+          "path": "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20",
+          "sha256": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6"
+        }
+      },
+      "one_excluded_warmup": true,
+      "rotated_rounds": 3
+    }
+  },
+  "diagnostic_boundary_profile_delta": {
+    "channel-simple": {
+      "selected_boundary": {
+        "seconds": 0.0785334159999979,
+        "launches": 29448,
+        "functions": [
+          "generated_kernels::fort_shared_126c357c532e::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_126c357c532e::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_126c357c532e::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_78c22618929d::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_78c22618929d::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_78c22618929d::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_7a673ca977de::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_7a673ca977de::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_7a673ca977de::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_cec962944411::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_cec962944411::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_cec962944411::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+        ]
+      },
+      "fusion_boundary": {
+        "seconds": 0.05885025200000055,
+        "launches": 9816,
+        "functions": [
+          "generated_kernels::fort_shared_0b9eed3c3cc9::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_106b4c5df54b::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_949c6dcb5117::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_b83d74cf824a::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ed48335fd1d3::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_f4766eb9ec06::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+        ]
+      },
+      "selected_kernel_launches": 58353,
+      "fusion_kernel_launches": 38721,
+      "selected_gpu_idle_within_kernel_window_seconds": 0.6407137029999999,
+      "fusion_gpu_idle_within_kernel_window_seconds": 0.8946688700000001
+    },
+    "channel": {
+      "selected_boundary": {
+        "seconds": 0.0995839829999978,
+        "launches": 37818,
+        "functions": [
+          "generated_kernels::fort_shared_126c357c532e::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_126c357c532e::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_126c357c532e::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_78c22618929d::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_78c22618929d::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_78c22618929d::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_7a673ca977de::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_7a673ca977de::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_7a673ca977de::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ca5d081a08d9::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_cec962944411::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_cec962944411::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_cec962944411::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ee2f9d9f09ac::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+        ]
+      },
+      "fusion_boundary": {
+        "seconds": 0.07529121900000046,
+        "launches": 12606,
+        "functions": [
+          "generated_kernels::fort_shared_0b9eed3c3cc9::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_106b4c5df54b::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_949c6dcb5117::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_b83d74cf824a::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_ed48335fd1d3::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+          "generated_kernels::fort_shared_f4766eb9ec06::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)"
+        ]
+      },
+      "selected_kernel_launches": 70238,
+      "fusion_kernel_launches": 45026,
+      "selected_gpu_idle_within_kernel_window_seconds": 0.8890476010000001,
+      "fusion_gpu_idle_within_kernel_window_seconds": 1.1470463840000003
+    }
+  },
+  "initial_failed_build": {
+    "directory": "/tmp/fortran-domain-union-20261110-01",
+    "reason": "The fusion changes the compiler-issued module identity. An initial exact-interface assertion did not account for that identity; subsequent diagnostic builds use checked identical signatures and explicit C symbol aliases. No production alias path retained."
+  },
+  "fusion_restored_exact_pre_experiment": true,
+  "phase_budget": {
+    "status": "PASS",
+    "scope": "Complete process wall minus the sum of ELMM per-step host timers, printed to two decimals. Residual includes initialization,final output,teardown,untimed loop control and any deferred device tail. It is not an exclusive startup attribution or a hardware ceiling. Counterfactual holds this residual fixed while eliminating only the reported time.",
+    "receipts": {
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/result.json": "4e833c48beb788379a709a68ff48e0e9b8c44b9e00c9b130eab816f5c36dce4b",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel-simple/gpu-cached/round-01/stdout.log": "915cc4d8dee8daf700ed90d408ce82fc22567ece0671246f1a3c4a32a2aa7ffb",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel-simple/gpu-cached/round-02/stdout.log": "f3830b77f0cfeaf921f608c5d04e93f5afb81ddee3b330252ce5b1ed5a4c64c0",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel-simple/gpu-cached/round-03/stdout.log": "f3830b77f0cfeaf921f608c5d04e93f5afb81ddee3b330252ce5b1ed5a4c64c0",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel-simple/gpu-cached/round-04/stdout.log": "3a812a4066ae29cbee21262d83202ded17d163b99808a2706053f1489c3430a3",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel-simple/gpu-cached/round-05/stdout.log": "9e3574d064815b7d0a013080bf2c78ee54e486fd80760c17a4f5dfe445e9551d",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel-simple/gpu-cached/round-06/stdout.log": "a861c417003e211c4fe12102c3a1a7a34cbe317fe0a1fa4cb3d74e4bb29226bb",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel-simple/gpu-cached/round-07/stdout.log": "cc5dace03ccd7bedd3b359f5313db79fbf28acba5c94e8057467fc77b30fdfa6",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel/gpu-cached/round-01/stdout.log": "bcd48d64c2b7546095be89a163696c5443c82fa146c5ea57c60f782dd02653c6",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel/gpu-cached/round-02/stdout.log": "1d1d1c0a40210961173ffc808482604cc021c69e826d7e7a01e5ee85da1e38e5",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel/gpu-cached/round-03/stdout.log": "96fcd7a6aa1a332fccbf848ec758cb16f9f236953ac2c9403dacb0773eada756",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel/gpu-cached/round-04/stdout.log": "fbc2202d6563cd425eb4c97cbf00826412527a27e4e82aa89bf5a64fc65296f6",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel/gpu-cached/round-05/stdout.log": "20389ed986d563b295514bc11e4c4aec92da33a24d46577d6d946d0bbbb40464",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel/gpu-cached/round-06/stdout.log": "20389ed986d563b295514bc11e4c4aec92da33a24d46577d6d946d0bbbb40464",
+      "/tmp/fortran-coordinate-decode-20261110-01/comparison/channel/gpu-cached/round-07/stdout.log": "09e80b710f62fd1979406757c7ec9adf76697d7b35bc70ddcad1504b7d3dbae3",
+      "/tmp/fortran-async-output-20261110-01/work/application/elmm/src/main.f90": "fd7cec94940953166a913cb49b6ef0d5d95d9c2b9e1bb74e78b78f4d3dca7c17"
+    },
+    "cases": {
+      "channel-simple": {
+        "samples": [
+          {
+            "round": 1,
+            "whole_seconds": 2.959944059002737,
+            "reported_timestep_seconds": 2.24,
+            "outside_timestep_seconds": 0.7199440590027368
+          },
+          {
+            "round": 2,
+            "whole_seconds": 3.0302917910012184,
+            "reported_timestep_seconds": 2.28,
+            "outside_timestep_seconds": 0.7502917910012186
+          },
+          {
+            "round": 3,
+            "whole_seconds": 3.045939071002067,
+            "reported_timestep_seconds": 2.28,
+            "outside_timestep_seconds": 0.7659390710020673
+          },
+          {
+            "round": 4,
+            "whole_seconds": 3.0223668690014165,
+            "reported_timestep_seconds": 2.31,
+            "outside_timestep_seconds": 0.7123668690014164
+          },
+          {
+            "round": 5,
+            "whole_seconds": 3.0768016340007307,
+            "reported_timestep_seconds": 2.35,
+            "outside_timestep_seconds": 0.7268016340007306
+          },
+          {
+            "round": 6,
+            "whole_seconds": 2.984635652996076,
+            "reported_timestep_seconds": 2.25,
+            "outside_timestep_seconds": 0.7346356529960758
+          },
+          {
+            "round": 7,
+            "whole_seconds": 3.0525082620006287,
+            "reported_timestep_seconds": 2.3,
+            "outside_timestep_seconds": 0.7525082620006289
+          }
+        ],
+        "native_median_seconds": 11.460197539003275,
+        "median_outside_timestep_seconds": 0.7346356529960758,
+        "20x_total_budget_seconds": 0.5730098769501637,
+        "outside_time_fixed_zero_timestep_counterfactual_speedup": 15.599838494449562,
+        "20x_requires_outside_interval_optimization": true
+      },
+      "channel": {
+        "samples": [
+          {
+            "round": 1,
+            "whole_seconds": 3.532703529999708,
+            "reported_timestep_seconds": 2.84,
+            "outside_timestep_seconds": 0.692703529999708
+          },
+          {
+            "round": 2,
+            "whole_seconds": 3.554988782001601,
+            "reported_timestep_seconds": 2.81,
+            "outside_timestep_seconds": 0.744988782001601
+          },
+          {
+            "round": 3,
+            "whole_seconds": 3.5884379999988596,
+            "reported_timestep_seconds": 2.87,
+            "outside_timestep_seconds": 0.7184379999988595
+          },
+          {
+            "round": 4,
+            "whole_seconds": 3.47279185399384,
+            "reported_timestep_seconds": 2.79,
+            "outside_timestep_seconds": 0.68279185399384
+          },
+          {
+            "round": 5,
+            "whole_seconds": 3.4766084540024167,
+            "reported_timestep_seconds": 2.8,
+            "outside_timestep_seconds": 0.6766084540024169
+          },
+          {
+            "round": 6,
+            "whole_seconds": 3.4794573969993507,
+            "reported_timestep_seconds": 2.8,
+            "outside_timestep_seconds": 0.6794573969993509
+          },
+          {
+            "round": 7,
+            "whole_seconds": 3.492288750996522,
+            "reported_timestep_seconds": 2.78,
+            "outside_timestep_seconds": 0.7122887509965223
+          }
+        ],
+        "native_median_seconds": 12.938242007003282,
+        "median_outside_timestep_seconds": 0.692703529999708,
+        "20x_total_budget_seconds": 0.6469121003501641,
+        "outside_time_fixed_zero_timestep_counterfactual_speedup": 18.677892412369744,
+        "20x_requires_outside_interval_optimization": true
+      }
+    },
+    "timer_source": {
+      "path": "/tmp/fortran-async-output-20261110-01/work/application/elmm/src/main.f90",
+      "sha256": "fd7cec94940953166a913cb49b6ef0d5d95d9c2b9e1bb74e78b78f4d3dca7c17",
+      "start_line": 94,
+      "end_line": 137,
+      "accumulate_line": 141,
+      "print_line": 191
+    }
+  },
+  "calibration": "The scoped emitter identity changed. Base runtime and transfer code are unchanged; no fresh numerical/collective cost calibration is claimed. Conservative emitter-bound costs must be revalidated/regenerated.",
+  "remaining": [
+    "Attribute initialization, untimed control, final output and GPU tail exclusively before another startup optimization; the residual timer difference is not a pure startup estimate.",
+    "Target measured SGS/CD4/filter and host graph preparation costs. A two-thirds boundary-launch reduction alone did not improve both primary cases.",
+    "Complete graph/queued-argument/opaque-driver and host-memory budgeting.",
+    "Finish residual legacy/test migration, current FD4/operator qualification, maintained suites and fresh four-control release timing.",
+    "20x objective remains unmet; selected seven-round comparison remains 3.78x/3.70x native."
+  ],
+  "receipts": {
+    "/tmp/fortran-domain-union-20261110-01/build.py": "33ff77eac68967ad83d347d7f956f1e785ec3010236dd42c4af04d3aa91f135d",
+    "/tmp/fortran-domain-union-20261110-01/build.log": "09452edf0d57865df8ef9d58903dfb0ddb95497d73f7116fb26dd16975c157a0",
+    "/tmp/fortran-domain-union-20261110-01/build-result.json": "da27af44ed2ceabc269d699c4bf229ecc34d65b04369a226da38fb3a91c5b1f1",
+    "/tmp/fortran-domain-union-20261110-01/fusion-before.py": "503840cc0c77d44d9b2a925d02d17745899ed7568458f71a1baa41c547fed006",
+    "/tmp/fortran-domain-union-20261110-01/transform-tests.log": "6830a4410b735004a3b882f0d950cacfb3b64609780a2e806ca9036cd038069d",
+    "/tmp/fortran-domain-union-20261110-02/build.py": "eda3c465edfe62310f354cc78a4c4f64165cac82a55ce4cf9cca226fb0d32b00",
+    "/tmp/fortran-domain-union-20261110-02/build-plan.json": "07ac53355989557d74e9c0762c5b92adb684d0c5e39a8b4a09bbcec46bb73be8",
+    "/tmp/fortran-domain-union-20261110-02/build-result.json": "5724804e38a3578a6d31cdc9629f5714f32b7e7ebfe8329af1c0a03ee7310d10",
+    "/tmp/fortran-domain-union-20261110-02/pilot.py": "5d11d2e86594952e70c5014de4bbea647409ebbd435a5983483b6b5127f47836",
+    "/tmp/fortran-domain-union-20261110-02/pilot-plan.json": "fbd0adcf4474191ffeb484ea12c04b88edd08cfd13e7ec56dff2e3f2bcd3c7fa",
+    "/tmp/fortran-domain-union-20261110-02/pilot-result.json": "a5664006a66fa85fecf1edadcfc7e0c1b652ee06916aeec18a56eb3958eba193",
+    "/tmp/fortran-domain-union-20261110-02/semantics.json": "251e5ac55e56c6e2863cecf6e52bf1afd2a2ea117bbcb15d430a29a2d747331a",
+    "/tmp/fortran-domain-union-20261110-02/source-archive.json": "7e60f808f0103f03886c3104c823ffac32f605692e9b7338dd7e3f63216b6581",
+    "/tmp/fortran-domain-union-20261110-02/decision.json": "c25198c7990a323b63a3789d13826197783cab4f544d54e013b2c1b068e34ef5",
+    "/tmp/fortran-domain-union-20261110-02/profile/profile.py": "51ae8e80e9247fe688fe4a88efdbfd64d4c5993d2553b52579e76e0200768d64",
+    "/tmp/fortran-domain-union-20261110-02/profile/result.json": "6df8f3d1dac8dda4f20606451bfd5104840ad78209281191c10abfa9a799a277",
+    "/tmp/fortran-domain-union-20261110-02/profile/analyze.py": "400f5fa0aac0069efc4ca7414b1cf44dbdddad512557667defe44fd9e5de597b",
+    "/tmp/fortran-domain-union-20261110-02/profile/analysis.json": "14fc9e12e0d98b2c64f624de4ca5facfa75f215aa83246d0e275da34ca205ff0",
+    "/tmp/fortran-domain-union-20261110-03/build.py": "6116c52f5687cf1ac24cba433d31eb6fe4155e78d51e145d446badb1ba3b120a",
+    "/tmp/fortran-domain-union-20261110-03/build-plan.json": "97a2414a66fbd6140135cccb5119766f0d5ce095ea38a0e4284bffdd3e816c39",
+    "/tmp/fortran-domain-union-20261110-03/build-result.json": "e0004d89521ac67c6c9b933a32ce4096a1633096bdbe6a01f512dbd5b7564cc1",
+    "/tmp/fortran-domain-union-20261110-03/pilot.py": "c23c17fbcc3560f87ee8976685a6100cecdabc0679ad0bdb16e4252f9a37bc3e",
+    "/tmp/fortran-domain-union-20261110-03/pilot-plan.json": "8d34f45284e15913d94d6dfb8046f62360ca69c99db67920e1245de64e673e80",
+    "/tmp/fortran-domain-union-20261110-03/pilot-result.json": "2b67ff72ec620d006879f3d6738d0112e6014233c474bdcd258d6d51b99209d8",
+    "/tmp/fortran-domain-union-20261110-03/semantics.json": "251e5ac55e56c6e2863cecf6e52bf1afd2a2ea117bbcb15d430a29a2d747331a",
+    "/tmp/fortran-domain-union-20261110-03/source-archive.json": "24c66239ff819d5e9abb52cab9fb2e09bae848d0f043e1e397ca588654e68d05",
+    "/tmp/fortran-domain-union-20261110-03/decision.json": "5393bd5333c935a1a805251a4da94d49f61beaa8174b49c85f98eea0af674b7c",
+    "/tmp/fortran-local-host-setup-20261110-01/build.py": "18a1f7b31d831ddd24e9e374f9a8a4a558d85ea88c65507c4bcbe36f143367ee",
+    "/tmp/fortran-local-host-setup-20261110-01/build-plan.json": "4525527bb8efa032a027a5d33248fcb74dec81fde08d20f4d94beff83b771f53",
+    "/tmp/fortran-local-host-setup-20261110-01/build-result.json": "9c8623156b9c613576d243ca1fe21b6c6cd5baf0286f5ffb5fbeb026808efd69",
+    "/tmp/fortran-local-host-setup-20261110-01/milestone.xml": "f81a7a0efdacdee7051a855d871b5f0959aeb950800e26d361fc9715566cfc6f",
+    "/tmp/fortran-local-host-setup-20261110-01/milestone.log": "ea2b2f2e6e3a22fc3591e95b7bd7c280853220b3a70c781be8f48f5fe0671482",
+    "/tmp/fortran-local-host-setup-20261110-01/source-archive.json": "59aaba53a0e073482aaad240c859e772798a8d7557780214b70e4ce0da396ead",
+    "/tmp/fortran-local-host-setup-20261110-01/report.py": "036c813cd19755e5f19167cf663a6f723a9992d6a11407fda9691e5d588ca5f0",
+    "/tmp/fortran-cuda-aggregate-20261110-01/build.py": "5843461c782d5ebf9797f904a44fbaafd81506dc4431e841e95e1787ec1cdfa1",
+    "/tmp/fortran-cuda-aggregate-20261110-01/build-plan.json": "0708b096f4ab747b50b5b3880fc726a57b379f9c197bffcaaec78222579a986a",
+    "/tmp/fortran-cuda-aggregate-20261110-01/build-result.json": "002f13c629477652210fb743ced99f1fe81e8f3f0ae5bfd662db9cecdfbe4cc4",
+    "/tmp/fortran-cuda-aggregate-20261110-01/numerical_entries.cu": "3c0b024073b80d23eda51bf2ff767d4203f7742c6639e63baba80d23fef35030",
+    "/tmp/fortran-cuda-aggregate-20261110-01/pilot.py": "fd7edc25fee1147bd6a30c88b096f5f61940ea56c992fa3a07e8e69afacf4e39",
+    "/tmp/fortran-cuda-aggregate-20261110-01/pilot-plan.json": "acaf2d85695e6a930963a3a0d3a213bd5eead0f1731d55c99bfc2b360570bcaa",
+    "/tmp/fortran-cuda-aggregate-20261110-01/pilot-result.json": "0cf01d3b5db0cac423938451d6f82e1a2262f38b3fc17f35ffb13ead95bfb9b1",
+    "/tmp/fortran-cuda-aggregate-20261110-01/semantics.json": "8a1e7e858b85d69416ef93a2597dabb25af384dc036609fe84ef3f0c48102880",
+    "/tmp/fortran-cuda-aggregate-20261110-01/decision.json": "08070dc75dd31f89be9931fcb8c17c0eb7c6e977869552a723280b8cd8076b63",
+    "/tmp/fortran-cuda-aggregate-20261110-01/phase-budget.json": "655a76cb3dc8e784a76002f723933891e30800d17cbaf514bb6cc5e27826178a",
+    "/tmp/fortran-coordinate-decode-20261110-01/comparison/result.json": "4e833c48beb788379a709a68ff48e0e9b8c44b9e00c9b130eab816f5c36dce4b",
+    "/tmp/fortran-coordinate-decode-20261110-01/selected-profile/result.json": "957963bba8abeda3e73203fa05aeffffb4c407fa3dd0151bf5deaec62ae6dc37",
+    "/tmp/fortran-coordinate-decode-20261110-01/selected-profile/analysis.json": "271b90db6da0bf30d598413181acb9cf9d0e0e6dbf1c272c672ac821b213b6ec",
+    "/tmp/fortran-local-host-setup-20261110-01/ELMM": "2d5df06329cb8447990b0d4b39327ddf803f9d3113036ca2db7d1998cb69300e",
+    "/tmp/fortran-local-host-setup-20261110-01/ELMM-full20": "51e2fc298bc7004e859f8592837fd018f9fcdc6ac9289ab0c489cc6d56c81984",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native": "f3daadb42c1c839849c6ec73fc9c9f1d4c9abd29f85ea9ab565d18e6857733a9",
+    "/tmp/fortran-async-output-20261110-01/work/build/ELMM-native-full20": "05c3ba2cf97e60f63383067a7ec204e74a332d87e5a9c1781ed3e73420b69cb6",
+    "/tmp/fortran-async-output-20261110-01/work/build/lib/libpoisson-solver.so.0.1": "4c6d1bd8d0d12c439910a57ca4e49b69ddb20f71772d4a3d0edebdd710a95d7c"
+  }
+}

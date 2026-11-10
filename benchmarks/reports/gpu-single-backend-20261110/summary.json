@@ -1,0 +1,139 @@
+{
+  "status": "SINGLE_PRODUCTION_BACKEND_MILESTONE_PASS",
+  "full_goal_complete": false,
+  "full_release_qualified": false,
+  "production_changes": {
+    "default_memory": "scoped",
+    "default_policy": "sections",
+    "policies": [
+      "sections",
+      "auto"
+    ],
+    "removed": [
+      "call ownership",
+      "always policy",
+      "chunked policy",
+      "hybrid policy",
+      "ordinary CUDA/C++/Fortran outputs",
+      "owned-session application API",
+      "old pipeline call-region adapter",
+      "pipelined slab switch",
+      "four-unit analysis from graph generation and owner batching"
+    ],
+    "legacy_reference_factory": "compiler/_legacy/emission.py; explicitly imported by25 numerical test modules, never the production driver or application adapters",
+    "native_baseline_default": "pipeline run defaults to baseline; local GPU integration requires resident-build or explicit checked source facts"
+  },
+  "verification": {
+    "tests": {
+      "graph-milestone": {
+        "tests": 156,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 4
+      },
+      "cuda-default": {
+        "tests": 20,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "focused_passed": 131,
+    "focused_subtests": 21,
+    "optional_skipped": 4,
+    "CUDA_passed": 20,
+    "CUDA_scope": "Compiled/executed default shared entries before final slab-analysis isolation; final numerical artifact parity also established after that isolation.",
+    "compiler_tests_collected": 14904,
+    "pipeline_tests_collected": 4778,
+    "complete_suites_executed": false,
+    "real_current_source_protocol_tests": 2,
+    "regenerated_entries": 130,
+    "byte_identical_emitted_files": 2990,
+    "normalization": "none; same qualified normalized source paths",
+    "scope_limit": "Complete numerical translation units and runtime artifacts, not a fresh complete application rebuild. Qualified application executables and field/output checks remain the preceding scoped-artifact milestone.",
+    "initial_failures": "Incorrect combined-suite PYTHONPATH; stale retired-API expectations and a missing test source_name; then the new test found a real legacy scope_slab_candidates call from shared generation. All retained; final milestone passes."
+  },
+  "calibration": {
+    "status": "BASE_COSTS_VALID_OPTIONAL_MODELS_UNAVAILABLE",
+    "runtime_id": "9e05267fe9ddc62156f273e86b3b43f30f16a07d3bf6910cc852c92c7bee9ddc",
+    "base_cost_count": 11,
+    "transfer_cost_count": 10,
+    "physical_copy_model_valid": true,
+    "collective_protocol_changed": true,
+    "old_collective_sources": {
+      "identity": "d6e22a42a6fe639f8b27a086c30ac5ada126c44eceb9c0e3290862cac5e5bf3a",
+      "sources": {
+        "compiler/numerical_contract.py": "877672fec46a46eacfb567a9239129a53af76679a5a99fcfe0fc41c3ec65c1ba",
+        "compiler.scopes/collective.py": "dda55f68a11a77f304d19b1e51ea818209089312fbebe4fdc59cb05034b7eaff",
+        "compiler.scopes/collective_roles.py": "b9008180ece9188402f3c683ef1eeb447e9af1212ab1fd9f1a3dc551de2a4272",
+        "compiler.scopes/source.py": "ad245a7b1f7c8905c81b81be70af24d8bdb1175da972f4cf2f67201486e09b6e",
+        "compiler.emission.cuda/scoped.py": "c77ab9072e54a0d893348d006959723f083e96f947367d55c82ba5d021885e6c",
+        "compiler.emission.cuda/offload.py": "87f6c42837c9125e86e06f5b89cb32428dbe764193be9ed34c830ae064064d25",
+        "compiler.runtime/scoped_team_observer.hpp": "374dcb2874c2e6395f259392e6aa814efe03fbe5b0861184b6e3fce9ab1dd223",
+        "compiler.runtime/scoped_team_observer.f90": "e80d7abaef437f568d285d16a5da65bd89643ab2eef768d1bc66fb7981f0036a",
+        "compiler.runtime/offload.hpp": "6499e0c406341955c45433169a5c09c295400e1ca05dfcc82a0b904aa8dbc0c9"
+      }
+    },
+    "current_collective_sources": {
+      "identity": "1086d6ff1f32ba02ef63c6af7d4d3ba826f8987534323fe7e678ffccca977ce3",
+      "sources": {
+        "compiler/numerical_contract.py": "877672fec46a46eacfb567a9239129a53af76679a5a99fcfe0fc41c3ec65c1ba",
+        "compiler.scopes/collective.py": "dda55f68a11a77f304d19b1e51ea818209089312fbebe4fdc59cb05034b7eaff",
+        "compiler.scopes/collective_roles.py": "b9008180ece9188402f3c683ef1eeb447e9af1212ab1fd9f1a3dc551de2a4272",
+        "compiler.scopes/source.py": "cefa4deaba86e9a33fda69c3ffff48ccefe1c4499df8e5d2b7659f6c7fdd3136",
+        "compiler.emission.cuda/scoped.py": "9f8b2dd527047292c843eb22dea28314aa3aa5e509c2dfb59de7c9218b07fcd0",
+        "compiler.emission.cuda/offload.py": "87f6c42837c9125e86e06f5b89cb32428dbe764193be9ed34c830ae064064d25",
+        "compiler.runtime/scoped_team_observer.hpp": "374dcb2874c2e6395f259392e6aa814efe03fbe5b0861184b6e3fce9ab1dd223",
+        "compiler.runtime/scoped_team_observer.f90": "e80d7abaef437f568d285d16a5da65bd89643ab2eef768d1bc66fb7981f0036a",
+        "compiler.runtime/offload.hpp": "6499e0c406341955c45433169a5c09c295400e1ca05dfcc82a0b904aa8dbc0c9"
+      }
+    },
+    "collective_rejection": "collective synchronization calibration is unavailable",
+    "source_submit_rejection": "source submit model failed independent coverage and is unavailable",
+    "fresh_measurements": false,
+    "complete_automatic_placement_qualified": false,
+    "inputs": {
+      "/tmp/fortran-single-production-backend-20261110-01/cost_status.py": "18e5159db3dbb54788c77fcf452a58ceb5605243f2c0845c70942e6ba8da3cb4",
+      "/tmp/fortran-current-public-20261110-01/calibration/hardware.json": "33c2bf7e36522b10b3f4ac8b2df1d8f7dea1cd241274a8e0e92e90b34c92d076"
+    }
+  },
+  "last_full_build": "/tmp/fortran-scoped-artifacts-20261110-01/work",
+  "last_application_report": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-scoped-artifacts-20261110/summary.json",
+  "selected_timing_baseline": "/tmp/fortran-index-conversion-20261110-01",
+  "new_timing_claim": false,
+  "selected_timing_report": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-host-preparation-20261110/summary.json",
+  "remaining": [
+    "Remove production frontend coupling to private legacy configuration types and retire residual historical implementation helpers after their useful numerical tests migrate.",
+    "Implement bounded asynchronous output with two immutable snapshot slots, backpressure and final writer join.",
+    "Account graph/queue and snapshot storage alongside fields, scratch and solver workspaces.",
+    "Complete maintained-suite execution and migrate obsolete public CLI expectations; collection success does not establish passing suites.",
+    "Finish current solver/operator qualification including independent FD4 residual validation.",
+    "Run a fresh full public release build and four-control timing protocol after implementation stabilizes; publish the20x feasibility gap."
+  ],
+  "receipts": {
+    "/tmp/fortran-single-production-backend-20261110-01/contracts.log": "b5ade841333a4c5da05f8fced6f1ef53521600e7c58772eeb11ecf8d87433cf4",
+    "/tmp/fortran-single-production-backend-20261110-01/contracts.xml": "fd0c1bf964e19db686f11d8532fde34969a610bb66d0fb7cbe34b76764c546b0",
+    "/tmp/fortran-single-production-backend-20261110-01/cuda-default.log": "0bdb60e85cae77ebf57b2d803cf834c975a05d6e5b68c2fc920ed0dd4ecec535",
+    "/tmp/fortran-single-production-backend-20261110-01/cuda-default.xml": "0c0508107edc9b1884f00589d5443c898df2b61b5e895e3635e6beee9ab5e8c6",
+    "/tmp/fortran-single-production-backend-20261110-01/graph-isolation.log": "88fbea09a7a95eb7c24a9f944683a344ca1271cb7a999cfe34e0ae2483b4020c",
+    "/tmp/fortran-single-production-backend-20261110-01/graph-milestone.log": "dfa480fa099fc58d722b650058942093c7dc6e89ec8189cc44b628bf7882a895",
+    "/tmp/fortran-single-production-backend-20261110-01/graph-milestone.xml": "8b020cccfa03786bdb24d3fb1920fb20411217c5ad53f47eb1895c70a99372c2",
+    "/tmp/fortran-single-production-backend-20261110-01/milestone.log": "3974b916d2a062bf9720c54a4b9c32cfd62e8f22087886e5918dae82ee6c072c",
+    "/tmp/fortran-single-production-backend-20261110-01/milestone.xml": "9796f251e539a3b3ffedf4598f3c78005ccae63552376599c33a323f6103fc05",
+    "/tmp/fortran-single-production-backend-20261110-01/milestone-final.log": "1d049bfccad62dbf785dfe684e128355fe0a6249821637dbb0d0737711b2217f",
+    "/tmp/fortran-single-production-backend-20261110-01/milestone-final.xml": "d5d12ec4410a001b5ecf94403498e2604934e465690a8b2ec41fbdc3cba9f2b1",
+    "/tmp/fortran-single-production-backend-20261110-01/milestone-qualified.log": "9a53f8818cfa8a01b0600c0b89a545a3cf7d4a5e8fc67b85295077fe2921295f",
+    "/tmp/fortran-single-production-backend-20261110-01/milestone-qualified.xml": "6a4eee375e6f344250eeccc24d47542277c719599014804396c6d4693533a2f6",
+    "/tmp/fortran-single-production-backend-20261110-01/compiler-collection.log": "5b389418640deafcdd47f08b5fd2c8dcd87dfc3af2992850b60a29e34ab5035a",
+    "/tmp/fortran-single-production-backend-20261110-01/compiler-collection-final.log": "6194237e689f7b444cb61861319fa061692acce0b90d9b5dbd238b287d5d665a",
+    "/tmp/fortran-single-production-backend-20261110-01/pipeline-collection.log": "8506fa9f9404f9403d108bb2b3a88a78d32621ac9abf55e91c2c0f6e30519cb3",
+    "/tmp/fortran-single-production-backend-20261110-01/reference-fixtures.json": "d437fb45f4d9c68df3f783b1ac45266654229f0a0deaf861c9df2c24827663c9",
+    "/tmp/fortran-single-production-backend-20261110-01/test-inputs.json": "0d230a4a1b8778e25a8b9b14238e21573989db99cdc0a4605c99ea5e50b69c98",
+    "/tmp/fortran-single-production-backend-20261110-01/graph-reproduction/reproduce.py": "059c4564046c7df3c3188f47babef050d05a8908b5de160377805e9dd9bbbb96",
+    "/tmp/fortran-single-production-backend-20261110-01/graph-reproduction/reproduction-plan.json": "730dbc8cb5e9ef5950127f463ad3fc3acc0b33371d805e52bb06ebe22c925021",
+    "/tmp/fortran-single-production-backend-20261110-01/graph-reproduction/reproduction.json": "20718f8675fadef650f5d7daf37251c3c6c96c9423bcd30f5e211dc548de7159",
+    "/tmp/fortran-single-production-backend-20261110-01/cost_status.py": "18e5159db3dbb54788c77fcf452a58ceb5605243f2c0845c70942e6ba8da3cb4",
+    "/tmp/fortran-single-production-backend-20261110-01/cost-status.json": "169e0bb5141bee73fddf750fd92e6617e4995cc4a5617e0c3a05dd43f8b1ffa9",
+    "/tmp/fortran-single-production-backend-20261110-01/report.py": "78c3328d2c6e55f64997329cefbd99f2de2233f74e4f979785f94a4955bbcb78"
+  }
+}

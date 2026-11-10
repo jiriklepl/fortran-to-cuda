@@ -85,11 +85,12 @@ def test_auto_schedule_favors_fortran_contiguity_and_source_option_preserves_ord
 
 
 def test_unscheduled_plan_api_keeps_source_order() -> None:
-    from compiler.emission import generate_sources
-
     function, plan = _example()
     scheduled = schedule_plan(function, plan, options=CompilerOptions(schedule="source"))
-    assert generate_sources(function, plan) == generate_sources(function, scheduled)
+    # The shared package records explicit plan provenance. Compare the actual
+    # coordinate mapping and launch policy, independently of that metadata.
+    assert generate_kernel(plan.regions[0]) == generate_kernel(scheduled.regions[0])
+    assert generate_launch(plan.regions[0]) == generate_launch(scheduled.regions[0])
 
 
 def test_writes_have_twice_the_locality_weight_of_reads() -> None:

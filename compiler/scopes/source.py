@@ -2522,7 +2522,9 @@ class ScopeBuilder:
     def owner_calls(self, calls, mode, handles, parameters, actuals, imports, *, batch=True, terminal=False,
                     view_codes=None):
         """Run original approved calls, or one generic direct-leaf batch chain."""
-        if batch and not any(view_call(call) or call.region is not None for call in calls) and self.config.scope_transfers in {"pipelined", "auto"}:
+        if (self.config.scope_execution != "graph" and batch
+                and not any(view_call(call) or call.region is not None for call in calls)
+                and self.config.scope_transfers in {"pipelined", "auto"}):
             from compiler.scopes.batch import execute_calls
             return execute_calls(self, calls, mode, handles, parameters, actuals, imports,
                                  lambda group: self.owner_calls(group, mode, handles, parameters, actuals, imports, batch=False),

@@ -5,8 +5,46 @@
 #ifndef FORT_SCOPED_GRAPHS_HPP
 #define FORT_SCOPED_GRAPHS_HPP
 #include "scoped_runtime.h"
+#include <cstddef>
+#include <cstring>
 #include <limits>
+#include <vector>
 namespace fort_scoped::graphs {
+class ArgumentValues {
+    struct alignas(std::max_align_t) Word { unsigned char bytes[alignof(std::max_align_t)]; };
+    std::vector<size_t> sizes_,offsets_;
+    std::vector<Word> storage_;
+public:
+    // The previous per-argument allocations had malloc's alignment. Keep that
+    // guarantee while owning one payload allocation, including stable padding.
+    bool capture(const fort_scope_kernel_v1 &kernel,const size_t *sizes) {
+        constexpr size_t alignment=alignof(Word),word=sizeof(Word);
+        constexpr size_t maximum=std::numeric_limits<size_t>::max();
+        sizes_.clear(); offsets_.clear(); storage_.clear();
+        sizes_.reserve(kernel.argument_count); offsets_.reserve(kernel.argument_count);
+        size_t bytes=0;
+        for (size_t i=0;i<kernel.argument_count;++i) {
+            if (!sizes[i] || sizes[i]>maximum-(alignment-1)) return false;
+            const size_t padded=((sizes[i]+alignment-1)/alignment)*alignment;
+            if (bytes>maximum-padded) return false;
+            sizes_.push_back(sizes[i]); offsets_.push_back(bytes); bytes+=padded;
+        }
+        if (bytes>maximum-(word-1)) return false;
+        storage_.resize((bytes+word-1)/word);
+        if (storage_.empty()) return true;
+        std::memset(storage_.data(),0,storage_.size()*word);
+        for (size_t i=0;i<kernel.argument_count;++i)
+            std::memcpy(argument(i),kernel.arguments[i],sizes[i]);
+        return true;
+    }
+    void *argument(size_t index) {
+        return reinterpret_cast<unsigned char *>(storage_.data())+offsets_[index];
+    }
+    bool operator==(const ArgumentValues &other) const {
+        return sizes_==other.sizes_ && storage_.size()==other.storage_.size() &&
+            (storage_.empty() || !std::memcmp(storage_.data(),other.storage_.data(),storage_.size()*sizeof(Word)));
+    }
+};
 inline const char *invalid(const fort_scope_kernel_v1 *kernels, size_t count) {
     if (count && !kernels) return "missing kernel group descriptors";
     for (size_t i=0; i<count; ++i) {
@@ -34,11 +72,33 @@ struct Topology {
     const void *function;
     size_t arguments;
 };
+// Only queued calls provide complete owned argument bytes. Raw graph calls
+// must still update every node: pointer equality cannot establish value parity.
+struct Parameters {
+    bool known = false;
+    unsigned int grid[3]{},block[3]{};
+    size_t shared = 0;
+    ArgumentValues values;
+    bool matches(const fort_scope_kernel_v1 &kernel,const ArgumentValues *arguments) const {
+        if (!known || !arguments || shared!=kernel.shared_bytes || !(values==*arguments)) return false;
+        for (size_t i=0;i<3;++i)
+            if (grid[i]!=kernel.grid[i] || block[i]!=kernel.block[i]) return false;
+        return true;
+    }
+    Parameters() = default;
+    Parameters(const fort_scope_kernel_v1 &kernel,const ArgumentValues *arguments) {
+        if (!arguments) return;
+        values=*arguments;
+        for (size_t i=0;i<3;++i) { grid[i]=kernel.grid[i]; block[i]=kernel.block[i]; }
+        shared=kernel.shared_bytes; known=true;
+    }
+};
 struct Entry {
     cudaGraph_t graph = nullptr;
     cudaGraphExec_t executable = nullptr;
     std::vector<cudaGraphNode_t> nodes;
     std::vector<Topology> topology;
+    std::vector<Parameters> parameters;
     bool replaces_graph = false;
 };
 inline cudaKernelNodeParams parameters(const fort_scope_kernel_v1 &kernel) {
@@ -102,7 +162,8 @@ public:
     // CUDA status is explicitly recoverable. Once launch is attempted there
     // is no retry path, including failures reported by later APIs.
     cudaError_t submit(uint64_t key, const fort_scope_kernel_v1 *kernels, size_t count,
-                       cudaStream_t stream, fort_scope_graph_stats_v1 &stats, bool &launch_attempted) {
+                       cudaStream_t stream, fort_scope_graph_stats_v1 &stats, bool &launch_attempted,
+                       const ArgumentValues *const *values=nullptr) {
         launch_attempted = false;
         auto found = entries_.find(key);
         const bool replay = found != entries_.end() && found->second.executable &&
@@ -114,8 +175,12 @@ public:
             Entry replacement;
             replacement.nodes.resize(count);
             replacement.topology.reserve(count);
-            for (size_t i=0; i<count; ++i)
+            replacement.parameters.reserve(count);
+            // Finish all copying before acquiring CUDA graph resources.
+            for (size_t i=0; i<count; ++i) {
                 replacement.topology.push_back({kernels[i].function,kernels[i].argument_count});
+                replacement.parameters.emplace_back(kernels[i],values?values[i]:nullptr);
+            }
             auto status = cudaGraphCreate(&replacement.graph,0);
             if (status != cudaSuccess) return status;
             ++stats.creations;
@@ -145,9 +210,15 @@ public:
             if (std::getenv("FORT_SCOPE_TEST_FAIL_GRAPH_UPDATE")) return cudaErrorNotSupported;
 #endif
             for (size_t i=0; i<count; ++i) {
+                const auto *arguments=values?values[i]:nullptr;
+                auto &previous=found->second.parameters[i];
+                if (previous.matches(kernels[i],arguments)) continue;
+                Parameters next(kernels[i],arguments);
                 auto p = parameters(kernels[i]);
                 const auto status = cudaGraphExecKernelNodeSetParams(found->second.executable,found->second.nodes[i],&p);
                 if (status != cudaSuccess) return status;
+                // A failed update must never record uninstalled arguments.
+                previous=std::move(next);
                 ++stats.parameter_updates;
             }
         }

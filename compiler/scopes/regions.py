@@ -696,12 +696,12 @@ def allocation_guard(analysis, routine, binding, preceding):
     no earlier allocation address, counter or proof is reused.  Allocation and
     unknown operations before this point remain outside this owning region.
     """
-    if binding.rank == 0 or not {"save", "allocatable"}.issubset(binding.attributes):
-        raise CompilationError("inline local allocations require original saved array storage")
+    if binding.rank == 0 or "allocatable" not in binding.attributes:
+        raise CompilationError("inline local allocations require original allocatable array storage")
     if binding.root != routine.qualified + "::" + binding.name:
         raise CompilationError("inline allocation proof requires original procedure-local storage")
     if binding.attributes & {"target", "pointer", "optional", "volatile", "asynchronous"}:
-        raise CompilationError("inline saved allocation may escape or have uncertain association")
+        raise CompilationError("inline local allocation may escape or have uncertain association")
     if _intrinsic_shadowed(analysis, routine, "allocated"):
         raise CompilationError("inline allocation guard intrinsic is shadowed")
     sites = []
@@ -715,11 +715,9 @@ def allocation_guard(analysis, routine, binding, preceding):
                     # reader item; its enclosing original IF owns the span.
                     first, last = statement_span(node)
                 sites.append({"first_line": first, "last_line": last})
-                if len(sites) > 32:
-                    raise CompilationError("inline saved allocation site budget exceeded")
     if not sites:
-        raise CompilationError("inline saved allocation lacks a preceding original allocation site: " + binding.root)
-    return {"resource": binding.root, "kind": "original saved allocation with reached descriptor guard",
+        raise CompilationError("inline local allocation lacks a preceding original allocation site: " + binding.root)
+    return {"resource": binding.root, "kind": "original local allocation with reached descriptor guard",
             "allocation_sites": sites, "allocation_proven": False,
             "runtime_guard": "ALLOCATED then checked original LBOUND/UBOUND/SIZE",
             "lifetime": "reached bounded region; allocation changes and unknown effects end ownership"}
@@ -807,7 +805,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                         if _kind(item) != "Comment" or directive(item) is not None)
     if len(grouped) == 1 and isinstance(grouped[0], tuple):
         nodes = grouped[0]
-    elif len(grouped) == 1 or worksharing is not None or atomic_alternative is not None:
+    elif (len(grouped) == 1 or worksharing is not None or atomic_alternative is not None
+          or all(_kind(item) == "Block_Nonlabel_Do_Construct" for item in grouped)):
         nodes = grouped
     joined = worksharing is not None or atomic_alternative is not None or directive(nodes[0]) is not None
     if joined:
@@ -818,13 +817,32 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             raise CompilationError("whole-team numerical extraction requires every original operation; structured siblings remain native")
         loops = tuple(item for item in nodes if _kind(item) == "Block_Nonlabel_Do_Construct")
     else:
-        if len(nodes) != 1 or _kind(nodes[0]) != "Block_Nonlabel_Do_Construct":
+        if not all(_kind(item) == "Block_Nonlabel_Do_Construct" for item in nodes):
             raise CompilationError("inline numerical region requires one counted DO or a complete joined team")
+        if len(nodes) > 1:
+            # Membership and sorted line numbers do not prove a serial group:
+            # selecting two loops must not discard an intervening native call,
+            # assignment or branch. Require their exact consecutive siblings.
+            wanted = tuple(id(item) for item in nodes)
+
+            def consecutive(sequence):
+                effective = tuple(item for item in sequence
+                                  if _kind(item) != "Comment" or directive(item) is not None)
+                identities = tuple(id(item) for item in effective)
+                if any(identities[start:start + len(wanted)] == wanted
+                       for start in range(len(identities) - len(wanted) + 1)):
+                    return True
+                return any(consecutive(_children(item)) for item in effective
+                           if _kind(item) in {"If_Construct", "Associate_Construct", "Block_Construct",
+                                              "Block_Nonlabel_Do_Construct"})
+
+            if not consecutive(_children(routine.execution)):
+                raise CompilationError("serial numerical group requires consecutive original sibling loops")
         completion = {"available": True, "caller_contract": "serial_source_scope",
-                      "reason": "original serial counted loop completes before continuation"}
+                      "reason": "original serial counted loops complete in source order before continuation"}
         loops = nodes
-    if not loops or len(loops) > 32:
-        raise CompilationError("inline numerical loop budget exceeded")
+    if not loops:
+        raise CompilationError("inline numerical region has no counted loops")
     original_nodes = {id(item) for item in walk(routine.execution)}
     for item in (*nodes, *preceding, *following, *cyclic_following):
         if id(item) in original_nodes:

@@ -1,0 +1,1020 @@
+{
+  "status": "PASS",
+  "scope": "Generic exact dynamic power-of-two division; all21 affected numerical CUDA entries rebuilt against the preceding full public build. Includes the previously qualified grouping/private-scalar fusion changes. Explicit GPU placement; no automatic-placement recalibration claimed.",
+  "performance": {
+    "channel-simple": {
+      "modes": {
+        "native": {
+          "samples": [
+            11.34552336300112,
+            11.286714400994242,
+            11.502038284001173,
+            11.584618621993286,
+            11.476931250996131,
+            11.49465959599911,
+            11.515664008002204
+          ],
+          "median": 11.49465959599911
+        },
+        "gpu-cached": {
+          "samples": [
+            3.197402598001645,
+            3.1884094209963223,
+            3.194049792000442,
+            3.1231630069960374,
+            3.2297162219983875,
+            3.151124723000976,
+            3.103166805994988
+          ],
+          "median": 3.1884094209963223
+        },
+        "candidate": {
+          "samples": [
+            3.1454518860045937,
+            3.0956871140006115,
+            3.1090331689993036,
+            3.053889173999778,
+            3.1730720849955105,
+            3.0772466720009106,
+            2.995614890998695
+          ],
+          "median": 3.0956871140006115
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          0.27724167368622454,
+          0.2742770840137422,
+          0.2703028013151227,
+          0.263615857685811,
+          0.2764739123727091,
+          0.2677109875504267,
+          0.26013392618237646
+        ],
+        "gpu-cached": [
+          0.9837522143662734,
+          0.9709189458589867,
+          0.9733828122485554,
+          0.9778193348086275,
+          0.9824615746061341,
+          0.9765550216210714,
+          0.9653412395400357
+        ]
+      },
+      "median_ratios": {
+        "native": 0.26931524923783845,
+        "gpu-cached": 0.9709189458589867
+      }
+    },
+    "channel": {
+      "modes": {
+        "native": {
+          "samples": [
+            13.078676908000489,
+            13.196278766998148,
+            12.986706053001399,
+            13.096449835000385,
+            12.939018821998616,
+            13.229614985000808,
+            13.264235460999771
+          ],
+          "median": 13.096449835000385
+        },
+        "gpu-cached": {
+          "samples": [
+            3.9759110859959037,
+            3.772524070001964,
+            3.7899721899957513,
+            3.83571443099936,
+            3.8052898940004525,
+            3.7869583799983957,
+            3.936915030993987
+          ],
+          "median": 3.8052898940004525
+        },
+        "candidate": {
+          "samples": [
+            3.6688265670018154,
+            3.5769207880002796,
+            3.610642965999432,
+            3.6660341899987543,
+            3.740233074997377,
+            3.6329099590002443,
+            3.6406537469956675
+          ],
+          "median": 3.6406537469956675
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          0.28051970339274307,
+          0.27105526119572476,
+          0.2780260792277627,
+          0.27992579944843093,
+          0.2890662055949962,
+          0.2746043602265892,
+          0.27447143544006863
+        ],
+        "gpu-cached": [
+          0.9227637358200206,
+          0.9481505542782176,
+          0.9526832348612774,
+          0.9557630673364813,
+          0.9829035840066623,
+          0.9593213324414153,
+          0.9247478592588472
+        ]
+      },
+      "median_ratios": {
+        "native": 0.27798783585349873,
+        "gpu-cached": 0.9567349264863222
+      }
+    }
+  },
+  "performance_gates": {
+    "comparison_valid": true,
+    "median_checkpoints": {
+      "channel_three_percent_simple_neutral": true,
+      "twice_native": true,
+      "twenty_times_native": false
+    },
+    "paired_wins": {
+      "channel-simple": {
+        "native": 7,
+        "gpu-cached": 7
+      },
+      "channel": {
+        "native": 7,
+        "gpu-cached": 7
+      }
+    },
+    "all_seven_pairs_won": true,
+    "retention_gate_passed": true
+  },
+  "processes": 48,
+  "external_cpu_max": 0.394157994308827,
+  "qualification": {
+    "cases": [
+      "channel100",
+      "channel2",
+      "simple109",
+      "simple2"
+    ],
+    "all_pass": true,
+    "all20_fields_exact_previous_GPU": true
+  },
+  "long": {
+    "status": "PASS",
+    "fields": 20,
+    "outputs": 114,
+    "completed_steps": 2458,
+    "worst_l2": {
+      "component": "frame-y-49.vtk:p",
+      "relative_l2": 0.0015489611183125967
+    },
+    "worst_local": {
+      "component": "fields-Pr.bin",
+      "relative_to_reference_peak": 0.014670614640088665
+    },
+    "exact_previous_GPU_files": {
+      "fields-Moisture.bin": true,
+      "fields-U_avg.bin": true,
+      "fields-W.shape": true,
+      "fields-Moisture.shape": true,
+      "fields-V.bin": true,
+      "fields-W_avg.bin": true,
+      "fields-Viscosity.bin": true,
+      "fields-W.bin": true,
+      "fields-Wstar.shape": true,
+      "fields-Scalar_avg.shape": true,
+      "fields-TDiff.shape": true,
+      "fields-V2.shape": true,
+      "fields-V.shape": true,
+      "fields-Scalar.bin": true,
+      "fields-Viscosity.shape": true,
+      "fields-U2.shape": true,
+      "fields-Wstar.bin": true,
+      "fields-U.shape": true,
+      "fields-U2.bin": true,
+      "fields-W_avg.shape": true,
+      "fields-Vstar.bin": true,
+      "fields-V_avg.shape": true,
+      "fields-Vstar.shape": true,
+      "fields-U_avg.shape": true,
+      "fields-W2.shape": true,
+      "fields-W2.bin": true,
+      "fields-Scalar_avg.bin": true,
+      "fields-V_avg.bin": true,
+      "fields-Pr_avg.bin": true,
+      "fields-Temperature.shape": true,
+      "fields-Ustar.bin": true,
+      "fields-Pr.bin": true,
+      "fields-Scalar.shape": true,
+      "fields-Temperature.bin": true,
+      "fields-Pr.shape": true,
+      "fields-U.bin": true,
+      "fields-Pr_avg.shape": true,
+      "fields-V2.bin": true,
+      "fields-Ustar.shape": true,
+      "fields-TDiff.bin": true
+    },
+    "fresh_native_process": false
+  },
+  "coverage": {
+    "simple2": {
+      "gpu_kernels_by_procedure": {
+        "arrayutilities::add_3d": 18,
+        "arrayutilities::multiply_3d": 18,
+        "arrayutilities::set_3d": 24,
+        "boundaries::bounduvw_do_bc": 558,
+        "boundaries::periodic_corners_edges": 93,
+        "dynamics::convection": 42,
+        "dynamics::pressuregrad": 24,
+        "momentumadvection::cduadv": 6,
+        "momentumadvection::cdudiv": 6,
+        "momentumadvection::cdvadv": 6,
+        "momentumadvection::cdvdiv": 6,
+        "momentumadvection::cdwadv": 6,
+        "momentumadvection::cdwdiv": 6,
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+        "pressure::buildpoissonrhs": 7,
+        "pressure::correctpoissonvelocity": 21,
+        "pressure::updatepoissonpressure": 7,
+        "resident_time::average": 8,
+        "resident_time::cfl": 1,
+        "resident_wall::correction1m": 6,
+        "resident_wall::correction1p": 6,
+        "resident_wall::correction2m": 6,
+        "resident_wall::correction2p": 6,
+        "resident_wall::correction3m": 6,
+        "resident_wall::correction3p": 6,
+        "resident_wall::stress0": 12,
+        "resident_wall::stress1": 12,
+        "resident_wall::stress2": 12,
+        "resident_wall::stress3": 12,
+        "scalarboundaries::boundviscosity": 36,
+        "subgrid::sgs_sigma_uniform": 6
+      },
+      "generated_cpu_events": {},
+      "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"
+    },
+    "channel2": {
+      "gpu_kernels_by_procedure": {
+        "arrayutilities::add_3d": 18,
+        "arrayutilities::multiply_3d": 18,
+        "arrayutilities::set_3d": 24,
+        "boundaries::bounduvw_do_bc": 774,
+        "boundaries::periodic_corners_edges": 129,
+        "dynamics::convection": 42,
+        "dynamics::pressuregrad": 24,
+        "filters::filter3ord": 108,
+        "momentumadvection::cd4divu": 6,
+        "momentumadvection::cd4divv": 6,
+        "momentumadvection::cd4divw": 6,
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+        "pressure::buildpoissonrhs": 7,
+        "pressure::correctpoissonvelocity": 21,
+        "pressure::updatepoissonpressure": 7,
+        "resident_time::cfl": 1,
+        "resident_wall::correction1m": 6,
+        "resident_wall::correction1p": 6,
+        "resident_wall::correction2m": 6,
+        "resident_wall::correction2p": 6,
+        "resident_wall::correction3m": 6,
+        "resident_wall::correction3p": 6,
+        "resident_wall::stress0": 12,
+        "resident_wall::stress1": 12,
+        "resident_wall::stress2": 12,
+        "resident_wall::stress3": 12,
+        "scalarboundaries::boundviscosity": 36,
+        "subgrid::sgs_sigma_uniform": 6
+      },
+      "generated_cpu_events": {},
+      "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"
+    }
+  },
+  "budget": {
+    "channel-simple": {
+      "native_median": 11.49465959599911,
+      "candidate_median": 3.0956871140006115,
+      "target_20x_seconds": 0.5747329797999555,
+      "profiled_kernel_union_seconds": 2.006669599,
+      "kernel_only_budget_ratio": 3.491481556702125,
+      "upper_bound_speedup_holding_profiled_kernels_fixed": 5.728227308435498,
+      "profiled_copy_union_seconds": 0.025159121,
+      "profiled_gpu_idle_inside_kernel_window_seconds": 0.8006782100000001,
+      "assumption": "Diagnostic durations, not wall-time samples. Conditional ceiling eliminates all other overhead while holding these measured kernels fixed; not a hardware limit.",
+      "stages": {
+        "subgrid::sgs_sigma_uniform": {
+          "previous_seconds": 0.5364492660000001,
+          "current_seconds": 0.4896759799999995,
+          "ratio": 0.9128094883067646,
+          "launches": 327
+        },
+        "VkFFT_main": {
+          "previous_seconds": 0.26315989699999986,
+          "current_seconds": 0.2634044339999995,
+          "ratio": 1.0009292335298325,
+          "launches": 1968
+        },
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord": {
+          "previous_seconds": 0.16774027600000052,
+          "current_seconds": 0.16763432200000028,
+          "ratio": 0.9993683449048323,
+          "launches": 981
+        },
+        "resident_wall::stress1": {
+          "previous_seconds": 0.08710002699999998,
+          "current_seconds": 0.09146294200000005,
+          "ratio": 1.0500908570326857,
+          "launches": 654
+        },
+        "resident_wall::stress2": {
+          "previous_seconds": 0.08445560800000003,
+          "current_seconds": 0.08835953499999985,
+          "ratio": 1.0462246035810887,
+          "launches": 654
+        },
+        "resident_wall::stress0": {
+          "previous_seconds": 0.08314831900000004,
+          "current_seconds": 0.08736353799999998,
+          "ratio": 1.0506951800192128,
+          "launches": 654
+        },
+        "<unnamed>::plane_reference": {
+          "previous_seconds": 0.08208192299999993,
+          "current_seconds": 0.08214057499999984,
+          "ratio": 1.0007145544092566,
+          "launches": 328
+        },
+        "boundaries::bounduvw_do_bc": {
+          "previous_seconds": 0.07916015899999881,
+          "current_seconds": 0.07913620799999822,
+          "ratio": 0.9996974361812412,
+          "launches": 29448
+        },
+        "resident_wall::stress3": {
+          "previous_seconds": 0.07396810900000002,
+          "current_seconds": 0.078149683,
+          "ratio": 1.0565321198085513,
+          "launches": 654
+        },
+        "dynamics::convection": {
+          "previous_seconds": 0.05188297799999992,
+          "current_seconds": 0.051865934999999926,
+          "ratio": 0.9996715107602344,
+          "launches": 2289
+        },
+        "momentumadvection::cdudiv": {
+          "previous_seconds": 0.039764518000000006,
+          "current_seconds": 0.039739242999999994,
+          "ratio": 0.9993643830914783,
+          "launches": 327
+        },
+        "momentumadvection::cdwdiv": {
+          "previous_seconds": 0.03958888399999999,
+          "current_seconds": 0.039566281999999994,
+          "ratio": 0.9994290821635691,
+          "launches": 327
+        },
+        "momentumadvection::cdvdiv": {
+          "previous_seconds": 0.039545933,
+          "current_seconds": 0.03951817700000003,
+          "ratio": 0.9992981326297202,
+          "launches": 327
+        },
+        "dynamics::pressuregrad": {
+          "previous_seconds": 0.038232289000000065,
+          "current_seconds": 0.03822679900000008,
+          "ratio": 0.9998564040986407,
+          "launches": 1308
+        },
+        "arrayutilities::add_3d": {
+          "previous_seconds": 0.03712069299999995,
+          "current_seconds": 0.037120343999999986,
+          "ratio": 0.9999905982358691,
+          "launches": 981
+        },
+        "pressure::correctpoissonvelocity": {
+          "previous_seconds": 0.031086106000000068,
+          "current_seconds": 0.03108971600000009,
+          "ratio": 1.0001161290513525,
+          "launches": 984
+        },
+        "pressure_faces": {
+          "previous_seconds": 0.027674277999999993,
+          "current_seconds": 0.027683984000000002,
+          "ratio": 1.0003507227903112,
+          "launches": 328
+        },
+        "momentumadvection::cduadv": {
+          "previous_seconds": 0.026096759999999986,
+          "current_seconds": 0.026059162999999996,
+          "ratio": 0.9985593230730562,
+          "launches": 327
+        },
+        "momentumadvection::cdvadv": {
+          "previous_seconds": 0.02590696000000004,
+          "current_seconds": 0.025866685000000045,
+          "ratio": 0.9984453984566312,
+          "launches": 327
+        },
+        "momentumadvection::cdwadv": {
+          "previous_seconds": 0.02586352400000002,
+          "current_seconds": 0.025831562000000016,
+          "ratio": 0.9987642055274446,
+          "launches": 327
+        },
+        "void poisson_solver::detail::kernels::DivideByDenoms<double, ": {
+          "previous_seconds": 0.025739188999999992,
+          "current_seconds": 0.025681147999999987,
+          "ratio": 0.9977450338470258,
+          "launches": 328
+        },
+        "pressure::buildpoissonrhs": {
+          "previous_seconds": 0.04131302600000005,
+          "current_seconds": 0.02507930900000001,
+          "ratio": 0.6070557262012224,
+          "launches": 328
+        },
+        "arrayutilities::multiply_3d": {
+          "previous_seconds": 0.023976421999999987,
+          "current_seconds": 0.023976324999999993,
+          "ratio": 0.9999959543588283,
+          "launches": 981
+        },
+        "arrayutilities::set_3d": {
+          "previous_seconds": 0.016326166999999985,
+          "current_seconds": 0.016310489999999962,
+          "ratio": 0.9990397623643061,
+          "launches": 1308
+        },
+        "resident_time::average": {
+          "previous_seconds": 0.015684435,
+          "current_seconds": 0.015681337000000014,
+          "ratio": 0.9998024793369996,
+          "launches": 436
+        },
+        "boundaries::periodic_corners_edges": {
+          "previous_seconds": 0.014324704999999925,
+          "current_seconds": 0.01429224499999987,
+          "ratio": 0.9977339847487222,
+          "launches": 4908
+        },
+        "void poisson_solver::detail::kernels::common_cmplx::Normalize<double, ": {
+          "previous_seconds": 0.01098966399999999,
+          "current_seconds": 0.01097062100000001,
+          "ratio": 0.9982671899705051,
+          "launches": 328
+        },
+        "pressure::updatepoissonpressure": {
+          "previous_seconds": 0.010675360999999994,
+          "current_seconds": 0.010673136,
+          "ratio": 0.9997915761349903,
+          "launches": 328
+        },
+        "resident_time::cfl": {
+          "previous_seconds": 0.015533433000000001,
+          "current_seconds": 0.00973798,
+          "ratio": 0.6269045612776004,
+          "launches": 108
+        },
+        "void poisson_solver::detail::kernels::common_cmplx::Init<double, ": {
+          "previous_seconds": 0.009685179,
+          "current_seconds": 0.009694725999999999,
+          "ratio": 1.0009857329430873,
+          "launches": 328
+        },
+        "<unnamed>::subtract_reference": {
+          "previous_seconds": 0.007087729,
+          "current_seconds": 0.007079023,
+          "ratio": 0.9987716798991609,
+          "launches": 328
+        },
+        "void poisson_solver::detail::kernels::PackPaddedGrid<double, ": {
+          "previous_seconds": 0.006612160999999996,
+          "current_seconds": 0.006610913999999997,
+          "ratio": 0.9998114081009222,
+          "launches": 328
+        },
+        "void poisson_solver::detail::kernels::UnpackPaddedGrid<double, ": {
+          "previous_seconds": 0.0065992130000000005,
+          "current_seconds": 0.006596495000000001,
+          "ratio": 0.9995881327061272,
+          "launches": 328
+        },
+        "<unnamed>::pressure_faces": {
+          "previous_seconds": 0.0034038010000000014,
+          "current_seconds": 0.003412536999999997,
+          "ratio": 1.0025665425211392,
+          "launches": 328
+        },
+        "scalarboundaries::boundviscosity": {
+          "previous_seconds": 0.003401047000000041,
+          "current_seconds": 0.0034013040000000386,
+          "ratio": 1.000075564965729,
+          "launches": 1962
+        },
+        "<unnamed>::partial_max": {
+          "previous_seconds": 0.002922450000000002,
+          "current_seconds": 0.0029111859999999996,
+          "ratio": 0.9961456996697967,
+          "launches": 108
+        },
+        "resident_wall::correction2m": {
+          "previous_seconds": 0.0012182739999999999,
+          "current_seconds": 0.0012153980000000006,
+          "ratio": 0.9976392831169348,
+          "launches": 327
+        },
+        "resident_wall::correction1m": {
+          "previous_seconds": 0.0012048960000000007,
+          "current_seconds": 0.0012028830000000007,
+          "ratio": 0.9983293163891324,
+          "launches": 327
+        },
+        "resident_wall::correction3m": {
+          "previous_seconds": 0.0010849969999999997,
+          "current_seconds": 0.0010864050000000004,
+          "ratio": 1.0012976994406442,
+          "launches": 327
+        },
+        "resident_wall::correction2p": {
+          "previous_seconds": 0.0008197160000000005,
+          "current_seconds": 0.0008179560000000002,
+          "ratio": 0.9978529149119936,
+          "launches": 327
+        },
+        "resident_wall::correction1p": {
+          "previous_seconds": 0.0008088990000000002,
+          "current_seconds": 0.0008071099999999994,
+          "ratio": 0.9977883518214254,
+          "launches": 327
+        },
+        "resident_wall::correction3p": {
+          "previous_seconds": 0.0007178880000000009,
+          "current_seconds": 0.0007178280000000003,
+          "ratio": 0.9999164215030748,
+          "launches": 327
+        },
+        "<unnamed>::final_max": {
+          "previous_seconds": 0.0003349139999999998,
+          "current_seconds": 0.0003345929999999999,
+          "ratio": 0.9990415449936404,
+          "launches": 108
+        }
+      }
+    },
+    "channel": {
+      "native_median": 13.096449835000385,
+      "candidate_median": 3.6406537469956675,
+      "target_20x_seconds": 0.6548224917500193,
+      "profiled_kernel_union_seconds": 2.517437809,
+      "kernel_only_budget_ratio": 3.8444583695836774,
+      "upper_bound_speedup_holding_profiled_kernels_fixed": 5.2022932952622485,
+      "profiled_copy_union_seconds": 0.023761507,
+      "profiled_gpu_idle_inside_kernel_window_seconds": 0.7823828239999999,
+      "assumption": "Diagnostic durations, not wall-time samples. Conditional ceiling eliminates all other overhead while holding these measured kernels fixed; not a hardware limit.",
+      "stages": {
+        "subgrid::sgs_sigma_uniform": {
+          "previous_seconds": 0.4872002200000004,
+          "current_seconds": 0.4435964989999999,
+          "ratio": 0.9105014340921266,
+          "launches": 300
+        },
+        "filters::filter3ord": {
+          "previous_seconds": 0.40372340100000037,
+          "current_seconds": 0.3254497869999993,
+          "ratio": 0.8061206910322224,
+          "launches": 5400
+        },
+        "VkFFT_main": {
+          "previous_seconds": 0.23940950300000016,
+          "current_seconds": 0.23895602900000054,
+          "ratio": 0.9981058646615225,
+          "launches": 1806
+        },
+        "momentumadvection::cd4divw": {
+          "previous_seconds": 0.1925199209999999,
+          "current_seconds": 0.1780347799999999,
+          "ratio": 0.9247603005197575,
+          "launches": 300
+        },
+        "momentumadvection::cd4divv": {
+          "previous_seconds": 0.19416615400000004,
+          "current_seconds": 0.17722917800000007,
+          "ratio": 0.9127707087405152,
+          "launches": 300
+        },
+        "momentumadvection::cd4divu": {
+          "previous_seconds": 0.19438323300000007,
+          "current_seconds": 0.17707531200000015,
+          "ratio": 0.9109598048510701,
+          "launches": 300
+        },
+        "momentumdiffusion::momentumdiffusion_nobranch_2ord": {
+          "previous_seconds": 0.15293344200000009,
+          "current_seconds": 0.1520764919999998,
+          "ratio": 0.9943965820111452,
+          "launches": 900
+        },
+        "boundaries::bounduvw_do_bc": {
+          "previous_seconds": 0.09959675899999995,
+          "current_seconds": 0.09927115499999882,
+          "ratio": 0.9967307771530886,
+          "launches": 37818
+        },
+        "resident_wall::stress1": {
+          "previous_seconds": 0.07848913100000009,
+          "current_seconds": 0.08221812100000003,
+          "ratio": 1.0475096354423894,
+          "launches": 600
+        },
+        "resident_wall::stress2": {
+          "previous_seconds": 0.07572629599999994,
+          "current_seconds": 0.07971256600000012,
+          "ratio": 1.0526404988829796,
+          "launches": 600
+        },
+        "resident_wall::stress0": {
+          "previous_seconds": 0.07498610099999994,
+          "current_seconds": 0.07864573099999991,
+          "ratio": 1.048804111044525,
+          "launches": 600
+        },
+        "<unnamed>::plane_reference": {
+          "previous_seconds": 0.07451857099999985,
+          "current_seconds": 0.07420275699999997,
+          "ratio": 0.995761942348574,
+          "launches": 301
+        },
+        "resident_wall::stress3": {
+          "previous_seconds": 0.06722306499999996,
+          "current_seconds": 0.07120507800000003,
+          "ratio": 1.05923581437413,
+          "launches": 600
+        },
+        "dynamics::convection": {
+          "previous_seconds": 0.04743725599999992,
+          "current_seconds": 0.04740945799999998,
+          "ratio": 0.9994140048910093,
+          "launches": 2100
+        },
+        "dynamics::pressuregrad": {
+          "previous_seconds": 0.03507453599999998,
+          "current_seconds": 0.03506052900000007,
+          "ratio": 0.999600650454794,
+          "launches": 1200
+        },
+        "arrayutilities::add_3d": {
+          "previous_seconds": 0.03404645999999996,
+          "current_seconds": 0.03404210099999997,
+          "ratio": 0.9998719690681501,
+          "launches": 900
+        },
+        "pressure::correctpoissonvelocity": {
+          "previous_seconds": 0.028506965000000047,
+          "current_seconds": 0.028491271000000026,
+          "ratio": 0.999449467875657,
+          "launches": 903
+        },
+        "pressure_faces": {
+          "previous_seconds": 0.025407481000000006,
+          "current_seconds": 0.02538871399999996,
+          "ratio": 0.9992613592823293,
+          "launches": 301
+        },
+        "void poisson_solver::detail::kernels::DivideByDenoms<double, ": {
+          "previous_seconds": 0.02336455299999999,
+          "current_seconds": 0.02325389000000001,
+          "ratio": 0.9952636371857839,
+          "launches": 301
+        },
+        "pressure::buildpoissonrhs": {
+          "previous_seconds": 0.037495319000000006,
+          "current_seconds": 0.022710326999999995,
+          "ratio": 0.6056843255554111,
+          "launches": 301
+        },
+        "arrayutilities::multiply_3d": {
+          "previous_seconds": 0.021401929000000063,
+          "current_seconds": 0.02136966100000005,
+          "ratio": 0.9984922854383821,
+          "launches": 900
+        },
+        "boundaries::periodic_corners_edges": {
+          "previous_seconds": 0.018358479999999903,
+          "current_seconds": 0.018302069999999986,
+          "ratio": 0.9969273055285668,
+          "launches": 6303
+        },
+        "arrayutilities::set_3d": {
+          "previous_seconds": 0.014908361999999991,
+          "current_seconds": 0.014925983000000009,
+          "ratio": 1.0011819541274902,
+          "launches": 1200
+        },
+        "void poisson_solver::detail::kernels::common_cmplx::Normalize<double, ": {
+          "previous_seconds": 0.009973643999999993,
+          "current_seconds": 0.00993357799999998,
+          "ratio": 0.9959828123000968,
+          "launches": 301
+        },
+        "pressure::updatepoissonpressure": {
+          "previous_seconds": 0.009781775000000006,
+          "current_seconds": 0.009782662999999994,
+          "ratio": 1.0000907810698965,
+          "launches": 301
+        },
+        "void poisson_solver::detail::kernels::common_cmplx::Init<double, ": {
+          "previous_seconds": 0.008888297,
+          "current_seconds": 0.008877065999999992,
+          "ratio": 0.9987364283619227,
+          "launches": 301
+        },
+        "resident_time::cfl": {
+          "previous_seconds": 0.014082822999999998,
+          "current_seconds": 0.008812503999999999,
+          "ratio": 0.6257626045573391,
+          "launches": 99
+        },
+        "<unnamed>::subtract_reference": {
+          "previous_seconds": 0.006511673999999993,
+          "current_seconds": 0.006507402999999998,
+          "ratio": 0.9993441010713996,
+          "launches": 301
+        },
+        "void poisson_solver::detail::kernels::PackPaddedGrid<double, ": {
+          "previous_seconds": 0.0060627380000000015,
+          "current_seconds": 0.006069421999999997,
+          "ratio": 1.0011024721833592,
+          "launches": 301
+        },
+        "void poisson_solver::detail::kernels::UnpackPaddedGrid<double, ": {
+          "previous_seconds": 0.006063756000000001,
+          "current_seconds": 0.006032427,
+          "ratio": 0.9948334002885338,
+          "launches": 301
+        },
+        "<unnamed>::pressure_faces": {
+          "previous_seconds": 0.003141844999999999,
+          "current_seconds": 0.003140983000000001,
+          "ratio": 0.9997256389159879,
+          "launches": 301
+        },
+        "scalarboundaries::boundviscosity": {
+          "previous_seconds": 0.003097085000000017,
+          "current_seconds": 0.0030863500000000246,
+          "ratio": 0.9965338374632945,
+          "launches": 1800
+        },
+        "<unnamed>::partial_max": {
+          "previous_seconds": 0.0026533610000000003,
+          "current_seconds": 0.0026409190000000007,
+          "ratio": 0.9953108529144735,
+          "launches": 99
+        },
+        "resident_wall::correction2m": {
+          "previous_seconds": 0.0011064430000000001,
+          "current_seconds": 0.0011032700000000006,
+          "ratio": 0.9971322517291903,
+          "launches": 300
+        },
+        "resident_wall::correction1m": {
+          "previous_seconds": 0.0010928060000000006,
+          "current_seconds": 0.0010909820000000005,
+          "ratio": 0.9983309022827472,
+          "launches": 300
+        },
+        "resident_wall::correction3m": {
+          "previous_seconds": 0.0009919100000000001,
+          "current_seconds": 0.0009921329999999999,
+          "ratio": 1.000224818783962,
+          "launches": 300
+        },
+        "resident_wall::correction2p": {
+          "previous_seconds": 0.0007429160000000004,
+          "current_seconds": 0.0007376989999999992,
+          "ratio": 0.9929776717690814,
+          "launches": 300
+        },
+        "resident_wall::correction1p": {
+          "previous_seconds": 0.000734084999999999,
+          "current_seconds": 0.0007296419999999982,
+          "ratio": 0.9939475673797983,
+          "launches": 300
+        },
+        "resident_wall::correction3p": {
+          "previous_seconds": 0.0006517780000000004,
+          "current_seconds": 0.0006483870000000011,
+          "ratio": 0.9947973082859513,
+          "launches": 300
+        },
+        "<unnamed>::final_max": {
+          "previous_seconds": 0.0002980480000000002,
+          "current_seconds": 0.0002968350000000001,
+          "ratio": 0.9959301857418937,
+          "launches": 99
+        }
+      }
+    }
+  },
+  "focused_checks": {
+    "source-tests.xml": {
+      "tests": 170,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "operator-tests.xml": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "full_release_qualified": false,
+  "selected_performance_baseline": "/tmp/fortran-exact-divide-20261110-01",
+  "receipts": [
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/prepared.json",
+      "sha256": "be2a7537d5e5db1ea4a6c2fe9f8ec16230cfa55d6ff4c8f7598def3325c9362f"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/build-plan.json",
+      "sha256": "c45693efae680d2ec9018621fa09d4dd5d967b07a077aeef58346fedf151117e"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/build-result.json",
+      "sha256": "22e64c64e9aec0c36d1c08c1c53876b841f0c9a2e59079b51289bc4cfb848e27"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/compiler-inputs.json",
+      "sha256": "69b8ba01bd81966e097d0956e81400f0136d9f425764fd40112ca131e0cd86c4"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/selected.json",
+      "sha256": "3dd39904ab5b00c0acb34f5800e270e13586eb828be94b4005cd5d18fb59c783"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/packages-all.json",
+      "sha256": "bc059fc2262bc20b591a97f293a0792d936062fecd58d08249eb8cac1547bc33"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/backend-identity-audit.json",
+      "sha256": "a86fff5debcb9faa38b50ca0d1fc73388a127bff069228457e4675745a94961e"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/production-source-audit.json",
+      "sha256": "c99b9fd307c9cf69eb0bf5b42e8f4fb855429334a1fd673d5ba146300342c340"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/source-tests.xml",
+      "sha256": "abb9ebe3a29776c261e4de20cef6242a1661d1a50e1f9d496f3f70c080973d00"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/operator-tests.xml",
+      "sha256": "16460540f810045abc45355c32af11867806a55195db92bc429132d9315a8e52"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/prepare-failed.log",
+      "sha256": "88ed9f7a8e2f9d8f1074907c02f0e4125a8bf0c15d7f9436a038edd643593632"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/qualification/plan.json",
+      "sha256": "a02bba4a8de0b53de460096c86a552c2aeb730c92de1d50d25c720518a860ef4"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/qualification/result.json",
+      "sha256": "6e0cd2ce60afad290d68754658959a93b25586300b4fd58d9983ff5f13474900"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/comparison/plan.json",
+      "sha256": "d5dc35dc16c484480df87187aeda62ed1fd9a3de11bd5f244ab361208910edf1"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/comparison/result.json",
+      "sha256": "12d11a3fd6c363adf7b24d088d21b1de1150f4ac6adf11f404c4aaac71a34ad0"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/comparison/execution.json",
+      "sha256": "639062f8486118accb28ac490b3c00efd1f1c3772b582ddc5c5ef2a0d993cfc6"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/long/plan.json",
+      "sha256": "a66b844164e2e03b89ff5f8ddc06168ed891044a825e778281a682340cdf7e91"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/long/result.json",
+      "sha256": "a0e0ebd190f88fe9883e2b0bb35273823aa975ddbcab2dd981b532be7a0bc254"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/long/execution.json",
+      "sha256": "4d208bc53d56fd79919c8a252c74d2ead7f4bd7d392c6cddffa106c561866912"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/profile/plan.json",
+      "sha256": "0c7e2408b3a8a9c014471478279c0c0f148561f30cddeacda8aefffb24193352"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/profile/result.json",
+      "sha256": "2981b879661758bd968fbbf741b2e0f31778c8a5bde0766f4a220a7812e04781"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/profile/analysis.json",
+      "sha256": "4b36afd1a9d9cba241d91fa05521aab49b1da1c5876f8ebcae0b279be6d1426c"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/feasibility.json",
+      "sha256": "28dfa5ce4443acf13a4ed6a71d3dd64672ac551c38fe726856c09d6476f7798a"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/summarize.py",
+      "sha256": "49142e98c22dcf38a4222c5b23ba3213b6e7e8d8f4bdc2d905c6d59a75f629cf"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/qualify.py",
+      "sha256": "f9bff935ecce48fc41a2d4cb7629b0a26580777ddd820b2e28b55d47398733a7"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/prepare_comparison.py",
+      "sha256": "379e3db973a215f55f2ac15663c7c80a6419e4c1cac45c704255d18732dd6451"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/comparison/run.py",
+      "sha256": "f3a3b5575640faa632c8d9f7d0cd88cc84efc5e78da5936ad774102a94bddfb9"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/comparison/execute.py",
+      "sha256": "9e80c84eb5b86b5b76429569b4e3bba648413533103453863763b90b2057526f"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/long/run.py",
+      "sha256": "5c2fd0e7c4a22cdbaa63ef5d6eaa8f7ff7b4b38f8f75dfba95079198c699bf2a"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/long/analyze.py",
+      "sha256": "5883c8768168cdb2244ed4dd666f7affd6ef715b9d81fb5a3b1a4dfbb02f54a2"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/profile/profile.py",
+      "sha256": "e8a128c246b843575b69037ad1cf20ee3c616227f32ae413da32a832ad38fc20"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/profile/analyze.py",
+      "sha256": "400f5fa0aac0069efc4ca7414b1cf44dbdddad512557667defe44fd9e5de597b"
+    },
+    {
+      "path": "/tmp/fortran-exact-divide-20261110-01/write_report.py",
+      "sha256": "887811a7884d3b18d0a9514be035643e34eeb9e1657e5060a2ca89db405be669"
+    },
+    {
+      "path": "/home/jirka/research/fortran-abomination/compiler/emission/common/c_family.py",
+      "sha256": "31f1dc79e706998fc844388696c550d75b1d7e9146acafe4918e1fb164ffc402"
+    },
+    {
+      "path": "/home/jirka/research/fortran-abomination/compiler/runtime/numeric.hpp",
+      "sha256": "b6ee824986a7a09d31d74ba5a5aa6cc93ebfb4976b517fb601deb673813cbdb2"
+    },
+    {
+      "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_exact_division.py",
+      "sha256": "cd48e46a06272e27f3991155498694bef24c0e7ed79c4642499f6c50cbb640d0"
+    },
+    {
+      "path": "/tmp/fortran-unit-division-pilot-20261110-01/plan.json",
+      "sha256": "8c9d0a243b727e9f4cbc492822b47a4fc9fd1166ddac3b4fc6d515f3b688ebc6"
+    },
+    {
+      "path": "/tmp/fortran-unit-division-pilot-20261110-01/result.json",
+      "sha256": "5f359a817eae3de76a0d4312545ac61a18082bdf92bf6908a20ee3b0321441b6"
+    },
+    {
+      "path": "/tmp/fortran-unit-division-pilot-20261110-02/plan.json",
+      "sha256": "108c3b7e5033d54b6e31941db736c2a01a4bcd98d6b7b825da6d9ea3ad9715e2"
+    },
+    {
+      "path": "/tmp/fortran-unit-division-pilot-20261110-02/result.json",
+      "sha256": "b7b29d5e99f2c8d609c5b5836f5fdb713f03fb5e9fd2629d07381494344bae2f"
+    },
+    {
+      "path": "/tmp/fortran-unit-division-pilot-20261110-02/samples.json",
+      "sha256": "fd892bf749b029e437d8df4cf2eab0b20a32cf780a5f743a1aa730b46e294307"
+    },
+    {
+      "path": "/tmp/fortran-power-division-pilot-20261110-01/plan.json",
+      "sha256": "f399e51dc98271f9be924c7f5ef47fc6cc59a78863084d891e732b5e2dafb722"
+    },
+    {
+      "path": "/tmp/fortran-power-division-pilot-20261110-01/result.json",
+      "sha256": "440a30eed823d4a785658034bf1e2c285be0ab608c659cf5fcd813d8f6ecff42"
+    },
+    {
+      "path": "/tmp/fortran-power-division-pilot-20261110-01/simple109.json",
+      "sha256": "b9ed6d4e88522071774118d0ead1d714000f0be2c297e8db607d8b90e1f6d31e"
+    },
+    {
+      "path": "/tmp/fortran-power-division-pilot-20261110-01/channel100.json",
+      "sha256": "57e100e55d222d1d47646eabfec9b736749259de959a9da9d50d8f259c24048b"
+    }
+  ]
+}

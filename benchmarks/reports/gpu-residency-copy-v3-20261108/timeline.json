@@ -1,0 +1,630 @@
+{
+  "durations_additive": false,
+  "runs": {
+    "baseline-7a612": {
+      "activity_union_seconds": 1.204367433,
+      "binary_sha256": "645478b003055e7ca755049f35859235cde0c1469ace51de902cb222db8a37b3",
+      "kernel_categories": {
+        "other numerical kernels": {
+          "count": 301,
+          "seconds": 0.579723605
+        }
+      },
+      "metrics": {
+        "activity_tables": [
+          "CUPTI_ACTIVITY_KIND_CUDA_EVENT",
+          "CUPTI_ACTIVITY_KIND_KERNEL",
+          "CUPTI_ACTIVITY_KIND_MEMCPY",
+          "CUPTI_ACTIVITY_KIND_OVERHEAD",
+          "CUPTI_ACTIVITY_KIND_RUNTIME",
+          "CUPTI_ACTIVITY_KIND_SYNCHRONIZATION"
+        ],
+        "available": true,
+        "d2h_bytes": 1262485504,
+        "gpu_span_seconds": 10.648221054,
+        "h2d_bytes": 4036501504,
+        "kernel_count": 301,
+        "kernel_seconds": 0.579723605,
+        "kernel_timing_available": true,
+        "kernels": [
+          {
+            "count": 301,
+            "name": "generated_kernels::fort_shared_4239a7e1a9ea::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, double, double, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.579723605
+          }
+        ],
+        "measurement": "sum of device activity durations in a separate profiled run",
+        "reason": null,
+        "sqlite_path": "/tmp/fortran-channel-regression-profile-20261108-02/baseline-7a612/capture.sqlite",
+        "status": "ok",
+        "transfer_bytes": 5298987008,
+        "transfer_count": 3010,
+        "transfer_seconds": 0.624643828,
+        "transfer_timing_available": true,
+        "transfers": [
+          {
+            "bytes": 4036501504,
+            "copy_kind": 1,
+            "count": 2709,
+            "kind": "Host-to-Device",
+            "seconds": 0.486043287
+          },
+          {
+            "bytes": 1262485504,
+            "copy_kind": 2,
+            "count": 301,
+            "kind": "Device-to-Host",
+            "seconds": 0.138600541
+          }
+        ]
+      },
+      "outputs_passed": true,
+      "runtime_API_intervals": [
+        {
+          "calls": 1204,
+          "host_interval_seconds": 1.348503348,
+          "name": "cudaMemcpy3DAsync_v3020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 0.15892987,
+          "name": "cudaStreamCreateWithFlags_v5000"
+        },
+        {
+          "calls": 1806,
+          "host_interval_seconds": 0.099068756,
+          "name": "cudaMemcpy2DAsync_v3020"
+        },
+        {
+          "calls": 1204,
+          "host_interval_seconds": 0.025185824,
+          "name": "cudaMallocFromPoolAsync_v11020"
+        },
+        {
+          "calls": 301,
+          "host_interval_seconds": 0.018459248,
+          "name": "cudaLaunchKernel_v7000"
+        },
+        {
+          "calls": 301,
+          "host_interval_seconds": 0.011722189,
+          "name": "cudaEventCreateWithFlags_v3020"
+        },
+        {
+          "calls": 301,
+          "host_interval_seconds": 0.003873149,
+          "name": "cudaEventRecord_v3020"
+        },
+        {
+          "calls": 1204,
+          "host_interval_seconds": 0.003082448,
+          "name": "cudaFreeAsync_v11020"
+        },
+        {
+          "calls": 301,
+          "host_interval_seconds": 0.001934815,
+          "name": "cudaStreamSynchronize_v3020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 0.000757149,
+          "name": "cudaMemPoolCreate_v11020"
+        },
+        {
+          "calls": 301,
+          "host_interval_seconds": 0.000679563,
+          "name": "cudaEventDestroy_v3020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 0.000635571,
+          "name": "cuLibraryLoadData"
+        },
+        {
+          "calls": 602,
+          "host_interval_seconds": 0.000520312,
+          "name": "cudaMemPoolGetAttribute_v11020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 0.000238031,
+          "name": "cudaMemPoolSetAttribute_v11020"
+        },
+        {
+          "calls": 301,
+          "host_interval_seconds": 0.000230733,
+          "name": "cudaMemPoolTrimTo_v11020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 2.69e-06,
+          "name": "cuModuleGetLoadingMode"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 1.521e-06,
+          "name": "cudaGetDeviceProperties_v12000"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 5.5e-07,
+          "name": "cuLibraryGetKernel"
+        }
+      ],
+      "runtime_API_union_by_thread": {
+        "282531471619580": 1.673825767
+      },
+      "sqlite_sha256": "9c8ac2a7ebf2d2ee78f56b08fffc2784adc8c99d162d3845fa85a5b05ec86122"
+    },
+    "be58": {
+      "activity_union_seconds": 1.193715859,
+      "binary_sha256": "23c65cffd2f83204bdb1a6c8611839aceef2bd6f90598d607a53bd64a16d2d6c",
+      "kernel_categories": {
+        "other numerical kernels": {
+          "count": 301,
+          "seconds": 0.579361575
+        }
+      },
+      "metrics": {
+        "activity_tables": [
+          "CUPTI_ACTIVITY_KIND_KERNEL",
+          "CUPTI_ACTIVITY_KIND_MEMCPY",
+          "CUPTI_ACTIVITY_KIND_OVERHEAD",
+          "CUPTI_ACTIVITY_KIND_RUNTIME",
+          "CUPTI_ACTIVITY_KIND_SYNCHRONIZATION"
+        ],
+        "available": true,
+        "d2h_bytes": 1262485504,
+        "gpu_span_seconds": 10.827655977,
+        "h2d_bytes": 4036501504,
+        "kernel_count": 301,
+        "kernel_seconds": 0.579361575,
+        "kernel_timing_available": true,
+        "kernels": [
+          {
+            "count": 301,
+            "name": "generated_kernels::fort_shared_eeb01ac8313f::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, double, double, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.579361575
+          }
+        ],
+        "measurement": "sum of device activity durations in a separate profiled run",
+        "reason": null,
+        "sqlite_path": "/tmp/fortran-channel-regression-profile-20261108-02/be58/capture.sqlite",
+        "status": "ok",
+        "transfer_bytes": 5298987008,
+        "transfer_count": 3010,
+        "transfer_seconds": 0.614354284,
+        "transfer_timing_available": true,
+        "transfers": [
+          {
+            "bytes": 4036501504,
+            "copy_kind": 1,
+            "count": 2709,
+            "kind": "Host-to-Device",
+            "seconds": 0.479879072
+          },
+          {
+            "bytes": 1262485504,
+            "copy_kind": 2,
+            "count": 301,
+            "kind": "Device-to-Host",
+            "seconds": 0.134475212
+          }
+        ]
+      },
+      "outputs_passed": true,
+      "runtime_API_intervals": [
+        {
+          "calls": 1204,
+          "host_interval_seconds": 0.736307125,
+          "name": "cudaMemcpy3DAsync_v3020"
+        },
+        {
+          "calls": 602,
+          "host_interval_seconds": 0.591336774,
+          "name": "cudaStreamSynchronize_v3020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 0.162242189,
+          "name": "cudaStreamCreateWithFlags_v5000"
+        },
+        {
+          "calls": 1806,
+          "host_interval_seconds": 0.105795287,
+          "name": "cudaMemcpy2DAsync_v3020"
+        },
+        {
+          "calls": 1204,
+          "host_interval_seconds": 0.043958696,
+          "name": "cudaMallocFromPoolAsync_v11020"
+        },
+        {
+          "calls": 301,
+          "host_interval_seconds": 0.016659653,
+          "name": "cudaLaunchKernel_v7000"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 0.011718194,
+          "name": "cuLibraryLoadData"
+        },
+        {
+          "calls": 1204,
+          "host_interval_seconds": 0.002563091,
+          "name": "cudaFreeAsync_v11020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 0.000761289,
+          "name": "cudaMemPoolCreate_v11020"
+        },
+        {
+          "calls": 301,
+          "host_interval_seconds": 0.000621916,
+          "name": "cuKernelGetName"
+        },
+        {
+          "calls": 602,
+          "host_interval_seconds": 0.000546761,
+          "name": "cudaMemPoolGetAttribute_v11020"
+        },
+        {
+          "calls": 301,
+          "host_interval_seconds": 0.000226724,
+          "name": "cudaMemPoolTrimTo_v11020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 0.000219855,
+          "name": "cudaMemPoolSetAttribute_v11020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 3.851e-06,
+          "name": "cuModuleGetLoadingMode"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 8.6e-07,
+          "name": "cuLibraryGetKernel"
+        }
+      ],
+      "runtime_API_union_by_thread": {
+        "282528636269907": 1.672962265
+      },
+      "sqlite_sha256": "d0f68148bae8936ebf41565d27f2af8a281d0c815340a6ff4f70f0855e3780d1"
+    },
+    "candidate": {
+      "activity_union_seconds": 4.13662151,
+      "binary_sha256": "e10f456e272061036a8f5dd61c9772ab9241ed0e5be4704c86b835a3e2071340",
+      "kernel_categories": {
+        "CD4 tile units": {
+          "count": 16200,
+          "seconds": 0.887694585
+        },
+        "compact copy kernels": {
+          "count": 1792,
+          "seconds": 0.004127463
+        },
+        "other numerical kernels": {
+          "count": 3900,
+          "seconds": 0.612224361
+        }
+      },
+      "metrics": {
+        "activity_tables": [
+          "CUPTI_ACTIVITY_KIND_CUDA_EVENT",
+          "CUPTI_ACTIVITY_KIND_GRAPH_TRACE",
+          "CUPTI_ACTIVITY_KIND_KERNEL",
+          "CUPTI_ACTIVITY_KIND_MEMCPY",
+          "CUPTI_ACTIVITY_KIND_OVERHEAD",
+          "CUPTI_ACTIVITY_KIND_RUNTIME",
+          "CUPTI_ACTIVITY_KIND_SYNCHRONIZATION"
+        ],
+        "available": true,
+        "d2h_bytes": 7315817600,
+        "gpu_span_seconds": 16.673835211,
+        "h2d_bytes": 9207910400,
+        "kernel_count": 21892,
+        "kernel_seconds": 1.504046409,
+        "kernel_timing_available": true,
+        "kernels": [
+          {
+            "count": 300,
+            "name": "generated_kernels::fort_shared_b32f45a53b06::kernel_region_0_device(const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, const double *, unsigned long, unsigned long, unsigned long, int, int, int, double, double, double, double, double, int, int, int, double *, unsigned long, unsigned long, unsigned long, int, int, int, double, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.578278745
+          },
+          {
+            "count": 3600,
+            "name": "<unnamed>::kernel_tile_private_cta_2(int, fort_scalar_bytes<double>, int, int, int, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned char *, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, unsigned long)",
+            "seconds": 0.213286698
+          },
+          {
+            "count": 3600,
+            "name": "<unnamed>::kernel_tile_private_cta_0(int, fort_scalar_bytes<double>, int, int, int, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned char *, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, unsigned long)",
+            "seconds": 0.188761558
+          },
+          {
+            "count": 1800,
+            "name": "<unnamed>::kernel_tile_private_cta_1(int, fort_scalar_bytes<double>, int, int, int, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned char *, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, unsigned long)",
+            "seconds": 0.101018017
+          },
+          {
+            "count": 1800,
+            "name": "<unnamed>::kernel_tile_private_cta_1(int, fort_scalar_bytes<double>, int, int, int, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned char *, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, unsigned long)",
+            "seconds": 0.097390255
+          },
+          {
+            "count": 1800,
+            "name": "<unnamed>::kernel_tile_private_cta_2(int, fort_scalar_bytes<double>, int, int, int, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned char *, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, unsigned long)",
+            "seconds": 0.097077293
+          },
+          {
+            "count": 1800,
+            "name": "<unnamed>::kernel_tile_private_cta_1(int, fort_scalar_bytes<double>, int, int, int, const double *, unsigned long, unsigned long, unsigned long, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned char *, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, unsigned long)",
+            "seconds": 0.096845402
+          },
+          {
+            "count": 1800,
+            "name": "<unnamed>::kernel_tile_private_cta_0(int, fort_scalar_bytes<double>, int, int, int, const double *, unsigned long, unsigned long, unsigned long, double *, unsigned long, unsigned long, unsigned long, int, int, int, const int *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned char *, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, int, unsigned long, int, unsigned long, int, unsigned long, unsigned long, unsigned long)",
+            "seconds": 0.093315362
+          },
+          {
+            "count": 600,
+            "name": "generated_kernels::fort_shared_b91a9dd0406f::kernel_region_0_device(double, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.015443741
+          },
+          {
+            "count": 600,
+            "name": "generated_kernels::fort_shared_05bfb61c8e71::kernel_region_0_device(double, double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.00814401
+          },
+          {
+            "count": 1792,
+            "name": "void fort_physical::compact::copy_chunk<unsigned long, (bool)0>(unsigned char *, unsigned char *, fort_physical::compact::Chunk)",
+            "seconds": 0.004127463
+          },
+          {
+            "count": 100,
+            "name": "generated_kernels::fort_shared_7636cb457d0d::kernel_region_1_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.001123733
+          },
+          {
+            "count": 100,
+            "name": "generated_kernels::fort_shared_7636cb457d0d::kernel_region_3_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.001113522
+          },
+          {
+            "count": 100,
+            "name": "generated_kernels::fort_shared_7636cb457d0d::kernel_region_4_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.001109738
+          },
+          {
+            "count": 100,
+            "name": "generated_kernels::fort_shared_7636cb457d0d::kernel_region_2_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.00110837
+          },
+          {
+            "count": 100,
+            "name": "generated_kernels::fort_shared_7636cb457d0d::kernel_region_5_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.001099276
+          },
+          {
+            "count": 100,
+            "name": "generated_kernels::fort_shared_7636cb457d0d::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.001099218
+          },
+          {
+            "count": 300,
+            "name": "generated_kernels::fort_shared_fb4e0536756d::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.000848361
+          },
+          {
+            "count": 300,
+            "name": "generated_kernels::fort_shared_7678f4223aa2::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.000729287
+          },
+          {
+            "count": 300,
+            "name": "generated_kernels::fort_shared_56cabebb9670::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.000544387
+          },
+          {
+            "count": 300,
+            "name": "generated_kernels::fort_shared_3d17a8e0e505::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.000544071
+          },
+          {
+            "count": 300,
+            "name": "generated_kernels::fort_shared_1379e461b536::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.000541604
+          },
+          {
+            "count": 300,
+            "name": "generated_kernels::fort_shared_1e6618c65c1f::kernel_region_0_device(double *, unsigned long, unsigned long, unsigned long, int, int, int, int, int, int, int, int, unsigned long, int, int, unsigned long, unsigned long)",
+            "seconds": 0.000496298
+          }
+        ],
+        "measurement": "sum of device activity durations in a separate profiled run",
+        "reason": null,
+        "sqlite_path": "/tmp/fortran-channel-regression-profile-20261108-02/candidate/capture.sqlite",
+        "status": "ok",
+        "transfer_bytes": 16523728000,
+        "transfer_count": 32188,
+        "transfer_seconds": 2.632575101,
+        "transfer_timing_available": true,
+        "transfers": [
+          {
+            "bytes": 9207910400,
+            "copy_kind": 1,
+            "count": 14400,
+            "kind": "Host-to-Device",
+            "seconds": 1.14695015
+          },
+          {
+            "bytes": 7315817600,
+            "copy_kind": 2,
+            "count": 17788,
+            "kind": "Device-to-Host",
+            "seconds": 1.485624951
+          }
+        ]
+      },
+      "outputs_passed": true,
+      "runtime_API_intervals": [
+        {
+          "calls": 22996,
+          "host_interval_seconds": 5.527703587,
+          "name": "cudaMemcpy3DAsync_v3020"
+        },
+        {
+          "calls": 2297,
+          "host_interval_seconds": 1.094326746,
+          "name": "cudaStreamSynchronize_v3020"
+        },
+        {
+          "calls": 21892,
+          "host_interval_seconds": 0.560433709,
+          "name": "cudaLaunchKernel_v7000"
+        },
+        {
+          "calls": 6200,
+          "host_interval_seconds": 0.389861233,
+          "name": "cudaMemcpy2DAsync_v3020"
+        },
+        {
+          "calls": 3,
+          "host_interval_seconds": 0.162564122,
+          "name": "cudaStreamCreateWithFlags_v5000"
+        },
+        {
+          "calls": 2992,
+          "host_interval_seconds": 0.083781291,
+          "name": "cudaMemcpyAsync_v3020"
+        },
+        {
+          "calls": 1792,
+          "host_interval_seconds": 0.050428871,
+          "name": "cudaEventSynchronize_v3020"
+        },
+        {
+          "calls": 4200,
+          "host_interval_seconds": 0.039067004,
+          "name": "cudaMallocFromPoolAsync_v11020"
+        },
+        {
+          "calls": 300,
+          "host_interval_seconds": 0.015220895,
+          "name": "cudaGraphInstantiate_v12000"
+        },
+        {
+          "calls": 2996,
+          "host_interval_seconds": 0.012155875,
+          "name": "cudaEventRecord_v3020"
+        },
+        {
+          "calls": 300,
+          "host_interval_seconds": 0.011961715,
+          "name": "cudaGraphLaunch_v10000"
+        },
+        {
+          "calls": 4200,
+          "host_interval_seconds": 0.00703504,
+          "name": "cudaFreeAsync_v11020"
+        },
+        {
+          "calls": 17992,
+          "host_interval_seconds": 0.005431619,
+          "name": "cuKernelGetName"
+        },
+        {
+          "calls": 300,
+          "host_interval_seconds": 0.004622259,
+          "name": "cudaGraphExecDestroy_v10000"
+        },
+        {
+          "calls": 2,
+          "host_interval_seconds": 0.00450487,
+          "name": "cudaMallocHost_v3020"
+        },
+        {
+          "calls": 600,
+          "host_interval_seconds": 0.00349386,
+          "name": "cudaGraphAddKernelNode_v10000"
+        },
+        {
+          "calls": 300,
+          "host_interval_seconds": 0.003279383,
+          "name": "cudaGraphCreate_v10000"
+        },
+        {
+          "calls": 504,
+          "host_interval_seconds": 0.0023525,
+          "name": "cudaEventCreateWithFlags_v3020"
+        },
+        {
+          "calls": 14,
+          "host_interval_seconds": 0.001808701,
+          "name": "cuLibraryLoadData"
+        },
+        {
+          "calls": 502,
+          "host_interval_seconds": 0.001060906,
+          "name": "cudaEventDestroy_v3020"
+        },
+        {
+          "calls": 1000,
+          "host_interval_seconds": 0.000963959,
+          "name": "cudaMemPoolGetAttribute_v11020"
+        },
+        {
+          "calls": 2,
+          "host_interval_seconds": 0.000783009,
+          "name": "cudaMalloc_v3020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 0.000752864,
+          "name": "cudaMemPoolCreate_v11020"
+        },
+        {
+          "calls": 300,
+          "host_interval_seconds": 0.000531008,
+          "name": "cudaGraphDestroy_v10000"
+        },
+        {
+          "calls": 500,
+          "host_interval_seconds": 0.000375791,
+          "name": "cudaMemPoolTrimTo_v11020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 0.00021501,
+          "name": "cudaMemPoolSetAttribute_v11020"
+        },
+        {
+          "calls": 25,
+          "host_interval_seconds": 1.5871e-05,
+          "name": "cuLibraryGetKernel"
+        },
+        {
+          "calls": 4,
+          "host_interval_seconds": 1.282e-05,
+          "name": "cudaEventQuery_v3020"
+        },
+        {
+          "calls": 1,
+          "host_interval_seconds": 3.5e-06,
+          "name": "cuModuleGetLoadingMode"
+        }
+      ],
+      "runtime_API_union_by_thread": {
+        "282533568771705": 7.984748018
+      },
+      "sqlite_sha256": "6edf5e5ddb5ac890069a076b35820006c17458febeb31dc00c7afd53c03b63ff"
+    }
+  },
+  "status": "PASS_SEPARATE_PROFILES",
+  "timing_sample": false
+}

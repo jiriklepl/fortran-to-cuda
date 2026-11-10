@@ -6,7 +6,7 @@ from dataclasses import replace
 import pytest
 
 from compiler.analysis import build_execution_plan
-from compiler.emission import generate_sources
+from compiler._legacy.emission import generate_sources
 from compiler.tests import test_language as language
 
 CUDA_RUNTIME = r"""

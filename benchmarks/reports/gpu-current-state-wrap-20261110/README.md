@@ -1,0 +1,15 @@
+# Current-state wrap — 2026-11-10
+
+This closes the current issues at the user's requested stopping point. It does not claim the full research plan or 20× objective is complete.
+
+The numerical fixture migration exposed a real shared-backend rejection in optimized CDU/CDV: unrelated scalar temporaries erased a proved same-iteration array definition, so the runtime requested an uninitialized incoming value. Footprint analysis now retires that proof only when the changed scalar affects its resolved coordinates. Initialization checks, arithmetic and failure-after-start handling remain intact.
+
+The maintained native harness now builds the public shared entry, Fortran interface and common runtime. It compares CPU execution with one/two threads and actual CUDA execution against separately compiled original Fortran, preserving empty shapes, signed strides, halos, integer/single/double precision, long names and CDU/CDV/CDW cases. **All 316 final checks pass**, with no skips. The first attempt's five failures and 293 passes remain recorded. The directly affected analysis/fusion/proof checks report **126 passes**.
+
+The preceding compiler audit reported 9,877 passes, 33 failures and four skips; two shards stopped at their failure limit. The follow-up covered 2,792 unreached/failed or modified checks, with 2,790 passes and two remaining fixture failures. Those two failures are repaired and pass in the final focused run. Obsolete artifact/policy expectations are removed. Tests whose purpose requires distinct work units explicitly disable fusion. The initial follow-up collection failure caused by a missing companion Python path is also preserved. This is cumulative audit evidence plus targeted repair, **not a fresh full-suite release qualification of the final compiler source**.
+
+All **130 ELMM numerical entries regenerate with zero changed CUDA sources**. Shared interfaces/common headers and all four application executable identities match the selected asynchronous-output build exactly. The local Poisson provider is unchanged. Existing strict primary-case and approved natural channel2458 evidence therefore remains attached to those exact binaries. No redundant application run or new timing campaign was started for this wrap.
+
+The latest measured selected-build speedups remain **3.78× native for simple109 and 3.70× for channel100**; these are the earlier seven-round results, not new measurements. See the [performance report](../gpu-kernel-screening-20261110/README.md). The approved natural-run rule remains an independent 1% relative L2 limit per field/output component; primary/operator tolerances and exact structural/output checks remain unchanged.
+
+Further memory budgeting, residual private legacy coupling, complete current-source native/CUDA release qualification, changed-identity calibration and fresh four-control timing are deferred. The 20× research objective remains unmet. No new research work is running after this wrap. Commands, source archives, failed attempts, final results and binary identities are in [summary.json](summary.json).

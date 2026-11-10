@@ -1,0 +1,121 @@
+{
+  "application_payload_reduction_bytes": {
+    "channel": 0,
+    "channel-simple": 0
+  },
+  "companion_commit": "75cbcbdded3065c7b0349bebbfe6879a887e6c4e",
+  "evidence": {
+    "build": {
+      "bytes": 514,
+      "path": "/tmp/fortran-empty-native-rk-build-20261108-02/execution.json",
+      "sha256": "afbce041045064b07622a823a265f21fc7f46e13cd863f6adbefea8839c535bc"
+    },
+    "callback_source": {
+      "bytes": 112,
+      "path": "/tmp/fortran-empty-native-callback-source-20261108-01.log",
+      "sha256": "f8b695c5bf0bccd598d8f688072eedb20c3649f5df171c09ec9c93fe9711454e"
+    },
+    "copy_comparison": {
+      "bytes": 12958,
+      "path": "/tmp/fortran-empty-native-rk-short-20261108-01/baseline-copy-comparison.json",
+      "sha256": "805525463adad3a4afa738a809bdbe365c18d72611c89b58c66e858cee159696"
+    },
+    "cuda": {
+      "bytes": 741,
+      "path": "/tmp/fortran-empty-native-cuda-20261108-01/cuda/result.json",
+      "sha256": "3cce4f458b7bcd21d8bbc653c9f6ff4cb303928ab4413e11ad87d4316b5714f1"
+    },
+    "generation": {
+      "bytes": 296,
+      "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/execution.json",
+      "sha256": "e8c502400aa1fcdafa4a6e0f7b9967c0c10d9bb542a56c290e39f6e7c49d11ea"
+    },
+    "interrupted_natural": {
+      "bytes": 6640,
+      "path": "/tmp/fortran-empty-native-rk-natural-20261108-01/qualification.json",
+      "sha256": "2e92e7def01d4c90c127a7cada693c4b8620fe39fa3323888b702384442907a3"
+    },
+    "natural": {
+      "bytes": 8221,
+      "path": "/tmp/fortran-empty-native-rk-natural-20261108-02/qualification.json",
+      "sha256": "0bad033ea67c529ff563b7be6401deecda18d7951f15cfc0d8eae0528602209f"
+    },
+    "natural_channel": {
+      "bytes": 560207,
+      "path": "/tmp/fortran-empty-native-rk-natural-20261108-02/runs/channel-candidate/report.json",
+      "sha256": "779aa7c7b1ecd31ed439dc29ff33796ee761b2840255dd828f6827284cf27a90"
+    },
+    "natural_channel-simple": {
+      "bytes": 93679,
+      "path": "/tmp/fortran-empty-native-rk-natural-20261108-02/runs/channel-simple-candidate/report.json",
+      "sha256": "7360dd65cc1d8ffdc6f925c8e33670bd59cebdb754d9c30368aa1abb80cc2063"
+    },
+    "short": {
+      "bytes": 1639672,
+      "path": "/tmp/fortran-empty-native-rk-short-20261108-01/qualification.json",
+      "sha256": "3ec2460a8349f5568afbd53bbe4676782e1c32d55f49d366dfc750758131dc6e"
+    },
+    "source_integration": {
+      "bytes": 261,
+      "path": "/tmp/fortran-empty-native-integration-20261108-03.log",
+      "sha256": "bc62b5ad5fa2ed5ed56bc8ee0a154410fd4125227673d5447c3973d8fdd54684"
+    },
+    "strict_package": {
+      "bytes": 74177,
+      "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/package-qualification.json",
+      "sha256": "18c79f4dffadbb194c63a1342fbc26e07061712fb778ba3fb208bcb8d0113fc2"
+    }
+  },
+  "frozen_source": {
+    "compiler/scopes/conditional_return.py": {
+      "bytes": 50813,
+      "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/source/compiler/scopes/conditional_return.py",
+      "sha256": "931587df41d7330100c21bcb103283d9255fffddd2b2b6aa5c02b2d61e493559"
+    },
+    "compiler/scopes/lexical.py": {
+      "bytes": 138874,
+      "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/source/compiler/scopes/lexical.py",
+      "sha256": "eda87556661f497cde121f1ddba0481d5c5cf4180348b1b01d846c7a67d963ed"
+    },
+    "compiler/scopes/native_empty.py": {
+      "bytes": 11924,
+      "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/source/compiler/scopes/native_empty.py",
+      "sha256": "6aaadfb783b6ba8eaafbce35dbce2b0521a0d0e2ac02c1c8434f29b68e56831b"
+    },
+    "compiler/scopes/native_guard.py": {
+      "bytes": 16364,
+      "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/source/compiler/scopes/native_guard.py",
+      "sha256": "02aa382a6927eed7d78368a91463587ae9048b3ce15d71a73394d11c975d637e"
+    },
+    "compiler/tests/test_empty_native_call.py": {
+      "bytes": 9541,
+      "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/source/compiler/tests/test_empty_native_call.py",
+      "sha256": "23dbda5b807be5e40f13c31c6d8549e3d742715beb42c6712b495e4fb651e70c"
+    },
+    "compiler/tests/test_empty_native_call_cuda.py": {
+      "bytes": 4675,
+      "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/source/compiler/tests/test_empty_native_call_cuda.py",
+      "sha256": "06f68c0a0626de64adfff2b5b925b2a8fa861132cc6b38601f059bb8aa1aa2aa"
+    },
+    "elmm-pipeline/elmm_pipeline/conditional_return_record.py": {
+      "bytes": 56194,
+      "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/source/elmm-pipeline/elmm_pipeline/conditional_return_record.py",
+      "sha256": "c2f363dc94054446c6328ce1484851a557f59829179c7fafedc33f62b8e0fcb7"
+    },
+    "elmm-pipeline/elmm_pipeline/native_empty_record.py": {
+      "bytes": 4776,
+      "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/source/elmm-pipeline/elmm_pipeline/native_empty_record.py",
+      "sha256": "862be47cfbf8b9826e94d0286068f9233c49606ef7c64343e3404c606b376111"
+    }
+  },
+  "kind": "empty_native_call_residency_checkpoint",
+  "performance_qualified": false,
+  "runtime_id": "2e587f943e91951318dd1b7e06a129fe4b97e7df90e4e556cc00f3fe20d29477",
+  "schema_version": 1,
+  "scope": "Exact empty-call source snapshot only. The working joined-descriptor follow-up is excluded. Broad suites and fresh application timing remain open. Local raw evidence is retained under /tmp; deleted report archives are not restored.",
+  "source_snapshot_provenance": {
+    "bytes": 7219,
+    "path": "/tmp/fortran-parent-graph-empty-native-20261108-01/snapshot-provenance.json",
+    "sha256": "6f187cc26cc034585a12d714fd38dc77b9cdbace59d089171d5d465efb0bb95d"
+  }
+}

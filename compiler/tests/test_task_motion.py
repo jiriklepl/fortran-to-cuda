@@ -16,9 +16,11 @@ GRAPH = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_exec
 @pytest.mark.parametrize(("case", "filename"), [("CDU", "cdu.f90"), ("CDV", "cvd.f90"), ("CDW", "cdw.f90")])
 def test_graph_placement_retains_checked_stencil_fusion(case, filename):
     function = lower_file(ROOT / "benchmarks" / "cases" / case / "Fortran" / filename, case)
-    _, old = prepare_function(function, options=CompilerOptions(gpu_policy="sections"))
+    _, unoptimized = prepare_function(function, options=CompilerOptions(opt_level=0, gpu_policy="sections"))
+    _, default = prepare_function(function, options=CompilerOptions(gpu_policy="sections"))
     _, graph = prepare_function(function, options=GRAPH)
-    assert len(old.regions) == 4
+    assert len(unoptimized.regions) == 4
+    assert len(default.regions) == 1
     assert len(graph.regions) == 1
     assert any("task graph:" in report for report in graph.reports)
 

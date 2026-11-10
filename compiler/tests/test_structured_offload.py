@@ -9,12 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.emission.cuda.offload import generate_offload
 from compiler.frontend import lower_file
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.offload.profile import load_profile
 
 SOURCE = """module prepared_case

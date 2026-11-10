@@ -1,0 +1,1051 @@
+{
+  "status": "PUBLIC_REGENERATION_AND_APPLICATION_PASS",
+  "full_release_qualified": false,
+  "build": {
+    "status": "PASS",
+    "command": [
+      "/tmp/fortran-native-runtime-env-20261102/bin/python",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/pipeline.py",
+      "resident-build",
+      "--elmm",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/repos/elmm",
+      "--poisfft",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/repos/PoisFFT",
+      "--compiler",
+      "/home/jirka/research/fortran-abomination",
+      "--solver",
+      "/home/jirka/research/fortran-abomination/poisson-solver",
+      "--vkfft",
+      "/tmp/fortran-poisson-api-24/vkfft-cache",
+      "--output",
+      "/tmp/fortran-current-public-20261110-01/work",
+      "--fortran",
+      "/usr/bin/gfortran-15",
+      "--cxx",
+      "/usr/bin/g++-14",
+      "--nvcc",
+      "/usr/local/cuda-13.5/bin/nvcc",
+      "--architecture",
+      "86",
+      "--jobs",
+      "4"
+    ],
+    "owned_group": 238623,
+    "returncode": 0,
+    "group_absent": true,
+    "binaries": {
+      "ELMM": {
+        "path": "/tmp/fortran-current-public-20261110-01/work/build/ELMM",
+        "sha256": "ecfd70e9337f462973dfe5124c9de7d11cfdca9b0d9f7619f80ee6ce89e07c74"
+      },
+      "ELMM-native": {
+        "path": "/tmp/fortran-current-public-20261110-01/work/build/ELMM-native",
+        "sha256": "c13de71f3a95efa2e41f3af761feb3900a6f7a8dd9794c61aa4ea02dd3a58554"
+      },
+      "ELMM-full20": {
+        "path": "/tmp/fortran-current-public-20261110-01/work/build/ELMM-full20",
+        "sha256": "2a11073fac274ab3e7abefe526fba65005fd17ccd3f19582a77cd7bd27a8b260"
+      },
+      "ELMM-native-full20": {
+        "path": "/tmp/fortran-current-public-20261110-01/work/build/ELMM-native-full20",
+        "sha256": "747909b7bb7305d02bf77bb3a7996313df6515937c9042488215de9cfd3ec921"
+      }
+    },
+    "provider": {
+      "path": "/tmp/fortran-current-public-20261110-01/work/build/lib/libpoisson-solver.so.0.1",
+      "sha256": "20c4f5585ae8c15be35076bd0b3e13e025801e629f76c79e06392d665d396b6b"
+    },
+    "seconds": 570.3329420890004
+  },
+  "generated_source_comparison": {
+    "interface_normalized": {
+      "identical_multiset": true,
+      "current_count": 130,
+      "selected_count": 130,
+      "new": {},
+      "missing": {}
+    },
+    "kernels": {
+      "identical_multiset": true,
+      "current_count": 229,
+      "selected_count": 229,
+      "new": {},
+      "missing": {}
+    },
+    "header": {
+      "identical_multiset": true,
+      "current_count": 130,
+      "selected_count": 130,
+      "new": {},
+      "missing": {}
+    }
+  },
+  "generated_source_comparison_limits": "Multiset comparison of numerical kernel bodies, Fortran ABIs and common headers. Does not equate host coordinator logic, trace/cache identities, actual execution or performance.",
+  "archived_source_inputs": 518,
+  "qualification": {
+    "processes": 8,
+    "all_pass": true,
+    "coverage": {
+      "simple2": {
+        "gpu_kernels_by_procedure": {
+          "arrayutilities::add_3d": 18,
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_3d": 24,
+          "boundaries::bounduvw_do_bc": 558,
+          "boundaries::periodic_corners_edges": 93,
+          "dynamics::convection": 42,
+          "dynamics::pressuregrad": 24,
+          "momentumadvection::cduadv": 6,
+          "momentumadvection::cdudiv": 6,
+          "momentumadvection::cdvadv": 6,
+          "momentumadvection::cdvdiv": 6,
+          "momentumadvection::cdwadv": 6,
+          "momentumadvection::cdwdiv": 6,
+          "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+          "pressure::buildpoissonrhs": 7,
+          "pressure::correctpoissonvelocity": 21,
+          "pressure::updatepoissonpressure": 7,
+          "resident_time::average": 8,
+          "resident_time::cfl": 1,
+          "resident_wall::correction1m": 6,
+          "resident_wall::correction1p": 6,
+          "resident_wall::correction2m": 6,
+          "resident_wall::correction2p": 6,
+          "resident_wall::correction3m": 6,
+          "resident_wall::correction3p": 6,
+          "resident_wall::stress0": 12,
+          "resident_wall::stress1": 12,
+          "resident_wall::stress2": 12,
+          "resident_wall::stress3": 12,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "generated_cpu_events": {},
+        "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"
+      },
+      "channel2": {
+        "gpu_kernels_by_procedure": {
+          "arrayutilities::add_3d": 18,
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_3d": 24,
+          "boundaries::bounduvw_do_bc": 774,
+          "boundaries::periodic_corners_edges": 129,
+          "dynamics::convection": 42,
+          "dynamics::pressuregrad": 24,
+          "filters::filter3ord": 108,
+          "momentumadvection::cd4divu": 6,
+          "momentumadvection::cd4divv": 6,
+          "momentumadvection::cd4divw": 6,
+          "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+          "pressure::buildpoissonrhs": 7,
+          "pressure::correctpoissonvelocity": 21,
+          "pressure::updatepoissonpressure": 7,
+          "resident_time::cfl": 1,
+          "resident_wall::correction1m": 6,
+          "resident_wall::correction1p": 6,
+          "resident_wall::correction2m": 6,
+          "resident_wall::correction2p": 6,
+          "resident_wall::correction3m": 6,
+          "resident_wall::correction3p": 6,
+          "resident_wall::stress0": 12,
+          "resident_wall::stress1": 12,
+          "resident_wall::stress2": 12,
+          "resident_wall::stress3": 12,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "generated_cpu_events": {},
+        "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"
+      }
+    }
+  },
+  "long": {
+    "fields": 20,
+    "outputs": 114,
+    "worst_l2": {
+      "component": "frame-y-49.vtk:p",
+      "value": 0.0015489611183125967
+    },
+    "worst_local": {
+      "component": "fields-Pr.bin",
+      "value": 0.014670614640088665
+    },
+    "exact_previous_GPU_files": 40,
+    "native_reference_fresh": false
+  },
+  "calibration_execution": {
+    "status": "PASS",
+    "rows": [
+      {
+        "label": "runtime",
+        "command": [
+          "/tmp/fortran-native-runtime-env-20261102/bin/python",
+          "-m",
+          "compiler.offload.calibrate",
+          "--output",
+          "/tmp/fortran-current-public-20261110-01/calibration/hardware.json",
+          "--build-dir",
+          "/tmp/fortran-current-public-20261110-01/calibration/runtime",
+          "--threads",
+          "4",
+          "--precision",
+          "64",
+          "--device",
+          "0",
+          "--max-mib",
+          "64",
+          "--nvcc",
+          "/usr/local/cuda-13.5/bin/nvcc",
+          "--cuda-host-cxx",
+          "/usr/bin/g++-14",
+          "--arch",
+          "sm_86",
+          "--fortran",
+          "/usr/bin/gfortran-15",
+          "--scoped-costs",
+          "--collective-costs",
+          "--source-task-costs",
+          "--source-submit-model",
+          "--cpu-affinity",
+          "0,2,4,6",
+          "--fortran-flag=-cpp",
+          "--fortran-flag=-O3",
+          "--fortran-flag=-fopenmp",
+          "--fortran-flag=-ffree-line-length-none",
+          "--fortran-flag=-ffp-contract=off",
+          "--fortran-flag=-fbacktrace",
+          "--fortran-flag=-g"
+        ],
+        "status": "PASS",
+        "owned_group": 247969,
+        "returncode": 0,
+        "group_absent": true,
+        "seconds": 251.3203695179982
+      },
+      {
+        "label": "graph",
+        "command": [
+          "/tmp/fortran-native-runtime-env-20261102/bin/python",
+          "-m",
+          "compiler.offload.graph_queue_calibrate",
+          "--output",
+          "/tmp/fortran-current-public-20261110-01/calibration/graph.json",
+          "--build-dir",
+          "/tmp/fortran-current-public-20261110-01/calibration/graph",
+          "--nvcc",
+          "/usr/local/cuda-13.5/bin/nvcc",
+          "--cuda-host-cxx",
+          "/usr/bin/g++-14",
+          "--arch",
+          "sm_86",
+          "--threads",
+          "4",
+          "--device",
+          "0"
+        ],
+        "status": "PASS",
+        "owned_group": 249497,
+        "returncode": 0,
+        "group_absent": true,
+        "seconds": 26.32314891400165
+      }
+    ]
+  },
+  "calibration_qualification": {
+    "status": "PASS",
+    "runtime_id": "9e05267fe9ddc62156f273e86b3b43f30f16a07d3bf6910cc852c92c7bee9ddc",
+    "hardware_toolchain_validated": true,
+    "compiler": {
+      "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+      "host_compiler": "14.4.1",
+      "cuda_compiler": "13.5.37",
+      "cuda_runtime": 13050,
+      "cuda_driver": 13050
+    },
+    "base_runtime_cost_count": 11,
+    "transfer_cost_count": 10,
+    "physical_copy_model_validated": true,
+    "collective_available": false,
+    "collective_rejection": "collective synchronization calibration is unavailable",
+    "collective_holdout_failures": [
+      {
+        "record_index": 15,
+        "kind": "collective_auto_holdout",
+        "observed_median_seconds": 0.0002867696250000116,
+        "predicted_seconds": 0.00010721862988281256,
+        "relative_error": 1.6746249724832711,
+        "maximum_relative_error": 0.25
+      }
+    ],
+    "source_submit_available": false,
+    "source_rejection": "source submit model failed independent coverage and is unavailable",
+    "source_failed_fit_points": [],
+    "source_failed_holdouts": [
+      [
+        2,
+        18
+      ],
+      [
+        6,
+        2
+      ],
+      [
+        6,
+        4
+      ]
+    ],
+    "graph_observation_count": 32,
+    "graph_logical_kernels": 217600,
+    "graph_replays": 10240,
+    "graph_placement_authority": false,
+    "complete_automatic_placement_qualified": false,
+    "numerical_compute_families_remeasured": false,
+    "inputs": {
+      "/tmp/fortran-current-public-20261110-01/calibration/validate.py": "6478d52ea2896a6d9058b9cb4b39848e3b1525aeebaf934c1d117af4e30a1eca",
+      "/tmp/fortran-current-public-20261110-01/calibration/hardware.json": "33c2bf7e36522b10b3f4ac8b2df1d8f7dea1cd241274a8e0e92e90b34c92d076",
+      "/tmp/fortran-current-public-20261110-01/calibration/graph.json": "deec737db38cd5064b82de75dc35a125db2e57b2d279b7998d7ba9f9dd1851e4",
+      "/tmp/fortran-current-public-20261110-01/calibration/graph/measurements.log": "caf0ef70670d1611878a13f7038a128bb9036768cc6a2f9575246d930f825c4d"
+    }
+  },
+  "requirements_audit": {
+    "schema_version": 1,
+    "date": "2026-11-10",
+    "scope": "Approved combined plan plus later explicit hot-path/legacy-removal redirect and long-run L2 approval",
+    "completion_proven": false,
+    "rows": [
+      {
+        "id": "A1",
+        "requirement": "Measured critical path, backend coverage, transfers and 20x feasibility gap",
+        "state": "partial",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/GPU_RESIDENCY_PLAN.md",
+            "sha256": "c378468d9f604a0d73549918fa4bb90bfd7c23186b5717fba10ea712c054be10"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-host-preparation-20261110/summary.json",
+            "sha256": "1b2acc63c5a2e1b196a9b7db40256ddca8439287e55304ea1a16c7082fd5969e"
+          }
+        ],
+        "finding": "Separate device unions and CPU sampling exist; current kernels alone exceed the entire 20x budget. Sampling and before-API gaps do not provide exclusive attribution of every named initialization/runtime/output phase.",
+        "required_evidence": "Preserve measured ceiling/gap; phase attribution must partition exclusive CPU time and dependencies without adding overlapping spans."
+      },
+      {
+        "id": "A2",
+        "requirement": "Pinned local solver, compiler/architecture/dependencies, out-of-tree installed artifacts",
+        "state": "current_public_build_pass_install_consumer_not_requalified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/poisson_source.py",
+            "sha256": "ae70c40c3a7d327989f1d97b9ecb3fae80fe3f43d568fc1c8e43d4b8f09a4c6b"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_build.py",
+            "sha256": "d5d3bc8de962286c0808d6a07966b0b243039e99e29e08330d8cb4bfa291767c"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/pressure-dependencies.json",
+            "sha256": "dd7608a31bc1699a584ec08a7186c9f3d45d23ab0c8ea0ab7d53a93392da3aa4"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/poisson-solver/CMakeLists.txt",
+            "sha256": "41dd878cccdf5ce18d6f120f0f2a2b9220f435893d4a518fa8e30a52ad375d60"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/poisson-solver/dependencies.lock.json",
+            "sha256": "fc27769ae5a25fe8451c7128c13d1df1b48a35c08eb733537526cd18a12a63c2"
+          }
+        ],
+        "finding": "Public resident-build snapshots the explicit local provider and hashes local edits. Duplicate vendored provider was removed. Current full build is the next evidence, not historical objects.",
+        "required_evidence": "Current complete build receipts, matching toolchain, loader/provider identity and install consumer verification."
+      },
+      {
+        "id": "A3",
+        "requirement": "Differential solver equivalence against pinned PoisFFT",
+        "state": "implemented_not_current_release_verified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/poisson-solver/tests/differential/test_poisfft.cu",
+            "sha256": "ee65196b426c2cae2273166a9eb1418add29b099e983964ad06c4b2e118c0236"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/poisson-solver/tests/differential/poisfft_reference.f90",
+            "sha256": "851915719ced00ec624d1dbeff91f98b58db344209f9fb0a9ea807ee6737a06c"
+          }
+        ],
+        "finding": "Maintained differential covers both approximation orders, ghost preservation and nondefault/cross-stream ordering. Recent identical-input application evidence establishes reached FD2 only.",
+        "required_evidence": "Run maintained differential on current provider; keep independent FD4 residual/manufactured-solution validation distinct from agreement with PoisFFT."
+      },
+      {
+        "id": "B1",
+        "requirement": "Caller-owned storage domains, borrowed contexts and unmanaged publication",
+        "state": "implemented_application_qualified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/resident_domain.f90",
+            "sha256": "81541f0d38cd2f57ce5555cf80b758b2f7139435d1c9858e0925c421d5b0bb15"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_runtime.cu",
+            "sha256": "b2053586fd35224ffbae8c0b5e2a802a527fd2105ce4d09d448d9df026a5b413"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/scopes/storage_epoch.py",
+            "sha256": "e066fca281b24f308563b3ff0a8951a30e2ec7f8d12e4a7b64c32fc7dfc48c95"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_domains.py",
+            "sha256": "1ec451d8804d7050ceeddd10cc48a30f53956bf610833adfd0ee3e184c23984f"
+          }
+        ],
+        "finding": "Storage and context lifetime are separate, using one scoped coherence engine. The supported application adapter retains a domain across RK stages and timesteps.",
+        "required_evidence": "Current public-build reproduction plus maintained lifecycle suite; application results do not prove every generic lifetime case."
+      },
+      {
+        "id": "B2",
+        "requirement": "Read copies preserve originals; overlapping writes invalidate only affected regions",
+        "state": "implemented_application_qualified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_regions.hpp",
+            "sha256": "0bd3f5db20ff2aa27dbda81f71c7b7ae5a70f299bb86a18df34c86bcf6ed3936"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_runtime.cu",
+            "sha256": "b2053586fd35224ffbae8c0b5e2a802a527fd2105ce4d09d448d9df026a5b413"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_domains.py",
+            "sha256": "1ec451d8804d7050ceeddd10cc48a30f53956bf610833adfd0ee3e184c23984f"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_domains_cuda.py",
+            "sha256": "534c682307eb2602c8173030bdbfee53301db30df0092ef99ef356814f241aef"
+          }
+        ],
+        "finding": "Replica state uses regional unions/differences; read-only frame observe does not end the domain. The CUDA chain fixture checks mixed host/device access.",
+        "required_evidence": "Fresh memory milestone must inspect physical copy ledgers as well as numerical values for unchanged alternating readers and partial writes."
+      },
+      {
+        "id": "B3",
+        "requirement": "Generations, views, allocation swaps, unknown mutations and lazy zero-trip activation",
+        "state": "implemented_not_current_release_verified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_runtime.cu",
+            "sha256": "b2053586fd35224ffbae8c0b5e2a802a527fd2105ce4d09d448d9df026a5b413"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/scopes/storage_epoch.py",
+            "sha256": "e066fca281b24f308563b3ff0a8951a30e2ec7f8d12e4a7b64c32fc7dfc48c95"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_graph_storage_epochs.py",
+            "sha256": "3e79a39a5f2bfce6684ff4a323d8c16b7cba6d81f27b8ad512e030bd967b9e5c"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_storage_epoch_runtime.py",
+            "sha256": "fdd7c2850b021d8219d4657d33e1ec7fb7c66fa7bd09cbd05c3568d97aae7d15"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_rk.py",
+            "sha256": "01581fbe583a655b757e94097005992f8961ff858f3d504226357341672ed054"
+          }
+        ],
+        "finding": "Generic checked epochs and generation-checked views exist. The ELMM adapter proves its MOVE_ALLOC exchange and follows physical allocations. Unknown source descriptor changes retain retirement boundaries.",
+        "required_evidence": "Re-run same-address replacement, overlapping/rebased views, swaps, SAVE and unallocated zero-trip cases at release scope."
+      },
+      {
+        "id": "B4",
+        "requirement": "Pending completion, eviction, queued readers and failure before/after submission",
+        "state": "implemented_not_current_release_verified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_runtime.cu",
+            "sha256": "b2053586fd35224ffbae8c0b5e2a802a527fd2105ce4d09d448d9df026a5b413"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_graphs.hpp",
+            "sha256": "eaebd08b699cdd79aa538af2bcc55cea6c76e65a8e44e2011a8d6eedc3c3538c"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_domains_cuda.py",
+            "sha256": "534c682307eb2602c8173030bdbfee53301db30df0092ef99ef356814f241aef"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_external_device_tasks_runtime.py",
+            "sha256": "0eb8b32a4a4a2ce35b30fd074e0375f39947b7a012d941b7bf01bb0678bf3bc9"
+          }
+        ],
+        "finding": "Runtime waits on ordered users, budgets allocations/workspaces and poisons uncertain/started failures; source replay is prohibited. Current application success does not exercise all failure modes.",
+        "required_evidence": "Current domain, queued lifetime, eviction and failure-injection suites."
+      },
+      {
+        "id": "B5",
+        "requirement": "Disable unsafe native-owner shortcuts under live coherent domains",
+        "state": "implemented_not_current_release_verified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_runtime.cu",
+            "sha256": "b2053586fd35224ffbae8c0b5e2a802a527fd2105ce4d09d448d9df026a5b413"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_native_hint.py",
+            "sha256": "2bf9f22d735d6963672ee48c17a72d016076fff71fd51e762a651a01e2af278a"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_domains.py",
+            "sha256": "1ec451d8804d7050ceeddd10cc48a30f53956bf610833adfd0ee3e184c23984f"
+          }
+        ],
+        "finding": "Live/detached domains veto contextless native-hint lookup and learning; test source explicitly covers this case.",
+        "required_evidence": "Current native-hint/generation/path invalidation regression results."
+      },
+      {
+        "id": "C1",
+        "requirement": "One checked task graph; data, anti/output, lifetime, control, IEEE and effect dependencies",
+        "state": "partial",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/ir/task_graph.py",
+            "sha256": "4bb40fbb09d6825c59bc26f2c92cb9e3ff9400291d254e6bb8aa2314e19c9833"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/analysis/task_dependencies.py",
+            "sha256": "7751bfc6cb4d216847291a1d762663f52bec082a72f5af3538486146ee14d282"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/scheduling/task_graph.py",
+            "sha256": "9a95b4ce4615842f5046f045e4adddd1f04a02f74ccefb6457655da3caf9dfa6"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/scopes/execution_plan.py",
+            "sha256": "d8e0b3efe5a41a791fb33480ca8c31e5b82634527e46f3afd34ba9f2007a8bdd"
+          }
+        ],
+        "finding": "Generic graph verification and deterministic scheduling exist. The supported resident application uses explicit source adapters and checked numerical entries; this is not proof that the entire application is one generic checked graph.",
+        "required_evidence": "Complete migration of production selection to graph authority; dependency verifier and control/IEEE/observable-effect regression results for every emitted schedule."
+      },
+      {
+        "id": "C2",
+        "requirement": "Regroup independent native work within original control regions",
+        "state": "implemented_not_current_application_generalized",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/scheduling/task_graph.py",
+            "sha256": "9a95b4ce4615842f5046f045e4adddd1f04a02f74ccefb6457655da3caf9dfa6"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/scopes/graph.py",
+            "sha256": "bcc017a0094b0e5ea41ec13e3ae147668183877e633f5255863a349f6fc605c8"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_task_graph.py",
+            "sha256": "305b88441c8165bf11588d88cd5224a278e1e70b1818cfecd93071488cfc6206"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_native_host_groups.py",
+            "sha256": "c51fcc7eb22b263d472817653480aa5c8f61c34713d74e8e7c982d4d6d5b3734"
+          }
+        ],
+        "finding": "Ready-list motion and native grouping have generic implementations. Native effects and control regions remain boundaries. The whole channel path is explicitly adapted, not evidence of arbitrary interprocedural regrouping.",
+        "required_evidence": "Generic host/GPU/host motion examples plus reached application profiles showing reduced dependencies/idle time."
+      },
+      {
+        "id": "C3",
+        "requirement": "Residency and execution not limited by source-unit windows",
+        "state": "partial",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/scopes/resident_entries.py",
+            "sha256": "b486c399e0ad7a7ab2c17a29f4863da5aa9d92e77c915df1e4a8cf9ce3f38bcd"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_resident_entry_groups.py",
+            "sha256": "bb2f8625f5e0edd4162efd589fca983ecf7126e52d476282516061068a2a16be"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/offload/analysis.py",
+            "sha256": "9faae52e5e6ba4e55acb9fdade9cba8eb02c40817ada38d4e8ab46e1380137a4"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/emission/cuda/offload.py",
+            "sha256": "87f6c42837c9125e86e06f5b89cb32428dbe764193be9ed34c830ae064064d25"
+          }
+        ],
+        "finding": "Resident extraction groups consecutive nests without the old 32-loop cutoff. Ordinary analyze_offload still validates max_interval in 1..4 and enumerates those windows plus the whole region; that legacy path remains publicly selectable.",
+        "required_evidence": "Remove/migrate ordinary interval-placement policy; retain budgeted graph search without dropping tasks or cutting storage lifetime."
+      },
+      {
+        "id": "C4",
+        "requirement": "All intended hot stages execute on GPU and improve complete-process wall time",
+        "state": "qualified_current_public_build",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_rk.py",
+            "sha256": "01581fbe583a655b757e94097005992f8961ff858f3d504226357341672ed054"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_hot_path.py",
+            "sha256": "2fa8ddf7eef9251c437393a7685d74c958e8aaaa59c9285df7e7a90e49ea733d"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_walls.py",
+            "sha256": "3b82927460ec771a1724ba92936034437c800803470c5e129e0a2a8c472cd49b"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-host-preparation-20261110/summary.json",
+            "sha256": "1b2acc63c5a2e1b196a9b7db40256ddca8439287e55304ea1a16c7082fd5969e"
+          }
+        ],
+        "finding": "Selected baseline short ledgers show 31/28 required GPU procedures, zero generated CPU numerical events and zero CPU FFTW plans. Clean primary medians are 3.83x/3.73x native.",
+        "required_evidence": "Fresh public-build strict cases, backend ledgers and complete-process release comparison; generated files alone do not establish execution."
+      },
+      {
+        "id": "D1",
+        "requirement": "Typed external-device contract, stream/workspace/completion, no replay after submission",
+        "state": "implemented_not_current_release_verified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_runtime.cu",
+            "sha256": "b2053586fd35224ffbae8c0b5e2a802a527fd2105ce4d09d448d9df026a5b413"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_external_device_tasks_v2.py",
+            "sha256": "6594df4578b14a12ccedc450a8b516c6ccb397fa121764c10633f5fe29b9f371"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/poisson-solver/include/poisson-solver/device_api.h",
+            "sha256": "60dfec529f043a55ebc623544094540fb34456cc121f3b7c4f8c7baad7380825"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/poisson-solver/src/device_api.cpp",
+            "sha256": "1412126ef97169504c6edfc0e52a177590b89ea9c8eea51b6856545d8cc0b533"
+          }
+        ],
+        "finding": "Checked external transactions supply typed views and stream; ABI exposes started/failure status. C++ boundary catches exceptions.",
+        "required_evidence": "Current contract tests for rejection, partial submission, wrong generation/layout, workspace exhaustion and completion."
+      },
+      {
+        "id": "D2",
+        "requirement": "Correct FD2/FD4, lengths/boundaries, dense origins, Phi interior only, RHS/halos retained",
+        "state": "implemented_partial_numerical_qualification",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_hot_path.py",
+            "sha256": "2fa8ddf7eef9251c437393a7685d74c958e8aaaa59c9285df7e7a90e49ea733d"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/poisson-solver/src/device_api.cpp",
+            "sha256": "1412126ef97169504c6edfc0e52a177590b89ea9c8eea51b6856545d8cc0b533"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/poisson-solver/tests/differential/test_poisfft.cu",
+            "sha256": "ee65196b426c2cae2273166a9eb1418add29b099e983964ad06c4b2e118c0236"
+          }
+        ],
+        "finding": "Configuration and layout checks exist; current primary reached pressure operator is FD2. Passing primary results cannot stand in for FD4 residual qualification.",
+        "required_evidence": "Current FD2 and FD4 manufactured solutions with matching residual operators, channel BCs, odd/noncubic shapes, nullspace/gauge and canaries."
+      },
+      {
+        "id": "D3",
+        "requirement": "Complete resident pressure projection including boundaries/reference",
+        "state": "qualified_current_public_build",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_hot_path.py",
+            "sha256": "2fa8ddf7eef9251c437393a7685d74c958e8aaaa59c9285df7e7a90e49ea733d"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_pressure_sources/resident_pressure_state.f90",
+            "sha256": "1b381a9bf87aa7dd3646e2ec5257fb08b06dbc7b080af060a90f0d800fbd63b7"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_pressure_sources/gpu_pressure_tail.cu",
+            "sha256": "dc3b43172497e7cca22dcb11acae965a1309fd105ceff4f5f67764e2c8e3decd"
+          }
+        ],
+        "finding": "Adapter connects RHS, local solver, Phi halos, corrections and deterministic reference in the coherent domain. Selected application passes strict primary and approved natural long-run qualification.",
+        "required_evidence": "Fresh public-build output/ledger reproduction; preserve transfer-reason evidence for the full producer/solve/consumer chain."
+      },
+      {
+        "id": "E1",
+        "requirement": "Residency across RK stages/adaptive timesteps, scalar control and allocation reuse",
+        "state": "implemented_application_qualified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_rk.py",
+            "sha256": "01581fbe583a655b757e94097005992f8961ff858f3d504226357341672ed054"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_time_loop.py",
+            "sha256": "3365e4b06b2a7f4ee27558afd4c1f92a8fe5cf69e8b3363a61a6ff70f76079b9"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_workspace.py",
+            "sha256": "aff569275ad68224e8baff077e6bbba550057204b45597d0832d819b9d5b68f7"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/reductions.cu",
+            "sha256": "eca878b720198b4d355f0fa9508f5544b53673085f899cce2cac581d4a4f5349"
+          }
+        ],
+        "finding": "Supported timestep path retains domains, computes CFL/averages on GPU, follows swaps and borrows domain-owned scratch.",
+        "required_evidence": "Current long/short reproduction plus non-output-step transfer ledger; do not claim zero transfers from kernel coverage."
+      },
+      {
+        "id": "E2",
+        "requirement": "One budget for fields, scratch, solver plans/workspaces, graphs and output snapshots",
+        "state": "partial",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_runtime.cu",
+            "sha256": "b2053586fd35224ffbae8c0b5e2a802a527fd2105ce4d09d448d9df026a5b413"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_graphs.hpp",
+            "sha256": "eaebd08b699cdd79aa538af2bcc55cea6c76e65a8e44e2011a8d6eedc3c3538c"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_workspace.py",
+            "sha256": "aff569275ad68224e8baff077e6bbba550057204b45597d0832d819b9d5b68f7"
+          }
+        ],
+        "finding": "Fields, scratch and provider workspace leases share runtime budget accounting. Full CUDA graph driver memory and future output snapshot budgeting require a complete inventory; no two-slot output implementation exists.",
+        "required_evidence": "Budget pressure/eviction tests including graphs and output slots; measure peak memory and retain latest values."
+      },
+      {
+        "id": "F1",
+        "requirement": "Batch compatible kernels and replay stable graphs, external solver capture boundary",
+        "state": "implemented_application_qualified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/scoped_graphs.hpp",
+            "sha256": "eaebd08b699cdd79aa538af2bcc55cea6c76e65a8e44e2011a8d6eedc3c3538c"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/emission/cuda/scoped.py",
+            "sha256": "c77ab9072e54a0d893348d006959723f083e96f947367d55c82ba5d021885e6c"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/offload/graph_queue_calibrate.py",
+            "sha256": "bb0538af1d9b739ec9a2d51aa96cb3c7f0f7d3cd2b3610c9872b1aeda71d577f"
+          }
+        ],
+        "finding": "Runtime graph queue/replay and packed launch arguments are used by the selected build. External solver remains separately ordered. Graph measurement producer explicitly grants no placement authority.",
+        "required_evidence": "Fresh graph protocol observations and replay/update/lifetime regressions; fit and validate any automatic graph pricing separately."
+      },
+      {
+        "id": "F2",
+        "requirement": "Dependency/numerical-safe fusion and measured kernel optimization",
+        "state": "implemented_application_qualified",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/transforms/fusion.py",
+            "sha256": "503840cc0c77d44d9b2a925d02d17745899ed7568458f71a1baa41c547fed006"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/emission/common/c_family.py",
+            "sha256": "31f1dc79e706998fc844388696c550d75b1d7e9146acafe4918e1fb164ffc402"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/runtime/numeric.hpp",
+            "sha256": "b6ee824986a7a09d31d74ba5a5aa6cc93ebfb4976b517fb601deb673813cbdb2"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-exact-division-20261110/summary.json",
+            "sha256": "dc3a8eef44f6903c4f303962387727de1e164f35409f4475b4e9c786fe5e912e"
+          }
+        ],
+        "finding": "Private-scalar fusion and exact power-of-two division lower current numerical costs; measured failed address/geometry pilots were not promoted.",
+        "required_evidence": "Current public reproduction and retained arithmetic tests; future optimizations require measured complete-process benefit."
+      },
+      {
+        "id": "F3",
+        "requirement": "Bounded asynchronous output: two immutable slots, ordered capture, DMA/write completion and join",
+        "state": "not_implemented",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_time_loop.py",
+            "sha256": "3365e4b06b2a7f4ee27558afd4c1f92a8fe5cf69e8b3363a61a6ff70f76079b9"
+          }
+        ],
+        "finding": "Frame path currently observes field replicas synchronously before original D%Fill. This preserves correctness and device replicas, but does not implement asynchronous snapshots or writer backpressure.",
+        "required_evidence": "Implement at most two budgeted device/pinned slots and writer lifecycle; verify every output/frame, conflict ordering, full queue backpressure and final join."
+      },
+      {
+        "id": "F4",
+        "requirement": "Remove duplicate policy/bridge/catalog/compatibility paths",
+        "state": "partial",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/offload/config.py",
+            "sha256": "26658664bc5e954dd78f25762455c0489a14ccd27348776a3fba808c7bf5e314"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/driver/cli.py",
+            "sha256": "22285d00679a3b70b5d3b7cde3573ee5deaba2ca814ad143fd43c032992c06a8"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/frontend/numerical_preparation.py",
+            "sha256": "f9a8425a67b97d91b1009ad4060b4b60345d816541dcdad52fbb6b2edef1ced9"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/_legacy/config.py",
+            "sha256": "51b8d0a35bd91737384fcf9dc17b61713681441f3e88abc4f3aecee4e1bb6048"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/cli.py",
+            "sha256": "98d50b810ede07ade2f728ec034e25c7d5a1646186cff944dd8c356025a7fdfa"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/README.md",
+            "sha256": "009084c35ec3e487bcc8dad8c930347ef94887577546a8821428605a17980ed8"
+          }
+        ],
+        "finding": "Old bounded/reached modes are no longer public source-scope modes; duplicate vendored solver is removed. Public ordinary policies always/sections/auto/chunked/hybrid remain; production numerical preparation explicitly imports legacy configuration types. Private fixtures are not fully isolated from production.",
+        "required_evidence": "Replace ordinary policy matrix with one graph policy plus explicit CPU/GPU diagnostics; migrate or remove legacy proof/config consumers and give clear errors for removed options."
+      },
+      {
+        "id": "V1",
+        "requirement": "Runtime ABI/manifests, full artifact regeneration and fresh calibrated costs",
+        "state": "regeneration_and_runtime_costs_pass_optional_models_unavailable",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_build.py",
+            "sha256": "d5d3bc8de962286c0808d6a07966b0b243039e99e29e08330d8cb4bfa291767c"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/offload/profile.py",
+            "sha256": "16b9c291c3cf1edc93c5ec4d3b526556cc1730b3b3bcdaa32f1483e43af2ef0d"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/offload/calibrate.py",
+            "sha256": "4eba0ae9498d96667668aa4a5d6a925a08c5b519512350dc20169d038611976b"
+          }
+        ],
+        "finding": "Full current public build and strict primary/approved long reproduction pass. Current base/runtime, transfer and physical-copy costs validate; collective AUTO holdout and three structural source-submit holdouts reject their optional models. All32 graph observation cases pass without placement authority. Complete automatic placement remains unqualified.",
+        "required_evidence": "Complete source and binary receipts, matching generated interfaces, validated current calibration; availability must reflect fit failures, never stale substitutes."
+      },
+      {
+        "id": "V2",
+        "requirement": "All memory/failure/solver maintained suites at release milestone",
+        "state": "incomplete",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+            "sha256": "dc68d0e41a7032f0ec2cf3b648d6315412b54ca0139115589540bfc82ddd9bb9"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/poisson-solver/tests/differential/CMakeLists.txt",
+            "sha256": "42109fa60a6e22d879fa0547a02657e68125bcfaa4fd22c0b96f81bb17d0114e"
+          }
+        ],
+        "finding": "Focused milestones passed, but previous broad compiler suite was interrupted after 878 passes and three stale-reader failures subsequently fixed. No complete current release-suite pass is established.",
+        "required_evidence": "Run maintained suites against current sources; preserve failures and distinguish private historical fixtures from supported production contracts."
+      },
+      {
+        "id": "V3",
+        "requirement": "Natural109 and2458: all20 fields/bounds/halos/output, approved tolerances and four native threads",
+        "state": "qualified_current_public_build",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/GPU_RESIDENCY_PLAN.md",
+            "sha256": "c378468d9f604a0d73549918fa4bb90bfd7c23186b5717fba10ea712c054be10"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-host-preparation-20261110/summary.json",
+            "sha256": "1b2acc63c5a2e1b196a9b7db40256ddca8439287e55304ea1a16c7082fd5969e"
+          }
+        ],
+        "finding": "Selected index-conversion baseline passes strict primary and approved per-component 1% L2 long run. Worst long L2 .154896%; peak-scaled local pressure error 1.467061% remains reported. Structural/time checks unchanged.",
+        "required_evidence": "New public-build primary and natural long results, retaining historical strict failures and native reference identities."
+      },
+      {
+        "id": "V4",
+        "requirement": "Fresh native/be58/7a/candidate timing with warmup/seven rotated complete-process samples",
+        "state": "partial",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-host-preparation-20261110/summary.json",
+            "sha256": "1b2acc63c5a2e1b196a9b7db40256ddca8439287e55304ea1a16c7082fd5969e"
+          },
+          {
+            "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-local-solver-cache-20261110/summary.json",
+            "sha256": "535c83bf9c5f28b5cb1365682ffed385a19b6a804817a6d5481da4e43f8bfc7f"
+          }
+        ],
+        "finding": "Recent valid three-variant campaign exceeds 2x native; latest increment wins 5/7 and6/7 pairs only. Historical four-control campaign remains separate; current release is not freshly compared against all four controls.",
+        "required_evidence": "Fresh four-control release campaign after implementation stabilizes; preserve all samples, load gates, separate profiles and paired/median claims."
+      },
+      {
+        "id": "V5",
+        "requirement": "20x research target or measured ceiling and remaining gap without workload changes",
+        "state": "target_not_achieved_gap_measured",
+        "sources": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/gpu-host-preparation-20261110/summary.json",
+            "sha256": "1b2acc63c5a2e1b196a9b7db40256ddca8439287e55304ea1a16c7082fd5969e"
+          }
+        ],
+        "finding": "Current measured speedups3.83x/3.73x fall below20x. Profile kernel unions1.994/2.527s exceed entire target budgets. This is a ceiling for unchanged measured kernels, not a hardware impossibility proof.",
+        "required_evidence": "Publish gap continuously; pursue measured kernel/host/output changes without shortening primary cases or excluding startup/output."
+      }
+    ],
+    "source_evidence_is_not_execution_evidence": true,
+    "next_implementation_priorities": [
+      "Complete public build, strict reproduction and current calibration",
+      "Migrate/remove four-unit ordinary policy and remaining production legacy-config coupling",
+      "Implement bounded asynchronous output and account its storage with graph/provider resources",
+      "Run maintained release suites and fresh four-control comparison; retain measured20xgap"
+    ],
+    "current_run_evidence": {
+      "build-result.json": {
+        "path": "/tmp/fortran-current-public-20261110-01/build-result.json",
+        "sha256": "3d63e0b9204f9a8db7342df61002342f481d95b04963b827a7f211f54aae7b73",
+        "status": "PASS"
+      },
+      "generated-comparison.json": {
+        "path": "/tmp/fortran-current-public-20261110-01/generated-comparison.json",
+        "sha256": "d50142bc975bd3b79b73064790705e5a38b95308d67deaa7b46125ac5dbb1711",
+        "status": "PASS"
+      },
+      "qualification/result.json": {
+        "path": "/tmp/fortran-current-public-20261110-01/qualification/result.json",
+        "sha256": "f24708a91e78fc5f2754737835e981a6fd364ee48d0fbcbc26c0d2b21e9ce378",
+        "status": "PASS"
+      },
+      "long/result.json": {
+        "path": "/tmp/fortran-current-public-20261110-01/long/result.json",
+        "sha256": "177ef4a65cfb29d6e206ee33ae0f3126696cad6df264e896837edfc3c56e6b92",
+        "status": "PASS"
+      },
+      "calibration/result.json": {
+        "path": "/tmp/fortran-current-public-20261110-01/calibration/result.json",
+        "sha256": "06f23e15a3042bef0491a9d031cf73a9c94f9edc649c5e28d5784a997595bfe5",
+        "status": "PASS"
+      },
+      "calibration/qualification.json": {
+        "path": "/tmp/fortran-current-public-20261110-01/calibration/qualification.json",
+        "sha256": "77ebe93f7e496cdcf514c7d679b174cf0893d87e695903e0d16cedef6fd12895",
+        "status": "PASS"
+      }
+    }
+  },
+  "new_performance_campaign": false,
+  "selected_timing_baseline": "/tmp/fortran-index-conversion-20261110-01",
+  "receipts": [
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/build.py",
+      "sha256": "3d985da625818dc54359c2969b548d6b8a0c083d0924e1d3b3273036259a9d01"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/build-plan.json",
+      "sha256": "27a4a2b0c4865162ff5a347aaa4d4e9db9a7bc3662f6170e6004053e54589361"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/build-result.json",
+      "sha256": "3d63e0b9204f9a8db7342df61002342f481d95b04963b827a7f211f54aae7b73"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/work/built.json",
+      "sha256": "08743d5c1752e02e8b8e52a470bcc414d1adba067f32550db135016469c50908"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/work/build-inputs.json",
+      "sha256": "b405502cbc46515fbfcd2ab2dcd3f6b2580b8956ba156273f03ab044902b96c9"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/source-archive.json",
+      "sha256": "4d19c3158f61e7a73a021dc2db4f269f7f16842df5a0739dd9af702276c97d6d"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/compare_generated.py",
+      "sha256": "344b2bcffbd561f095b564b3970d2e7287c3254881783d58d3616484b48c0464"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/generated-comparison.json",
+      "sha256": "d50142bc975bd3b79b73064790705e5a38b95308d67deaa7b46125ac5dbb1711"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/qualify.py",
+      "sha256": "51947a36e7132f595a4b00dcd03210f86eb156a082676a5ee57cf0a88e52d606"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/qualification/plan.json",
+      "sha256": "98be0376eb355f7146918c21f7de19da6d38c1291be4c4af4e94f0df71172297"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/qualification/result.json",
+      "sha256": "f24708a91e78fc5f2754737835e981a6fd364ee48d0fbcbc26c0d2b21e9ce378"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/long/run.py",
+      "sha256": "0cc9daf6b0cb472ebc53045e54999431a62766e2de20af5728370750e480c0d1"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/long/analyze.py",
+      "sha256": "5883c8768168cdb2244ed4dd666f7affd6ef715b9d81fb5a3b1a4dfbb02f54a2"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/long/plan.json",
+      "sha256": "2d2affd19e4b18fa5bf017bc30f08c9bb646ef8421f885fc3fc81390d6a84184"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/long/result.json",
+      "sha256": "177ef4a65cfb29d6e206ee33ae0f3126696cad6df264e896837edfc3c56e6b92"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/long/execution.json",
+      "sha256": "a9773350dbd33eead26b99af5a231ba7f2816026af7343435c0145f5a35520ee"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/long/selected-gpu-parity.json",
+      "sha256": "1739f851372c6682dcf47b605755bbd52a81d80863a567ad42fc1ecbd7d3c49d"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/calibrate.py",
+      "sha256": "09fe1958fe0f732b8b768c098aafffb25fb939afebb01afe2287068a35f47020"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/calibration/plan.json",
+      "sha256": "9d78024ada0b5ccc32e0f7c2de403bb224725a8eb4e9aa8b06576ce6807c4f99"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/calibration/result.json",
+      "sha256": "06f23e15a3042bef0491a9d031cf73a9c94f9edc649c5e28d5784a997595bfe5"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/audit.py",
+      "sha256": "fdb68d9493b16c5e112787091f5fd15e8cc00c1b7fdc68aaded40d5d2431d0a3"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/requirements-audit.json",
+      "sha256": "9751e89acefa110010434aa1ec03943b9d98109c1f1d6e4f8d707d620045456c"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/calibration/validate.py",
+      "sha256": "6478d52ea2896a6d9058b9cb4b39848e3b1525aeebaf934c1d117af4e30a1eca"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/report.py",
+      "sha256": "29d7403a90d2573c1fa6c3835beb977262bfd15a64b83758543ca36b98e46779"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/calibration/hardware.json",
+      "sha256": "33c2bf7e36522b10b3f4ac8b2df1d8f7dea1cd241274a8e0e92e90b34c92d076"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/calibration/graph.json",
+      "sha256": "deec737db38cd5064b82de75dc35a125db2e57b2d279b7998d7ba9f9dd1851e4"
+    },
+    {
+      "path": "/tmp/fortran-current-public-20261110-01/calibration/qualification.json",
+      "sha256": "77ebe93f7e496cdcf514c7d679b174cf0893d87e695903e0d16cedef6fd12895"
+    },
+    {
+      "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/README.md",
+      "sha256": "009084c35ec3e487bcc8dad8c930347ef94887577546a8821428605a17980ed8"
+    }
+  ]
+}

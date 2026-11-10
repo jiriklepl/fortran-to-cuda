@@ -56,6 +56,54 @@ def query(function):
     return prove_region(0, function.body.statements[0], {N: Affine(terms=(("p3", 1),))}, {N}, Block(()))
 
 
+@pytest.mark.parametrize("guarded", [False, True])
+def test_integer_guard_proves_periodic_halo_copy_only_on_disjoint_domain(guarded):
+    three = Literal("3", ScalarType.INTEGER)
+    target = ArrayAccess(A, (Binary("+", Reference(N), Reference(ITERATOR)),))
+    assignment = Assignment(target, POINT, LOCATION)
+    body = (If(Binary(">=", Reference(N), three), Block((assignment,)), Block(()), LOCATION)
+            if guarded else assignment)
+    loop = Loop(ITERATOR, ONE, three, Block((body,)), LOCATION)
+    function = replace(function_with_assignment(POINT, ONE), body=Block((loop,)))
+    proof = query(function)
+    assert proof.proven is guarded
+    if guarded:
+        assert not proof.region.report.conservative
+
+
+def test_integer_guard_does_not_hide_conflicts_in_else_arm():
+    three = Literal("3", ScalarType.INTEGER)
+    safe = Assignment(ArrayAccess(A, (Binary("+", Reference(N), Reference(ITERATOR)),)), POINT, LOCATION)
+    unsafe = Assignment(POINT, ArrayAccess(A, (Binary("-", Reference(ITERATOR), ONE),)), LOCATION)
+    branch = If(Binary(">=", Reference(N), three), Block((safe,)), Block((unsafe,)), LOCATION)
+    loop = Loop(ITERATOR, ONE, three, Block((branch,)), LOCATION)
+    assert not query(replace(function_with_assignment(POINT, ONE), body=Block((loop,)))).proven
+
+
+def test_comment_before_if_keeps_original_branch_header():
+    from compiler.frontend import lower_source
+
+    source = """module comment_case
+contains
+subroutine step(a,n)
+real(8),intent(inout)::a(:)
+integer,intent(in)::n
+integer::i
+do i=1,n
+! Original branch explanation.
+if (a(i)>0) then
+  a(i)=a(i)*2
+else
+  a(i)=0
+endif
+enddo
+end subroutine
+end module
+"""
+    function = lower_source(source, "comment_case::step", source_name="comment_case.f90")
+    assert isinstance(function.body.statements[0].body.statements[0], If)
+
+
 @pytest.mark.parametrize("indirect", [False, True], ids=["exact", "conservative"])
 def test_success_preserves_model_precision_and_existing_entry_points(indirect):
     value = ArrayAccess(SOURCE, (ArrayAccess(INDICES, (Reference(ITERATOR),)),)) if indirect else POINT
@@ -128,24 +176,20 @@ def conditional_function(target, *, predicate=None):
     return replace(function, body=Block((replace(loop, body=Block((branch,))),)))
 
 
-def test_branch_union_success_reports_conservative_dependence_model():
+def test_affine_branch_success_reports_exact_dependence_model():
     function = conditional_function(POINT)
     proof = query(function)
     assert proof.proven
-    assert proof.region.report.conservative
-    assert "dependence model: conservative" in format_plan(build_execution_plan(function))
+    assert not proof.region.report.conservative
+    assert "dependence model: exact" in format_plan(build_execution_plan(function))
 
 
-def test_branch_union_conflict_is_possible_even_when_predicate_excludes_witness():
-    # Only i=1 writes in the actual program. Path-insensitive analysis includes
-    # the same write at every iteration and must identify its witness as possible.
+def test_affine_branch_excludes_a_conflict_that_cannot_execute():
+    # Only i=1 writes. The exact predicate eliminates the spurious WAW witness.
     function = conditional_function(ArrayAccess(A, (ONE,)))
     proof = query(function)
-    assert not proof.proven
-    assert proof.failure.conservative
-    assert proof.failure.witness
-    assert "WAW possible loop-carried conflict" in proof.failure.reason
-    assert "conservative dependence model" in proof.failure.reason
+    assert proof.proven
+    assert not proof.region.report.conservative
 
 
 def test_branch_predicate_reads_remain_in_conservative_dependence_model():

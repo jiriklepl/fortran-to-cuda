@@ -1,0 +1,217 @@
+{
+  "status": "DIAGNOSTIC_COMPLETE_NOT_RELEASE_QUALIFICATION",
+  "factorial": [
+    {
+      "wall_stress": "GPU",
+      "solver": "GPU",
+      "passed": false,
+      "failed_fields": 15,
+      "failed_outputs": 48,
+      "output_count": 114,
+      "max_absolute_field_errors": {
+        "fields-Moisture.bin": 0.0,
+        "fields-U_avg.bin": 0.0001902860579499066,
+        "fields-V.bin": 0.0002120722770743988,
+        "fields-W_avg.bin": 5.9210530846219925e-05,
+        "fields-Viscosity.bin": 1.1346074608324153e-06,
+        "fields-W.bin": 0.00013788714048307337,
+        "fields-Scalar.bin": 0.0,
+        "fields-Wstar.bin": 0.00019408503303950373,
+        "fields-U2.bin": 0.0006315461216359619,
+        "fields-Vstar.bin": 0.00013853397158469435,
+        "fields-W2.bin": 0.00013787343634286684,
+        "fields-Scalar_avg.bin": 0.0,
+        "fields-V_avg.bin": 6.978516163518543e-05,
+        "fields-Pr_avg.bin": 6.275302678040756e-06,
+        "fields-Ustar.bin": 0.02411056023062807,
+        "fields-Pr.bin": 0.0008446155355846174,
+        "fields-Temperature.bin": 0.0,
+        "fields-U.bin": 0.0006302421378821532,
+        "fields-V2.bin": 0.00021180555672160872,
+        "fields-TDiff.bin": 0.0
+      },
+      "returncode": 0,
+      "group_absent": true
+    },
+    {
+      "wall_stress": "GPU",
+      "solver": "CPU",
+      "passed": false,
+      "failed_fields": 15,
+      "failed_outputs": 48,
+      "output_count": 114,
+      "max_absolute_field_errors": {
+        "fields-Moisture.bin": 0.0,
+        "fields-U_avg.bin": 0.00019028837360951512,
+        "fields-V.bin": 0.0002120752817711402,
+        "fields-W_avg.bin": 5.921109508585324e-05,
+        "fields-Viscosity.bin": 1.1378195688884895e-06,
+        "fields-W.bin": 0.00013256558102283213,
+        "fields-Scalar.bin": 0.0,
+        "fields-Wstar.bin": 0.0001807737567887588,
+        "fields-U2.bin": 0.0005740036194469278,
+        "fields-Vstar.bin": 0.0001387617201187505,
+        "fields-W2.bin": 0.00013253384726766683,
+        "fields-Scalar_avg.bin": 0.0,
+        "fields-V_avg.bin": 6.978577165597626e-05,
+        "fields-Pr_avg.bin": 6.27502718124974e-06,
+        "fields-Ustar.bin": 0.02411059064765189,
+        "fields-Pr.bin": 0.0004760751112376032,
+        "fields-Temperature.bin": 0.0,
+        "fields-U.bin": 0.0005729034448820336,
+        "fields-V2.bin": 0.0002118392554095183,
+        "fields-TDiff.bin": 0.0
+      },
+      "returncode": 0,
+      "group_absent": true
+    },
+    {
+      "wall_stress": "CPU",
+      "solver": "GPU",
+      "passed": false,
+      "failed_fields": 15,
+      "failed_outputs": 16,
+      "output_count": 114,
+      "max_absolute_field_errors": {
+        "fields-Moisture.bin": 0.0,
+        "fields-U_avg.bin": 9.229651653769322e-05,
+        "fields-V.bin": 0.00010109333062872667,
+        "fields-W_avg.bin": 2.842735812679355e-05,
+        "fields-Viscosity.bin": 1.367984324061735e-06,
+        "fields-W.bin": 6.845283502714215e-05,
+        "fields-Scalar.bin": 0.0,
+        "fields-Wstar.bin": 0.00014364345589290561,
+        "fields-U2.bin": 0.0003177715174744744,
+        "fields-Vstar.bin": 8.505334679166643e-05,
+        "fields-W2.bin": 6.862807989372558e-05,
+        "fields-Scalar_avg.bin": 0.0,
+        "fields-V_avg.bin": 1.8216862631904862e-05,
+        "fields-Pr_avg.bin": 2.350100725291419e-06,
+        "fields-Ustar.bin": 0.00017591041267167595,
+        "fields-Pr.bin": 2.1788949401071664e-05,
+        "fields-Temperature.bin": 0.0,
+        "fields-U.bin": 0.00031683879691751793,
+        "fields-V2.bin": 0.00010128532991655285,
+        "fields-TDiff.bin": 0.0
+      },
+      "returncode": 0,
+      "group_absent": true
+    },
+    {
+      "wall_stress": "CPU",
+      "solver": "CPU",
+      "passed": true,
+      "failed_fields": 0,
+      "failed_outputs": 0,
+      "output_count": 114,
+      "max_absolute_field_errors": {
+        "fields-Moisture.bin": 0.0,
+        "fields-U_avg.bin": 1.4986826668561548e-08,
+        "fields-V.bin": 8.086071124485672e-08,
+        "fields-W_avg.bin": 2.703246765323186e-09,
+        "fields-Viscosity.bin": 3.993558514263362e-09,
+        "fields-W.bin": 5.96368580749098e-08,
+        "fields-Scalar.bin": 0.0,
+        "fields-Wstar.bin": 3.390458648746403e-07,
+        "fields-U2.bin": 1.381638118913564e-07,
+        "fields-Vstar.bin": 3.4609570548349566e-07,
+        "fields-W2.bin": 5.673089741899118e-08,
+        "fields-Scalar_avg.bin": 0.0,
+        "fields-V_avg.bin": 4.588318124206479e-09,
+        "fields-Pr_avg.bin": 5.081297114843675e-10,
+        "fields-Ustar.bin": 1.059737481143297e-06,
+        "fields-Pr.bin": 1.572348968387205e-08,
+        "fields-Temperature.bin": 0.0,
+        "fields-U.bin": 1.5156072258326603e-07,
+        "fields-V2.bin": 7.648148389605147e-08,
+        "fields-TDiff.bin": 0.0
+      },
+      "returncode": 0,
+      "group_absent": true
+    }
+  ],
+  "CPU_wall_and_solver_matches_historical_GPU_fields": true,
+  "native_matches_historical_native_fields": true,
+  "original_tolerances": {
+    "atol": 1e-06,
+    "rtol": 1e-05
+  },
+  "geometry": {
+    "simple109": {
+      "recommended": 576,
+      "medians_ms": {
+        "32": 1.59998405,
+        "64": 1.59928,
+        "128": 1.599679947,
+        "256": 1.604464054,
+        "512": 1.597776055
+      },
+      "ratios_to_256": {
+        "32": 0.9972077878660908,
+        "64": 0.9967689809023295,
+        "128": 0.9970182523017123,
+        "256": 1.0,
+        "512": 0.9958316305165413
+      }
+    },
+    "channel100": {
+      "recommended": 576,
+      "medians_ms": {
+        "32": 1.603824019,
+        "64": 1.605216026,
+        "128": 1.608224034,
+        "256": 1.599087954,
+        "512": 1.605919957
+      },
+      "ratios_to_256": {
+        "32": 1.00296172889562,
+        "64": 1.0038322294809807,
+        "128": 1.0057133067491046,
+        "256": 1.0,
+        "512": 1.0042724372870862
+      }
+    }
+  },
+  "production_change": false,
+  "performance_claim": false,
+  "receipts": {
+    "/tmp/fortran-resident-long-20261110-01/natural2458/result.json": "8ae496b3c554c6c9b6aa4306d2489b69aa7af9b455d2d62343f27042d304ee1a",
+    "/tmp/fortran-pressure-cpu-isolation-20261110-01/build-result.json": "eb12da222cf590d3a9a308929b5af3fd6402a74e30d357986346329e7f812ed6",
+    "/tmp/fortran-pressure-cpu-isolation-20261110-01/source.diff": "fd7c21b48b4fa92d1695a70b189559e68a4fecd26aab474bfc66e87cfa3b8552",
+    "/tmp/fortran-pressure-cpu-isolation-20261110-01/runs/plan.json": "94e1f951200499e8ce5da2a73caf267e191a1122230a9d34bbc527181a8f21e9",
+    "/tmp/fortran-pressure-cpu-isolation-20261110-01/runs/result.json": "2345ca76ad1aa38cbebb35c3e6a27edc330f71a92c0f98249d4b68f225a26f2d",
+    "/tmp/fortran-wall-cpu-isolation-20261110-02/build-result.json": "7d272cef1ec481cb1722128d700838cd6d4ab61718a37516df24fcf201596e4c",
+    "/tmp/fortran-wall-cpu-isolation-20261110-02/source.diff": "c9644fa99fef8bad3872844dccba721d9d6e654d4f021ef02cdb400e637549d6",
+    "/tmp/fortran-wall-cpu-isolation-20261110-02/runs/plan.json": "1daba6ec0b1e077c2c727cefe4f62014daf4e15f267cf061b5a170c4adde8ff3",
+    "/tmp/fortran-wall-cpu-isolation-20261110-02/runs/result.json": "804bf120026100222efd0bcc9062b35b99b008158359aaf336fa96375d0cd54a",
+    "/tmp/fortran-wall-cpu-isolation-20261110-02/historical-field-identity.json": "292fe03019d1091e1e9934991e1981d61c7f97f4d66dfadc34922eeb02101375",
+    "/tmp/fortran-wall-cpu-isolation-20261110-02/backend-audit.json": "4608b3ede0f38a53ca9c2d4de398932e8a0ad8680a68c63c66e7bc50d481be0a",
+    "/tmp/fortran-sgs-geometry-20261110-01/plan.json": "87d3df96d01f52d0c9157a50774a7fab1f0dd5ddaaf239be361749a94e12ab33",
+    "/tmp/fortran-sgs-geometry-20261110-01/result.json": "b509188d8af02ee584eb4b97c0cc2b8d141aa1c209589adefea0416ab4f278ee",
+    "/tmp/fortran-sgs-geometry-20261110-01/summary.json": "83eb04887fd72593f0d94ac78e709deac014f509c75877292be2b39ed0669fd3",
+    "/tmp/fortran-sgs-kernel-profile-20261110-01/result.json": "7e1fa7cc3220ecab07d2227061a8be8cc184a4ed73617f934768614ef2830adb",
+    "/tmp/fortran-sgs-kernel-profile-20261110-01/profile.log": "7e9aa392d1ccdfb48ce78ba88a3c0056077dcdea5506c2fb88f15768cd537d1f",
+    "/tmp/fortran-wall-cpu-isolation-20261110-01/compile.log": "0e66c0c4532e6293cd25d429e38b5c775051cd57101201fa9eefb72ec4485326",
+    "/tmp/fortran-gpu-wait-isolation-20261110-01/build.py": "5299c2d272a4beaf80b966c22b5b696530cc40f16efc19517a11f4155fff1617",
+    "/tmp/fortran-gpu-wait-isolation-20261110-01/build-result.json": "fce7c83d282624a97d7ecae14083c57295f87cd1ad9b6b294f3d490e4df0929f",
+    "/tmp/fortran-gpu-wait-isolation-20261110-01/wallmodels.diff": "3eccecb60166f65a02236c01b374c39effd0c6d4630288815c611a72fec5aab0",
+    "/tmp/fortran-gpu-wait-isolation-20261110-01/pressure.diff": "f316b321ace5b21d7355e06079e3a1748de3274e5275df18e259a010fcd047a4",
+    "/tmp/fortran-gpu-wait-isolation-20261110-01/run.py": "3595abf39c6e656067534dca7854850b082207d6c424009eb8c1f8ecc4f4971e",
+    "/tmp/fortran-gpu-wait-isolation-20261110-01/runs/plan.json": "e310fb6829281bdaff8b21888ca6635e004363919d549aa5c3a94103a6576eda",
+    "/tmp/fortran-gpu-wait-isolation-20261110-01/runs/result.json": "6e7b39f20d7d6d2c98a93da06bdb26b77c41ee907b42db5bce2120cab5335e82",
+    "/tmp/fortran-gpu-wait-isolation-20261110-01/audit.py": "d56d3076f5ccad4bc297573cfe83162fbf1374f2d4e10e3a988525bddde38107",
+    "/tmp/fortran-gpu-wait-isolation-20261110-01/audit.json": "0dd16f405722cb2002175612b60969f651500a48f050db1a379f2ed526ebb7f6"
+  },
+  "synchronization_followup": {
+    "root": "/tmp/fortran-gpu-wait-isolation-20261110-01",
+    "status": "DIAGNOSTIC_COMPLETE_NO_FIELD_CHANGE",
+    "long_qualified": false,
+    "exact_field_and_bounds_files": {
+      "channel2": 40,
+      "channel2458": 40
+    },
+    "GPU_procedures": 28,
+    "production_change": false,
+    "performance_claim": false
+  }
+}

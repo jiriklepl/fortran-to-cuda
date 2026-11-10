@@ -158,7 +158,7 @@ def generate(case, checkout, transfers, policy):
 
 
 @pytest.mark.parametrize(("transfers", "policy"), [("pinned", "sections"), ("auto", "sections"),
-                                                   ("pipelined", "sections"), ("pinned", "auto")])
+                                                   ("pinned", "auto")])
 def test_thin_opposite_3d_faces_have_public_source_transfer_configuration(tmp_path, transfers, policy):
     generate(tmp_path / "source", ROOT, transfers, policy)
 
@@ -178,7 +178,7 @@ def transfer_binaries(tmp_path_factory):
     cuda_flags = [nvcc, "-O2", "-std=c++17", "-ccbin", host, "-arch=sm_86", "-Xcompiler=-fopenmp"]
     cache, targets, reuse = {}, {}, []
     for label, transfers, policy in [("pinned", "pinned", "sections"), ("auto", "auto", "sections"),
-                                      ("pipelined", "pipelined", "sections"), ("pinned-native", "pinned", "auto")]:
+                                      ("pinned-native", "pinned", "auto")]:
         case = directory / label
         original, output, manifest = generate(case, checkout, transfers, policy)
         objects = []
@@ -223,7 +223,7 @@ def transfer_binaries(tmp_path_factory):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("label", ["pinned", "auto", "pipelined", "pinned-native"])
+@pytest.mark.parametrize("label", ["pinned", "auto", "pinned-native"])
 def test_transfer_modes_preserve_complete_fields_and_pitched_opposite_faces(transfer_binaries, label):
     target, output, reference = transfer_binaries[label]
     result = _run([str(target)], output, env={**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE",
@@ -261,6 +261,7 @@ def test_transfer_modes_preserve_complete_fields_and_pitched_opposite_faces(tran
         assert all(event["event_waits"] == event["events"] for event in stats)
         assert max(event["process_peak_bytes"] for event in stats) <= 64 * 1024 * 1024
     else:
-        reason = "transfer_estimates_unavailable" if label == "auto" else "pipelined_not_available"
+        assert label == "auto"
+        reason = "transfer_estimates_unavailable"
         assert all(event["effective_mode"] == 0 and event["reason"] == reason for event in stats)
         assert all(event["pinned_upload_bytes"] == event["pinned_download_bytes"] == 0 for event in stats)

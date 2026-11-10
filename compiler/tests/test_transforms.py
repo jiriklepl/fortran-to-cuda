@@ -56,6 +56,18 @@ def test_same_point_dependencies_preserve_order(tmp_path: Path, header: str) -> 
     assert len(plan.regions) == 1
 
 
+def test_explicit_scoped_pipeline_honors_requested_optimization(tmp_path):
+    from compiler.driver.pipeline import prepare_function
+
+    function = _function(tmp_path, "a(i)=i", "b(i)=a(i)+factor")
+    _, source = prepare_function(function, options=CompilerOptions(
+        memory_model="scoped", gpu_policy="sections", opt_level=0))
+    _, optimized = prepare_function(function, options=CompilerOptions(
+        memory_model="scoped", gpu_policy="sections", opt_level=1))
+    assert len(source.regions) == 2
+    assert len(optimized.regions) == 1
+
+
 @pytest.mark.parametrize(
     ("first", "second"),
     [
@@ -99,6 +111,58 @@ def test_unequal_domains_retain_original_regions(tmp_path: Path) -> None:
     assert unchanged is function
     assert len(plan.regions) == 2
     assert any("different domains" in report for report in plan.reports)
+
+
+@pytest.mark.parametrize("second", ["b(j+3)=j", "b(j+3)=a(j+3)"])
+def test_constant_width_shifted_domains_preserve_source_coordinates(tmp_path, second):
+    source = tmp_path / "shifted.f90"
+    source.write_text(f"""module shifted
+contains
+subroutine entry(a,b,n)
+integer,intent(inout)::a(:),b(:)
+integer,intent(in)::n
+integer::i,j
+do i=n+1,n+3
+  a(i-n)=i
+enddo
+do j=-2,0
+  {second}
+enddo
+end subroutine
+end module
+""")
+    function = lower_file(source, "entry")
+    _, baseline = optimize_function(function, options=CompilerOptions(opt_level=0))
+    transformed, plan = optimize_function(function)
+    assert len(baseline.regions) == 2
+    assert len(plan.regions) == 1
+    # Re-run the ordinary semantic/dependency checker on the translated body.
+    from compiler.analysis import build_execution_plan
+    assert len(build_execution_plan(transformed).regions) == 1
+
+
+@pytest.mark.parametrize("second", ["b(j+3)=a(j+2)", "a(j+4)=j"])
+def test_shifted_domain_cross_point_dependencies_still_prevent_fusion(tmp_path, second):
+    source = tmp_path / "shifted_conflict.f90"
+    source.write_text(f"""module shifted_conflict
+contains
+subroutine entry(a,b,n)
+integer,intent(inout)::a(:),b(:)
+integer,intent(in)::n
+integer::i,j
+do i=n+1,n+3
+  a(i-n)=i
+enddo
+do j=-2,0
+  {second}
+enddo
+end subroutine
+end module
+""")
+    function = lower_file(source, "entry")
+    unchanged, plan = optimize_function(function)
+    assert unchanged is function
+    assert len(plan.regions) == 2
 
 
 def test_conservative_cross_pass_accesses_prevent_fusion(tmp_path: Path) -> None:
@@ -291,3 +355,60 @@ end module
     assert unchanged is function
     assert len(plan.regions) == 2
     assert any("iterator/array-valued bounds" in report for report in plan.reports)
+
+
+def _private_scalar_function(tmp_path, first, second, *, tail=""):
+    path = tmp_path / "reuse.f90"
+    path.write_text(f"""module reuse
+contains
+subroutine entry(a,b,n)
+integer,intent(in)::n
+real(8),intent(inout)::a(:),b(:)
+real(8)::t
+integer::i
+t=0
+do i=1,n
+ {first}
+enddo
+do i=1,n
+ {second}
+enddo
+{tail}
+end subroutine
+end module
+""")
+    return lower_file(path, "entry")
+
+
+@pytest.mark.parametrize("guarded", [False, True])
+def test_reused_definite_private_temporary_can_fuse(tmp_path, guarded):
+    first = "t=a(i)+1; a(i)=t"
+    second = "t=b(i)+2; b(i)=t+a(i)"
+    if guarded:
+        first = "if(a(i)>0)then\n" + first + "\nendif"
+        second = "if(b(i)>0)then\n" + second + "\nendif"
+    function = _private_scalar_function(tmp_path, first, second)
+    _, original = optimize_function(function, options=CompilerOptions(opt_level=0))
+    _, fused = optimize_function(function)
+    assert len(original.regions) == 2 and len(fused.regions) == 1
+
+
+def test_private_temporary_does_not_hide_array_dependence(tmp_path):
+    function = _private_scalar_function(tmp_path, "t=a(i)+1; a(i)=t", "t=b(i)+2; b(i)=t+a(i+1)")
+    _, plan = optimize_function(function)
+    assert len(plan.regions) == 2
+
+
+@pytest.mark.parametrize(("second", "tail"), [
+    ("b(i)=t", ""),
+    ("t=b(i)+2; b(i)=t", "b(1)=t"),
+    ("if(b(i)>0) t=b(i)+2\n b(i)=t", ""),
+])
+def test_escaping_or_carried_scalar_does_not_become_private(tmp_path, second, tail):
+    from compiler.ir import SequentialRegion
+
+    function = _private_scalar_function(tmp_path, "t=a(i)+1; a(i)=t", second, tail=tail)
+    unchanged, plan = optimize_function(function, options=CompilerOptions(fallback="host"))
+    assert unchanged is function
+    reasons = [step.reason for step in plan.steps if isinstance(step, SequentialRegion)]
+    assert any("live after" in reason or "before its per-iteration definition" in reason for reason in reasons)

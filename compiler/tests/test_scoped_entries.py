@@ -30,6 +30,22 @@ enddo
 end subroutine
 end module
 ''',
+    "integer_host_setup": '''module source_integer_host_setup
+contains
+subroutine integer_host_setup(a,b,n,limit)
+real(8),intent(inout)::a(:),b(:)
+integer,intent(in)::n,limit
+integer::i,last
+do i=1,n
+  a(i)=real(i,8)
+enddo
+last=limit
+do i=2,last
+  b(i)=a(i-1)+3
+enddo
+end subroutine
+end module
+''',
     "consumer": '''module source_consumer
 contains
 subroutine consumer(a,b,out,n)
@@ -151,12 +167,21 @@ def generated(tmp_path_factory):
         source.write_text(SOURCES[name] if name in SOURCES else
                           (ROOT / "compiler/tests/fixtures" / (name + ".f90")).read_text())
         output = directory / name
+        # This fixture must retain a protected native pass followed by a GPU
+        # pass. Fusion can legally merge guarded_value's two loops into one
+        # native worker, which would stop exercising the mixed continuation.
+        optimization = ["--opt-level", "0"] if name == "guarded_value" else []
         report = json.loads(_run([sys.executable, "-m", "compiler", "--input", str(source), "--kernel", name,
-                                 "--fallback", "host", "--gpu-policy", "sections", "--memory-model", "scoped",
-                                 "--json", "--output-dir", str(output)], directory=directory, env=env).stdout)
+                                 "--fallback", "host",
+                                 "--json", "--output-dir", str(output), *optimization], directory=directory, env=env).stdout)
         reports[name] = report
+        assert report["artifact_schema_version"] == 2
+        assert report["memory_model"] == "scoped"
+        assert "offload" not in report
+        assert all(item["role"] in {"common_runtime", "shared_entry"} for item in report["build_sources"])
+        assert not {"generated_code.cu", "generated_cpp_impl.cpp", "generated_interface.f90"} & set(report["outputs"])
         assert report["scoped"]["abi_version"] == 1
-        assert report["scoped"]["entry_abi_version"] == 2
+        assert report["scoped"]["entry_abi_version"] == 3
         assert report["scoped"]["runtime"]["link_once"] is True
         assert report["scoped"]["runtime"]["runtime_id"] == reports["producer"]["scoped"]["runtime"]["runtime_id"]
         target = output / "shared.o"
@@ -231,6 +256,30 @@ def invoke(scope, reports, entry, buffers, scalars, mode):
 def require_gpu(lib):
     if not lib.gpu_count():
         pytest.skip("CUDA device unavailable")
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("mode", [0, 1])
+@pytest.mark.parametrize(("count", "limit"), [(16, 16), (16, 4), (16, 1), (0, 0)])
+def test_local_integer_setup_preserves_device_values_and_zero_trip_paths(generated, mode, count, limit):
+    _, lib, reports, _ = generated
+    if mode:
+        require_gpu(lib)
+    scope = Scope(lib)
+    a, b = (c.c_double * 16)(*([-9] * 16)), (c.c_double * 16)(*([-7] * 16))
+    handles = []
+    for identity, values in enumerate((a, b), 1):
+        status, handle = scope.register(values, [16], identity=identity, initialized=True)
+        scope.check(status)
+        handles.append(handle)
+    invoke(scope, reports, "integer_host_setup", handles, [c.c_int(count), c.c_int(limit)], mode)
+    scope.check(lib.fort_scope_wait(scope.handle))
+    stats = scope.stats()
+    assert stats.downloads == 0
+    assert stats.launches == (int(count > 0) + int(limit > 1)) * mode
+    scope.close()
+    assert list(a) == [i + 1 if i < count else -9 for i in range(16)]
+    assert list(b) == [i + 3 if 1 <= i < limit else -7 for i in range(16)]
 
 
 @pytest.mark.cuda

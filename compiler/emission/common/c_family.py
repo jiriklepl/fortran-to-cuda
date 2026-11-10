@@ -18,6 +18,7 @@ from compiler.ir import (
     Size,
     Symbol,
     Unary,
+    referenced_symbols,
 )
 from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
 from compiler.ir.intrinsics import REAL_MATH
@@ -146,6 +147,13 @@ def render_expression(expression: Expr, *, addressing: RegionAddressing | None =
         operator = operators.get(expression.operator, expression.operator)
         if operator not in {"+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "&&", "||"}:
             raise CompilationError(f"unsupported emission operator: {expression.operator}")
+        if operator == "/" and referenced_symbols(expression.right):
+            from compiler.analysis.semantics import expression_type
+
+            if expression_type(expression, None) in {ScalarType.REAL, ScalarType.REAL32}:
+                left = render_expression(expression.left, addressing=addressing, scalar_bytes=scalar_bytes)
+                right = render_expression(expression.right, addressing=addressing, scalar_bytes=scalar_bytes)
+                return f"::generated_kernels::numeric::divide({left}, {right})"
         return f"({render_expression(expression.left, addressing=addressing, scalar_bytes=scalar_bytes)} {operator} {render_expression(expression.right, addressing=addressing, scalar_bytes=scalar_bytes)})"
     raise CompilationError(f"unsupported IR expression: {type(expression).__name__}")
 

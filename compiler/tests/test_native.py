@@ -1,6 +1,7 @@
 """Execute generated code against Fortran; missing native capabilities alone may skip."""
 
 import math
+import json
 import os
 import re
 import shutil
@@ -14,11 +15,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).parent / "fixtures"
 OUTPUT_FILES = (
-    "generated_code.cu",
-    "generated_cpp_impl.cpp",
-    "generated_interface.f90",
-    "common_functions.cuh",
+    "shared_entry.cu", "shared_interface.f90", "common_functions.cuh",
+    "scoped_runtime.cu", "fort_scoped_memory.f90", "scoped-runtime.json",
 )
+
 LONG_PROCEDURE = "native_long_procedure_" + "x" * 41
 LONG_ARRAY = "long_array_argument_" + "a" * 43
 LONG_VALUE = "long_value_argument_" + "v" * 43
@@ -147,11 +147,11 @@ CASES = [
 ]
 
 
-def _run(command: list[str | Path], cwd: Path, *, timeout: int = 120) -> subprocess.CompletedProcess[str]:
+def _run(command: list[str | Path], cwd: Path, *, timeout: int = 120, threads: int = 2) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
         [str(arg) for arg in command],
         cwd=cwd,
-        env={**os.environ, "OMP_NUM_THREADS": "2", "OMP_DYNAMIC": "FALSE"},
+        env={**os.environ, "OMP_NUM_THREADS": str(threads), "OMP_DYNAMIC": "FALSE"},
         capture_output=True,
         text=True,
         check=False,
@@ -168,7 +168,7 @@ def _tool(name: str) -> str:
     return executable
 
 
-def _generate(case: Case, output: Path, *, verbose: bool = False, opt_level: int = 1) -> None:
+def _generate(case: Case, output: Path, *, verbose: bool = False, opt_level: int = 1) -> dict:
     command = [
         sys.executable,
         "-m",
@@ -184,7 +184,8 @@ def _generate(case: Case, output: Path, *, verbose: bool = False, opt_level: int
     ]
     if verbose:
         command.append("--verbose")
-    _run(command, ROOT)
+    command.append("--json")
+    return json.loads(_run(command, ROOT).stdout)
 
 
 def _driver(case: Case, destination: Path) -> Path:
@@ -231,6 +232,7 @@ class Generated:
     directory: Path
     driver: Path
     opt_level: int
+    report: dict
 
 
 @pytest.fixture(
@@ -242,36 +244,84 @@ def generated(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathF
     case, opt_level = request.param
     directory = tmp_path_factory.mktemp(f"native_{case.name}_opt{opt_level}")
     output = directory / "generated"
-    _generate(case, output, opt_level=opt_level)
-    return Generated(case, output, _driver(case, directory / "driver.f90"), opt_level)
+    report = _generate(case, output, opt_level=opt_level)
+    return Generated(case, output, _driver(case, directory / "driver.f90"), opt_level, report)
 
 
-def _fortran_objects(generated: Generated, directory: Path, *, reference: bool = False) -> list[Path]:
+def _shared_caller(generated: Generated, mode: int) -> str:
+    """Test-only unmanaged caller: register, run, and publish through the public ABI.
+
+    The numerical body comes exclusively from the public compiler artifacts.
+    Keep the original argument names in the outer wrapper for keyword calls;
+    canonical names in the inner wrapper prevent intrinsic shadowing.
+    """
+    from compiler.frontend import lower_file
+    from compiler.emission.fortran.declarations import public_declaration
+    from compiler.emission.fortran.formatting import _fortran_list
+
+    function = lower_file(generated.case.source, generated.case.kernel)
+    arrays = [s for s in function.parameters if s.rank]
+    scalars = [s for s in function.parameters if not s.rank]
+    names = [s.name for s in function.parameters]
+    private = [s.cpp_name for s in function.parameters]
+    lines = [f"module {generated.case.module}", "use iso_c_binding", "use fort_scoped_memory",
+             f"use {generated.report['scoped']['fortran_module']}, only: shared_run=>run",
+             "implicit none", "integer,parameter::knd=kind(1.d0)", "contains"]
+    lines += _fortran_list(f"subroutine {generated.case.kernel}(", names, ")", 0)
+    lines += [public_declaration(s, s.name) for s in function.parameters]
+    lines += _fortran_list("call invoke_shared(", names, ")", 0)
+    lines += ["end subroutine"]
+    lines += _fortran_list("subroutine invoke_shared(", private, ")", 0)
+    lines += [public_declaration(s, s.cpp_name).replace(", contiguous", ", target, contiguous")
+              for s in function.parameters]
+    lines += ["integer(c_int64_t)::context", "type(fort_scope_layout)::layout"]
+    for i, s in enumerate(arrays):
+        lines += [f"integer(c_int64_t)::handle{i}",
+                  f"integer(c_size_t),target::extents{i}({s.rank})",
+                  f"integer(c_int64_t),target::bounds{i}({s.rank})"]
+    lines += ["call check(fort_scope_create(0_c_int,context))"]
+    kinds = {"real": ("REAL64", 8), "real32": ("REAL32", 4), "integer": ("INTEGER32", 4)}
+    for i, s in enumerate(arrays):
+        kind, size = kinds[s.dtype.value]
+        lines += [f"extents{i}=shape({s.cpp_name},kind=c_size_t)", f"bounds{i}=1_c_int64_t",
+                  f"layout=fort_scope_layout({s.rank},FORT_SCOPE_{kind},{size}_c_size_t, &",
+                  f"  c_loc({s.cpp_name}),c_loc(extents{i}),c_loc(bounds{i}),1_c_int64_t)",
+                  f"call check(fort_scope_register(context,{i+1}_c_int64_t,1_c_int64_t,layout, &",
+                  f"  {int(s.intent != 'out')}_c_int,handle{i}))"]
+    args = ["context", f"{mode}_c_int", *[f"handle{i}" for i in range(len(arrays))],
+            *[s.cpp_name for s in scalars]]
+    lines += _fortran_list("call check(shared_run(", args, "))", 0)
+    lines += ["call check(fort_scope_close(context))", "end subroutine",
+              "subroutine check(status)", "integer(c_int),intent(in)::status",
+              "if(status/=FORT_SCOPE_OK) then", "print *, 'shared runtime status',status",
+              "error stop 1", "endif", "end subroutine", "end module"]
+    return "\n".join(lines)+"\n"
+
+
+def _fortran_objects(generated: Generated, directory: Path, *, reference: bool = False,
+                     mode: int = 0) -> list[Path]:
     compiler = _tool("gfortran")
-    module_source = generated.case.source if reference else generated.directory / "generated_interface.f90"
     nx, ny, nz = generated.case.shape
     flags = ["-cpp", "-O0", "-fcheck=bounds", "-ffree-line-length-none", "-J", str(directory), "-I", str(directory)]
-    objects = [directory / "module.o", directory / "driver.o"]
-    _run([compiler, *flags, "-c", module_source, "-o", objects[0]], directory)
-    _run(
-        [
-            compiler,
-            *flags,
-            f"-DVAR_NX={nx}",
-            f"-DVAR_NY={ny}",
-            f"-DVAR_NZ={nz}",
-            "-c",
-            generated.driver,
-            "-o",
-            objects[1],
-        ],
-        directory,
-    )
-    return objects
+    objects = []
+    if reference:
+        module_source = generated.case.source
+    else:
+        for name in ("fort_scoped_memory", "shared_interface"):
+            obj = directory / (name + ".o")
+            _run([compiler, *flags, "-c", generated.directory / (name + ".f90"), "-o", obj], directory)
+            objects.append(obj)
+        module_source = directory / "caller.f90"
+        module_source.write_text(_shared_caller(generated, mode))
+    module, driver = directory / "module.o", directory / "driver.o"
+    _run([compiler, *flags, "-c", module_source, "-o", module], directory)
+    _run([compiler, *flags, f"-DVAR_NX={nx}", f"-DVAR_NY={ny}", f"-DVAR_NZ={nz}",
+          "-c", generated.driver, "-o", driver], directory)
+    return [*objects, module, driver]
 
 
-def _values(executable: Path, case: Case) -> list[float | int]:
-    result = _run([executable], executable.parent)
+def _values(executable: Path, case: Case, *, threads: int = 2) -> list[float | int]:
+    result = _run([executable], executable.parent, threads=threads)
     convert = int if case.integer_output else float
     values = [convert(token) for token in result.stdout.split()]
     assert len(values) == case.count, result.stdout
@@ -297,7 +347,7 @@ def test_generation_is_deterministic(generated: Generated, tmp_path: Path) -> No
             assert (output / filename).read_bytes() == (generated.directory / filename).read_bytes(), filename
 
     if generated.case.name in ("CDU", "CDV", "CDW"):
-        cuda = (generated.directory / "generated_code.cu").read_text()
+        cuda = (generated.directory / "shared_entry.cu").read_text()
         assert len(re.findall(r"\b__global__\s+void\b", cuda)) == (4 if generated.opt_level == 0 else 1)
 
 
@@ -337,37 +387,29 @@ def test_rejected_program_preserves_outputs(tmp_path: Path, kernel: str, *, exis
 
 
 @pytest.mark.native
-@pytest.mark.parametrize("openmp", [False, True], ids=["serial", "openmp"])
-def test_cpp_matches_fortran(
-    generated: Generated, reference: list[float | int], tmp_path: Path, *, openmp: bool
+@pytest.mark.parametrize("threads", [1, 2], ids=["one-thread", "two-threads"])
+def test_shared_cpu_matches_fortran(
+    generated: Generated, reference: list[float | int], cuda_object: Path,
+    shared_runtime_object: Path, tmp_path: Path, threads: int,
 ) -> None:
-    compiler = _tool("g++")
     objects = _fortran_objects(generated, tmp_path)
-    cpp_object = tmp_path / "generated.o"
-    flags = ["-fopenmp"] if openmp else []
-    _run(
-        [
-            compiler,
-            "-std=c++17",
-            "-O0",
-            "-ffp-contract=off",
-            *flags,
-            "-I",
-            generated.directory,
-            "-c",
-            generated.directory / "generated_cpp_impl.cpp",
-            "-o",
-            cpp_object,
-        ],
-        tmp_path,
-    )
     executable = tmp_path / "generated"
-    _run([_tool("gfortran"), *objects, cpp_object, "-lstdc++", *flags, "-o", executable], tmp_path)
-    actual = _values(executable, generated.case)
+    _run([_tool("nvcc"), *objects, cuda_object, shared_runtime_object,
+          "-Xcompiler=-fopenmp", "-lgfortran", "-o", executable], tmp_path)
+    actual = _values(executable, generated.case, threads=threads)
     if generated.case.integer_output:
         assert actual == reference
     else:
         assert actual == pytest.approx(reference, rel=0, abs=1e-10)
+
+
+@pytest.fixture(scope="module")
+def shared_runtime_object(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    directory = tmp_path_factory.mktemp("shared_native_runtime")
+    target = directory / "runtime.o"
+    _run([_tool("nvcc"), "-std=c++17", "-O0", "-Xcompiler=-fopenmp",
+          "-c", ROOT / "compiler/runtime/scoped_runtime.cu", "-o", target], directory)
+    return target
 
 
 @pytest.fixture(scope="module")
@@ -381,11 +423,12 @@ def cuda_object(generated: Generated) -> Path:
             compiler,
             "-std=c++17",
             "-O0",
-            "--fmad=false",
+            "--fmad=false", "--ftz=false", "--prec-div=true", "--prec-sqrt=true",
+            "-Xcompiler=-ffp-contract=off,-fopenmp",
             "-I",
             generated.directory,
             "-c",
-            generated.directory / "generated_code.cu",
+            generated.directory / "shared_entry.cu",
             "-o",
             destination,
         ],
@@ -436,11 +479,13 @@ int main() {
 @pytest.mark.cuda
 @pytest.mark.usefixtures("cuda_device")
 def test_cuda_matches_fortran(
-    generated: Generated, reference: list[float | int], cuda_object: Path, tmp_path: Path
+    generated: Generated, reference: list[float | int], cuda_object: Path,
+    shared_runtime_object: Path, tmp_path: Path
 ) -> None:
-    objects = _fortran_objects(generated, tmp_path)
+    objects = _fortran_objects(generated, tmp_path, mode=1)
     executable = tmp_path / "generated"
-    _run([_tool("nvcc"), *objects, cuda_object, "-lgfortran", "-o", executable], tmp_path)
+    _run([_tool("nvcc"), *objects, cuda_object, shared_runtime_object,
+          "-Xcompiler=-fopenmp", "-lgfortran", "-o", executable], tmp_path)
     actual = _values(executable, generated.case)
     if generated.case.integer_output:
         assert actual == reference

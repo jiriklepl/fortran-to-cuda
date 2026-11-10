@@ -32,7 +32,6 @@ def emit(tmp_path, transfers, *, profile=None, collective=False):
 @pytest.mark.parametrize(("requested", "selected", "reason", "constant"), [
     ("direct", "direct", None, "DIRECT"), ("pinned", "pinned", None, "PINNED"),
     ("auto", "direct", "transfer_estimates_unavailable", "AUTO"),
-    ("pipelined", "direct", "pipelined_not_available", "PIPELINED"),
     ("coalesced", "runtime", None, "COALESCED"),
 ])
 def test_public_configuration_retains_requested_mode_without_initializing_cuda(tmp_path, requested, selected, reason, constant):
@@ -50,7 +49,14 @@ def test_public_configuration_retains_requested_mode_without_initializing_cuda(t
     assert emitted.cuda.count("fort_scope_set_transfers(") == 1
     assert "function configure(fort_context)" in emitted.fortran
     assert "bind(C, name='" + configuration["entry"] + "')" in emitted.fortran
-    assert emitted.report["entry_abi_version"] == 2
+    assert emitted.report["entry_abi_version"] == 3
+
+
+def test_removed_pipelined_configuration_rejects_before_source_generation(tmp_path):
+    from compiler.ir import CompilationError
+
+    with pytest.raises(CompilationError, match="pipelined slab batching was removed"):
+        emit(tmp_path, "pipelined")
 
 
 def test_pinned_bandwidth_in_v1_profile_cannot_estimate_staging_or_select_gpu(tmp_path):
@@ -68,7 +74,7 @@ def test_pinned_bandwidth_in_v1_profile_cannot_estimate_staging_or_select_gpu(tm
     assert "!preview.available ||" in selector
 
 
-@pytest.mark.parametrize("transfers", ["auto", "pipelined"])
+@pytest.mark.parametrize("transfers", ["auto"])
 def test_direct_transfer_fallback_retains_calibrated_direct_placement(tmp_path, transfers):
     emitted = emit(tmp_path, transfers, profile=calibration())
     assert emitted.report["automatic_estimate_available"]
@@ -126,7 +132,7 @@ def source_scope(tmp_path, transfers, *, collective=False, structured=False, pol
 
 
 @pytest.mark.parametrize("collective", [False, True])
-@pytest.mark.parametrize("transfers", ["direct", "pinned", "pipelined", "auto", "coalesced"])
+@pytest.mark.parametrize("transfers", ["direct", "pinned", "auto", "coalesced"])
 def test_owners_configure_once_before_registration_and_planning(tmp_path, collective, transfers):
     _, report, owner = source_scope(tmp_path, transfers, collective=collective)
     scope, = report["scopes"]

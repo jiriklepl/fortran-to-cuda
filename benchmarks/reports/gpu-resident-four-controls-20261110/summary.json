@@ -1,0 +1,233 @@
+{
+  "status": "PRIMARY_PERFORMANCE_CHECKPOINT",
+  "scope": "Fresh four-control primary performance checkpoint. Not natural channel2458 qualification and not a replacement for the failed packed-runtime pilot retention gate.",
+  "summary": {
+    "channel-simple": {
+      "modes": {
+        "native": {
+          "samples": [
+            11.52094546599983,
+            11.490643538996665,
+            11.672559095000906,
+            11.853239210999163,
+            11.807070638998994,
+            12.364729479002563,
+            11.538127621999593
+          ],
+          "median": 11.672559095000906
+        },
+        "be58": {
+          "samples": [
+            9.388982396001666,
+            9.591767905996676,
+            9.485462976997951,
+            9.397383560997696,
+            9.254508508998697,
+            9.36540096599856,
+            9.988301312998374
+          ],
+          "median": 9.397383560997696
+        },
+        "baseline-7a612": {
+          "samples": [
+            16.684979101002682,
+            16.42260527399776,
+            16.7660439579995,
+            16.388898745000915,
+            16.782185220999963,
+            16.584300072001497,
+            16.76441327000066
+          ],
+          "median": 16.684979101002682
+        },
+        "candidate": {
+          "samples": [
+            4.038810662998003,
+            4.082830888000899,
+            4.032127950002177,
+            3.957382841002982,
+            4.000089919001766,
+            4.152691094997863,
+            4.001545588998852
+          ],
+          "median": 4.032127950002177
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          0.35056243213000055,
+          0.35531786136648374,
+          0.34543649915887314,
+          0.3338650954863667,
+          0.33878766726349446,
+          0.33584973306936045,
+          0.34681065421474094
+        ],
+        "be58": [
+          0.4301648988838179,
+          0.42565989169195334,
+          0.4250849916108474,
+          0.42111538975885293,
+          0.4322314810248698,
+          0.44340772061702044,
+          0.4006232354836353
+        ],
+        "baseline-7a612": [
+          0.242062674370104,
+          0.24861042568351363,
+          0.24049370024932734,
+          0.2414672823706411,
+          0.238353341136788,
+          0.2503989361606317,
+          0.23869285041782404
+        ]
+      },
+      "median_ratios": {
+        "native": 0.34543649915887314,
+        "be58": 0.4290692110021842,
+        "baseline-7a612": 0.2416621516631008
+      }
+    },
+    "channel": {
+      "modes": {
+        "native": {
+          "samples": [
+            13.02037464499881,
+            13.190278436999506,
+            13.333534682999016,
+            13.195987263999996,
+            13.226637280000432,
+            12.894902774001821,
+            12.981944470000599
+          ],
+          "median": 13.190278436999506
+        },
+        "be58": {
+          "samples": [
+            11.296540940998966,
+            11.75554796600045,
+            11.367539075999957,
+            11.228538487997866,
+            11.20789803399748,
+            11.215341797000292,
+            11.28916775900143
+          ],
+          "median": 11.28916775900143
+        },
+        "baseline-7a612": {
+          "samples": [
+            11.034455224002159,
+            11.28528447500139,
+            11.309814093998284,
+            11.212441735999164,
+            11.48893789399881,
+            11.62145388800127,
+            11.337556258000404
+          ],
+          "median": 11.309814093998284
+        },
+        "candidate": {
+          "samples": [
+            4.772202272000868,
+            4.718647277997661,
+            4.699787657002162,
+            4.655318821998662,
+            4.673072716999741,
+            4.6075352000007115,
+            4.63577210099902
+          ],
+          "median": 4.673072716999741
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          0.36651804591766446,
+          0.35773674532613187,
+          0.35247875141425533,
+          0.3527829126282085,
+          0.35330769401726486,
+          0.3573144583369978,
+          0.3570938168555274
+        ],
+        "be58": [
+          0.4224481013193103,
+          0.4013974756127911,
+          0.4134393227576163,
+          0.41459704012011106,
+          0.41694461377366876,
+          0.4108243229139093,
+          0.41063895939562794
+        ],
+        "baseline-7a612": [
+          0.43248191008291637,
+          0.4181239106953996,
+          0.4155495057603265,
+          0.41519224194067283,
+          0.40674540676564175,
+          0.39646805334380963,
+          0.4088863592388143
+        ]
+      },
+      "median_ratios": {
+        "native": 0.35428158240325675,
+        "be58": 0.4139430661993362,
+        "baseline-7a612": 0.4131874032730188
+      }
+    }
+  },
+  "median_checkpoints": {
+    "ten_percent_below_7a": true,
+    "twice_native": true,
+    "twenty_times_native": false
+  },
+  "paired_wins": {
+    "channel-simple": {
+      "native": 7,
+      "be58": 7,
+      "baseline-7a612": 7
+    },
+    "channel": {
+      "native": 7,
+      "be58": 7,
+      "baseline-7a612": 7
+    }
+  },
+  "comparison_valid": true,
+  "all_seven_pairs_won": true,
+  "max_external_cpu_cores": 0.3023793125204646,
+  "correctness": "All 20 fields, bounds, halos and outputs at atol=1e-6 rtol=1e-5: two steps in both cases, natural simple109, channel100, all four fresh variants.",
+  "natural_channel2458_qualified": false,
+  "research20x_achieved": false,
+  "isolated_packed_argument_pilot_gate": "FAILED; unchanged, not replaced by this complete-path comparison",
+  "receipts": {
+    "/tmp/fortran-packed-regenerated-20261110-01/comparison/plan.json": "d61458c34c0da38cac2a9a1592f379fe38e2aed397f1608144a20ad2753a158a",
+    "/tmp/fortran-packed-regenerated-20261110-01/comparison/result.json": "356f20e9547f899f539727be7d3a308fcd7043657eac96936a766ee36c73c31f",
+    "/tmp/fortran-packed-regenerated-20261110-01/comparison/execution.json": "7674d8ee3bcca9cc45e3b26f38cb60c918d696a10c11605faffea2215504df66",
+    "/tmp/fortran-packed-regenerated-20261110-01/qualification-final.json": "e3c87090bc8e5c1ed4e58e5b8e2893c37decdc17cb7d707194e988b637476f5b",
+    "/tmp/fortran-packed-regenerated-20261110-01/built.json": "01446b97aa3bd1f288792503b402b43294421719cc7dc5bed7e54c6b0c6956d4",
+    "/tmp/fortran-packed-regenerated-20261110-01/build-contract.json": "a7eb20757a8fc2f1d531eaff33b3d792d7cc76aaad17b4566328e403f3b60604",
+    "/tmp/fortran-packed-regenerated-20261110-01/linkage.json": "ce725a1e525cf1ff3dc53b9ce51aaf746952e4d834cff1edcf81d7fc0c6a0989",
+    "/tmp/fortran-packed-regenerated-20261110-01/backend-qualification.json": "0f7802b4ef13307645fa5777e50106e4e6fae57ae07b3fa59083fa4d5f34c321",
+    "/tmp/fortran-7a612-cxx-refresh-20261110-01/control-result.json": "6a7a86387999723dbc6056fd329e33725632fe93127c23da84506a8f86d1f050",
+    "/tmp/fortran-7a612-cxx-refresh-20261110-01/banner-normalization.json": "5be61cbb5732564af4c153c020d95f28f5881dcd86f32ed5b094dba465ba36f4",
+    "/tmp/fortran-packed-graph-calibration-20261110-01/profile.json": "20ef9e1020151840d0774702613e83dc7fcbce3ac6f46f741fc2c55fa23aad06"
+  },
+  "binaries": {
+    "ELMM": {
+      "path": "/tmp/fortran-packed-regenerated-20261110-01/build/ELMM",
+      "sha256": "d62e6377227fc81bfa7c99bf18fffd1bc8f99a093c2222fb920c2dc881f09635"
+    },
+    "ELMM-native": {
+      "path": "/tmp/fortran-packed-regenerated-20261110-01/build/ELMM-native",
+      "sha256": "65a0b2c251fc3289191eff2cd24c754a763c82a12fa08c0237af3e41fac588a4"
+    },
+    "ELMM-full20": {
+      "path": "/tmp/fortran-packed-regenerated-20261110-01/build/ELMM-full20",
+      "sha256": "a1223fdd255b0a1920789aaf24bc01a91491d5ba7d5e7f56e841ef24d30351da"
+    },
+    "ELMM-native-full20": {
+      "path": "/tmp/fortran-packed-regenerated-20261110-01/build/ELMM-native-full20",
+      "sha256": "d6fbcaf4e64b214aa8b63bbf8d8758c48a4eb6072da5e6bbd38e798775f380ad"
+    }
+  }
+}

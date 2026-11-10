@@ -257,6 +257,31 @@ def _region_model(
         parameters.update(name for name, _ in value.terms if not name.startswith("q"))
         return value
 
+    def affine_predicate(expression, values, active, location):
+        """Exact integer predicates constrain the events in each branch.
+
+        Array/real/unknown predicates retain the enclosing domain. Predicate
+        reads themselves are always evaluated in that enclosing domain.
+        """
+        if isinstance(expression, Unary) and expression.operator.lower() in {".not.", "not"}:
+            return "not (" + affine_predicate(expression.operand, values, active, location) + ")"
+        if not isinstance(expression, Binary):
+            raise CompilationError("Non-affine predicate", location)
+        operator = expression.operator.lower()
+        if operator in {".and.", "and", ".or.", "or"}:
+            left = affine_predicate(expression.left, values, active, location)
+            right = affine_predicate(expression.right, values, active, location)
+            return "(" + left + ") " + ("and" if operator in {".and.", "and"} else "or") + " (" + right + ")"
+        relation = {"==": "=", ".eq.": "=", "/=": "!=", "!=": "!=", ".ne.": "!=",
+                    "<": "<", ".lt.": "<", "<=": "<=", ".le.": "<=",
+                    ">": ">", ".gt.": ">", ">=": ">=", ".ge.": ">="}.get(operator)
+        if relation is None:
+            raise CompilationError("Non-affine predicate", location)
+        left = affine_expression(expression.left, values, active, location)
+        right = affine_expression(expression.right, values, active, location)
+        parameters.update(name for value in (left, right) for name, _ in value.terms if not name.startswith("q"))
+        return "(" + str(left) + ") " + relation + " (" + str(right) + ")"
+
     def constraints(item, values, active, is_mapped):
         nonlocal axis_number, conservative
         axis = f"q{axis_number}"
@@ -371,8 +396,11 @@ def _region_model(
                         else:
                             values[symbol] = value
             elif isinstance(statement, If):
-                # Both arms use the enclosing domain; predicates do not constrain events.
-                conservative = True
+                try:
+                    predicate = affine_predicate(statement.condition, values, active, statement.location)
+                except CompilationError:
+                    predicate = None
+                    conservative = True
                 check_reads(referenced_symbols(statement.condition), available, statement.location)
                 predicate_reads = tuple(
                     node for node in walk_expr(statement.condition) if isinstance(node, ArrayAccess)
@@ -393,10 +421,12 @@ def _region_model(
                         )
                     )
                 then_available = visit(
-                    statement.then_body, values, definitions, available, active, coords, domain, (*path, "1"), timing
+                    statement.then_body, values, definitions, available, active, coords,
+                    domain if predicate is None else (*domain, "(" + predicate + ")"), (*path, "1"), timing
                 )
                 else_available = visit(
-                    statement.else_body, values, definitions, available, active, coords, domain, (*path, "2"), timing
+                    statement.else_body, values, definitions, available, active, coords,
+                    domain if predicate is None else (*domain, "not (" + predicate + ")"), (*path, "2"), timing
                 )
                 available.update(then_available & else_available)
                 # Branch-local values cannot be substituted after the join.

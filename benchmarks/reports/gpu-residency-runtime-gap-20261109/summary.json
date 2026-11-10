@@ -1,0 +1,857 @@
+{
+  "status": "PRIVATE_PILOT_COMPLETE_NOT_PROMOTED",
+  "pilot": {
+    "status": "PRIVATE_PILOT_COMPLETE_NOT_PROMOTED",
+    "performance_checkpoint": false,
+    "protocol": "Six excluded warmups and 18 complete-process measurements: three rotated rounds of three modes in each primary case.",
+    "maximum_external_cpu_cores": 0.4491234666800054,
+    "external_cpu_guard_cores": 0.5,
+    "all_outputs_pass": true,
+    "rows": [
+      {
+        "case": "channel-simple",
+        "median_ratios": {
+          "be58": 1.0571142528725959,
+          "original": 0.9945917186240736
+        },
+        "modes": {
+          "be58": {
+            "median": 12.13883482899837,
+            "samples": [
+              12.227130429000681,
+              10.487429441000131,
+              12.13883482899837
+            ]
+          },
+          "candidate": {
+            "median": 12.832135311000457,
+            "samples": [
+              12.832135311000457,
+              12.181793292998918,
+              13.81321070699778
+            ]
+          },
+          "original": {
+            "median": 12.901912484001514,
+            "samples": [
+              13.736891492000723,
+              12.570249779000733,
+              12.901912484001514
+            ]
+          }
+        },
+        "paired_ratios": {
+          "be58": [
+            1.0494805290180602,
+            1.1615614065897548,
+            1.1379354692263797
+          ],
+          "original": [
+            0.9341367600139285,
+            0.9690971545648399,
+            1.070632801464611
+          ]
+        },
+        "paired_wins": {
+          "be58": 0,
+          "original": 2
+        },
+        "median_change_percent": {
+          "be58": 5.711425287259586,
+          "original": -0.5408281375926416
+        }
+      },
+      {
+        "case": "channel",
+        "median_ratios": {
+          "be58": 1.399434811534182,
+          "original": 0.9987874656046841
+        },
+        "modes": {
+          "be58": {
+            "median": 13.78660017600123,
+            "samples": [
+              13.103791228000773,
+              13.78660017600123,
+              13.931884014000389
+            ]
+          },
+          "candidate": {
+            "median": 19.2934482189994,
+            "samples": [
+              19.07026889500048,
+              19.2934482189994,
+              19.69793527799993
+            ]
+          },
+          "original": {
+            "median": 19.316870588998427,
+            "samples": [
+              19.316870588998427,
+              18.956129490998137,
+              20.996491781999794
+            ]
+          }
+        },
+        "paired_ratios": {
+          "be58": [
+            1.4553245364784406,
+            1.399434811534182,
+            1.4138744808817774
+          ],
+          "original": [
+            0.9872338693339701,
+            1.0177947047767029,
+            0.9381536440714773
+          ]
+        },
+        "paired_wins": {
+          "be58": 0,
+          "original": 2
+        },
+        "median_change_percent": {
+          "be58": 39.94348115341819,
+          "original": -0.12125343953158785
+        }
+      }
+    ],
+    "execution": {
+      "CPU": [
+        0,
+        2,
+        4,
+        6
+      ],
+      "all_owned_groups_absent": true,
+      "application_execution": true,
+      "owned_group": 186526,
+      "plan_sha256": "f0156f0999139ecd04fed63ec05714dbac5a0555623e82c5783b91b7fd5b32ea",
+      "retries": 0,
+      "returncode": 0,
+      "seconds": 444.8289899110023,
+      "status": "PASS"
+    },
+    "disposition": {
+      "status": "ISOLATED_NOT_PROMOTED",
+      "reason": "Private application pilot gives only 0.54% / 0.12% median decrease, with 2/3 paired wins in each case; not a meaningful two-case speedup. Avoid runtime-ID/calibration churn for an unproven application gain.",
+      "patch": "/tmp/fortran-periodic-copy-private-20261109-01/runtime-experiment.patch",
+      "test_source": "/tmp/fortran-periodic-copy-private-20261109-01/test_section_batch_overlap.py",
+      "source_preserved": true,
+      "runtime_header_restored_to_HEAD": true,
+      "external_edits_preserved": true
+    },
+    "fresh_native_in_this_campaign": false,
+    "interpretation": "Only 0.54% and 0.12% lower medians, with 2/3 paired wins in each case. No meaningful application gain established; no full timing campaign or production promotion."
+  },
+  "profile": {
+    "interpretation": "Use untraced pilot for wall time. Host API spans overlap GPU activity; CPU samples are shares of sampled CPU execution, not elapsed fractions. These figures must not be added.",
+    "status": "PASS_DIAGNOSTIC"
+  },
+  "profile_rows": [
+    {
+      "additive_cpu_plus_gpu_claim": false,
+      "api": [
+        {
+          "calls": 1204,
+          "interval_union_seconds": 0.855638009,
+          "name": "cudaMemcpy3DAsync_v3020",
+          "span_sum_seconds": 0.855638009
+        },
+        {
+          "calls": 602,
+          "interval_union_seconds": 0.71062314,
+          "name": "cudaStreamSynchronize_v3020",
+          "span_sum_seconds": 0.71062314
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.216968347,
+          "name": "cudaStreamCreateWithFlags_v5000",
+          "span_sum_seconds": 0.216968347
+        },
+        {
+          "calls": 1806,
+          "interval_union_seconds": 0.110664638,
+          "name": "cudaMemcpy2DAsync_v3020",
+          "span_sum_seconds": 0.110664638
+        },
+        {
+          "calls": 1204,
+          "interval_union_seconds": 0.049416893,
+          "name": "cudaMallocFromPoolAsync_v11020",
+          "span_sum_seconds": 0.049416893
+        },
+        {
+          "calls": 301,
+          "interval_union_seconds": 0.018705186,
+          "name": "cudaLaunchKernel_v7000",
+          "span_sum_seconds": 0.018705186
+        },
+        {
+          "calls": 1204,
+          "interval_union_seconds": 0.003852232,
+          "name": "cudaFreeAsync_v11020",
+          "span_sum_seconds": 0.003852232
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.001275662,
+          "name": "cuLibraryLoadData",
+          "span_sum_seconds": 0.001275662
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.001015765,
+          "name": "cudaMemPoolCreate_v11020",
+          "span_sum_seconds": 0.001015765
+        },
+        {
+          "calls": 301,
+          "interval_union_seconds": 0.0006368,
+          "name": "cuKernelGetName",
+          "span_sum_seconds": 0.0006368
+        },
+        {
+          "calls": 602,
+          "interval_union_seconds": 0.000595358,
+          "name": "cudaMemPoolGetAttribute_v11020",
+          "span_sum_seconds": 0.000595358
+        },
+        {
+          "calls": 301,
+          "interval_union_seconds": 0.0002831,
+          "name": "cudaMemPoolTrimTo_v11020",
+          "span_sum_seconds": 0.0002831
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.000216985,
+          "name": "cudaMemPoolSetAttribute_v11020",
+          "span_sum_seconds": 0.000216985
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 3.731e-06,
+          "name": "cuModuleGetLoadingMode",
+          "span_sum_seconds": 3.731e-06
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 1.26e-06,
+          "name": "cuLibraryGetKernel",
+          "span_sum_seconds": 1.26e-06
+        }
+      ],
+      "application_pid": 177815,
+      "case": "channel",
+      "copies": [
+        {
+          "bytes": 4036501504,
+          "calls": 2709,
+          "kind": 1,
+          "sum_seconds": 0.542685495
+        },
+        {
+          "bytes": 1262485504,
+          "calls": 301,
+          "kind": 2,
+          "sum_seconds": 0.148113858
+        }
+      ],
+      "database": "/tmp/fortran-runtime-gap-profile-20261109-02/channel/be58/capture.sqlite",
+      "gpu_all_union_seconds": 1.316613191,
+      "gpu_copy_union_seconds": 0.690799353,
+      "gpu_kernel_union_seconds": 0.625813838,
+      "host_api_and_gpu_intersection_seconds": 1.2993197,
+      "host_api_or_gpu_union_seconds": 1.987190597,
+      "host_api_union_seconds": 1.969897106,
+      "host_copy_api_union_seconds": 0.966302647,
+      "mode": "be58",
+      "timing_sample": false
+    },
+    {
+      "additive_cpu_plus_gpu_claim": false,
+      "api": [
+        {
+          "calls": 22996,
+          "interval_union_seconds": 6.203611162,
+          "name": "cudaMemcpy3DAsync_v3020",
+          "span_sum_seconds": 6.203611162
+        },
+        {
+          "calls": 2297,
+          "interval_union_seconds": 1.296256801,
+          "name": "cudaStreamSynchronize_v3020",
+          "span_sum_seconds": 1.296256801
+        },
+        {
+          "calls": 21892,
+          "interval_union_seconds": 0.556772697,
+          "name": "cudaLaunchKernel_v7000",
+          "span_sum_seconds": 0.556772697
+        },
+        {
+          "calls": 6200,
+          "interval_union_seconds": 0.415857737,
+          "name": "cudaMemcpy2DAsync_v3020",
+          "span_sum_seconds": 0.415857737
+        },
+        {
+          "calls": 1792,
+          "interval_union_seconds": 0.356645734,
+          "name": "cudaEventSynchronize_v3020",
+          "span_sum_seconds": 0.356645734
+        },
+        {
+          "calls": 3,
+          "interval_union_seconds": 0.218156014,
+          "name": "cudaStreamCreateWithFlags_v5000",
+          "span_sum_seconds": 0.218156014
+        },
+        {
+          "calls": 2992,
+          "interval_union_seconds": 0.076697775,
+          "name": "cudaMemcpyAsync_v3020",
+          "span_sum_seconds": 0.076697775
+        },
+        {
+          "calls": 4200,
+          "interval_union_seconds": 0.06864114,
+          "name": "cudaMallocFromPoolAsync_v11020",
+          "span_sum_seconds": 0.06864114
+        },
+        {
+          "calls": 600,
+          "interval_union_seconds": 0.036690753,
+          "name": "cudaGraphAddKernelNode_v10000",
+          "span_sum_seconds": 0.036690753
+        },
+        {
+          "calls": 2996,
+          "interval_union_seconds": 0.016254587,
+          "name": "cudaEventRecord_v3020",
+          "span_sum_seconds": 0.016254587
+        },
+        {
+          "calls": 300,
+          "interval_union_seconds": 0.014953194,
+          "name": "cudaGraphLaunch_v10000",
+          "span_sum_seconds": 0.014953194
+        },
+        {
+          "calls": 300,
+          "interval_union_seconds": 0.014754417,
+          "name": "cudaGraphInstantiate_v12000",
+          "span_sum_seconds": 0.014754417
+        },
+        {
+          "calls": 4200,
+          "interval_union_seconds": 0.009652136,
+          "name": "cudaFreeAsync_v11020",
+          "span_sum_seconds": 0.009652136
+        },
+        {
+          "calls": 17992,
+          "interval_union_seconds": 0.006774741,
+          "name": "cuKernelGetName",
+          "span_sum_seconds": 0.006774741
+        },
+        {
+          "calls": 300,
+          "interval_union_seconds": 0.00576082,
+          "name": "cudaGraphExecDestroy_v10000",
+          "span_sum_seconds": 0.00576082
+        },
+        {
+          "calls": 504,
+          "interval_union_seconds": 0.004786583,
+          "name": "cudaEventCreateWithFlags_v3020",
+          "span_sum_seconds": 0.004786583
+        },
+        {
+          "calls": 14,
+          "interval_union_seconds": 0.00289639,
+          "name": "cuLibraryLoadData",
+          "span_sum_seconds": 0.00289639
+        },
+        {
+          "calls": 2,
+          "interval_union_seconds": 0.00256555,
+          "name": "cudaMallocHost_v3020",
+          "span_sum_seconds": 0.00256555
+        },
+        {
+          "calls": 502,
+          "interval_union_seconds": 0.001671694,
+          "name": "cudaEventDestroy_v3020",
+          "span_sum_seconds": 0.001671694
+        },
+        {
+          "calls": 300,
+          "interval_union_seconds": 0.001243906,
+          "name": "cudaGraphCreate_v10000",
+          "span_sum_seconds": 0.001243906
+        },
+        {
+          "calls": 1000,
+          "interval_union_seconds": 0.000995102,
+          "name": "cudaMemPoolGetAttribute_v11020",
+          "span_sum_seconds": 0.000995102
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.000987225,
+          "name": "cudaMemPoolCreate_v11020",
+          "span_sum_seconds": 0.000987225
+        },
+        {
+          "calls": 2,
+          "interval_union_seconds": 0.000808849,
+          "name": "cudaMalloc_v3020",
+          "span_sum_seconds": 0.000808849
+        },
+        {
+          "calls": 300,
+          "interval_union_seconds": 0.000696385,
+          "name": "cudaGraphDestroy_v10000",
+          "span_sum_seconds": 0.000696385
+        },
+        {
+          "calls": 500,
+          "interval_union_seconds": 0.000417658,
+          "name": "cudaMemPoolTrimTo_v11020",
+          "span_sum_seconds": 0.000417658
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.000238596,
+          "name": "cudaMemPoolSetAttribute_v11020",
+          "span_sum_seconds": 0.000238596
+        },
+        {
+          "calls": 25,
+          "interval_union_seconds": 2.258e-05,
+          "name": "cuLibraryGetKernel",
+          "span_sum_seconds": 2.258e-05
+        },
+        {
+          "calls": 4,
+          "interval_union_seconds": 1.5141e-05,
+          "name": "cudaEventQuery_v3020",
+          "span_sum_seconds": 1.5141e-05
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 3.17e-06,
+          "name": "cuModuleGetLoadingMode",
+          "span_sum_seconds": 3.17e-06
+        }
+      ],
+      "application_pid": 178018,
+      "case": "channel",
+      "copies": [
+        {
+          "bytes": 9207910400,
+          "calls": 14400,
+          "kind": 1,
+          "sum_seconds": 1.214851189
+        },
+        {
+          "bytes": 7315817600,
+          "calls": 17788,
+          "kind": 2,
+          "sum_seconds": 1.53193625
+        }
+      ],
+      "database": "/tmp/fortran-runtime-gap-profile-20261109-02/channel/candidate/capture.sqlite",
+      "gpu_all_union_seconds": 4.151784667,
+      "gpu_copy_union_seconds": 2.746787439,
+      "gpu_kernel_union_seconds": 1.404997228,
+      "host_api_and_gpu_intersection_seconds": 3.811200878,
+      "host_api_or_gpu_union_seconds": 9.655412326,
+      "host_api_union_seconds": 9.314828537,
+      "host_copy_api_union_seconds": 6.696166674,
+      "mode": "candidate",
+      "timing_sample": false
+    },
+    {
+      "additive_cpu_plus_gpu_claim": false,
+      "api": [
+        {
+          "calls": 1312,
+          "interval_union_seconds": 0.920703613,
+          "name": "cudaMemcpy3DAsync_v3020",
+          "span_sum_seconds": 0.920703613
+        },
+        {
+          "calls": 656,
+          "interval_union_seconds": 0.65794321,
+          "name": "cudaStreamSynchronize_v3020",
+          "span_sum_seconds": 0.65794321
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.227772896,
+          "name": "cudaStreamCreateWithFlags_v5000",
+          "span_sum_seconds": 0.227772896
+        },
+        {
+          "calls": 1968,
+          "interval_union_seconds": 0.12241572,
+          "name": "cudaMemcpy2DAsync_v3020",
+          "span_sum_seconds": 0.12241572
+        },
+        {
+          "calls": 1312,
+          "interval_union_seconds": 0.053771751,
+          "name": "cudaMallocFromPoolAsync_v11020",
+          "span_sum_seconds": 0.053771751
+        },
+        {
+          "calls": 328,
+          "interval_union_seconds": 0.020314442,
+          "name": "cudaLaunchKernel_v7000",
+          "span_sum_seconds": 0.020314442
+        },
+        {
+          "calls": 1312,
+          "interval_union_seconds": 0.00405984,
+          "name": "cudaFreeAsync_v11020",
+          "span_sum_seconds": 0.00405984
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.000961894,
+          "name": "cuLibraryLoadData",
+          "span_sum_seconds": 0.000961894
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.000890485,
+          "name": "cudaMemPoolCreate_v11020",
+          "span_sum_seconds": 0.000890485
+        },
+        {
+          "calls": 328,
+          "interval_union_seconds": 0.000718172,
+          "name": "cuKernelGetName",
+          "span_sum_seconds": 0.000718172
+        },
+        {
+          "calls": 656,
+          "interval_union_seconds": 0.00068236,
+          "name": "cudaMemPoolGetAttribute_v11020",
+          "span_sum_seconds": 0.00068236
+        },
+        {
+          "calls": 328,
+          "interval_union_seconds": 0.000294874,
+          "name": "cudaMemPoolTrimTo_v11020",
+          "span_sum_seconds": 0.000294874
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.000231623,
+          "name": "cudaMemPoolSetAttribute_v11020",
+          "span_sum_seconds": 0.000231623
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 5.05e-06,
+          "name": "cuModuleGetLoadingMode",
+          "span_sum_seconds": 5.05e-06
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 8.1e-07,
+          "name": "cuLibraryGetKernel",
+          "span_sum_seconds": 8.1e-07
+        }
+      ],
+      "application_pid": 178252,
+      "case": "channel-simple",
+      "copies": [
+        {
+          "bytes": 4398579712,
+          "calls": 2952,
+          "kind": 1,
+          "sum_seconds": 0.581723655
+        },
+        {
+          "bytes": 1375731712,
+          "calls": 328,
+          "kind": 2,
+          "sum_seconds": 0.16330348
+        }
+      ],
+      "database": "/tmp/fortran-runtime-gap-profile-20261109-02/channel-simple/be58/capture.sqlite",
+      "gpu_all_union_seconds": 1.333491054,
+      "gpu_copy_union_seconds": 0.745027135,
+      "gpu_kernel_union_seconds": 0.588463919,
+      "host_api_and_gpu_intersection_seconds": 1.321004076,
+      "host_api_or_gpu_union_seconds": 2.023253718,
+      "host_api_union_seconds": 2.01076674,
+      "host_copy_api_union_seconds": 1.043119333,
+      "mode": "be58",
+      "timing_sample": false
+    },
+    {
+      "additive_cpu_plus_gpu_claim": false,
+      "api": [
+        {
+          "calls": 2834,
+          "interval_union_seconds": 2.068512326,
+          "name": "cudaMemcpy3DAsync_v3020",
+          "span_sum_seconds": 2.068512326
+        },
+        {
+          "calls": 981,
+          "interval_union_seconds": 1.050458134,
+          "name": "cudaMemcpyAsync_v3020",
+          "span_sum_seconds": 1.050458134
+        },
+        {
+          "calls": 872,
+          "interval_union_seconds": 0.75383012,
+          "name": "cudaStreamSynchronize_v3020",
+          "span_sum_seconds": 0.75383012
+        },
+        {
+          "calls": 4251,
+          "interval_union_seconds": 0.232810848,
+          "name": "cudaMemcpy2DAsync_v3020",
+          "span_sum_seconds": 0.232810848
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.210500687,
+          "name": "cudaStreamCreateWithFlags_v5000",
+          "span_sum_seconds": 0.210500687
+        },
+        {
+          "calls": 6867,
+          "interval_union_seconds": 0.188302606,
+          "name": "cudaLaunchKernel_v7000",
+          "span_sum_seconds": 0.188302606
+        },
+        {
+          "calls": 3270,
+          "interval_union_seconds": 0.051168466,
+          "name": "cudaMallocFromPoolAsync_v11020",
+          "span_sum_seconds": 0.051168466
+        },
+        {
+          "calls": 3270,
+          "interval_union_seconds": 0.009598437,
+          "name": "cudaFreeAsync_v11020",
+          "span_sum_seconds": 0.009598437
+        },
+        {
+          "calls": 654,
+          "interval_union_seconds": 0.007041994,
+          "name": "cudaEventRecord_v3020",
+          "span_sum_seconds": 0.007041994
+        },
+        {
+          "calls": 545,
+          "interval_union_seconds": 0.003151352,
+          "name": "cudaEventCreateWithFlags_v3020",
+          "span_sum_seconds": 0.003151352
+        },
+        {
+          "calls": 16,
+          "interval_union_seconds": 0.001989049,
+          "name": "cuLibraryLoadData",
+          "span_sum_seconds": 0.001989049
+        },
+        {
+          "calls": 545,
+          "interval_union_seconds": 0.001792587,
+          "name": "cudaEventDestroy_v3020",
+          "span_sum_seconds": 0.001792587
+        },
+        {
+          "calls": 1090,
+          "interval_union_seconds": 0.001028164,
+          "name": "cudaMemPoolGetAttribute_v11020",
+          "span_sum_seconds": 0.001028164
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.000887153,
+          "name": "cudaMemPoolCreate_v11020",
+          "span_sum_seconds": 0.000887153
+        },
+        {
+          "calls": 545,
+          "interval_union_seconds": 0.000502185,
+          "name": "cudaMemPoolTrimTo_v11020",
+          "span_sum_seconds": 0.000502185
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 0.000248562,
+          "name": "cudaMemPoolSetAttribute_v11020",
+          "span_sum_seconds": 0.000248562
+        },
+        {
+          "calls": 1,
+          "interval_union_seconds": 2.3901e-05,
+          "name": "cuModuleGetLoadingMode",
+          "span_sum_seconds": 2.3901e-05
+        },
+        {
+          "calls": 21,
+          "interval_union_seconds": 1.4821e-05,
+          "name": "cuLibraryGetKernel",
+          "span_sum_seconds": 1.4821e-05
+        }
+      ],
+      "application_pid": 178440,
+      "case": "channel-simple",
+      "copies": [
+        {
+          "bytes": 7339198464,
+          "calls": 6431,
+          "kind": 1,
+          "sum_seconds": 1.016161981
+        },
+        {
+          "bytes": 7974241184,
+          "calls": 1635,
+          "kind": 2,
+          "sum_seconds": 1.16707577
+        }
+      ],
+      "database": "/tmp/fortran-runtime-gap-profile-20261109-02/channel-simple/candidate/capture.sqlite",
+      "gpu_all_union_seconds": 3.073468524,
+      "gpu_copy_union_seconds": 2.183237751,
+      "gpu_kernel_union_seconds": 0.890230773,
+      "host_api_and_gpu_intersection_seconds": 3.02817777,
+      "host_api_or_gpu_union_seconds": 4.627152146,
+      "host_api_union_seconds": 4.581861392,
+      "host_copy_api_union_seconds": 3.351781308,
+      "mode": "candidate",
+      "timing_sample": false
+    }
+  ],
+  "planner_profile": {
+    "rows": [
+      {
+        "copies": [
+          [
+            1,
+            14400,
+            9207910400
+          ],
+          [
+            2,
+            17788,
+            7315817600
+          ]
+        ],
+        "copy_planner_percent": 4.4434276417804215,
+        "copy_planner_samples": 1748,
+        "kernels": 22492,
+        "main_samples": 39339,
+        "main_top": [
+          [
+            "master",
+            4423
+          ],
+          [
+            "__filters_MOD_filter3ord",
+            3958
+          ],
+          [
+            "0x78d3210d14f2",
+            3402
+          ],
+          [
+            "0x78d352302712",
+            2801
+          ],
+          [
+            "fort_physical::compact::make_plan(std::vector<fort_physical::CopyOperation, std::allocator<fort_physical::CopyOperation> > const&, unsigned long, unsigned long)",
+            1748
+          ],
+          [
+            "0x78d320e42008",
+            830
+          ],
+          [
+            "0x78d320e4209c",
+            746
+          ],
+          [
+            "0x78d320e42080",
+            705
+          ]
+        ],
+        "root": "/tmp/fortran-runtime-gap-profile-20261109-02"
+      },
+      {
+        "copies": [
+          [
+            1,
+            14400,
+            9207910400
+          ],
+          [
+            2,
+            17788,
+            7315817600
+          ]
+        ],
+        "copy_planner_percent": 0.10901162790697674,
+        "copy_planner_samples": 39,
+        "kernels": 22492,
+        "main_samples": 35776,
+        "main_top": [
+          [
+            "master",
+            4268
+          ],
+          [
+            "__filters_MOD_filter3ord",
+            3634
+          ],
+          [
+            "0x7460b4e8a4f2",
+            3096
+          ],
+          [
+            "0x7460ee06c712",
+            2785
+          ],
+          [
+            "0x7460b4bfaf81",
+            1565
+          ],
+          [
+            "__arrayutilities_MOD_add_3d",
+            660
+          ],
+          [
+            "__poisfft_dp_MOD_poisfft_solver3d_ppns",
+            658
+          ],
+          [
+            "0x7460b4bfb080",
+            636
+          ]
+        ],
+        "root": "/tmp/fortran-periodic-copy-profile-20261109-01"
+      }
+    ],
+    "sample_share_reduction": 0.975466770994093,
+    "status": "PASS_SAME_FULL_RUN_COPIES_AND_KERNELS",
+    "timing_sample": false
+  },
+  "domain_attribution": "/tmp/fortran-runtime-gap-profile-20261109-02/domain-attribution.json",
+  "CPU_passes": 64,
+  "CUDA_passes": 23,
+  "production_runtime_unchanged": true,
+  "full_maintained_suite_pass_claimed": false,
+  "new_natural_2458_qualification_claimed": false
+}

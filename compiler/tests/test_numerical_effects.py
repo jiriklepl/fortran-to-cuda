@@ -41,7 +41,7 @@ end module
 """
 
 
-def fixture(directory, source=SOURCE):
+def fixture(directory, source=SOURCE, *, opt_level=1):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "cells.f90"
     path.write_text(source)
@@ -52,7 +52,7 @@ def fixture(directory, source=SOURCE):
     assert len(groups) == 1
     selection = groups[0].original_nodes
     prepared = prepare_original_region(analysis, ENTRY, selection,
-        options=CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="reached"),
+        options=CompilerOptions(opt_level=opt_level, gpu_policy="sections", memory_model="scoped", scope_execution="reached"),
         config=OffloadConfig(policy="sections", scope_execution="reached"), environment_root=ENTRY)
     return path, analysis, selection, prepared
 
@@ -171,7 +171,9 @@ enddo
 !$omp end do
 !$omp end parallel
 """ + SOURCE[closing:]
-    _path, analysis, selection, prepared = fixture(tmp_path, source)
+    # Keep the worksharing units separate: this check exercises their shared
+    # entry snapshot, not the legal same-iteration fused kernel.
+    _path, analysis, selection, prepared = fixture(tmp_path, source, opt_level=0)
     proof = prove_numerical_effects(analysis, ENTRY, selection, prepared)
     result = proof.transfer({"argument::a": resource(proof, "a").reads})
     assert {item.resource for item in result.uncovered_reads} == {"argument::b"}

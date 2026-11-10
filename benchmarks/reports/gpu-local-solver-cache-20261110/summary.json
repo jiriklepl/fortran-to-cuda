@@ -1,0 +1,167 @@
+{
+  "status": "ISOLATED_CACHE_PERFORMANCE_CHECKPOINT",
+  "summary": {
+    "channel-simple": {
+      "modes": {
+        "native": {
+          "samples": [
+            11.480051960999845,
+            11.376358900000923,
+            11.267839655996795,
+            11.54023877200234,
+            11.394593032000557,
+            11.586997327998688,
+            11.533927395998035
+          ],
+          "median": 11.480051960999845
+        },
+        "gpu-uncached": {
+          "samples": [
+            4.056624480999744,
+            4.1188210809996235,
+            4.0690826309983095,
+            4.056004480000411,
+            4.092555270999583,
+            4.0382760140018945,
+            3.99110691900205
+          ],
+          "median": 4.056624480999744
+        },
+        "candidate": {
+          "samples": [
+            3.212997402999463,
+            3.1568756439992285,
+            3.1901933920016745,
+            3.155182626000169,
+            3.147023691999493,
+            3.2349555199980387,
+            3.244064726997749
+          ],
+          "median": 3.1901933920016745
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          0.27987655577820486,
+          0.27749437862750376,
+          0.2831237832093075,
+          0.2734070488779597,
+          0.2761857034438524,
+          0.2791884237498812,
+          0.28126280109265756
+        ],
+        "gpu-uncached": [
+          0.7920371772266257,
+          0.7664512689230643,
+          0.784008013919096,
+          0.7779041274628595,
+          0.7689630276467472,
+          0.8010734057755075,
+          0.8128233076273752
+        ]
+      },
+      "median_ratios": {
+        "native": 0.2778901526612801,
+        "gpu-uncached": 0.7864157520479834
+      }
+    },
+    "channel": {
+      "modes": {
+        "native": {
+          "samples": [
+            13.082387901002221,
+            12.94974309799727,
+            12.837958976000664,
+            12.885629389002133,
+            13.048837450001884,
+            13.016128343999299,
+            13.345796965000773
+          ],
+          "median": 13.016128343999299
+        },
+        "gpu-uncached": {
+          "samples": [
+            4.712692077999236,
+            4.7007121889982955,
+            4.688307882002846,
+            4.7102613050010405,
+            4.663360113001545,
+            4.646801987000799,
+            4.721783312998014
+          ],
+          "median": 4.7007121889982955
+        },
+        "candidate": {
+          "samples": [
+            3.7782081849982205,
+            3.762843233998865,
+            3.8144904210021195,
+            3.822560139000416,
+            3.813991607999924,
+            3.74874999000167,
+            3.7727470339996216
+          ],
+          "median": 3.7782081849982205
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          0.28880111288465754,
+          0.2905728094776493,
+          0.29712592384295233,
+          0.29665296304912864,
+          0.2922859314183099,
+          0.2880080689838865,
+          0.2826917750879633
+        ],
+        "gpu-uncached": [
+          0.8017091128521707,
+          0.8004836464579876,
+          0.8136177309610837,
+          0.8115388704532968,
+          0.8178634108411306,
+          0.8067376230983404,
+          0.7990089302942159
+        ]
+      },
+      "median_ratios": {
+        "native": 0.29027127615409937,
+        "gpu-uncached": 0.8037522896723747
+      }
+    }
+  },
+  "comparison_valid": true,
+  "retention_gate_passed": true,
+  "paired_wins": {
+    "channel-simple": {
+      "native": 7,
+      "gpu-uncached": 7
+    },
+    "channel": {
+      "native": 7,
+      "gpu-uncached": 7
+    }
+  },
+  "release_qualified": false,
+  "natural2458": "FAIL at original tolerances;15fields,48outputs",
+  "qualification": "20fields including bounds/halos bit-identical to uncached GPU in disabled,cold,warm,corrupt modes for both primarycases; everyoutput passes original native tolerances. Retau diagnostic has established unchanged-baseline bit variability.",
+  "initial_extra_byte_exact_gate": "Preserved FAIL on channel Retau, maxabs9.094947e-12; original repeated control varies up to1.55e-11. No physics or tolerance changes.",
+  "receipts": {
+    "/tmp/fortran-local-solver-cache-20261110-01/build-result.json": "62e541796766e57e7f891296b421c932e0b07ea028f9b3fadb099e8e27a5809b",
+    "/tmp/fortran-local-solver-cache-20261110-01/source-inputs.json": "5d97ca257911b381b1ea67d2348d04812d039adc05e9356e7a21511c630ce58f",
+    "/tmp/fortran-local-solver-cache-20261110-01/inputs.json": "7fe15aee413a83f60bd6937842c797f71873f7227e598d99ac88d7dd54f92c2c",
+    "/tmp/fortran-local-solver-cache-20261110-01/ctest.log": "29af370cda5d18592eed8428fdfd6b903f65c2e9a7b92d5ec607256baf1c9ed9",
+    "/tmp/fortran-local-solver-cache-20261110-01/qualification/plan.json": "74570e6a833f08136c61065217076aaae7b55bec40106328d775ac635b2e60f4",
+    "/tmp/fortran-local-solver-cache-20261110-01/qualification/result.json": "b6c6b8e1d141fc719f0b844c8b58e7cad2236d1a899ae2a91326d9e05111a13f",
+    "/tmp/fortran-local-solver-cache-20261110-01/qualification-channel/plan.json": "30520069c96511c37d63e1427d31d3fc901932abe4af91542a4e517352e5991d",
+    "/tmp/fortran-local-solver-cache-20261110-01/qualification-channel/result.json": "83d9eeed260d2b378d1102c0ad01a700191a4239019d9ae9e97db085acb62e81",
+    "/tmp/fortran-local-solver-cache-20261110-01/retau-repeatability.json": "c58c5f4a25c3c7ad9914b879511ad5f89cd16c4f08ad6607077cadb8116fb55d",
+    "/tmp/fortran-local-solver-cache-20261110-01/comparison/plan.json": "e1f67bee201094be7e5a44a761d0efcfd788e9edfbff151029b8b35a268078a6",
+    "/tmp/fortran-local-solver-cache-20261110-01/comparison/result.json": "e452ae6f58d726cb2a75bbfe2629e390e16fbedc4fd9fe0372d3faa660373ee7",
+    "/tmp/fortran-local-solver-cache-20261110-01/comparison/execution.json": "477195041aced7911053062c68d105fbd557045ea7a90e6678d2230ea49bbce4",
+    "/tmp/fortran-resident-critical-path-20261110-01/result.json": "c7478c37a020a3f117c282824e1670ab16c779869880b7b0b5c20bdd8f0765f4",
+    "/tmp/fortran-resident-critical-path-20261110-01/analysis.json": "2f4767d2d0930d793ccf6794f3434da86c996f1cba31aa759a69a12e5795fdb7",
+    "/tmp/fortran-resident-long-20261110-01/natural2458/result.json": "8ae496b3c554c6c9b6aa4306d2489b69aa7af9b455d2d62343f27042d304ee1a",
+    "/tmp/fortran-resident-startup-20261110-01/result.json": "09addc16b3fc79512bbfce8ba83943aa96a289e29709cf8dc766b86d21b9f0b9"
+  }
+}

@@ -247,9 +247,10 @@ def test_unsupported_original_specification_cannot_disappear_during_extraction(t
     "if(.not.allocated(work)) allocate(work(-3:n,7:8))",
     "if(.not.allocated(work)) then\nallocate(work(-3:n,7:8))\nendif",
 ])
-def test_successful_saved_allocation_guard_preserves_storage_owner(tmp_path, guard):
+@pytest.mark.parametrize("storage", ["", ",save"])
+def test_successful_allocation_guard_preserves_storage_owner(tmp_path, guard, storage):
     analysis, routine, path = case(tmp_path, guard + "\ndo i=-3,n\nwork(i,7)=a(i,7)\nenddo",
-                                   declarations="real(8),allocatable,save::work(:,:)")
+                                   declarations="real(8),allocatable" + storage + "::work(:,:)")
     before = path.read_text()
     region = extracted(analysis, routine)
     guard, = region.allocation_guards
@@ -332,7 +333,7 @@ def test_foreign_node_or_mutated_source_role_cannot_borrow_original_proof(tmp_pa
 def test_saved_guard_requires_original_procedure_local_storage(tmp_path):
     analysis, routine, _ = case(tmp_path, "do i=-3,n\na(i,7)=1\nenddo")
     binding = routine.scope.bindings["a"]
-    with pytest.raises(CompilationError, match="saved array storage"):
+    with pytest.raises(CompilationError, match="allocatable array storage"):
         allocation_guard(analysis, routine, binding, ())
 
 

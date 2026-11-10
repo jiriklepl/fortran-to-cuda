@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "profile_sha256": "471aab90098f6184d6137904ea084c1cf09574f4d214c88b6edde5a0a0ef62e2",
+  "runtime_id": "6f32137c39a5a76dd5a5b57b087240efa364a407049fd5792703951f7b75e65e",
+  "source_guards_pass": true,
+  "physical_schema": 3,
+  "minimum_compact_operations": 1,
+  "application_qualification": false
+}

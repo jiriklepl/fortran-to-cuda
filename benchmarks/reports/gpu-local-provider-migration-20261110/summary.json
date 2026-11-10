@@ -1,0 +1,104 @@
+{
+  "status": "LOCAL_PROVIDER_MIGRATION_MILESTONE_PASS_NOT_FULL_RELEASE",
+  "provider_manifest_schema": 2,
+  "retired_vendor_files": 95,
+  "build": {
+    "status": "PASS",
+    "inputs": {
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/poisson_source.py": "ae70c40c3a7d327989f1d97b9ecb3fae80fe3f43d568fc1c8e43d4b8f09a4c6b",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_pressure_build.py": "2fac776ad61d2c753d75ed7603d60ff63442a18052c7488ce3ddd92ffc8699e8",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/resident_build.py": "69f704113c9b7658ea94ca272c9eff087c5679e8c1713285b836029523f98181",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/pressure-dependencies.json": "dd7608a31bc1699a584ec08a7186c9f3d45d23ab0c8ea0ab7d53a93392da3aa4",
+      "/tmp/fortran-local-provider-migration-20261110-01/build.py": "962f37a848949b710874a1eb37c996c8dd09c2661ad796a46a1ffcd0741aeea1"
+    },
+    "request": {
+      "manifest": "/tmp/fortran-local-provider-migration-20261110-01/prepared/pressure-backend.json",
+      "sha256": "46af90dd00f3ce975208d6186ec078b56c16a2dea30baca32649f0329d9527ee"
+    },
+    "provider": {
+      "path": "/tmp/fortran-local-provider-migration-20261110-01/prepared/provider-install/lib/libpoisson-solver.so.0.1",
+      "sha256": "accc012f53bed923d0c81db5232c61c5eab19d23242f7384ea069db41977f32a"
+    },
+    "schema": 2,
+    "seconds": 53.802167742000165
+  },
+  "checks": [
+    {
+      "file": "tests-02.xml",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "6",
+          "tests": "112",
+          "time": "23.305",
+          "timestamp": "2026-11-10T03:17:31.640514+01:00",
+          "hostname": "Nemesis"
+        }
+      ]
+    },
+    {
+      "file": "lazy-04.xml",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "6",
+          "time": "1.201",
+          "timestamp": "2026-11-10T03:21:16.057366+01:00",
+          "hostname": "Nemesis"
+        }
+      ]
+    }
+  ],
+  "application_cases": [
+    {
+      "case": "simple2",
+      "passed": true,
+      "CPU_FFTW_plans": 0,
+      "GPU_procedures": 31
+    },
+    {
+      "case": "channel2",
+      "passed": true,
+      "CPU_FFTW_plans": 0,
+      "GPU_procedures": 28
+    },
+    {
+      "case": "simple109",
+      "passed": true,
+      "CPU_FFTW_plans": 0,
+      "GPU_procedures": "untraced"
+    },
+    {
+      "case": "channel100",
+      "passed": true,
+      "CPU_FFTW_plans": 0,
+      "GPU_procedures": "untraced"
+    }
+  ],
+  "runtime_abi_changed": false,
+  "numerical_implementation_changed": false,
+  "performance_claim": false,
+  "long_pointwise_gate": "still fails; proposed norm change awaiting user decision",
+  "receipts": {
+    "/tmp/fortran-local-provider-migration-20261110-01/build.py": "962f37a848949b710874a1eb37c996c8dd09c2661ad796a46a1ffcd0741aeea1",
+    "/tmp/fortran-local-provider-migration-20261110-01/before.json": "db8cceea8ce7fd14ba2551e926b4b22fe80722ed3a83e0b52e40c13f979226fe",
+    "/tmp/fortran-local-provider-migration-20261110-01/tests-first-result.json": "fc8ebd5a4c92166dccd457d2aacd7d54b4efcd3fd8640309ffa03766db399238",
+    "/tmp/fortran-local-provider-migration-20261110-01/tests-02.xml": "ee5443faa563f50c39f8da03602140975b880fee805ded5dd437568570e8bc2b",
+    "/tmp/fortran-local-provider-migration-20261110-01/tests-02.log": "a9d9c88655f2c50c4fb3ef9f8284b4f14efb2df43c73feeac3dcb40fffd72a97",
+    "/tmp/fortran-local-provider-migration-20261110-01/lazy-03.log": "460bd97be0a86a683d2ac8eb92001cd1f487d80c85a6b6e35d655de4dbc46728",
+    "/tmp/fortran-local-provider-migration-20261110-01/lazy-04.xml": "91aa0a135f5c8f8011201b88303646c5bf445e9c455ece7d916ff9b464587863",
+    "/tmp/fortran-local-provider-migration-20261110-01/lazy-04.log": "65978bada43b5ebd390701afce53c6cf3d66c28dccd1f5e6fe03f8e219d6003d",
+    "/tmp/fortran-local-provider-migration-20261110-01/build-result.json": "5cda1620c8b372967560374a9757ab2e0746a7c8dd59b2086ca6173bc48c8cfd",
+    "/tmp/fortran-local-provider-migration-20261110-01/prepared/pressure-backend.json": "46af90dd00f3ce975208d6186ec078b56c16a2dea30baca32649f0329d9527ee",
+    "/tmp/fortran-local-provider-migration-20261110-01/prepared/provider-inputs.json": "1667d2eaedfe48314a9e13e5e73e12ae448da66469c83a234be1eb654ef88660",
+    "/tmp/fortran-local-provider-migration-20261110-01/relink-result.json": "6ec85fbd4c09a5927d76a9b8f0c230333163e0ee92d8816a1fd9ab02201a2acc",
+    "/tmp/fortran-local-provider-migration-20261110-01/qualification/plan.json": "6c69c6d3bd3294d04e19094dd044ff8e560a6e38e42f0db26d77cd308feacfe6",
+    "/tmp/fortran-local-provider-migration-20261110-01/qualification/result.json": "9f626eb4e8933439d03576c31a9fa94b7a669daf31fc151fd6599ba364b3e09c",
+    "/tmp/fortran-local-provider-migration-20261110-01/retired-vendor-source.json": "d168577acae444d53d0ea2c475778cdcced5944473f80b3d8ed1d2c313a7984b"
+  }
+}

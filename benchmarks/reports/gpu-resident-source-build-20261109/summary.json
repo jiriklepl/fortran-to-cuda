@@ -1,0 +1,314 @@
+{
+  "status": "PASS",
+  "kind": "source_build_integration_milestone",
+  "build": {
+    "status": "PASS",
+    "binaries": {
+      "ELMM": {
+        "path": "/tmp/fortran-resident-source-build-20261109-02/build/ELMM",
+        "sha256": "002727e55ec6ca8061ec3ae01b7d934afa98528c7d1e22f5d8bcf2ff99b04462"
+      },
+      "ELMM-native": {
+        "path": "/tmp/fortran-resident-source-build-20261109-02/build/ELMM-native",
+        "sha256": "107fef201744694930f7482e3f662a5b28b077a24ca594cd489776da39a8c83a"
+      },
+      "ELMM-full20": {
+        "path": "/tmp/fortran-resident-source-build-20261109-02/build/ELMM-full20",
+        "sha256": "72e897cbce3b23f4bba0634f56fdcc63df906ca9ed9d282dc5cb4d75f9d35422"
+      },
+      "ELMM-native-full20": {
+        "path": "/tmp/fortran-resident-source-build-20261109-02/build/ELMM-native-full20",
+        "sha256": "04f6f4420b4e5da61161b4b936455d23756a3b2fb8faa0ea833132b507d5b8f5"
+      }
+    },
+    "provider": {
+      "path": "/tmp/fortran-resident-source-build-20261109-02/build/lib/libpoisson-solver.so.0.1",
+      "sha256": "561a9c4a2bb8d7b078b9317e5eb62d8d73253168820c0d11a86783192dd709a7"
+    },
+    "gpu_execution_established": false,
+    "performance_qualified": false
+  },
+  "performance": {
+    "channel-simple": {
+      "modes": {
+        "native": {
+          "samples": [
+            12.107636900000216,
+            12.829687809997267,
+            14.360677982000198
+          ],
+          "median": 12.829687809997267
+        },
+        "candidate": {
+          "samples": [
+            4.053322144001868,
+            4.246857652000472,
+            4.711281366999174
+          ],
+          "median": 4.246857652000472
+        },
+        "previous": {
+          "samples": [
+            4.051082771999063,
+            4.8075019369971415,
+            4.523265173000254
+          ],
+          "median": 4.523265173000254
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          0.33477400895642945,
+          0.33101800409291304,
+          0.32806817149610457
+        ],
+        "previous": [
+          1.0005527835714154,
+          0.883381370960641,
+          1.0415664761644317
+        ]
+      },
+      "median_ratios": {
+        "native": 0.33101800409291304,
+        "previous": 0.9388920369626609
+      },
+      "speedup_over_native": 3.0209837157960484,
+      "paired_wins": {
+        "native": 3,
+        "previous": 1
+      }
+    },
+    "channel": {
+      "modes": {
+        "native": {
+          "samples": [
+            14.014120851999905,
+            13.75654640400171,
+            14.215735402001883
+          ],
+          "median": 14.014120851999905
+        },
+        "candidate": {
+          "samples": [
+            5.120248014998651,
+            5.3084867100005795,
+            4.777249902999756
+          ],
+          "median": 5.120248014998651
+        },
+        "previous": {
+          "samples": [
+            5.1040084269989165,
+            5.4503516520017,
+            4.69283855699905
+          ],
+          "median": 5.1040084269989165
+        }
+      },
+      "paired_ratios": {
+        "native": [
+          0.36536348366568844,
+          0.3858880386182078,
+          0.33605365940667525
+        ],
+        "previous": [
+          1.0031817322075394,
+          0.9739714148629256,
+          1.0179872682546927
+        ]
+      },
+      "median_ratios": {
+        "native": 0.36536348366568844,
+        "previous": 1.0031817322075394
+      },
+      "speedup_over_native": 2.737000397431646,
+      "paired_wins": {
+        "native": 3,
+        "previous": 1
+      }
+    }
+  },
+  "qualification": {
+    "milestone": {
+      "receipt": {
+        "path": "/tmp/fortran-resident-source-build-20261109-02/milestone/result.json",
+        "sha256": "d821c5c9d21fadb0832457a1d6bba95bd42fe3801e142b4511f2f69cb00b7ada"
+      },
+      "cases": [
+        {
+          "case": "channel-simple",
+          "mode": "native",
+          "fields": 20,
+          "max_absolute_error": 0.0,
+          "outputs_passed": true,
+          "fftw_plans": 4
+        },
+        {
+          "case": "channel-simple",
+          "mode": "candidate",
+          "fields": 20,
+          "max_absolute_error": 4.366383671294827e-09,
+          "outputs_passed": true,
+          "fftw_plans": 0
+        },
+        {
+          "case": "channel",
+          "mode": "native",
+          "fields": 20,
+          "max_absolute_error": 0.0,
+          "outputs_passed": true,
+          "fftw_plans": 4
+        },
+        {
+          "case": "channel",
+          "mode": "candidate",
+          "fields": 20,
+          "max_absolute_error": 2.72425086933481e-08,
+          "outputs_passed": true,
+          "fftw_plans": 0
+        }
+      ]
+    },
+    "natural109": {
+      "receipt": {
+        "path": "/tmp/fortran-resident-source-build-20261109-02/natural109/result.json",
+        "sha256": "2f45f2799dc82649abb678de88c9f21fa9782e187dfcb275b8241c2389bfa681"
+      },
+      "cases": [
+        {
+          "case": "channel-simple",
+          "mode": "native",
+          "fields": 20,
+          "max_absolute_error": 0.0,
+          "outputs_passed": true,
+          "fftw_plans": 4
+        },
+        {
+          "case": "channel-simple",
+          "mode": "candidate",
+          "fields": 20,
+          "max_absolute_error": 5.675429006757327e-07,
+          "outputs_passed": true,
+          "fftw_plans": 0
+        }
+      ]
+    },
+    "channel100-full20": {
+      "receipt": {
+        "path": "/tmp/fortran-resident-source-build-20261109-02/channel100-full20/result.json",
+        "sha256": "d37e2ab1cd6d8df21e8d9ce7b87570a8dda0f72d77101c1ed116a2637798a937"
+      },
+      "cases": [
+        {
+          "case": "channel",
+          "mode": "native",
+          "fields": 20,
+          "max_absolute_error": 0.0,
+          "outputs_passed": true,
+          "fftw_plans": 4
+        },
+        {
+          "case": "channel",
+          "mode": "candidate",
+          "fields": 20,
+          "max_absolute_error": 1.4455937452362289e-06,
+          "outputs_passed": true,
+          "fftw_plans": 0
+        }
+      ]
+    }
+  },
+  "backend": {
+    "status": "PASS",
+    "cases": {
+      "channel-simple": {
+        "gpu_kernels_by_procedure": {
+          "arrayutilities::add_3d": 18,
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_3d": 24,
+          "boundaries::bounduvw_do_bc": 558,
+          "boundaries::periodic_corners_edges": 372,
+          "dynamics::convection": 42,
+          "dynamics::pressuregrad": 24,
+          "momentumadvection::cduadv": 6,
+          "momentumadvection::cdudiv": 6,
+          "momentumadvection::cdvadv": 6,
+          "momentumadvection::cdvdiv": 6,
+          "momentumadvection::cdwadv": 6,
+          "momentumadvection::cdwdiv": 6,
+          "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+          "pressure::buildpoissonrhs": 7,
+          "pressure::correctpoissonvelocity": 21,
+          "pressure::updatepoissonpressure": 7,
+          "resident_time::average": 8,
+          "resident_time::cfl": 1,
+          "resident_wall::correction1m": 6,
+          "resident_wall::correction1p": 6,
+          "resident_wall::correction2m": 6,
+          "resident_wall::correction2p": 6,
+          "resident_wall::correction3m": 6,
+          "resident_wall::correction3p": 6,
+          "resident_wall::stress0": 12,
+          "resident_wall::stress1": 12,
+          "resident_wall::stress2": 12,
+          "resident_wall::stress3": 12,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "generated_cpu_events": {},
+        "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"
+      },
+      "channel": {
+        "gpu_kernels_by_procedure": {
+          "arrayutilities::add_3d": 18,
+          "arrayutilities::multiply_3d": 18,
+          "arrayutilities::set_3d": 24,
+          "boundaries::bounduvw_do_bc": 774,
+          "boundaries::periodic_corners_edges": 516,
+          "dynamics::convection": 42,
+          "dynamics::pressuregrad": 24,
+          "filters::filter3ord": 108,
+          "momentumadvection::cd4divu": 18,
+          "momentumadvection::cd4divv": 18,
+          "momentumadvection::cd4divw": 18,
+          "momentumdiffusion::momentumdiffusion_nobranch_2ord": 18,
+          "pressure::buildpoissonrhs": 7,
+          "pressure::correctpoissonvelocity": 21,
+          "pressure::updatepoissonpressure": 7,
+          "resident_time::cfl": 1,
+          "resident_wall::correction1m": 6,
+          "resident_wall::correction1p": 6,
+          "resident_wall::correction2m": 6,
+          "resident_wall::correction2p": 6,
+          "resident_wall::correction3m": 6,
+          "resident_wall::correction3p": 6,
+          "resident_wall::stress0": 12,
+          "resident_wall::stress1": 12,
+          "resident_wall::stress2": 12,
+          "resident_wall::stress3": 12,
+          "scalarboundaries::boundviscosity": 36,
+          "subgrid::sgs_sigma_uniform": 6
+        },
+        "generated_cpu_events": {},
+        "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"
+      }
+    }
+  },
+  "comparison": {
+    "path": "/tmp/fortran-resident-source-build-20261109-02/comparison/result.json",
+    "sha256": "ebac63d168de75bac2db491bd95cc07c16f760f86b2f872c1964690ddae64bbd"
+  },
+  "controller": {
+    "path": "/tmp/fortran-resident-source-build-20261109-02/comparison/execution.json",
+    "sha256": "699a0b4c30920cff44c889df48dfeee86e3dba9772f55b7c3bb7e64e5559c7f0"
+  },
+  "processes": 24,
+  "maximum_external_cpu_cores": 0.23145486051706674,
+  "primary_correctness_passed": true,
+  "gpu_execution_established": true,
+  "formal_seven_round_gate_passed": false,
+  "natural2458_qualified": false,
+  "research_20x_achieved": false,
+  "scope": "Fresh source-built native and candidate; retained manually linked workspace candidate. Three rotated measurements after one excluded warmup; complete process, four native threads, all output. No new speed gain over retained GPU candidate established.",
+  "artifact_root": "/tmp/fortran-resident-source-build-20261109-02"
+}

@@ -8,8 +8,9 @@ from pathlib import Path
 import pytest
 
 from compiler.analysis import ParallelizationError, build_execution_plan
-from compiler.driver.options import CompilerOptions
-from compiler.emission import generate_sources, read_common_header
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler.emission import read_common_header
+from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
 from compiler.ir import CompilationError, ConditionalRegion, If, IntrinsicCall, ScalarType, walk_expr
 from compiler.tests.test_native import cuda_device as cuda_device

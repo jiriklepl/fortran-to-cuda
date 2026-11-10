@@ -12,7 +12,6 @@ from compiler.emission import generate_sources, read_common_header
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.frontend import analyze_source_effects, discover_file, lower_file
 from compiler.ir import CompilationError, format_ir
-from compiler.memory import format_memory, plan_memory
 from compiler.offload.config import OffloadConfig
 
 
@@ -85,21 +84,18 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--cuda-output",
-        default="generated_code.cu",
         metavar="FILE",
-        help="CUDA output filename (default: generated_code.cu).",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--cpp-output",
-        default="generated_cpp_impl.cpp",
         metavar="FILE",
-        help="C++ implementation output filename (default: generated_cpp_impl.cpp).",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--fortran-output",
-        default="generated_interface.f90",
         metavar="FILE",
-        help="Fortran interface output filename (default: generated_interface.f90).",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--common-header",
@@ -142,11 +138,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print normalized IR, transformations, schedules, addressing proofs, ordered regions, legality, and memory operations.",
     )
-    parser.add_argument("--gpu-policy", choices=("always", "sections", "auto", "chunked", "hybrid"),
-                        help="GPU placement policy (default: sections for source scopes, always for numerical entries).")
-    parser.add_argument("--memory-model", choices=("call", "scoped"),
-                        help="Memory ownership (default: scoped for source scopes, call for numerical entries).")
-    parser.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto", "coalesced"), default="direct",
+    parser.add_argument("--gpu-policy", metavar="POLICY",
+                        help="Shared graph placement: sections or auto (default: sections).")
+    parser.add_argument("--memory-model", metavar="MODEL",
+                        help="Storage ownership: scoped (the only production memory model).")
+    parser.add_argument("--scope-transfers", default="direct",
                         help="Scoped transfer mode, independent of GPU placement (default: direct).")
     parser.add_argument("--scope-execution", choices=("graph",),
                         help="Source execution strategy (graph is the default with --form-scopes).")
@@ -157,8 +153,19 @@ def _parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.require_markers:
         parser.error("--require-markers was removed; omit it and select an entry with --kernel or --list-candidates")
-    args.memory_model = args.memory_model or ("scoped" if args.form_scopes else "call")
-    args.gpu_policy = args.gpu_policy or ("sections" if args.form_scopes else "always")
+    args.memory_model = args.memory_model or "scoped"
+    args.gpu_policy = args.gpu_policy or "sections"
+    if args.memory_model != "scoped":
+        parser.error("ordinary-call generation was removed; use caller-owned scoped memory")
+    if args.gpu_policy not in {"sections", "auto"}:
+        parser.error("ordinary GPU policies were removed; use sections or auto with shared graph execution")
+    if args.scope_transfers == "pipelined":
+        parser.error("pipelined slab batching was removed; use shared graph execution")
+    if args.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
+        parser.error("scope transfers must be direct, pinned, auto, or coalesced")
+    if args.memory_model == "scoped" and any((args.cuda_output, args.cpp_output, args.fortran_output)):
+        parser.error("scoped generation emits shared_entry.cu and shared_interface.f90; "
+                     "ordinary --cuda-output/--cpp-output/--fortran-output options do not apply")
     if args.scope_preflight and not args.form_scopes:
         parser.error("--scope-preflight requires --form-scopes")
     if args.scope_execution is not None and not args.form_scopes:
@@ -201,7 +208,7 @@ def _offload_config(args):
         except (OSError, ValueError) as error:
             profile = None
             reason = str(error)
-    elif args.gpu_policy in {"auto", "hybrid"}:
+    elif args.gpu_policy == "auto":
         reason = "no calibration profile supplied; automatic policy retains native execution"
     try:
         return OffloadConfig(args.gpu_policy, profile, args.host_threads, args.gpu_collective, reason,
@@ -333,8 +340,8 @@ def main() -> None:
         function, plan = prepare_function(function, options=options)
         sources = generate_sources(function, plan, common_header=args.common_header, offload_config=_offload_config(args),
                                    memory_model=args.memory_model)
-        if set(sources.artifacts) & {args.cuda_output, args.cpp_output, args.fortran_output, args.common_header}:
-            raise CompilationError("ordinary output filename conflicts with a shared runtime/entry artifact")
+        if args.common_header in sources.artifacts:
+            raise CompilationError("common header filename conflicts with a shared runtime/entry artifact")
         common_header = read_common_header()
     except CompilationError as error:
         if args.json and not args.list_candidates:
@@ -349,19 +356,13 @@ def main() -> None:
         print(format_ir(function), file=stream)
         print("\nExecution plan and dependence checks:", file=stream)
         print(format_plan(plan), file=stream)
-        print("\nMemory operations (explicit sessions):", file=stream)
-        print(format_memory(plan_memory(plan, function.parameters)), file=stream)
-        print("\nMemory operations (ordinary CUDA calls):", file=stream)
-        print(format_memory(plan_memory(plan, function.parameters, acquisition_policy="pooled")), file=stream)
+        print("\nMemory ownership: caller domain; shared entries use canonical handles and regional coherence.",
+              file=stream)
 
     # Publish only after every stage has validated and generated successfully.
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    outputs = {
-        args.cuda_output: sources.cuda,
-        args.cpp_output: sources.cpp,
-        args.fortran_output: sources.fortran,
-    }
+    outputs = {}
     if not args.no_common_header:
         outputs[args.common_header] = common_header
     outputs.update(sources.artifacts)
@@ -373,31 +374,22 @@ def main() -> None:
             json.dumps(
                 {
                     "kernel": args.kernel,
+                    "artifact_schema_version": 2,
+                    "memory_model": args.memory_model,
                     "supported": True,
                     "reason": None,
                     "parallel_regions": len(plan.regions),
                     "execution_plan": format_plan(plan),
-                    "memory_plan": (format_memory(plan_memory(plan, function.parameters, acquisition_policy="pooled"))
-                                    if sources.offload is None else
-                                    "Ordinary-call policy " + sources.offload["policy"] +
-                                    "; runtime footprints and choices are described by offload.analysis and FORT_OFFLOAD_TRACE."),
+                    "memory_plan": "Caller-owned domain; shared entries borrow canonical handles and preserve replicas.",
                     "outputs": list(outputs),
                     "numerical_contract": sources.numerical_contract,
                     "build_sources": [
-                        {"path": args.cuda_output, "language": "cuda", "role": "numerical_entry",
-                         "numerical_contract": sources.numerical_contract},
-                        {"path": args.cpp_output, "language": "c++", "role": "numerical_entry",
-                         "numerical_contract": sources.numerical_contract},
-                        {"path": args.fortran_output, "language": "fortran", "role": "numerical_entry"},
-                        *[{**item, "role": "common_runtime"} for item in
-                          (sources.scoped["runtime"]["sources"] if sources.scoped is not None else [])],
-                        *([{"path": "shared_entry.cu", "language": "cuda", "role": "shared_entry",
+                        *[{**item, "role": "common_runtime"} for item in sources.scoped["runtime"]["sources"]],
+                        {"path": "shared_entry.cu", "language": "cuda", "role": "shared_entry",
                              "numerical_contract": sources.numerical_contract},
-                            {"path": "shared_interface.f90", "language": "fortran", "role": "shared_entry"}]
-                          if sources.scoped is not None else []),
+                        {"path": "shared_interface.f90", "language": "fortran", "role": "shared_entry"},
                     ],
-                    **({"offload": sources.offload} if sources.offload is not None else {}),
-                    **({"scoped": sources.scoped} if sources.scoped is not None else {}),
+                    "scoped": sources.scoped,
                 },
                 indent=2,
             )

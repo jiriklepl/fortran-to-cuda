@@ -1,0 +1,19 @@
+{
+  "application_aggregate_accepted": false,
+  "build06": "PASS production+full20 only; no app qualification from build receipt",
+  "new_tests": 40,
+  "owned_sha256": "7c1e1a7b27a32f0f2d8c715ad3811336486f64c1fa41a2698d454eab754c1b14",
+  "patch_sha256": "e6eae64e4fbcc29340365d2fde2de350c64ae19a43a1a34bd7b76e057f39f4f5",
+  "performance_claim": false,
+  "promotion": false,
+  "reader_qualification_sha256": "feea9f3a2f7cd7518b9688953b660514da83179152ec27d4df188668580ac377",
+  "reader_tests": 269,
+  "saved_GPU_allocations": 0,
+  "saved_GPU_launches": 0,
+  "saved_authenticated_fallbacks": 139,
+  "short06": "FAIL preserved; only2simple applications executed",
+  "short07": "Offline harnessFAIL preserved;0apps/GPU",
+  "short08_or_later": "Unselected changing outputs excluded",
+  "status": "EVIDENCE_ONLY_SEALED_READER_COMPONENT",
+  "subtests": 309
+}

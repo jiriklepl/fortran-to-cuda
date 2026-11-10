@@ -91,9 +91,7 @@ def test_public_scoped_emission_supplies_independently_validated_intrinsic_costs
     gpu = unit["gpu_numerical_seconds_per_iteration"]
     assert math.isfinite(cpu) and cpu > 0
     assert math.isfinite(gpu) and 0 < gpu < cpu
-    ordinary, = generated.offload["analysis"]["units"]
-    assert ordinary["cpu_numerical_seconds_per_iteration"] == cpu
-    assert ordinary["gpu_numerical_seconds_per_iteration"] == gpu
+    assert generated.offload is None
 
     # Consume the emitted public unit's additional seconds through the versioned
     # planner interface. This requires no CUDA numerical work or device setup.
@@ -128,7 +126,7 @@ def test_public_scoped_missing_or_rejected_intrinsic_costs_keep_auto_native(tmp_
     assert unit["work_per_iteration"] is None
     assert unit["cpu_numerical_seconds_per_iteration"] == 0
     assert unit["gpu_numerical_seconds_per_iteration"] == 0
-    assert not generated.offload["estimate_available"]
+    assert generated.offload is None
 
     add = planning.fort_scope_plan_add_costs_v2
     add.argtypes = [TOKEN, c.c_uint32, TOKEN, c.POINTER(Binding), c.c_size_t,
