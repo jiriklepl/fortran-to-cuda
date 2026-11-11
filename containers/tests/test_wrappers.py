@@ -25,7 +25,7 @@ def sandbox(tmp_path):
     (commands / "python3.12").symlink_to(sys.executable)
     capture = tmp_path / "capture.json"
     env = {key: value for key, value in os.environ.items()
-           if key not in {"WORKSPACE_ROOT", "PIPELINE_ROOT", "COMPILER_ROOT", "OUTPUT_DIR", "WORK_DIR",
+           if key not in {"WORKSPACE_ROOT", "PIPELINE_ROOT", "COMPILER_ROOT", "SOLVER_ROOT", "DEPS_ROOT", "OUTPUT_DIR", "WORK_DIR",
                           "SIF_FILE", "IMAGE_TAG", "GPU_DEVICES", "CUDA_VISIBLE_DEVICES"}
            and not key.startswith(("APPTAINER", "SINGULARITY", "SLURM_"))}
     env.update(PATH=str(commands), CAPTURE=str(capture), OUTPUT_DIR=str(tmp_path / "output"))
@@ -106,6 +106,45 @@ def test_node_default_submission_and_full_case(sandbox):
     assert values(argv, "--arch") == ["auto"]
     assert "--steps" not in argv
     assert values(argv, "--output-dir") == [env["OUTPUT_DIR"]]
+
+
+def test_node_resident_mode_forwards_sources_and_resources(sandbox):
+    tmp, _, capture, _, invoke = sandbox
+    fake_workspace(sandbox)
+    deps, solver = tmp / "pinned dependencies", tmp / "solver checkout"
+    deps.mkdir()
+    solver.mkdir()
+    result = invoke("run_node.sh", "hopper01", "--dry-run", "--runtime", "native",
+                    "--experiment", "resident", "--deps", deps, "--solver", solver,
+                    "--steps", "2", "--repeats", "1")
+    assert result.returncode == 0, result.stderr
+    assert execute_payload(sandbox).returncode == 0
+    record = json.loads(capture.read_text())
+    assert record["argv"][0] == "resident"
+    assert values(record["argv"], "--steps") == ["2"]
+    assert record["env"]["DEPS_ROOT"] == str(deps)
+    assert record["env"]["SOLVER_ROOT"] == str(solver)
+    assert "/resident/report.json" in result.stdout
+    assert "/resident/build.log" in result.stdout
+
+
+def test_node_resident_apptainer_receives_checkout_paths(sandbox):
+    tmp, env, capture, _, invoke = sandbox
+    fake_workspace(sandbox)
+    deps, solver = tmp / "deps", tmp / "solver"
+    deps.mkdir()
+    solver.mkdir()
+    env["SIF_FILE"] = str(tmp / "image.sif")
+    result = invoke("run_node.sh", "hopper01", "--dry-run", "--runtime", "apptainer",
+                    "--experiment", "resident", "--deps", deps, "--solver", solver)
+    assert result.returncode == 0, result.stderr
+    assert execute_payload(sandbox).returncode == 0
+    record = json.loads(capture.read_text())
+    assert Path(record["executable"]).name == "run-apptainer.sh"
+    assert record["argv"][0] == "resident"
+    assert record["env"]["DEPS_ROOT"] == str(deps)
+    assert record["env"]["SOLVER_ROOT"] == str(solver)
+    assert values(record["argv"], "--output-dir") == ["/output"]
 
 
 @pytest.mark.parametrize("case_name", ["channel-simple", "channel", "second-order", "fourth-order"])
@@ -618,6 +657,31 @@ def test_apptainer_gpu_visibility_and_existing_bind_plan(sandbox, sif_env):
     assert "CUDA_VISIBLE_DEVICES=GPU-selected" in values(record["argv"], "--env")
     assert record["env"]["APPTAINER_BINDPATH"] == "/scratch:/work"
     assert record["argv"][-3:] == ["run-elmm", "--arch", "120"]
+
+
+def test_apptainer_binds_explicit_solver_checkout_read_only(sandbox, sif_env):
+    tmp, _, capture, stub, invoke = sandbox
+    stub("apptainer")
+    solver = tmp / "solver checkout"
+    solver.mkdir()
+    result = invoke("run-apptainer.sh", "doctor", overrides={"SOLVER_ROOT": str(solver)})
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(capture.read_text())["argv"]
+    assert f"{solver}:/solver-source:ro" in values(argv, "--bind")
+    assert "SOLVER_ROOT=/solver-source" in values(argv, "--env")
+
+
+def test_apptainer_resident_binds_dependencies_and_enables_gpu(sandbox, sif_env):
+    tmp, _, capture, stub, invoke = sandbox
+    stub("apptainer")
+    deps = tmp / "dependency checkouts"
+    deps.mkdir()
+    result = invoke("run-apptainer.sh", "resident", overrides={"DEPS_ROOT": str(deps)})
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(capture.read_text())["argv"]
+    assert f"{deps}:/dependencies:ro" in values(argv, "--bind")
+    assert "DEPS_ROOT=/dependencies" in values(argv, "--env")
+    assert "--nv" in argv
 
 
 @pytest.mark.parametrize("script,engine", [("run-docker.sh", "docker"), ("run-apptainer.sh", "apptainer")])

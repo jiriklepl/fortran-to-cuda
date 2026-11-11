@@ -39,6 +39,14 @@ if [[ ${COMPILER_ROOT+x} ]]; then
     flags+=(--bind "$(directory "$COMPILER_ROOT"):/compiler-source:ro"
             --env COMPILER_ROOT=/compiler-source)
 fi
+if [[ ${SOLVER_ROOT+x} ]]; then
+    flags+=(--bind "$(directory "$SOLVER_ROOT"):/solver-source:ro"
+            --env SOLVER_ROOT=/solver-source)
+fi
+if [[ ${DEPS_ROOT+x} ]]; then
+    flags+=(--bind "$(directory "$DEPS_ROOT"):/dependencies:ro"
+            --env DEPS_ROOT=/dependencies)
+fi
 
 selection=
 requested=false
@@ -50,7 +58,7 @@ elif [[ ${CUDA_VISIBLE_DEVICES+x} ]]; then
     requested=true
 else
     case "${1:-doctor}" in
-        run-elmm|elmm|run-benchmarks|benchmark|e2e|benchmark-e2e|run-e2e) selection=all; requested=true ;;
+        resident|run-elmm|elmm|run-benchmarks|benchmark|e2e|benchmark-e2e|run-e2e) selection=all; requested=true ;;
     esac
 fi
 if [[ "$requested" == true ]]; then

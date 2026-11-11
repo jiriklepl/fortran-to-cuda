@@ -10,6 +10,9 @@ mkdir -p "${MPLCONFIGDIR}"
 PYTHON="${PYTHON:-python3}"
 if [[ $# -eq 0 ]]; then set -- doctor; fi
 case "$1" in
+    resident)
+        shift
+        exec "${PYTHON}" "${SCRIPT_DIR}/resident_comparison.py" "$@" ;;
     e2e|benchmark-e2e|run-e2e)
         shift
         exec "${PYTHON}" "${SCRIPT_DIR}/reproduce_e2e.py" "$@" ;;
