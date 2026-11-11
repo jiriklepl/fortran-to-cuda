@@ -1,0 +1,6 @@
+[submodule "elmm-pipeline"]
+	path = elmm-pipeline
+	url = ./elmm-pipeline
+[submodule "poisson-solver"]
+	path = poisson-solver
+	url = ./poisson-solver/
