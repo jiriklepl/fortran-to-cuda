@@ -90,12 +90,13 @@ def selected_gpu(requested=None):
     return devices[0]
 
 
-def doctor(args, *, require_gpu=False):
+def doctor(args, *, require_gpu=False, fortran=None):
     from elmm_pipeline.campaigns.guard import memory_headroom
+    fortran = fortran or os.environ.get("FC", "gfortran")
     result = {"python": sys.version, "cpu_affinity": sorted(os.sched_getaffinity(0)),
               "memory_headroom_bytes": memory_headroom(), "tools": {},
               "source_roots": {"compiler": str(COMPILER), "pipeline": str(PIPELINE)}}
-    for name in (os.environ.get("FC", "gfortran"), args.nvcc or "nvcc", args.cuda_host or "g++-14"):
+    for name in (fortran, args.nvcc or "nvcc", args.cuda_host or "g++-14"):
         path = shutil.which(name)
         result["tools"][name] = {"path": path}
         if path:
@@ -108,7 +109,7 @@ def doctor(args, *, require_gpu=False):
             raise
         result["gpu"] = {"available": False, "reason": str(error)}
     if require_gpu:
-        if not shutil.which(os.environ.get("FC", "gfortran")):
+        if not shutil.which(fortran):
             raise RuntimeError("native Fortran compiler is unavailable")
         from elmm_pipeline.gpu_toolchain import discover_toolchain
         gpu = result["gpu"]

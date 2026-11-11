@@ -1,5 +1,114 @@
 # GPU node experiments
 
+## Current resident comparison
+
+The current full-application comparison is `resident`, not the older SGS-only
+`run-elmm` experiment described below. It runs the current pipeline and compiler,
+builds the local CUDA Poisson solver, and compares fresh ELMM executables:
+
+- `ELMM-native` uses native Fortran/OpenMP and CPU PoisFFT/FFTW.
+- `ELMM` uses the generated resident GPU path and the local CUDA Poisson solver.
+
+Both start from the same pinned upstream ELMM and PoisFFT sources and apply the
+reviewed deterministic TOP/BOTTOM pressure-reference fix. Thus the native
+reference is an approved derivative of the original, not pristine upstream.
+The generated build records source snapshots, build commands, binaries and the
+solver source receipt. The comparison records the configuration, toolchain,
+GPU, runtime settings and complete-process timing samples. Work and output
+directories must be new for every run and must be retained together.
+
+### Prepare dependencies
+
+On a worker with network access, create independent, clean Git checkouts. The
+solver is the separate `poisson-solver` checkout in this repository; retain its
+`.git` history because the pipeline verifies its ancestry. These commands do not
+modify that checkout:
+
+```bash
+USER=$(id -un)
+export DEPS_ROOT=/work/$USER/elmm-deps
+mkdir -p "$DEPS_ROOT"
+git clone https://bitbucket.org/LadaF/elmm.git "$DEPS_ROOT/elmm"
+git -C "$DEPS_ROOT/elmm" checkout --detach ddb426fca5b020216083f02a218292fea70c1df2
+git clone https://github.com/LadaF/PoisFFT.git "$DEPS_ROOT/PoisFFT"
+git -C "$DEPS_ROOT/PoisFFT" checkout --detach 256a2338254c08f611881b2df5e72bdfa73bc257
+git clone https://github.com/DTolm/VkFFT.git "$DEPS_ROOT/VkFFT"
+git -C "$DEPS_ROOT/VkFFT" checkout --detach 066a17c17068c0f11c9298d848c2976c71fad1c1
+```
+
+The runner reconstructs the approved application derivative in its own work
+directory. It rejects unclean or mismatched application/VkFFT checkouts; local
+solver edits are snapshotted and hashed. The selected compiler and pipeline are
+the current workspace sources. Keep the same revisions and source receipts to
+repeat a particular comparison.
+
+### Run natively
+
+Linux requires a visible NVIDIA GPU and compatible driver/toolkit, GNU Fortran
+15, G++ 14, CMake 4+, Ninja, FFTW (single, double and OpenMP), BLAS and LAPACK.
+Use a Python 3.12+ environment with the repository requirements and NumPy, for
+example `pip install -r requirements.txt numpy==2.5.3 cmake==4.0.3`. Select
+another compatible toolchain with `--fortran`, `--cuda-host`, and `--nvcc`.
+
+```bash
+export SOLVER_ROOT="$PWD/poisson-solver"
+export PYTHON=/path/to/venv/bin/python
+OUTPUT_DIR="$PWD/results/resident-smoke" WORK_DIR="$PWD/results/resident-smoke/work" \
+    ./containers/entrypoint.sh resident --steps 2 --repeats 1 --warmups 0
+```
+
+Remove `--steps` to retain the selected configuration's natural end, and use
+`--case channel` for the upstream channel configuration. Defaults are four
+application threads, four build jobs, one excluded warmup and seven measured
+repetitions. `--steps` caps all diagnostics and timings; it is a smoke or
+explicitly limited workload, not the natural-duration run.
+
+### Run with Apptainer on Slurm
+
+Build the image on an allocated worker. It includes the compiler and pipeline,
+but the actual job binds the current workspace, the dependency checkouts and
+the independent solver checkout read-only. Fakeroot builds require the site
+administrator's subuid/subgid setup; alternatively use an existing image.
+
+```bash
+./containers/build-apptainer.sh --fakeroot -o /work/$USER/fortran-resident.sif
+
+./run_on_node.sh hopper01 --experiment resident \
+    --deps "$DEPS_ROOT" --solver "$PWD/poisson-solver" \
+    --runtime apptainer --sif /work/$USER/fortran-resident.sif \
+    --time 04:00:00 --output-dir /work/$USER/resident-smoke \
+    --work-dir /scratch/tmp/$USER-resident-smoke \
+    --steps 2 --repeats 1 --warmups 0
+```
+
+Use `--account ACCOUNT` and `--partition PARTITION` where required; verify
+current nodes, accounts and partitions with `sinfo`/`smypartition`. For a
+Chimera GPU node such as `mff-a2-19`, specify `--partition gpu-ffa`. Use
+`--dry-run` to inspect the generated job script without submitting it.
+`--runtime native` uses the same experiment on an allocated worker with the
+native dependencies installed. On Chimera, `$TMPDIR` is RAM charged to the
+job's memory limit; `/scratch/tmp` is appropriate for larger builds.
+
+The report is `OUTPUT_DIR/resident/report.json`; its paths into the work tree
+refer to the container's mount points when run inside Apptainer. Three separate
+diagnostic processes require native repeatability, compare all available
+full-precision fields including bounds, and compare final/available averaged
+VTK output at `atol=1e-6`, `rtol=1e-5`. A traced diagnostic verifies compiler
+GPU launches for SGS and convection. It does not independently establish that
+every pressure solve used the CUDA provider. Production timing runs are
+untraced, alternate native/GPU order and validate final VTK against the native
+reference. Initially empty, owner-only diagnostic and timing kernel caches are
+separate; an excluded warmup populates the timing cache. With zero warmups the
+first timing includes cache misses and compilation.
+
+These are reproducible comparison measurements, not release qualification:
+they do not check every output file, external machine load, CPU FFTW plan
+counts or the long-run relative-L2 rule used in the published milestone.
+Strict elementwise tolerances may fail for long chaotic trajectories. A capped
+smoke run is not evidence of full-workload performance.
+
+## Earlier SGS experiment
+
 `./run_on_node.sh` remains the top-level Slurm command. It forwards to
 `containers/run_node.sh`; local, Docker/Podman and Apptainer entrypoints run the
 same experiment. The experiment builds **native ELMM on the reviewed common source basis and a

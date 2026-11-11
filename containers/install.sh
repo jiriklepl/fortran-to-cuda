@@ -4,7 +4,7 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends ca-certificates software-properties-common \
-    git build-essential make cmake python3 python3-venv python3-dev \
+    git build-essential make ninja-build python3 python3-venv python3-dev \
     libfftw3-dev libopenblas-dev liblapack-dev time procps
 add-apt-repository -y ppa:ubuntu-toolchain-r/test
 apt-get update
@@ -14,5 +14,5 @@ update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
 update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
 python3 -m venv /opt/venv
 /opt/venv/bin/python -m pip install --no-cache-dir -r /workspace/requirements.txt \
-    numpy==2.5.3 scons==4.11.1 pytest
+    numpy==2.5.3 scons==4.11.1 cmake==4.0.3 pytest
 rm -rf /var/lib/apt/lists/*

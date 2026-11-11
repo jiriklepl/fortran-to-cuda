@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workspace="${WORKSPACE_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 node="" partition="" account="" config="" steps=""
+experiment=sgs deps="${DEPS_ROOT:-}" solver="${SOLVER_ROOT:-}"
 output="${OUTPUT_DIR:-}" work="${WORK_DIR:-}"
 case_name=channel-simple threads=4 jobs="" repeats=7 warmups=1 arch=auto
 cpus=8 memory=32G time_limit=01:30:00 gpus=1 runtime=auto
@@ -15,8 +16,10 @@ extra=()
 usage() {
     cat <<'EOF'
 Usage: run_on_node.sh [OPTIONS] NODE [-- EXTRA_RUN_ELMM_ARGS...]
-Submit a fresh native/SGS comparison; no local fallback or headnode setup.
+Submit a fresh comparison; no local fallback or headnode setup.
 
+    --experiment sgs|resident       Default: sgs; resident uses CUDA Poisson
+    --deps DIR --solver DIR         Resident: pinned dependency and solver checkouts
   --case NAME                     channel-simple (default), channel,
                                   second-order or fourth-order
   --config DIR                    Explicit application configuration
@@ -46,6 +49,9 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help) usage; exit 0 ;;
         --case) value "$@"; case_name="$2"; shift 2 ;;
+        --experiment) value "$@"; experiment="$2"; shift 2 ;;
+        --deps) value "$@"; deps="$2"; shift 2 ;;
+        --solver) value "$@"; solver="$2"; shift 2 ;;
         --config) value "$@"; config="$2"; shift 2 ;;
         --steps) value "$@"; steps="$2"; shift 2 ;;
         --threads) value "$@"; threads="$2"; shift 2 ;;
@@ -74,15 +80,22 @@ while [[ $# -gt 0 ]]; do
 done
 for argument in "${extra[@]}"; do
     case "${argument%%=*}" in
-        --case|--config|--steps|--threads|--jobs|--repeats|--warmups|--arch|--output-dir|--output|-o|--work-dir)
+        --case|--config|--steps|--threads|--jobs|--repeats|--warmups|--arch|--output-dir|--output|-o|--work-dir|--app-root|--vkfft|--solver)
             fail "use ${argument%%=*} before -- so resource and container paths can be checked" ;;
     esac
 done
 [[ -n "$node" && "$node" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "one valid SLURM node is required"
+[[ "$experiment" == sgs || "$experiment" == resident ]] || fail "experiment must be sgs or resident"
 case "$case_name" in
     channel-simple|channel|second-order|fourth-order) ;;
     *) fail "case must be channel-simple, channel, second-order or fourth-order" ;;
 esac
+if [[ "$experiment" == resident ]]; then
+    [[ "$case_name" == channel-simple || "$case_name" == channel ]] || fail "resident supports channel-simple or channel"
+    [[ -n "$deps" && -n "$solver" ]] || fail "resident requires --deps and --solver (or DEPS_ROOT and SOLVER_ROOT)"
+    deps="$(cd -- "$deps" && pwd -P)"
+    solver="$(cd -- "$solver" && pwd -P)"
+fi
 [[ "$runtime" == auto || "$runtime" == apptainer || "$runtime" == native ]] || fail "runtime must be auto, apptainer or native"
 jobs="${jobs:-$cpus}"
 for name in threads jobs repeats cpus gpus; do positive "$name" "${!name}"; done
@@ -106,6 +119,7 @@ sif="$(realpath -m -- "$sif")"
 job_script="$output/submit-$node.sh"
 [[ ! -e "$job_script" ]] || fail "existing job script must remain immutable: $job_script"
 workflow=(run-elmm --case "$case_name" --threads "$threads")
+if [[ "$experiment" == resident ]]; then workflow[0]=resident; fi
 jobs_index=$((${#workflow[@]} + 1))
 workflow+=(--jobs "$jobs" --repeats "$repeats" --warmups "$warmups" --arch "$arch")
 config_index=-1
@@ -144,12 +158,18 @@ slurm_directive() {
         printf '%s\n' 'set -euo pipefail'
         printf 'workspace=%q\noutput=%q\nwork=%q\nsif=%q\nruntime=%q\nconfig=%q\nconfig_index=%q\n' \
             "$workspace" "$output" "$work" "$sif" "$runtime" "$config" "$config_index"
+        printf 'experiment=%q\ndeps=%q\nsolver=%q\n' "$experiment" "$deps" "$solver"
         printf 'jobs_index=%q\njobs_explicit=%q\n' "$jobs_index" "$jobs_explicit"
         printf 'workflow=('; printf ' %q' "${workflow[@]}"; printf ' )\n'
         cat <<'EOF'
 printf 'Worker: %s\nJob ID: %s\nOutput directory: %s\nWork directory: %s\n' \
     "${SLURMD_NODENAME:-${HOSTNAME:-unknown}}" "${SLURM_JOB_ID:-interactive}" "$output" "$work"
-trap 'printf "Job exit status: %s\nResults and logs: %s\nProgress log: %s/run.log\nModule setup log: %s/modules.log\nReport: %s/experiment/report.json\nFigures: %s/experiment/figures\n" "$?" "$output" "$output" "$output" "$output" "$output"' EXIT
+report_path="$output/experiment/report.json"
+if [[ "$experiment" == resident ]]; then
+    report_path="$output/resident/report.json"
+    export DEPS_ROOT="$deps" SOLVER_ROOT="$solver"
+fi
+trap 'printf "Job exit status: %s\nResults and logs: %s\nModule setup log: %s/modules.log\nReport: %s\n" "$?" "$output" "$output" "$report_path"' EXIT
 if [[ "$jobs_explicit" == 0 && "${SLURM_CPUS_PER_TASK:-}" =~ ^[1-9][0-9]*$ ]] && \
         (( SLURM_CPUS_PER_TASK < workflow[jobs_index] )); then
     workflow[jobs_index]="$SLURM_CPUS_PER_TASK"
@@ -241,8 +261,13 @@ chmod +x "$job_script"
 printf 'Target node: %s\nPartition: %s\nAccount: %s\n' "$node" "$partition" "${account:-site default}"
 printf 'Batch defaults: %s CPUs, %s memory, %s GPU(s), %s wall time\n' "$cpus" "$memory" "$gpus" "$time_limit"
 printf 'Output directory: %s\nWork directory: %s\nJob script: %s\n' "$output" "$work" "$job_script"
-printf 'Report: %s/experiment/report.json\nFigures: %s/experiment/figures\n' "$output" "$output"
-printf 'Progress log: %s/run.log\nModule setup log: %s/modules.log\n' "$output" "$output"
+if [[ "$experiment" == resident ]]; then
+    printf 'Report: %s/resident/report.json\nBuild log: %s/resident/build.log\n' "$output" "$output"
+else
+    printf 'Report: %s/experiment/report.json\nFigures: %s/experiment/figures\n' "$output" "$output"
+    printf 'Progress log: %s/run.log\n' "$output"
+fi
+printf 'Module setup log: %s/modules.log\n' "$output"
 printf 'Slurm logs: %s/slurm-<job-id>.out and .err\n' "$output"
 if (( interactive )); then
     submission=(srun --nodelist="$node" --partition="$partition" --gpus="$gpus"
