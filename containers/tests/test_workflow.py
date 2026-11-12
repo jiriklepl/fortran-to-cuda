@@ -1,6 +1,7 @@
 """Check source isolation and actual CUDA visibility without a device."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -11,6 +12,32 @@ import pytest
 spec = importlib.util.spec_from_file_location('container_workflow', Path(__file__).resolve().parents[1] / 'workflow.py')
 workflow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(workflow)
+
+
+@pytest.mark.parametrize("command", [["run-elmm", "--steps", "2"], ["doctor"]])
+def test_missing_pipeline_reports_checkout_and_submodule_fix(tmp_path, command):
+    missing = tmp_path / "elmm-pipeline"
+    env = {key: value for key, value in os.environ.items() if key != "PIPELINE_ROOT"}
+    result = subprocess.run([sys.executable, str(Path(workflow.__file__)), *command,
+                             "--output-dir", str(tmp_path / "output")],
+                            env={**env, "WORKSPACE_ROOT": str(tmp_path)},
+                            text=True, capture_output=True, check=False)
+    assert result.returncode == 1
+    assert str(missing) in result.stderr
+    assert "submodule update --init -- elmm-pipeline" in result.stderr
+    assert "PIPELINE_ROOT" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (tmp_path / "output").exists()
+
+
+def test_missing_pipeline_override_reports_only_override_fix(tmp_path):
+    missing = tmp_path / "external pipeline"
+    result = subprocess.run([sys.executable, str(Path(workflow.__file__)), "doctor"],
+                            env={**os.environ, "PIPELINE_ROOT": str(missing)},
+                            text=True, capture_output=True, check=False)
+    assert result.returncode == 1
+    assert str(missing) in result.stderr and "PIPELINE_ROOT" in result.stderr
+    assert "submodule update" not in result.stderr and "Traceback" not in result.stderr
 
 
 def test_source_identity_does_not_visit_results_or_caches(tmp_path, monkeypatch):
@@ -228,6 +255,7 @@ def test_existing_prepared_pipeline_cache_is_reused(tmp_path, monkeypatch, capsy
     def unexpected_prepare(args):
         pytest.fail("A prepared cache must not be downloaded or rebuilt")
     monkeypatch.setattr(workflow, "prepare", unexpected_prepare)
+    monkeypatch.setattr(workflow, "cached_python_usable", lambda path, modules: True)
     basis_calls = []
     def application_basis(upstream, destination):
         basis_calls.append((upstream, destination))
@@ -247,6 +275,51 @@ def test_existing_prepared_pipeline_cache_is_reused(tmp_path, monkeypatch, capsy
     assert calls[0][calls[0].index("--app-root") + 1] == str(output / "work/application-basis")
     assert basis_calls == [(pipeline / ".cache/repos", output / "work/application-basis")]
     assert "Using prepared pipeline cache:" in capsys.readouterr().out
+
+
+def test_cached_python_probe_checks_modules_and_ignores_python_path(tmp_path, monkeypatch):
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    monkeypatch.setenv("PYTHONHOME", str(tmp_path))
+    assert workflow.cached_python_usable(sys.executable, ("json",))
+    assert not workflow.cached_python_usable(sys.executable, ("module_that_does_not_exist_here",))
+    assert not workflow.cached_python_usable(tmp_path / "absent", ("json",))
+
+
+def test_unusable_cached_python_rebuilds_in_private_work_directory(tmp_path, monkeypatch, capsys):
+    pipeline = tmp_path / "pipeline"
+    for name in ("setup.json", "repos/elmm/src/SConstruct", "repos/PoisFFT/src/SConstruct",
+                 "envs/local/bin/python", "envs/build/bin/python", "native/lib/ready"):
+        path = pipeline / ".cache" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    output = tmp_path / "output"
+    monkeypatch.setattr(workflow, "PIPELINE", pipeline)
+    monkeypatch.setattr(workflow, "guarded", lambda args: True)
+    monkeypatch.setattr(workflow, "doctor", lambda *a, **kw: {
+        "memory_headroom_bytes": {"host": 8 * 2**30}, "cpu_affinity": list(range(8)),
+        "toolchain": {"nvcc": "/cuda/nvcc", "cuda_host_cxx": "/tools/g++", "architecture": "120"}})
+    monkeypatch.setattr(workflow, "cached_python_usable", lambda path, modules: "local" not in str(path))
+    preparations = []
+    def prepare(args):
+        target = args.work_dir / "pipeline"
+        preparations.append(target)
+        return target
+    monkeypatch.setattr(workflow, "prepare", prepare)
+    monkeypatch.setattr(workflow, "prepare_application_basis", lambda upstream, destination: destination)
+    monkeypatch.setattr(workflow, "plot_experiment", lambda *a: None)
+    commands = []
+    def execute(command, **kwargs):
+        commands.append(command)
+        path = output / "experiment/report.json"
+        path.parent.mkdir()
+        path.write_text(json.dumps({"summary": {}}))
+    monkeypatch.setattr(workflow.subprocess, "run", execute)
+    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--output-dir", str(output)])
+    workflow.main()
+    assert preparations == [output / "work/pipeline"]
+    assert commands[0][0] == str(output / "work/pipeline/.cache/envs/local/bin/python")
+    assert (pipeline / ".cache/envs/local/bin/python").exists()
+    assert "unusable Python environments" in capsys.readouterr().out
 
 
 def test_prepare_reconstructs_common_basis_after_upstream_setup(tmp_path, monkeypatch):

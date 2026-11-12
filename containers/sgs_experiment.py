@@ -181,6 +181,20 @@ def compare_outputs(reference, observed, compare):
             "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."}
 
 
+def validate_sgs_generation(metadata, source, sources, entry):
+    manifest = metadata["scope_manifest"]
+    approved_sources = {str(path) for path in sources}
+    if (manifest["scope_count"] <= 0 or manifest.get("entry") != entry
+            or str(source) not in manifest["sources"]
+            or not set(manifest["sources"]).issubset(approved_sources)
+            or any(scope.get("path") != str(source) or not scope.get("gpu_leaves")
+                   or any(not leaf.startswith(entry + "#") for leaf in scope["gpu_leaves"])
+                   for scope in manifest["scopes"])
+            or not metadata["gpu_sources"]
+            or any("numerical_contract" not in row for row in metadata["gpu_sources"])):
+        raise RuntimeError("current compiler did not emit strict SGS-only CUDA scopes")
+
+
 def assess_validation(receipt, record, *, allow_native_variation=False, is_reference=False):
     """Keep failed comparisons visible when explicitly timing a variable baseline."""
     passed = record["validation"]["passed"]
@@ -227,7 +241,7 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
     """
     if threads < 1 or jobs < 1 or repeats < 1 or warmups < 0 or timeout < 1 or (steps is not None and steps < 1):
         raise ValueError("positive threads and valid jobs/repetition/time budgets required")
-    if scope_transfers not in {"direct", "pinned", "pipelined", "auto", "coalesced"}:
+    if scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
         raise ValueError("unsupported compiler scope transfer policy")
     app_root, compiler_root, pipeline_root = (Path(path).resolve(strict=True)
                                               for path in (app_root, compiler_root, pipeline_root))
@@ -251,13 +265,12 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
         raise ValueError("another pipeline checkout is already imported")
     sys.dont_write_bytecode = True
     sys.path.insert(0, str(pipeline_root))
-    from elmm_pipeline._legacy_scopes import transform_scopes
     from elmm_pipeline.build import build, preprocessing_defines
     from elmm_pipeline.common import clean_environment, command, digest_tree
     from elmm_pipeline.configuration import prepare_config
     from elmm_pipeline.gpu_toolchain import discover_toolchain
     from elmm_pipeline.gpu_validation import gpu_activity, trace_environment
-    from elmm_pipeline.local_adapter import apply_scope_sources
+    from elmm_pipeline.local_adapter import apply_scope_sources, transform_scopes
     from elmm_pipeline.scope_extraction import export_analysis_sources
     from elmm_pipeline.structural import Project
     from elmm_pipeline.validation import compare_vtk, read_vtk, validate_log
@@ -278,7 +291,7 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                "paths": {"app_root": str(app_root), "compiler_root": str(compiler_root),
                          "pipeline_root": str(pipeline_root), "work_dir": str(work), "output": str(output)},
                "selection": {"entry": contract["entry"], "gpu_policy": "sections", "scope_transfers": scope_transfers,
-                             "scope_execution": "bounded", "host_threads": threads},
+                             "scope_execution": "graph", "host_threads": threads},
                "protocol": {"threads": threads, "jobs": jobs, "warmups": warmups, "repetitions": repeats,
                             "rotate": True, "explicit_steps": steps, "timeout_seconds": timeout,
                             "allow_native_variation": allow_native_variation},
@@ -308,7 +321,7 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                                              for path in native_library_dir.iterdir() if path.is_file()}
         receipt["compiler_tree_sha256"] = digest_tree(compiler_root / "compiler")
         helper_paths = [Path(importlib.import_module("elmm_pipeline." + name).__file__)
-                        for name in ("_legacy_scopes", "build", "common", "configuration", "gpu_toolchain", "gpu_validation",
+                        for name in ("build", "common", "configuration", "gpu_toolchain", "gpu_validation",
                                      "local_adapter", "scope_extraction", "structural", "validation", "scoped_provenance")]
         receipt["pipeline_helpers_sha256"] = {str(path): digest(path) for path in helper_paths}
         for mode in ("native", "current"):
@@ -332,12 +345,10 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                                     entry=contract["entry"], source_files=sources[1:],
                                     capture_facts=contract["capture_facts"], analysis_sources=analysis, gpu_options=options)
         manifest = metadata["scope_manifest"]
-        if (manifest["scope_count"] <= 0 or set(manifest["sources"]) != {str(source)}
-                or not metadata["gpu_sources"] or any("numerical_contract" not in row for row in metadata["gpu_sources"])):
-            raise RuntimeError("current compiler did not emit strict SGS-only CUDA scopes")
+        validate_sgs_generation(metadata, source, sources, contract["entry"])
         changed = apply_scope_sources(metadata, {str(path): path for path in sources})
-        if set(changed) != {source}:
-            raise RuntimeError("source changes extend beyond the explicit SGS source")
+        if {str(path) for path in changed} != set(manifest["sources"]):
+            raise RuntimeError("applied source changes differ from the approved SGS graph manifest")
         receipt["generation"] = {"analysis_sources": str(analysis), "command": metadata["command"],
                                  "scope_count": manifest["scope_count"], "scope_manifest": str(work / "generated/compiler/scope-manifest.json"),
                                  "gpu_sources": metadata["gpu_sources"], "changed_sources": [str(path) for path in changed]}
@@ -468,7 +479,7 @@ def main(argv=None):
     parser.add_argument("--cuda-host")
     parser.add_argument("--cuda-runtime-dir")
     parser.add_argument("--gpu-arch")
-    parser.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto", "coalesced"), default="direct")
+    parser.add_argument("--scope-transfers", choices=("direct", "pinned", "auto", "coalesced"), default="direct")
     parser.add_argument("--build-arg", action="append", default=[])
     parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument("--threads", type=int, default=4)

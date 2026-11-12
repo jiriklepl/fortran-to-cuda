@@ -12,6 +12,22 @@ runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
 
+def test_sgs_graph_accepts_approved_support_sources_but_not_other_gpu_leaves(tmp_path):
+    source = tmp_path / "subgrid.f90"
+    support = tmp_path / "parameters.f90"
+    entry = "subgrid::sgs_sigma_uniform"
+    metadata = {"scope_manifest": {"scope_count": 1, "entry": entry,
+                "sources": {str(source): {}, str(support): {}},
+                "scopes": [{"path": str(source), "gpu_leaves": [entry + "#region3"]}]},
+                "gpu_sources": [{"numerical_contract": {}}]}
+    runner.validate_sgs_generation(metadata, source, [source, support], entry)
+    with pytest.raises(RuntimeError, match="SGS-only"):
+        runner.validate_sgs_generation(metadata, source, [source], entry)
+    metadata["scope_manifest"]["scopes"][0]["gpu_leaves"].append("other::step#region1")
+    with pytest.raises(RuntimeError, match="SGS-only"):
+        runner.validate_sgs_generation(metadata, source, [source, support], entry)
+
+
 @pytest.mark.parametrize("case,method", [("channel", 4), ("second-order", 2), ("fourth-order", 4)])
 def test_named_channel_presets_preserve_duration_and_original_inputs(tmp_path, monkeypatch, case, method):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "elmm-pipeline"))

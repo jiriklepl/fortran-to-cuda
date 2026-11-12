@@ -16,7 +16,13 @@ import time
 from application_basis import prepare_application_basis
 from sgs_experiment import (application_paths, compare_outputs, digest, read_outputs,
                             select_configuration)
-from workflow import COMPILER, PIPELINE, WORKSPACE, doctor, source_identity
+from workflow import COMPILER, PIPELINE, WORKSPACE, doctor, require_pipeline, source_identity
+
+try:
+    require_pipeline()
+except RuntimeError as error:
+    raise SystemExit(f"error: {error}") from None
+
 from elmm_pipeline.campaigns.halos import compare_fields, fields
 from elmm_pipeline.campaigns.run import environment
 from elmm_pipeline.configuration import prepare_config

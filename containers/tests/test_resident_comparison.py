@@ -1,7 +1,9 @@
 """Resident comparison preserves diagnostic and timing evidence boundaries."""
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 from types import SimpleNamespace
 
@@ -12,6 +14,16 @@ sys.path[:0] = [str(HERE), str(HERE.parent / "elmm-pipeline")]
 spec = importlib.util.spec_from_file_location("resident_comparison", HERE / "resident_comparison.py")
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
+
+
+def test_missing_pipeline_is_reported_before_resident_imports(tmp_path):
+    missing = tmp_path / "pipeline"
+    result = subprocess.run([sys.executable, str(HERE / "resident_comparison.py"), "--help"],
+                            env={**os.environ, "PIPELINE_ROOT": str(missing)},
+                            text=True, capture_output=True, check=False)
+    assert result.returncode == 1
+    assert str(missing) in result.stderr and "PIPELINE_ROOT" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_application_environment_strips_external_controls(monkeypatch, tmp_path):

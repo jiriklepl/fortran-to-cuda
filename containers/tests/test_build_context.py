@@ -17,6 +17,9 @@ def test_apptainer_build_context_excludes_large_artifacts(tmp_path):
     for name in ('compiler', 'benchmarks', 'elmm-pipeline'):
         (workspace / name).mkdir()
         (workspace / name / 'source.py').write_text('source')
+    (workspace / 'elmm-pipeline/pipeline.py').write_text('pipeline')
+    (workspace / 'elmm-pipeline/elmm_pipeline').mkdir()
+    (workspace / 'elmm-pipeline/elmm_pipeline/__init__.py').write_text('')
     for directory in ('benchmarks/results', 'elmm-pipeline/.cache', 'compiler/__pycache__'):
         (workspace / directory).mkdir(parents=True)
         (workspace / directory / 'do-not-copy').write_text('cached result')
@@ -38,4 +41,23 @@ def test_apptainer_build_context_excludes_large_artifacts(tmp_path):
     observed = json.loads(capture.read_text())
     assert observed['argv'] == ['build', str(output), 'containers/Apptainer.def']
     assert set(observed['files']) == {'requirements.txt', 'containers/Apptainer.def',
-        'containers/build-apptainer.sh', 'compiler/source.py', 'benchmarks/source.py', 'elmm-pipeline/source.py'}
+        'containers/build-apptainer.sh', 'compiler/source.py', 'benchmarks/source.py', 'elmm-pipeline/source.py',
+        'elmm-pipeline/pipeline.py', 'elmm-pipeline/elmm_pipeline/__init__.py'}
+
+
+def test_apptainer_build_rejects_uninitialized_pipeline(tmp_path):
+    workspace = tmp_path / 'workspace with spaces'
+    (workspace / 'containers').mkdir(parents=True)
+    source = Path(__file__).resolve().parents[1]
+    shutil.copy2(source / 'build-apptainer.sh', workspace / 'containers/build-apptainer.sh')
+    commands = tmp_path / 'commands'
+    commands.mkdir()
+    engine = commands / 'apptainer'
+    engine.write_text('#!/bin/sh\nexit 99\n')
+    engine.chmod(0o755)
+    result = subprocess.run(['bash', str(workspace / 'containers/build-apptainer.sh'), '-o', str(tmp_path / 'image.sif')],
+                            env={**os.environ, 'PATH': str(commands) + os.pathsep + os.environ['PATH']},
+                            text=True, capture_output=True, timeout=10)
+    assert result.returncode == 1
+    assert 'ELMM pipeline checkout is missing or incomplete' in result.stderr
+    assert 'submodule update --init -- elmm-pipeline' in result.stderr

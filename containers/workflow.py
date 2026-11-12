@@ -91,6 +91,7 @@ def selected_gpu(requested=None):
 
 
 def doctor(args, *, require_gpu=False, fortran=None):
+    require_pipeline()
     from elmm_pipeline.campaigns.guard import memory_headroom
     fortran = fortran or os.environ.get("FC", "gfortran")
     result = {"python": sys.version, "cpu_affinity": sorted(os.sched_getaffinity(0)),
@@ -148,8 +149,32 @@ def prepare(args):
     return target
 
 
+def require_pipeline():
+    if not (PIPELINE / "pipeline.py").is_file() or not (PIPELINE / "elmm_pipeline/__init__.py").is_file():
+        if PIPELINE != (WORKSPACE / "elmm-pipeline").resolve():
+            hint = "Set PIPELINE_ROOT to a complete pipeline checkout."
+        else:
+            hint = (f"Initialize it with 'git -C {shlex.quote(str(WORKSPACE))} "
+                    "submodule update --init -- elmm-pipeline', or set PIPELINE_ROOT to a complete checkout.")
+        raise RuntimeError(f"ELMM pipeline checkout is missing or incomplete: {PIPELINE}. {hint}")
+
+
+def cached_python_usable(path, modules):
+    env = dict(os.environ)
+    env.pop("PYTHONHOME", None)
+    env.pop("PYTHONPATH", None)
+    env["PYTHONNOUSERSITE"] = "1"
+    try:
+        result = subprocess.run([str(path), "-c", "import " + ", ".join(modules)],
+                                env=env, capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
 def guarded(args):
     """Return True only in the guarded worker, never silently run locally."""
+    require_pipeline()
     if args.worker:
         return True
     from elmm_pipeline.campaigns.guard import available
@@ -215,6 +240,15 @@ def run_elmm(args):
         prepared = all((cache / path).exists() for path in (
             "setup.json", "repos/elmm/src/SConstruct", "repos/PoisFFT/src/SConstruct",
             "envs/local/bin/python", "envs/build/bin/python", "native/lib"))
+        if prepared:
+            interpreters = ((args.compiler_python, cache / "envs/local/bin/python", ("fparser", "islpy")),
+                            (args.scons_python, cache / "envs/build/bin/python", ("SCons",)))
+            unusable = [path for override, path, modules in interpreters
+                        if override is None and not cached_python_usable(path, modules)]
+            if unusable:
+                print("Prepared pipeline cache has unusable Python environments:",
+                      ", ".join(map(str, unusable)), "; preparing a fresh cache in", args.work_dir, flush=True)
+                prepared = False
         if prepared:
             print("Using prepared pipeline cache:", cache, flush=True)
         else:
@@ -358,7 +392,7 @@ def main():
             child.add_argument("--case", choices=CASE_NAMES, default="channel-simple")
             child.add_argument("--config", type=Path)
             child.add_argument("--steps", type=int, help="Explicit smoke-run cap; default preserves original duration")
-            child.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto", "coalesced"), default="direct")
+            child.add_argument("--scope-transfers", choices=("direct", "pinned", "auto", "coalesced"), default="direct")
             child.add_argument("--threads", type=int, default=4)
             child.add_argument("--jobs", type=int, default=8)
             child.add_argument("--repeats", type=int, default=7)
