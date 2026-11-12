@@ -68,6 +68,10 @@ program test
   call get_command_argument(1,mode)
   call owner%begin_epoch(0_c_int,8388608_c_size_t)
   result_handle=owner%bind_real64(output,lbound(output),.true.)
+  if (trim(mode)=='shape') then
+    handle=owner%bind_real64(output(:,:,-7:-6),lbound(output),.true.)
+    error stop 'shape change accepted'
+  endif
   do i=1,40
     call owner%acquire_work_real64_3(17_c_int64_t,lbound(output),ubound(output),work)
     if (any(lbound(work)/=lbound(output)).or.any(ubound(work)/=ubound(output))) error stop 'bounds'
@@ -153,3 +157,8 @@ def test_domain_owned_workspace(tmp_path):
     rejected = subprocess.run([str(binary), "overlap"], text=True, capture_output=True, timeout=30)
     assert rejected.returncode != 0
     assert "overlapping use of a compiler workspace slot" in rejected.stderr
+    rejected = subprocess.run([str(binary), "shape"], text=True, capture_output=True, check=False, timeout=30)
+    assert rejected.returncode != 0
+    assert "storage shape changed inside an epoch" in rejected.stderr
+    assert re.search(r"Registered extents:\s+257\s+13\s+3", rejected.stderr)
+    assert re.search(r"Requested extents:\s+257\s+13\s+2", rejected.stderr)
