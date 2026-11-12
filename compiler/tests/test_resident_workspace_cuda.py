@@ -66,8 +66,23 @@ program test
   character(20) :: mode
   if (available()==0) stop 77
   call get_command_argument(1,mode)
+  if (trim(mode)=='status') call resident_require(FORT_SCOPE_UNINITIALIZED)
   call owner%begin_epoch(0_c_int,8388608_c_size_t)
-  result_handle=owner%bind_real64(output,lbound(output),.true.)
+  result_handle=owner%bind_real64(output,lbound(output),.true.,origin='test::output')
+  if (trim(mode)=='type') then
+    handle=owner%register_storage(c_loc(output),shape(output,kind=c_size_t),int(lbound(output),c_int64_t), &
+                                  FORT_SCOPE_INTEGER32,4_c_size_t,.true.,.false.,'test::mask')
+    error stop 'type change accepted'
+  endif
+  if (trim(mode)=='persistent') then
+    handle=owner%bind_real64(output,lbound(output),.true.,persistent=.true.)
+    error stop 'persistence change accepted'
+  endif
+  if (trim(mode)=='rank') then
+    handle=owner%register_storage(c_loc(output),[size(output,kind=c_size_t)],[1_c_int64_t], &
+                                  FORT_SCOPE_REAL64,8_c_size_t,.true.,.false.)
+    error stop 'rank change accepted'
+  endif
   if (trim(mode)=='shape') then
     handle=owner%bind_real64(output(:,:,-7:-6),lbound(output),.true.)
     error stop 'shape change accepted'
@@ -157,8 +172,21 @@ def test_domain_owned_workspace(tmp_path):
     rejected = subprocess.run([str(binary), "overlap"], text=True, capture_output=True, timeout=30)
     assert rejected.returncode != 0
     assert "overlapping use of a compiler workspace slot" in rejected.stderr
-    rejected = subprocess.run([str(binary), "shape"], text=True, capture_output=True, check=False, timeout=30)
+    rejected = subprocess.run([str(binary), "status"], text=True, capture_output=True, check=False, timeout=30)
     assert rejected.returncode != 0
-    assert "storage shape changed inside an epoch" in rejected.stderr
-    assert re.search(r"Registered extents:\s+257\s+13\s+3", rejected.stderr)
-    assert re.search(r"Requested extents:\s+257\s+13\s+2", rejected.stderr)
+    assert "Resident runtime failed: UNINITIALIZED (status 7)" in rejected.stderr
+    registered = r"Registered:.*origin=test::output.*real64.*bytes=\s*8.*persistent=\s*F.*257\s+13\s+3"
+    for mode, message, requested in (
+        ("type", "contract", r"integer32.*bytes=\s*4.*persistent=\s*F.*257\s+13\s+3"),
+        ("persistent", "contract", r"real64.*bytes=\s*8.*persistent=\s*T.*257\s+13\s+3"),
+        ("rank", "rank", r"real64.*bytes=\s*8.*persistent=\s*F.*10023"),
+        ("shape", "shape", r"real64.*bytes=\s*8.*persistent=\s*F.*257\s+13\s+2"),
+    ):
+        rejected = subprocess.run([str(binary), mode], text=True, capture_output=True, check=False, timeout=30)
+        assert rejected.returncode != 0
+        assert f"storage {message} changed inside an epoch" in rejected.stderr
+        assert re.search(r"Resident storage conflict: address=\d+ domain=\d+ epoch=\d+", rejected.stderr)
+        assert re.search(registered, rejected.stderr)
+        assert re.search(r"Requested:.*" + requested, rejected.stderr)
+        expected_origin = "test::mask" if mode == "type" else "unknown"
+        assert "origin=" + expected_origin in rejected.stderr
