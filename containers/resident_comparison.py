@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -13,10 +14,12 @@ import subprocess
 import sys
 import time
 
+import numpy as np
+
 from application_basis import prepare_application_basis
 from sgs_experiment import (application_paths, compare_outputs, digest, read_outputs,
                             select_configuration)
-from workflow import COMPILER, PIPELINE, WORKSPACE, doctor, require_pipeline, source_identity
+from workflow import COMPILER, PIPELINE, WORKSPACE, doctor, plot_experiment, require_pipeline, source_identity
 
 try:
     require_pipeline()
@@ -33,6 +36,12 @@ REQUIRED_FIELDS = {"fields-" + name + ".bin" for name in
                    "U V W Pr Viscosity U2 V2 W2 Ustar Vstar Wstar".split()}
 FIELD_POLICY = {"dtype": "float64", "atol": 1e-6, "rtol": 1e-5,
                 "metadata_format": "storage-shape-bounds-v1"}
+NATURAL_CHANNEL_FIELDS = {"fields-" + name + ".bin" for name in
+                          "Moisture Pr Pr_avg Scalar Scalar_avg TDiff Temperature U U2 U_avg Ustar "
+                          "V V2 V_avg Viscosity Vstar W W2 W_avg Wstar".split()}
+NATURAL_CHANNEL_OUTPUTS = {"out.vtk", "avg.vtk", "U.vtk", "V.vtk", "W.vtk", "Uavg.vtk", "Vavg.vtk",
+                           "Wavg.vtk", "Retau.unf", "times.unf", "frame-y-times.txt", "frame-z-times.txt"} | {
+                               f"frame-{axis}-{index}.vtk" for axis in ("y", "z") for index in range(51)}
 
 
 def write(path, value):
@@ -127,11 +136,172 @@ def read_fields(directory, expected_count=None):
     return fields(directory, policy)
 
 
+def compare_long_vectors(reference, actual, *, criterion="relative_l2"):
+    reference = np.asarray(reference, dtype=np.float64)
+    actual = np.asarray(actual, dtype=np.float64)
+    if reference.shape != actual.shape:
+        raise ValueError("Long-run comparison shape mismatch")
+    if criterion not in {"relative_l2", "pointwise", "exact"}:
+        raise ValueError("Unknown long-run comparison criterion")
+    if not np.all(np.isfinite(reference)) or not np.all(np.isfinite(actual)):
+        return {"passed": False, "values": int(reference.size), "criterion": criterion,
+                "relative_l2": None, "max_absolute_error": None, "reason": "nonfinite input"}
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        error = actual - reference
+        maximum = float(np.max(np.abs(error), initial=0))
+        peak = float(np.max(np.abs(reference), initial=0))
+    if not math.isfinite(maximum):
+        return {"passed": False, "values": int(reference.size), "criterion": criterion,
+                "relative_l2": None, "max_absolute_error": None, "reason": "nonfinite error"}
+    relative = peak_relative = None
+    if peak:
+        with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+            peak_ratio = float(np.divide(maximum, peak))
+            relative_ratio = (peak_ratio * float(np.linalg.norm(error / maximum))
+                              / float(np.linalg.norm(reference / peak))) if maximum else 0.0
+        peak_relative = peak_ratio if math.isfinite(peak_ratio) else None
+        relative = relative_ratio if math.isfinite(relative_ratio) else None
+    if criterion == "exact":
+        passed = np.array_equal(reference, actual)
+    elif criterion == "pointwise":
+        passed = np.all(np.isclose(actual, reference, atol=FIELD_POLICY["atol"], rtol=FIELD_POLICY["rtol"]))
+    else:
+        passed = relative is not None and relative <= 0.01 if peak else maximum <= FIELD_POLICY["atol"]
+    return {"passed": bool(passed), "values": int(reference.size), "criterion": criterion,
+            "relative_l2": relative, "max_absolute_error": maximum,
+            "max_error_relative_to_reference_peak": peak_relative}
+
+
+def compare_long_fields(actual, reference):
+    pointwise = compare_fields(actual, reference, FIELD_POLICY)
+    return {name: {**compare_long_vectors(reference[name][0], values), "pointwise": pointwise[name]}
+            for name, (values, _layout) in actual.items()}
+
+
+def compare_long_vtk(reference, actual):
+    shape, expected = reference
+    actual_shape, observed = actual
+    if shape != actual_shape or list(expected) != list(observed):
+        raise ValueError("Long-run VTK dimensions or field labels differ")
+    result = {}
+    count = math.prod(shape)
+    for name, values in expected.items():
+        candidate = observed[name]
+        if values.typecode != candidate.typecode:
+            raise ValueError("Long-run VTK field precision differs: " + name)
+        exact = name.endswith("_COORDINATES") or name == "ptype"
+        if not exact and len(values) == 3 * count:
+            original = np.asarray(values).reshape(-1, 3)
+            changed = np.asarray(candidate).reshape(-1, 3)
+            for component in range(3):
+                result[f"{name}[{component}]"] = compare_long_vectors(original[:, component], changed[:, component])
+        else:
+            result[name] = compare_long_vectors(values, candidate, criterion="exact" if exact else "relative_l2")
+    return result
+
+
+def compare_long_outputs(reference, actual):
+    reference, actual = Path(reference), Path(actual)
+    expected = {str(path.relative_to(reference)): path for path in reference.rglob("*") if path.is_file()}
+    observed = {str(path.relative_to(actual)): path for path in actual.rglob("*") if path.is_file()}
+    if expected.keys() != observed.keys():
+        missing = sorted(expected.keys() - observed.keys())
+        extra = sorted(observed.keys() - expected.keys())
+        raise ValueError(f"Long-run output inventory differs: missing={missing[:3]}, extra={extra[:3]}")
+    results = {}
+    for name, path in sorted(expected.items()):
+        candidate = observed[name]
+        if path.suffix == ".vtk":
+            final = name in {"out.vtk", "avg.vtk"}
+            results[name] = compare_long_vtk(read_vtk(path, require_flow_fields=final),
+                                             read_vtk(candidate, require_flow_fields=final))
+        elif name in {"Retau.unf", "times.unf"}:
+            if path.stat().st_size % 8 or candidate.stat().st_size % 8:
+                raise ValueError("Incomplete long-run output: " + name)
+            original = np.fromfile(path, dtype="<f8")
+            changed = np.fromfile(candidate, dtype="<f8")
+            if name == "Retau.unf":
+                if original.size % 2 or changed.size % 2:
+                    raise ValueError("Incomplete long-run output: " + name)
+                original, changed = original.reshape(-1, 2), changed.reshape(-1, 2)
+                results[name] = {field: compare_long_vectors(original[:, component], changed[:, component])
+                                 for component, field in enumerate(("Retau", "friction_velocity"))}
+            else:
+                results[name] = {"time": compare_long_vectors(original, changed, criterion="pointwise")}
+        elif path.suffix == ".txt":
+            original, changed = np.loadtxt(path, ndmin=2), np.loadtxt(candidate, ndmin=2)
+            if original.shape != changed.shape:
+                raise ValueError("Long-run output shape differs: " + name)
+            results[name] = {"frame_index": compare_long_vectors(original[:, 0], changed[:, 0], criterion="exact")}
+            for component in range(1, original.shape[1]):
+                results[name][f"column{component}"] = compare_long_vectors(
+                    original[:, component], changed[:, component], criterion="pointwise")
+        else:
+            results[name] = {"bytes": {"passed": path.read_bytes() == candidate.read_bytes(), "criterion": "exact"}}
+    return {"passed": all(row["passed"] for components in results.values() for row in components.values()),
+            "output_count": len(results), "files": results}
+
+
+class FieldComparisonError(ValueError):
+    def __init__(self, comparison, *, label=None):
+        self.comparison = comparison
+        failed = sorted((name, row) for name, row in comparison.items() if not row["passed"])
+        details = []
+        for name, row in failed[:3]:
+            maximum = row["max_absolute_error"]
+            error = f"{maximum:.6g}" if maximum is not None else "nonfinite"
+            details.append(f"{name} ({row['failed_values']}/{row['values']}, max_abs={error})")
+        if len(failed) > 3:
+            details.append(f"+{len(failed) - 3} more fields")
+        prefix = f"{label}: " if label else ""
+        super().__init__(prefix + "Full-precision field comparison failed: " + ", ".join(details))
+
+
 def checked_fields(actual, reference):
     result = compare_fields(actual, reference, FIELD_POLICY)
     if not all(row["passed"] for row in result.values()):
-        raise ValueError("Full-precision field comparison failed")
+        raise FieldComparisonError(result)
     return result
+
+
+def inspect_diagnostics(directory):
+    directory = Path(directory)
+    reference = read_fields(directory / "native-reference")
+    comparisons = {}
+    for name in ("native-repeat", "resident"):
+        candidate = directory / name
+        if not candidate.is_dir():
+            continue
+        result = compare_fields(read_fields(candidate, len(reference)), reference, FIELD_POLICY)
+        failed = {field: row for field, row in result.items() if not row["passed"]}
+        comparisons[name] = {"passed": not failed, "failed_fields": failed}
+    if not comparisons:
+        raise ValueError("No native-repeat or resident diagnostic directory found")
+    print(json.dumps({"reference": str(directory / "native-reference"), "comparisons": comparisons},
+                     indent=2, allow_nan=False))
+    if not all(row["passed"] for row in comparisons.values()):
+        raise SystemExit(1)
+
+
+def uses_natural_channel_policy(case, config, steps):
+    return case == "channel" and config is None and steps is None
+
+
+def require_natural_channel(row, log):
+    timing = row["application_timing"]
+    if timing["completed_steps"] != 2458 or "Time limit reached." not in log:
+        raise ValueError("The approved 1% rule requires natural channel completion at 2458 steps")
+
+
+def require_long_comparison(row, label):
+    failures = [name for name, result in row.get("fields", {}).items() if not result["passed"]]
+    failures += [f"{name}:{component}" for name, components in row["outputs"]["files"].items()
+                 for component, result in components.items() if not result["passed"]]
+    if failures:
+        details = ", ".join(failures[:3])
+        if len(failures) > 3:
+            details += f", +{len(failures) - 3} more"
+        raise ValueError(f"{label}: natural channel 1% comparison failed: {details}")
 
 
 def run(args):
@@ -160,7 +330,8 @@ def run(args):
         application = application_paths(basis)
         source, advection = select_configuration(application, args.case, args.config)
         configuration = prepare_config(source, work / "config", steps=args.steps, advection=advection)
-        report.update(hardware=hardware, configuration=configuration,
+        natural_channel = uses_natural_channel_policy(args.case, args.config, args.steps)
+        report.update(hardware=hardware, configuration=configuration, case=args.case,
                       dependencies={"application_root": str(app_root), "vkfft": str(vkfft)},
                       source_identities={"compiler": source_identity(COMPILER / "compiler"),
                                          "pipeline": source_identity(PIPELINE),
@@ -172,7 +343,11 @@ def run(args):
                                     "warmups populate timing cache"),
                       timing_scope=("complete process including startup, cache lookup or compilation, "
                                     "output and teardown"),
-                      validation_scope="full-precision allocated fields and bounds; final and available averaged VTK",
+                      validation_policy=("natural-channel-componentwise-relative-l2-1-percent"
+                                         if natural_channel else "pointwise-1e-6-1e-5"),
+                      validation_scope=("all full-precision fields, bounds and outputs; original time checks"
+                                        if natural_channel else
+                                        "full-precision allocated fields and bounds; final and available averaged VTK"),
                       poisson_execution_verified=False)
         build = work / "build"
         build_command = [sys.executable, PIPELINE / "pipeline.py", "resident-build",
@@ -217,29 +392,52 @@ def run(args):
             caches[name].mkdir(mode=0o700)
         packages = json.loads((build / "packages.json").read_text())
         reference_fields = reference_vtk = None
+        reference_directory = None
         expected_steps = None
         for name, mode in (("native-reference", "native"), ("native-repeat", "native"), ("resident", "resident")):
             verify_binaries()
+            print("Starting diagnostic:", name, flush=True)
             is_gpu = mode == "resident"
             env = application_environment(args.threads, gpu["uuid"], caches["diagnostic"] if is_gpu else None,
                                           traced=is_gpu)
             binary = binaries["ELMM-full20" if is_gpu else "ELMM-native-full20"]["path"]
             row, vtk, log = run_application(binary, work / "config", configuration, output / "diagnostics" / name,
                                             env, args.timeout, expected_steps)
+            row.update(mode=mode, traced=is_gpu, timing_sample=False)
+            report["diagnostics"].append(row)
+            if natural_channel:
+                require_natural_channel(row, log)
             field_count = None if reference_fields is None else len(reference_fields)
             actual_fields = read_fields(Path(row["directory"]), field_count)
+            row["field_count"] = len(actual_fields)
             if reference_fields is None:
                 reference_fields, reference_vtk = actual_fields, vtk
+                reference_directory = Path(row["directory"])
                 expected_steps = row["application_timing"]["completed_steps"]
+                if natural_channel:
+                    outputs = {str(path.relative_to(reference_directory / "output"))
+                               for path in (reference_directory / "output").rglob("*") if path.is_file()}
+                    if set(reference_fields) != NATURAL_CHANNEL_FIELDS or outputs != NATURAL_CHANNEL_OUTPUTS:
+                        raise ValueError("Natural channel reference is missing approved fields or outputs")
+            elif natural_channel:
+                if reference_directory is None:
+                    raise RuntimeError("Natural channel reference directory is missing")
+                row["fields"] = compare_long_fields(actual_fields, reference_fields)
+                row["vtk_pointwise"] = compare_outputs(reference_vtk, vtk, compare_vtk)
+                row["outputs"] = compare_long_outputs(reference_directory / "output", Path(row["directory"]) / "output")
+                require_long_comparison(row, name)
             else:
-                row["fields"] = checked_fields(actual_fields, reference_fields)
+                try:
+                    row["fields"] = checked_fields(actual_fields, reference_fields)
+                except FieldComparisonError as error:
+                    row["fields"] = error.comparison
+                    raise FieldComparisonError(error.comparison, label=name) from None
                 row["vtk"] = compare_vtks(reference_vtk, vtk)
             if is_gpu:
                 row["gpu_activity"] = verify_resident_execution(
                     packages, log, ["subgrid::sgs_sigma_uniform", "dynamics::convection"])
-            row.update(mode=mode, traced=is_gpu, timing_sample=False, field_count=len(actual_fields))
-            report["diagnostics"].append(row)
             write(report_path, report)
+            print("Completed diagnostic:", name, "steps", row["application_timing"]["completed_steps"], flush=True)
         for round_number in range(args.warmups + args.repeats):
             order = ("native", "resident") if round_number % 2 == 0 else ("resident", "native")
             for mode in order:
@@ -249,11 +447,21 @@ def run(args):
                                               traced=False)
                 binary = binaries["ELMM" if is_gpu else "ELMM-native"]["path"]
                 directory = output / "runs" / f"round-{round_number:02}" / mode
-                row, vtk, _log = run_application(binary, work / "config", configuration, directory,
-                                                 env, args.timeout, expected_steps)
+                print("Starting", mode, "round", round_number, flush=True)
+                row, vtk, log = run_application(binary, work / "config", configuration, directory,
+                                                env, args.timeout, expected_steps)
                 row.update(mode=mode, round=round_number, warmup=round_number < args.warmups,
-                           traced=False, vtk=compare_vtks(reference_vtk, vtk))
+                           traced=False)
                 report["runs"].append(row)
+                if natural_channel:
+                    if reference_directory is None:
+                        raise RuntimeError("Natural channel reference directory is missing")
+                    require_natural_channel(row, log)
+                    row["vtk_pointwise"] = compare_outputs(reference_vtk, vtk, compare_vtk)
+                    row["outputs"] = compare_long_outputs(reference_directory / "output", directory / "output")
+                    require_long_comparison(row, f"round {round_number} {mode}")
+                else:
+                    row["vtk"] = compare_vtks(reference_vtk, vtk)
                 write(report_path, report)
                 print(mode, "round", round_number, "seconds", round(row["wall_seconds"], 3), flush=True)
         verify_binaries()
@@ -262,13 +470,16 @@ def run(args):
             samples = [row["wall_seconds"] for row in report["runs"] if row["mode"] == mode and not row["warmup"]]
             summary[mode] = {"samples_seconds": samples, "median_seconds": statistics.median(samples)}
         summary["speedup"] = summary["native"]["median_seconds"] / summary["resident"]["median_seconds"]
-        report.update(status="passed", summary=summary)
+        report.update(status="passed", summary=summary, figures=str(output / "figures"))
+        write(report_path, report)
+        plot_experiment(report_path, output / "figures")
     except BaseException as error:
         report.update(status="failed", error={"type": type(error).__name__, "message": str(error)})
         raise
     finally:
         write(report_path, report)
     print("Report:", report_path, flush=True)
+    print("Figures:", output / "figures", flush=True)
 
 
 def main(argv=None):
@@ -288,7 +499,7 @@ def main(argv=None):
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--repeats", type=int, default=7)
     parser.add_argument("--warmups", type=int, default=1)
-    parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--timeout", type=int)
     parser.add_argument("--build-timeout", type=int, default=3600)
     fortran = os.environ.get("FC") or ("gfortran-15" if shutil.which("gfortran-15") else "gfortran")
     cuda_host = os.environ.get("CUDAHOSTCXX") or os.environ.get("CUDA_HOST_CXX") or os.environ.get("CXX")
@@ -297,9 +508,16 @@ def main(argv=None):
     parser.add_argument("--nvcc", default=os.environ.get("NVCC"))
     parser.add_argument("--arch", default="auto")
     parser.add_argument("--gpu")
+    parser.add_argument("--inspect-diagnostics", type=Path, metavar="DIR",
+                        help="compare saved diagnostic dumps without rerunning the application")
     args = parser.parse_args(argv)
+    if args.inspect_diagnostics is not None:
+        inspect_diagnostics(args.inspect_diagnostics)
+        return
     if args.work_dir is None:
         args.work_dir = args.output_dir / "work"
+    if args.timeout is None:
+        args.timeout = 3600 if uses_natural_channel_policy(args.case, args.config, args.steps) else 900
     if min(args.threads, args.jobs, args.repeats, args.timeout, args.build_timeout) < 1 or args.warmups < 0:
         parser.error("threads, jobs, repeats and timeouts must be positive; warmups must be nonnegative")
     if args.steps is not None and args.steps < 1:
