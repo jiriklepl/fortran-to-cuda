@@ -13,6 +13,7 @@ module fort_resident_domain
     integer(c_int) :: element_type=0
     integer(c_size_t) :: element_bytes=0
     integer(c_size_t), allocatable :: extents(:)
+    character(:), allocatable :: origin
     logical :: persistent=.false.
   end type
 
@@ -49,8 +50,32 @@ module fort_resident_domain
 contains
   subroutine resident_require(status)
     integer(c_int), intent(in) :: status
+    character(len=16) :: name
     if (status /= FORT_SCOPE_OK) then
-      write(*,*) 'Resident execution failed; source work will not be replayed. Status:', status
+      select case(status)
+      case(FORT_SCOPE_ARGUMENT)
+        name='ARGUMENT'
+      case(FORT_SCOPE_STALE)
+        name='STALE'
+      case(FORT_SCOPE_ALIAS)
+        name='ALIAS'
+      case(FORT_SCOPE_RESOURCE)
+        name='RESOURCE'
+      case(FORT_SCOPE_BOUNDARY)
+        name='BOUNDARY'
+      case(FORT_SCOPE_EXECUTION)
+        name='EXECUTION'
+      case(FORT_SCOPE_UNINITIALIZED)
+        name='UNINITIALIZED'
+      case(FORT_SCOPE_STATE)
+        name='STATE'
+      case(FORT_SCOPE_PLAN_MISMATCH)
+        name='PLAN_MISMATCH'
+      case default
+        name='UNKNOWN'
+      end select
+      write(error_unit,'(a,a,a,i0,a)') 'Resident runtime failed: ',trim(name),' (status ',status, &
+                                      '); source work will not be replayed.'
       error stop 'resident execution failure'
     endif
   end subroutine
@@ -71,7 +96,45 @@ contains
     self%active = .true.
   end subroutine
 
-  function register_storage(self, host, extents, lower, element_type, element_bytes, initialized, persistent) result(handle)
+  function storage_type_name(element_type) result(name)
+    integer(c_int), intent(in) :: element_type
+    character(len=12) :: name
+    select case(element_type)
+    case(FORT_SCOPE_BYTES)
+      name='bytes'
+    case(FORT_SCOPE_REAL32)
+      name='real32'
+    case(FORT_SCOPE_REAL64)
+      name='real64'
+    case(FORT_SCOPE_INTEGER32)
+      name='integer32'
+    case(FORT_SCOPE_LOGICAL)
+      name='logical'
+    case default
+      name='unknown'
+    end select
+  end function
+
+  subroutine report_storage_conflict(self, item, extents, element_type, element_bytes, persistent, origin)
+    class(resident_domain), intent(in) :: self
+    type(registered_storage), intent(in) :: item
+    integer(c_size_t), intent(in) :: extents(:), element_bytes
+    integer(c_int), intent(in) :: element_type
+    logical, intent(in) :: persistent
+    character(*), optional, intent(in) :: origin
+    character(:), allocatable :: requested_origin
+    requested_origin='unknown'
+    if (present(origin)) requested_origin=origin
+    write(error_unit,'(a,i0,a,i0,a,i0)') 'Resident storage conflict: address=',item%identity, &
+                                         ' domain=',self%domain,' epoch=',self%generation
+    write(error_unit,*) 'Registered: origin=',item%origin,' type=',trim(storage_type_name(item%element_type)), &
+                        ' bytes=',item%element_bytes,' persistent=',item%persistent,' extents=',item%extents
+    write(error_unit,*) 'Requested: origin=',requested_origin,' type=',trim(storage_type_name(element_type)), &
+                        ' bytes=',element_bytes,' persistent=',persistent,' extents=',extents
+  end subroutine
+
+  function register_storage(self, host, extents, lower, element_type, element_bytes, initialized, persistent, origin) &
+      result(handle)
     class(resident_domain), intent(inout) :: self
     type(c_ptr), intent(in) :: host
     integer(c_size_t), target, intent(in) :: extents(:)
@@ -79,6 +142,7 @@ contains
     integer(c_int), intent(in) :: element_type
     integer(c_size_t), intent(in) :: element_bytes
     logical, intent(in) :: initialized, persistent
+    character(*), optional, intent(in) :: origin
     integer(c_int64_t) :: handle, allocation_id, generation
     type(fort_scope_layout) :: layout
     type(registered_storage) :: item
@@ -90,17 +154,24 @@ contains
     do i=1,size(self%storage)
       if (self%storage(i)%identity /= allocation_id) cycle
       if (self%storage(i)%element_type /= element_type .or. self%storage(i)%element_bytes /= element_bytes .or. &
-          (self%storage(i)%persistent .neqv. persistent)) error stop 'storage contract changed inside an epoch'
-      if (size(self%storage(i)%extents) /= size(extents)) error stop 'storage rank changed inside an epoch'
+          (self%storage(i)%persistent .neqv. persistent)) then
+        call report_storage_conflict(self,self%storage(i),extents,element_type,element_bytes,persistent,origin)
+        error stop 'storage contract changed inside an epoch'
+      endif
+      if (size(self%storage(i)%extents) /= size(extents)) then
+        call report_storage_conflict(self,self%storage(i),extents,element_type,element_bytes,persistent,origin)
+        error stop 'storage rank changed inside an epoch'
+      endif
       if (any(self%storage(i)%extents /= extents)) then
-        write(error_unit,*) 'Resident storage identity:', allocation_id
-        write(error_unit,*) 'Registered extents:', self%storage(i)%extents
-        write(error_unit,*) 'Requested extents:', extents
+        call report_storage_conflict(self,self%storage(i),extents,element_type,element_bytes,persistent,origin)
         error stop 'storage shape changed inside an epoch'
       endif
       ! Complete-array dummy rebasing does not change allocation identity.
       ! Numerical entries pass their own logical origins as scalar arguments;
       ! external tasks validate the canonical layout established by the owner.
+      if (present(origin)) then
+        if (self%storage(i)%origin=='unknown') self%storage(i)%origin=origin
+      endif
       handle = self%storage(i)%handle
       return
     enddo
@@ -112,35 +183,39 @@ contains
                                              merge(1_c_int,0_c_int,initialized),handle))
     item%identity=allocation_id; item%handle=handle; item%element_type=element_type
     item%element_bytes=element_bytes; item%extents=extents; item%persistent=persistent
+    item%origin='unknown'
+    if (present(origin)) item%origin=origin
     self%storage=[self%storage,item]
   end function
 
-  function bind_real64(self, values, lower, initialized, persistent) result(handle)
+  function bind_real64(self, values, lower, initialized, persistent, origin) result(handle)
     class(resident_domain), intent(inout) :: self
     real(c_double), contiguous, target, intent(in) :: values(..)
     integer, intent(in) :: lower(:)
     logical, intent(in) :: initialized
     logical, optional, intent(in) :: persistent
+    character(*), optional, intent(in) :: origin
     integer(c_int64_t) :: handle
     logical :: saved
     saved=.false.
     if (present(persistent)) saved=persistent
     handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
-                                 FORT_SCOPE_REAL64,8_c_size_t,initialized,saved)
+                                 FORT_SCOPE_REAL64,8_c_size_t,initialized,saved,origin)
   end function
 
-  function bind_integer32(self, values, lower, initialized, persistent) result(handle)
+  function bind_integer32(self, values, lower, initialized, persistent, origin) result(handle)
     class(resident_domain), intent(inout) :: self
     integer(c_int), contiguous, target, intent(in) :: values(..)
     integer, intent(in) :: lower(:)
     logical, intent(in) :: initialized
     logical, optional, intent(in) :: persistent
+    character(*), optional, intent(in) :: origin
     integer(c_int64_t) :: handle
     logical :: saved
     saved=.false.
     if (present(persistent)) saved=persistent
     handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
-                                 FORT_SCOPE_INTEGER32,4_c_size_t,initialized,saved)
+                                 FORT_SCOPE_INTEGER32,4_c_size_t,initialized,saved,origin)
   end function
 
   subroutine observe(self, handles)
