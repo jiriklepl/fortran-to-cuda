@@ -15,7 +15,7 @@ point to a complete pipeline checkout.
 
 ## Current resident comparison
 
-The current full-application comparison is `resident`, not the older SGS-only
+The default `./run_on_node.sh` comparison is `resident`, not the older SGS-only
 `run-elmm` experiment described below. It runs the current pipeline and compiler,
 builds the local CUDA Poisson solver, and compares fresh ELMM executables:
 
@@ -32,10 +32,12 @@ directories must be new for every run and must be retained together.
 
 ### Prepare dependencies
 
-On a worker with network access, create independent, clean Git checkouts. The
-solver is the separate `poisson-solver` checkout in this repository; retain its
-`.git` history because the pipeline verifies its ancestry. These commands do not
-modify that checkout:
+By default, the job creates fresh, pinned ELMM, PoisFFT and VkFFT checkouts in
+its work directory on the worker; this requires network access. The solver is
+the separate `poisson-solver` submodule in this repository, and its Git history
+must be available for the pipeline's ancestry check. No source checkout is
+modified. To reuse explicitly prepared dependencies instead, create independent,
+clean checkouts on a worker with network access:
 
 ```bash
 USER=$(id -un)
@@ -58,10 +60,11 @@ repeat a particular comparison.
 ### Run natively
 
 Linux requires a visible NVIDIA GPU and compatible driver/toolkit, GNU Fortran
-15, G++ 14, CMake 4+, Ninja, FFTW (single, double and OpenMP), BLAS and LAPACK.
-Use a Python 3.12+ environment with the repository requirements and NumPy, for
-example `pip install -r requirements.txt numpy==2.5.3 cmake==4.0.3`. Select
-another compatible toolchain with `--fortran`, `--cuda-host`, and `--nvcc`.
+15, a CUDA-compatible C++ compiler, FFTW (single, double and OpenMP), BLAS and
+LAPACK. The worker needs Python 3.12+ with `venv`/`pip`; missing Python, CMake 4+
+or Ninja packages are installed into a private work-directory environment. This
+also requires network access. Select another compatible toolchain with
+`--fortran`, `--cuda-host`, and `--nvcc`.
 
 ```bash
 export SOLVER_ROOT="$PWD/poisson-solver"
@@ -86,8 +89,7 @@ administrator's subuid/subgid setup; alternatively use an existing image.
 ```bash
 ./containers/build-apptainer.sh --fakeroot -o /work/$USER/fortran-resident.sif
 
-./run_on_node.sh hopper01 --experiment resident \
-    --deps "$DEPS_ROOT" --solver "$PWD/poisson-solver" \
+./run_on_node.sh hopper01 \
     --runtime apptainer --sif /work/$USER/fortran-resident.sif \
     --time 04:00:00 --output-dir /work/$USER/resident-smoke \
     --work-dir /scratch/tmp/$USER-resident-smoke \
@@ -101,6 +103,8 @@ Chimera GPU node such as `mff-a2-19`, specify `--partition gpu-ffa`. Use
 `--runtime native` uses the same experiment on an allocated worker with the
 native dependencies installed. On Chimera, `$TMPDIR` is RAM charged to the
 job's memory limit; `/scratch/tmp` is appropriate for larger builds.
+Use `--deps "$DEPS_ROOT"` to reuse the explicit checkouts above and `--solver`
+to select a different local solver checkout.
 
 The report is `OUTPUT_DIR/resident/report.json`; its paths into the work tree
 refer to the container's mount points when run inside Apptainer. Three separate
@@ -122,9 +126,8 @@ smoke run is not evidence of full-workload performance.
 
 ## Earlier SGS experiment
 
-`./run_on_node.sh` remains the top-level Slurm command. It forwards to
-`containers/run_node.sh`; local, Docker/Podman and Apptainer entrypoints run the
-same experiment. The experiment builds **native ELMM on the reviewed common source basis and a
+Use `./run_on_node.sh --experiment sgs` to select this older experiment. It builds
+**native ELMM on the reviewed common source basis and a
 fresh compiler-generated SGS graph with sections/direct transfers**, checks final and available
 averaged VTK fields,
 verifies actual GPU launches separately, then measures complete process time.
@@ -142,7 +145,7 @@ select a partition; `--partition` overrides them. Check live availability with
 `sinfo` and choose an account with `--account` when needed.
 
 ```bash
-# SGS-only experiment; use the bw01 partition preset and the kdss account.
+# Current resident comparison, using the bw01 partition preset and kdss account.
 ./run_on_node.sh -p gpu-short -A kdss bw01
 
 # Inspect the job script without submitting or executing numerical work.
@@ -150,24 +153,24 @@ select a partition; `--partition` overrides them. Check live availability with
 
 # Fresh, full-duration channel-simple comparison: four runtime threads,
 # eight build jobs, one warmup and seven rotated measured repetitions per mode.
-./run_on_node.sh hopper01 --runtime apptainer --sif /work/USER/fortran.sif \
+./run_on_node.sh hopper01 --experiment sgs --runtime apptainer --sif /work/USER/fortran.sif \
     --output-dir /work/USER/sgs-hopper-01 --work-dir /scratch/tmp/USER-sgs-hopper-01
 
 # The upstream ELMM channel configuration, on the other target.
-./run_on_node.sh bw01 --case channel --runtime apptainer \
+./run_on_node.sh bw01 --experiment sgs --case channel --runtime apptainer \
     --sif /work/USER/fortran.sif --time 08:00:00 \
     --output-dir /work/USER/sgs-blackwell-01 -- --timeout 7200
 
 # Explicitly reproduce the earlier 50-step advection-order comparisons.
-./run_on_node.sh -p gpu-short -A kdss bw01 --case second-order --steps 50
-./run_on_node.sh -p gpu-short -A kdss bw01 --case fourth-order --steps 50
+./run_on_node.sh -p gpu-short -A kdss bw01 --experiment sgs --case second-order --steps 50
+./run_on_node.sh -p gpu-short -A kdss bw01 --experiment sgs --case fourth-order --steps 50
 
 # An explicitly capped smoke test. Its report cannot pass the performance gate.
-./run_on_node.sh hopper01 --steps 3 --repeats 1 --warmups 0 \
+./run_on_node.sh hopper01 --experiment sgs --steps 3 --repeats 1 --warmups 0 \
     --output-dir /work/USER/sgs-smoke-01
 
 # More build resources, while retaining the four-thread timing budget.
-./run_on_node.sh hopper01 --jobs 16 --cpus 16 --mem 64G \
+./run_on_node.sh hopper01 --experiment sgs --jobs 16 --cpus 16 --mem 64G \
     --output-dir /work/USER/sgs-build16-01
 ```
 
@@ -301,7 +304,7 @@ series is eligible for this comparison target. `--jobs` controls builds only.
 existing transfer selection; `direct` remains the default. The compiler owns
 eligibility and fallback. Reports and plots identify the selected control.
 For node runs, supply it after `--`, for example
-`./run_on_node.sh -p gpu-short -A kdss bw01 -- --scope-transfers pinned`.
+`./run_on_node.sh -A kdss bw01 --experiment sgs -- --scope-transfers pinned`.
 The experimental `coalesced` control combines eligible upload sections into a
 dense physical span with at most 12.5% extra bytes, provided that the whole
 canonical source resource is defined and host current. Output copies stay exact, and ineligible uploads use
@@ -375,7 +378,7 @@ and uses the selected toolkit's normal `targets/x86_64-linux/lib` directory.
 For an explicitly requested timing series despite native roundoff variation:
 
 ```bash
-./run_on_node.sh -p gpu-short -A kdss bw01 --case channel -- --allow-native-variation
+./run_on_node.sh -A kdss bw01 --experiment sgs --case channel -- --allow-native-variation
 ```
 
 This continues when native/native comparisons fail, retaining all original

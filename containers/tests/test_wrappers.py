@@ -68,6 +68,11 @@ def fake_workspace(sandbox):
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("")
     (package.parent / "pipeline.py").write_text("")
+    for relative in ("CMakeLists.txt", "dependencies.lock.json", "src/device_api.cpp",
+                     "include/poisson-solver/device_api.h"):
+        path = workspace / "poisson-solver" / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("")
     env["WORKSPACE_ROOT"] = str(workspace)
     return workspace
 
@@ -113,7 +118,7 @@ def test_node_default_submission_and_full_case(sandbox):
     assert not any(arg.startswith(("--partition", "--cpus-per-task", "--mem", "--gpus", "--time")) for arg in submission)
     assert execute_payload(sandbox).returncode == 0
     argv = json.loads(capture.read_text())["argv"]
-    assert argv[0] == "run-elmm"
+    assert argv[0] == "resident"
     assert values(argv, "--case") == ["channel-simple"]
     assert values(argv, "--threads") == ["4"]
     assert values(argv, "--jobs") == ["8"]
@@ -170,6 +175,41 @@ def test_node_resident_mode_forwards_sources_and_resources(sandbox):
     assert "/resident/build.log" in result.stdout
 
 
+def test_node_explicit_sgs_mode_preserves_earlier_workflow(sandbox):
+    _, _, capture, _, invoke = sandbox
+    fake_workspace(sandbox)
+    result = invoke("run_node.sh", "hopper01", "--dry-run", "--runtime", "native", "--experiment", "sgs")
+    assert result.returncode == 0, result.stderr
+    assert execute_payload(sandbox).returncode == 0
+    assert json.loads(capture.read_text())["argv"][0] == "run-elmm"
+    assert "/experiment/report.json" in result.stdout
+
+
+def test_native_resident_bootstraps_missing_tools_in_work_directory(sandbox):
+    tmp, env, capture, _, invoke = sandbox
+    fake_workspace(sandbox)
+    python = tmp / "python"
+    python.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, shutil, sys\nfrom pathlib import Path\n"
+        "if sys.argv[1:2] == ['-c']:\n    sys.exit(1)\n"
+        "if sys.argv[1:3] == ['-m', 'venv']:\n"
+        "    target = Path(sys.argv[3]) / 'bin/python'\n"
+        "    target.parent.mkdir(parents=True)\n    shutil.copy2(sys.argv[0], target)\n    sys.exit(0)\n"
+        "with Path(os.environ['CAPTURE']).open('a') as output:\n"
+        "    output.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+    )
+    python.chmod(0o755)
+    env.update(PYTHON=str(python), WORK_DIR=str(tmp / "work"))
+    result = invoke("entrypoint.sh", "resident", "--steps", "2")
+    assert result.returncode == 0, result.stderr
+    calls = [json.loads(line) for line in capture.read_text().splitlines()]
+    assert calls[0][:2] == ["-m", "pip"]
+    assert "numpy==2.5.3" in calls[0] and "cmake==4.0.3" in calls[0] and "ninja==1.13.0" in calls[0]
+    assert calls[1][-3:] == [str(CONTAINERS / "resident_comparison.py"), "--steps", "2"]
+    assert (tmp / "work/resident-python/bin/python").exists()
+
+
 def test_node_resident_apptainer_receives_checkout_paths(sandbox):
     tmp, env, capture, _, invoke = sandbox
     fake_workspace(sandbox)
@@ -220,7 +260,7 @@ def test_root_launcher_forwards_each_named_preset_without_a_step_cap(sandbox, ca
     _, _, capture, _, invoke = sandbox
     fake_workspace(sandbox)
     result = invoke("../run_on_node.sh", "-p", "gpu-short", "-A", "kdss", "bw01",
-                    "--dry-run", "--case", case_name, "--runtime", "native")
+                    "--dry-run", "--case", case_name, "--runtime", "native", "--experiment", "sgs")
     assert result.returncode == 0, result.stderr
     assert execute_payload(sandbox, "bw01").returncode == 0
     argv = json.loads(capture.read_text())["argv"]
@@ -322,9 +362,14 @@ def test_original_top_level_command_preserves_site_defaults_and_prints_paths(san
     assert record["env"]["SBATCH_MEM_PER_NODE"] == "16000"
     assert record["env"]["SBATCH_CPUS_PER_TASK"] == "4"
     assert record["argv"] == ["--parsable", "--wait", str(Path(env["OUTPUT_DIR"]) / "submit-bw01.sh")]
-    for expected in (env["OUTPUT_DIR"], "experiment/report.json", "experiment/figures",
+    for expected in (env["OUTPUT_DIR"], "resident/report.json", "resident/build.log",
                      "Job ID: 12345", "slurm-12345.out", "slurm-12345.err", "squeue -j 12345", "scancel 12345"):
         assert expected in result.stdout
+    assert execute_payload(sandbox, "bw01").returncode == 0
+    payload = json.loads(capture.read_text())
+    assert payload["argv"][0] == "resident"
+    assert payload["env"]["SOLVER_ROOT"] == str(Path(env["WORKSPACE_ROOT"]) / "poisson-solver")
+    assert "DEPS_ROOT" not in payload["env"]
 
 
 def test_reduced_cpu_request_defaults_build_jobs_to_that_budget(sandbox):
@@ -737,6 +782,21 @@ def test_apptainer_binds_explicit_solver_checkout_read_only(sandbox, sif_env):
     argv = json.loads(capture.read_text())["argv"]
     assert f"{solver}:/solver-source:ro" in values(argv, "--bind")
     assert "SOLVER_ROOT=/solver-source" in values(argv, "--env")
+
+
+def test_apptainer_keeps_workspace_solver_at_submodule_path(sandbox, sif_env):
+    tmp, _, capture, stub, invoke = sandbox
+    stub("apptainer")
+    workspace = tmp / "workspace"
+    solver = workspace / "poisson-solver"
+    solver.mkdir(parents=True)
+    result = invoke("run-apptainer.sh", "resident", overrides={"WORKSPACE_ROOT": str(workspace),
+                                                               "SOLVER_ROOT": str(solver)})
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(capture.read_text())["argv"]
+    assert f"{workspace}:/workspace:ro" in values(argv, "--bind")
+    assert f"{solver}:/solver-source:ro" not in values(argv, "--bind")
+    assert "SOLVER_ROOT=/workspace/poisson-solver" in values(argv, "--env")
 
 
 def test_apptainer_resident_binds_dependencies_and_enables_gpu(sandbox, sif_env):

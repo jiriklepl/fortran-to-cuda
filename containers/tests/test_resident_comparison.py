@@ -16,6 +16,38 @@ runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
 
+@pytest.mark.parametrize(("application", "vkfft", "names"), [
+    (True, True, ("elmm", "PoisFFT", "VkFFT")),
+    (True, False, ("elmm", "PoisFFT")),
+    (False, True, ("VkFFT",)),
+])
+def test_prepare_dependencies_uses_exact_pins_without_replacing_existing_paths(
+        tmp_path, monkeypatch, application, vkfft, names):
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(["git", "init", "-q", str(source)], check=True)
+    (source / "content").write_text("pinned\n")
+    subprocess.run(["git", "-C", str(source), "add", "content"], check=True)
+    subprocess.run(["git", "-C", str(source), "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                    "commit", "-qm", "pinned"], check=True)
+    revision = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+    pipeline = tmp_path / "pipeline"
+    pipeline.mkdir()
+    spec = {"url": str(source), "revision": revision}
+    (pipeline / "dependencies.json").write_text(json.dumps({"elmm": spec, "PoisFFT": spec}))
+    (pipeline / "pressure-dependencies.json").write_text(json.dumps({"VkFFT": spec}))
+    monkeypatch.setattr(runner, "PIPELINE", pipeline)
+    destination = tmp_path / "dependencies"
+    runner.prepare_dependencies(destination, application=application, vkfft=vkfft)
+    assert {path.name for path in destination.iterdir()} == set(names)
+    for name in names:
+        assert (destination / name / "content").read_text() == "pinned\n"
+        assert subprocess.check_output(["git", "-C", str(destination / name), "rev-parse", "HEAD"],
+                                       text=True).strip() == revision
+    with pytest.raises(FileExistsError):
+        runner.prepare_dependencies(destination, application=application, vkfft=vkfft)
+
+
 def test_missing_pipeline_is_reported_before_resident_imports(tmp_path):
     missing = tmp_path / "pipeline"
     result = subprocess.run([sys.executable, str(HERE / "resident_comparison.py"), "--help"],
@@ -41,10 +73,12 @@ def test_application_environment_strips_external_controls(monkeypatch, tmp_path)
 
 def test_default_work_directory_follows_output(monkeypatch, tmp_path):
     monkeypatch.delenv("WORK_DIR", raising=False)
+    monkeypatch.delenv("DEPS_ROOT", raising=False)
     arguments = []
     monkeypatch.setattr(runner, "run", arguments.append)
     runner.main(["--output-dir", str(tmp_path / "output")])
     assert arguments[0].work_dir == tmp_path / "output/work"
+    assert arguments[0].app_root is None and arguments[0].vkfft is None
 
 
 def test_doctor_checks_explicit_fortran_not_ambient_fc(monkeypatch):
@@ -62,18 +96,27 @@ def test_doctor_checks_explicit_fortran_not_ambient_fc(monkeypatch):
     assert result["tools"]["explicit-fortran"]["path"] == "explicit-fortran"
 
 
-def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, monkeypatch):
-    args = SimpleNamespace(output_dir=tmp_path / "output", work_dir=tmp_path / "work", app_root=tmp_path,
-        solver=tmp_path, vkfft=tmp_path, case="channel-simple", config=None, steps=2, threads=4,
+@pytest.mark.parametrize("provision", [False, True])
+def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, monkeypatch, provision):
+    args = SimpleNamespace(output_dir=tmp_path / "output", work_dir=tmp_path / "work",
+        app_root=None if provision else tmp_path, solver=tmp_path, vkfft=None if provision else tmp_path,
+        case="channel-simple", config=None, steps=2, threads=4,
         jobs=2, repeats=2, warmups=1, timeout=30, build_timeout=30, fortran=sys.executable,
-        cuda_host=sys.executable, nvcc=sys.executable)
+        cuda_host=None, nvcc=None)
     monkeypatch.setattr(runner, "doctor", lambda *_args, **_kwargs: {
-        "gpu": {"uuid": "GPU-id", "compute_capability": "8.6"}})
+        "gpu": {"uuid": "GPU-id", "compute_capability": "8.6"},
+        "toolchain": {"cuda_host_cxx": sys.executable, "nvcc": sys.executable}})
     monkeypatch.setattr(runner, "prepare_application_basis", lambda *_args: tmp_path)
     monkeypatch.setattr(runner, "application_paths", lambda _root: {"elmm": tmp_path, "PoisFFT": tmp_path})
     monkeypatch.setattr(runner, "select_configuration", lambda *_args: (tmp_path, None))
     monkeypatch.setattr(runner, "source_identity", lambda _root: {"files": {}})
     monkeypatch.setattr(runner, "solver_identity", lambda _root: {"revision": "test"})
+    provisioned = []
+    def dependencies(directory, *, application, vkfft):
+        provisioned.append((directory, application, vkfft))
+        directory.mkdir()
+        return directory
+    monkeypatch.setattr(runner, "prepare_dependencies", dependencies)
 
     def prepare(_source, destination, **_kwargs):
         destination.mkdir()
@@ -113,6 +156,10 @@ def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, mon
     runner.run(args)
     report = json.loads((args.output_dir / "resident/report.json").read_text())
     assert report["status"] == "passed" and report["release_qualified"] is False
+    assert len(provisioned) == int(provision)
+    if provision:
+        assert provisioned[0][1:] == (True, True)
+        assert report["dependencies"]["vkfft"].endswith("dependencies/VkFFT")
     assert len(report["diagnostics"]) == 3 and len(report["runs"]) == 6
     assert report["summary"]["native"]["samples_seconds"] == [2.0, 2.0]
     assert report["summary"]["resident"]["samples_seconds"] == [1.0, 1.0]

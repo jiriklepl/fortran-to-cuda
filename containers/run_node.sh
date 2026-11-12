@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Submit the same SGS workflow used by local/container entrypoints.
+# Submit the selected workflow used by local/container entrypoints.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workspace="${WORKSPACE_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 node="" partition="" account="" config="" steps=""
-experiment=sgs deps="${DEPS_ROOT:-}" solver="${SOLVER_ROOT:-}"
+experiment=resident deps="${DEPS_ROOT:-}" solver="${SOLVER_ROOT:-}"
 output="${OUTPUT_DIR:-}" work="${WORK_DIR:-}"
 case_name=channel-simple threads=4 jobs="" repeats=7 warmups=1 arch=auto
 cpus=8 memory=32G time_limit=01:30:00 gpus=1 runtime=auto
@@ -18,8 +18,8 @@ usage() {
 Usage: run_on_node.sh [OPTIONS] NODE [-- EXTRA_RUN_ELMM_ARGS...]
 Submit a fresh comparison; no local fallback or headnode setup.
 
-    --experiment sgs|resident       Default: sgs; resident uses CUDA Poisson
-    --deps DIR --solver DIR         Resident: pinned dependency and solver checkouts
+    --experiment resident|sgs       Default: resident; sgs is the older comparison
+    --deps DIR --solver DIR         Optional resident dependency and solver checkouts
   --case NAME                     channel-simple (default), channel,
                                   second-order or fourth-order
   --config DIR                    Explicit application configuration
@@ -92,8 +92,9 @@ case "$case_name" in
 esac
 if [[ "$experiment" == resident ]]; then
     [[ "$case_name" == channel-simple || "$case_name" == channel ]] || fail "resident supports channel-simple or channel"
-    [[ -n "$deps" && -n "$solver" ]] || fail "resident requires --deps and --solver (or DEPS_ROOT and SOLVER_ROOT)"
-    deps="$(cd -- "$deps" && pwd -P)"
+    [[ -z "$deps" ]] || deps="$(cd -- "$deps" && pwd -P)"
+    solver="${solver:-$workspace/poisson-solver}"
+    [[ -d "$solver" ]] || fail "Poisson solver checkout is missing: $solver; initialize the solver submodule or select --solver"
     solver="$(cd -- "$solver" && pwd -P)"
 fi
 [[ "$runtime" == auto || "$runtime" == apptainer || "$runtime" == native ]] || fail "runtime must be auto, apptainer or native"
@@ -119,12 +120,14 @@ if [[ ! -f "$pipeline/pipeline.py" || ! -f "$pipeline/elmm_pipeline/__init__.py"
     fail "ELMM pipeline checkout is missing or incomplete: $pipeline; initialize it with: ${initialize% }"
 fi
 if [[ "$experiment" == resident ]]; then
-    [[ -f "$deps/elmm/src/SConstruct" || -f "$deps/ELMM/src/SConstruct" ]] || \
-        fail "ELMM dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
-    [[ -f "$deps/PoisFFT/src/SConstruct" ]] || \
-        fail "PoisFFT dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
-    [[ -f "$deps/VkFFT/vkFFT/vkFFT.h" ]] || \
-        fail "VkFFT dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
+    if [[ -n "$deps" ]]; then
+        [[ -f "$deps/elmm/src/SConstruct" || -f "$deps/ELMM/src/SConstruct" ]] || \
+            fail "ELMM dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
+        [[ -f "$deps/PoisFFT/src/SConstruct" ]] || \
+            fail "PoisFFT dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
+        [[ -f "$deps/VkFFT/vkFFT/vkFFT.h" ]] || \
+            fail "VkFFT dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
+    fi
     for source in CMakeLists.txt dependencies.lock.json src/device_api.cpp include/poisson-solver/device_api.h; do
         [[ -f "$solver/$source" ]] || \
             fail "Poisson solver checkout is incomplete: $solver/$source; initialize the solver submodule or select a complete --solver checkout"
@@ -187,7 +190,8 @@ printf 'Worker: %s\nJob ID: %s\nOutput directory: %s\nWork directory: %s\n' \
 report_path="$output/experiment/report.json"
 if [[ "$experiment" == resident ]]; then
     report_path="$output/resident/report.json"
-    export DEPS_ROOT="$deps" SOLVER_ROOT="$solver"
+    export SOLVER_ROOT="$solver"
+    if [[ -n "$deps" ]]; then export DEPS_ROOT="$deps"; else unset DEPS_ROOT; fi
 fi
 trap 'printf "Job exit status: %s\nResults and logs: %s\nModule setup log: %s/modules.log\nReport: %s\n" "$?" "$output" "$output" "$report_path"' EXIT
 if [[ "$jobs_explicit" == 0 && "${SLURM_CPUS_PER_TASK:-}" =~ ^[1-9][0-9]*$ ]] && \
@@ -279,6 +283,10 @@ EOF
 )
 chmod +x "$job_script"
 printf 'Target node: %s\nPartition: %s\nAccount: %s\n' "$node" "$partition" "${account:-site default}"
+printf 'Experiment: %s\n' "$experiment"
+if [[ "$experiment" == resident && -z "$deps" ]]; then
+    printf 'Pinned ELMM, PoisFFT and VkFFT sources will be prepared in the work directory on the worker.\n'
+fi
 printf 'Batch defaults: %s CPUs, %s memory, %s GPU(s), %s wall time\n' "$cpus" "$memory" "$gpus" "$time_limit"
 printf 'Output directory: %s\nWork directory: %s\nJob script: %s\n' "$output" "$work" "$job_script"
 if [[ "$experiment" == resident ]]; then
