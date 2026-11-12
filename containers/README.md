@@ -78,6 +78,8 @@ Remove `--steps` to retain the selected configuration's natural end, and use
 application threads, four build jobs, one excluded warmup and seven measured
 repetitions. `--steps` caps all diagnostics and timings; it is a smoke or
 explicitly limited workload, not the natural-duration run.
+The unmodified natural `channel` uses the approved 1% validation rule described
+below; `channel-simple`, capped runs and custom configurations remain pointwise.
 
 ### Run with Apptainer on Slurm
 
@@ -107,22 +109,49 @@ Use `--deps "$DEPS_ROOT"` to reuse the explicit checkouts above and `--solver`
 to select a different local solver checkout.
 
 The report is `OUTPUT_DIR/resident/report.json`; its paths into the work tree
-refer to the container's mount points when run inside Apptainer. Three separate
-diagnostic processes require native repeatability, compare all available
-full-precision fields including bounds, and compare final/available averaged
-VTK output at `atol=1e-6`, `rtol=1e-5`. A traced diagnostic verifies compiler
-GPU launches for SGS and convection. It does not independently establish that
-every pressure solve used the CUDA provider. Production timing runs are
-untraced, alternate native/GPU order and validate final VTK against the native
-reference. Initially empty, owner-only diagnostic and timing kernel caches are
-separate; an excluded warmup populates the timing cache. With zero warmups the
-first timing includes cache misses and compilation.
+refer to the container's mount points when run inside Apptainer. Absolute and
+relative complete-wall timing plots are written to `OUTPUT_DIR/resident/figures`
+in PNG, SVG and PDF formats. Three diagnostic processes compare a native
+reference, native repeat and resident run. A traced diagnostic verifies GPU
+launches for SGS and convection; it does not independently establish that every
+pressure solve used the CUDA provider. Production timing runs are untraced,
+alternate native/GPU order and are validated against the native reference.
+Initially empty, owner-only diagnostic and timing kernel caches are separate;
+an excluded warmup populates the timing cache. With zero warmups the first
+timing includes cache misses and compilation.
+
+For the unmodified natural `channel`, every run must reach the time limit at
+2,458 steps and retain all 20 fields and 114 outputs. The approved rule requires
+at most 1% relative L2 error independently per field and output component;
+zero-reference components use maximum absolute error `1e-6`. Bounds, layouts,
+coordinates, labels and output inventories must match exactly. Time columns
+retain the original `atol=1e-6`, `rtol=1e-5` pointwise checks. The report also
+retains the original pointwise field and final/averaged VTK results, even when
+those stricter checks fail. Short, `channel-simple` and custom runs retain the
+original pointwise checks on full fields, bounds and final/available averaged
+VTK output. Natural `channel` defaults to a four-hour Slurm allocation and a
+one-hour per-process timeout; both can be overridden.
+
+Field comparison failures retain the diagnostic stage and full per-field
+statistics in the report. To inspect saved dumps, including from earlier runs,
+without rebuilding or using a GPU, using the original pointwise rule:
+
+```sh
+python3 containers/resident_comparison.py --inspect-diagnostics OUTPUT_DIR/resident/diagnostics
+```
+
+Use the experiment's Python environment. For an Apptainer run, the same check
+can be run with the existing image and output directory:
+
+```sh
+OUTPUT_DIR=/path/to/run WORKSPACE_ROOT="$PWD" GPU_DEVICES=none \
+    ./containers/run-apptainer.sh resident --inspect-diagnostics /output/resident/diagnostics
+```
 
 These are reproducible comparison measurements, not release qualification:
-they do not check every output file, external machine load, CPU FFTW plan
-counts or the long-run relative-L2 rule used in the published milestone.
-Strict elementwise tolerances may fail for long chaotic trajectories. A capped
-smoke run is not evidence of full-workload performance.
+they do not check external machine load or CPU FFTW plan counts. The 1% rule is
+limited to natural `channel` and does not change primary/operator checks.
+A capped smoke run is not evidence of full-workload performance.
 
 ## Earlier SGS experiment
 
@@ -147,6 +176,9 @@ select a partition; `--partition` overrides them. Check live availability with
 ```bash
 # Current resident comparison, using the bw01 partition preset and kdss account.
 ./run_on_node.sh -p gpu-short -A kdss bw01
+
+# Natural channel comparison with the approved 1% rule and timing plots.
+./run_on_node.sh -p gpu-short -A kdss --case channel bw01
 
 # Inspect the job script without submitting or executing numerical work.
 ./run_on_node.sh hopper01 --dry-run

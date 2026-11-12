@@ -17,7 +17,7 @@ case "$1" in
                 [[ "$version" =~ ^cmake\ version\ ([0-9]+)\. ]] && (( BASH_REMATCH[1] >= 4 )); then
             cmake_ready=true
         fi
-        if ! "${PYTHON}" -c 'import fparser, islpy, numpy' >/dev/null 2>&1 || \
+        if ! "${PYTHON}" -c 'import fparser, islpy, numpy, matplotlib' >/dev/null 2>&1 || \
                 [[ "$cmake_ready" != true ]] || ! command -v ninja >/dev/null 2>&1; then
             work="${WORK_DIR:-${OUTPUT_DIR:-${WORKSPACE_ROOT}/out}/work}"
             environment="${work}/resident-python"

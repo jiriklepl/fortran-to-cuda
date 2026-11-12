@@ -129,6 +129,18 @@ def test_node_default_submission_and_full_case(sandbox):
     assert values(argv, "--output-dir") == [env["OUTPUT_DIR"]]
 
 
+@pytest.mark.parametrize(("options", "expected"), [
+    (("--case", "channel"), "04:00:00"),
+    (("--case", "channel", "--steps", "2"), "01:30:00"),
+    (("--case", "channel", "--time", "08:00:00"), "08:00:00"),
+])
+def test_node_natural_channel_time_limit(sandbox, options, expected):
+    fake_workspace(sandbox)
+    result = sandbox[4]("run_node.sh", "hopper01", "--dry-run", *options)
+    assert result.returncode == 0, result.stderr
+    assert batch_request(sandbox)["time"] == expected
+
+
 def test_node_missing_pipeline_fails_before_submission(sandbox):
     _, env, capture, stub, invoke = sandbox
     workspace = fake_workspace(sandbox)

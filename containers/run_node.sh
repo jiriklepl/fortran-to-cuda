@@ -8,7 +8,7 @@ node="" partition="" account="" config="" steps=""
 experiment=resident deps="${DEPS_ROOT:-}" solver="${SOLVER_ROOT:-}"
 output="${OUTPUT_DIR:-}" work="${WORK_DIR:-}"
 case_name=channel-simple threads=4 jobs="" repeats=7 warmups=1 arch=auto
-cpus=8 memory=32G time_limit=01:30:00 gpus=1 runtime=auto
+cpus=8 memory=32G time_limit="" gpus=1 runtime=auto
 sif="${SIF_FILE:-${workspace}/fortran-abomination.sif}"
 wait_job=1 dry_run=0 interactive=0 jobs_explicit=0
 extra=()
@@ -34,7 +34,7 @@ Submit a fresh comparison; no local fallback or headnode setup.
   -p, --partition NAME            Presets: hopper01=gpu-ffa-gpulab, bw01=ffa-gpulab
   -A, --account NAME              Optional SLURM account
   -c, --cpus N --mem SIZE          Defaults: 8 CPUs, 32G; CPUs cover jobs/threads
-  -t, --time HH:MM:SS --gpus N     Defaults: 01:30:00, 1 GPU
+    -t, --time HH:MM:SS --gpus N     Defaults: 01:30:00 (natural channel: 04:00:00), 1 GPU
   --no-wait                       Submit without sbatch --wait
   --interactive                   Run on the allocated node via srun
   --dry-run                       Create/print the quoted job script only
@@ -86,6 +86,12 @@ for argument in "${extra[@]}"; do
 done
 [[ -n "$node" && "$node" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "one valid SLURM node is required"
 [[ "$experiment" == sgs || "$experiment" == resident ]] || fail "experiment must be sgs or resident"
+if [[ -z "$time_limit" ]]; then
+    time_limit=01:30:00
+    if [[ "$experiment" == resident && "$case_name" == channel && -z "$steps" && -z "$config" ]]; then
+        time_limit=04:00:00
+    fi
+fi
 case "$case_name" in
     channel-simple|channel|second-order|fourth-order) ;;
     *) fail "case must be channel-simple, channel, second-order or fourth-order" ;;
@@ -290,7 +296,8 @@ fi
 printf 'Batch defaults: %s CPUs, %s memory, %s GPU(s), %s wall time\n' "$cpus" "$memory" "$gpus" "$time_limit"
 printf 'Output directory: %s\nWork directory: %s\nJob script: %s\n' "$output" "$work" "$job_script"
 if [[ "$experiment" == resident ]]; then
-    printf 'Report: %s/resident/report.json\nBuild log: %s/resident/build.log\n' "$output" "$output"
+    printf 'Report: %s/resident/report.json\nFigures: %s/resident/figures\nBuild log: %s/resident/build.log\n' \
+        "$output" "$output" "$output"
 else
     printf 'Report: %s/experiment/report.json\nFigures: %s/experiment/figures\n' "$output" "$output"
     printf 'Progress log: %s/run.log\n' "$output"
