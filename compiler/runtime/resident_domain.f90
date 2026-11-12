@@ -2,6 +2,7 @@
 ! This table caches allocation handles, never replica validity or completion.
 module fort_resident_domain
   use, intrinsic :: iso_c_binding
+  use, intrinsic :: iso_fortran_env, only: error_unit
   use fort_scoped_memory
   implicit none
   private
@@ -91,7 +92,12 @@ contains
       if (self%storage(i)%element_type /= element_type .or. self%storage(i)%element_bytes /= element_bytes .or. &
           (self%storage(i)%persistent .neqv. persistent)) error stop 'storage contract changed inside an epoch'
       if (size(self%storage(i)%extents) /= size(extents)) error stop 'storage rank changed inside an epoch'
-      if (any(self%storage(i)%extents /= extents)) error stop 'storage shape changed inside an epoch'
+      if (any(self%storage(i)%extents /= extents)) then
+        write(error_unit,*) 'Resident storage identity:', allocation_id
+        write(error_unit,*) 'Registered extents:', self%storage(i)%extents
+        write(error_unit,*) 'Requested extents:', extents
+        error stop 'storage shape changed inside an epoch'
+      endif
       ! Complete-array dummy rebasing does not change allocation identity.
       ! Numerical entries pass their own logical origins as scalar arguments;
       ! external tasks validate the canonical layout established by the owner.
