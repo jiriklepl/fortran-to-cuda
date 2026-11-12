@@ -29,8 +29,10 @@ flags=(run --cleanenv --no-home --pwd /output --bind "$OUTPUT_DIR:/output"
        --env OUTPUT_DIR=/output --env WORK_DIR=/output/work
        --env WORKSPACE_ROOT=/workspace --env PIPELINE_ROOT=/workspace/elmm-pipeline
        --env HOME=/output --env MPLCONFIGDIR=/tmp/matplotlib)
+workspace_host=
 if [[ ${WORKSPACE_ROOT+x} ]]; then
-    flags+=(--bind "$(directory "$WORKSPACE_ROOT"):/workspace:ro")
+    workspace_host="$(directory "$WORKSPACE_ROOT")"
+    flags+=(--bind "$workspace_host:/workspace:ro")
 fi
 if [[ ${PIPELINE_ROOT+x} ]]; then
     flags+=(--bind "$(directory "$PIPELINE_ROOT"):/workspace/elmm-pipeline:ro")
@@ -40,8 +42,12 @@ if [[ ${COMPILER_ROOT+x} ]]; then
             --env COMPILER_ROOT=/compiler-source)
 fi
 if [[ ${SOLVER_ROOT+x} ]]; then
-    flags+=(--bind "$(directory "$SOLVER_ROOT"):/solver-source:ro"
-            --env SOLVER_ROOT=/solver-source)
+    solver_host="$(directory "$SOLVER_ROOT")"
+    if [[ -n "$workspace_host" && "$solver_host" == "$workspace_host/"* ]]; then
+        flags+=(--env "SOLVER_ROOT=/workspace/${solver_host#"$workspace_host"/}")
+    else
+        flags+=(--bind "$solver_host:/solver-source:ro" --env SOLVER_ROOT=/solver-source)
+    fi
 fi
 if [[ ${DEPS_ROOT+x} ]]; then
     flags+=(--bind "$(directory "$DEPS_ROOT"):/dependencies:ro"

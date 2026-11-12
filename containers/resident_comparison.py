@@ -48,6 +48,26 @@ def solver_identity(root):
     return {"root": str(root), "revision": revision, "source_status": status.splitlines()}
 
 
+def prepare_dependencies(directory, *, application, vkfft):
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=False)
+    specifications = {}
+    if application:
+        specifications.update(json.loads((PIPELINE / "dependencies.json").read_text()))
+    if vkfft:
+        specifications["VkFFT"] = json.loads((PIPELINE / "pressure-dependencies.json").read_text())["VkFFT"]
+    for name, spec in specifications.items():
+        destination = directory / name
+        print("Preparing pinned dependency:", name, spec["revision"], flush=True)
+        subprocess.run(["git", "clone", "--no-checkout", "--", spec["url"], str(destination)], check=True)
+        subprocess.run(["git", "-C", str(destination), "checkout", "--detach", spec["revision"]], check=True)
+        revision = subprocess.check_output(["git", "-C", str(destination), "rev-parse", "HEAD"], text=True).strip()
+        status = subprocess.check_output(["git", "-C", str(destination), "status", "--porcelain"], text=True)
+        if revision != spec["revision"] or status:
+            raise ValueError("Pinned dependency checkout is not clean: " + str(destination))
+    return directory
+
+
 def command(argv, *, cwd, env, log, timeout):
     started = time.monotonic()
     process = None
@@ -128,13 +148,20 @@ def run(args):
         gpu = hardware["gpu"]
         architecture = gpu["compute_capability"].replace(".", "")
         fortran = Path(shutil.which(args.fortran) or args.fortran).resolve(strict=True)
-        cxx = Path(shutil.which(args.cuda_host) or args.cuda_host).resolve(strict=True)
-        nvcc = Path(shutil.which(args.nvcc) or args.nvcc).resolve(strict=True)
-        basis = prepare_application_basis(args.app_root, work / "application-basis")
+        cxx = Path(hardware["toolchain"]["cuda_host_cxx"]).resolve(strict=True)
+        nvcc = Path(hardware["toolchain"]["nvcc"]).resolve(strict=True)
+        dependencies = None
+        if args.app_root is None or args.vkfft is None:
+            dependencies = prepare_dependencies(work / "dependencies", application=args.app_root is None,
+                                                vkfft=args.vkfft is None)
+        app_root = args.app_root if args.app_root is not None else dependencies
+        vkfft = args.vkfft if args.vkfft is not None else dependencies / "VkFFT"
+        basis = prepare_application_basis(app_root, work / "application-basis")
         application = application_paths(basis)
         source, advection = select_configuration(application, args.case, args.config)
         configuration = prepare_config(source, work / "config", steps=args.steps, advection=advection)
         report.update(hardware=hardware, configuration=configuration,
+                      dependencies={"application_root": str(app_root), "vkfft": str(vkfft)},
                       source_identities={"compiler": source_identity(COMPILER / "compiler"),
                                          "pipeline": source_identity(PIPELINE),
                                          "config": source_identity(work / "config"),
@@ -150,7 +177,7 @@ def run(args):
         build = work / "build"
         build_command = [sys.executable, PIPELINE / "pipeline.py", "resident-build",
                          "--elmm", application["elmm"], "--poisfft", application["PoisFFT"],
-                         "--compiler", COMPILER, "--solver", args.solver, "--vkfft", args.vkfft,
+                         "--compiler", COMPILER, "--solver", args.solver, "--vkfft", vkfft,
                          "--output", build, "--fortran", fortran, "--cxx", cxx, "--nvcc", nvcc,
                          "--architecture", architecture, "--jobs", str(args.jobs)]
         report["build_command"] = list(map(str, build_command))
@@ -246,9 +273,9 @@ def run(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    deps = Path(os.environ.get("DEPS_ROOT", PIPELINE / ".cache/repos"))
+    deps = Path(os.environ["DEPS_ROOT"]) if os.environ.get("DEPS_ROOT") else None
     parser.add_argument("--app-root", type=Path, default=deps)
-    parser.add_argument("--vkfft", type=Path, default=deps / "VkFFT")
+    parser.add_argument("--vkfft", type=Path, default=deps / "VkFFT" if deps is not None else None)
     solver = Path(os.environ.get("SOLVER_ROOT", WORKSPACE / "poisson-solver"))
     parser.add_argument("--solver", type=Path, default=solver)
     parser.add_argument("--output-dir", type=Path, default=Path(os.environ.get("OUTPUT_DIR", "out")))
@@ -263,9 +290,11 @@ def main(argv=None):
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--build-timeout", type=int, default=3600)
-    parser.add_argument("--fortran", default=os.environ.get("FC", "gfortran-15"))
-    parser.add_argument("--cuda-host", default=os.environ.get("CXX", "g++-14"))
-    parser.add_argument("--nvcc", default=os.environ.get("NVCC", "nvcc"))
+    fortran = os.environ.get("FC") or ("gfortran-15" if shutil.which("gfortran-15") else "gfortran")
+    cuda_host = os.environ.get("CUDAHOSTCXX") or os.environ.get("CUDA_HOST_CXX") or os.environ.get("CXX")
+    parser.add_argument("--fortran", default=fortran)
+    parser.add_argument("--cuda-host", default=cuda_host)
+    parser.add_argument("--nvcc", default=os.environ.get("NVCC"))
     parser.add_argument("--arch", default="auto")
     parser.add_argument("--gpu")
     args = parser.parse_args(argv)
