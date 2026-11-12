@@ -34,7 +34,7 @@ Submit a fresh comparison; no local fallback or headnode setup.
   -p, --partition NAME            Presets: hopper01=gpu-ffa-gpulab, bw01=ffa-gpulab
   -A, --account NAME              Optional SLURM account
   -c, --cpus N --mem SIZE          Defaults: 8 CPUs, 32G; CPUs cover jobs/threads
-    -t, --time HH:MM:SS --gpus N     Defaults: 01:30:00 (natural channel: 04:00:00), 1 GPU
+    -t, --time HH:MM:SS --gpus N     Defaults: 01:30:00 (natural channel: 02:00:00), 1 GPU
   --no-wait                       Submit without sbatch --wait
   --interactive                   Run on the allocated node via srun
   --dry-run                       Create/print the quoted job script only
@@ -89,7 +89,7 @@ done
 if [[ -z "$time_limit" ]]; then
     time_limit=01:30:00
     if [[ "$experiment" == resident && "$case_name" == channel && -z "$steps" && -z "$config" ]]; then
-        time_limit=04:00:00
+        time_limit=02:00:00
     fi
 fi
 case "$case_name" in
