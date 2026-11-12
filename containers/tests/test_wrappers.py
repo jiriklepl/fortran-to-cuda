@@ -64,6 +64,10 @@ def fake_workspace(sandbox):
     workspace = tmp / "workspace & literal$"
     stub("entrypoint.sh", directory=workspace / "containers")
     stub("run-apptainer.sh", directory=workspace / "containers")
+    package = workspace / "elmm-pipeline/elmm_pipeline"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package.parent / "pipeline.py").write_text("")
     env["WORKSPACE_ROOT"] = str(workspace)
     return workspace
 
@@ -79,6 +83,18 @@ def batch_request(sandbox, node="hopper01"):
     script = Path(sandbox[1]["OUTPUT_DIR"]) / f"submit-{node}.sh"
     return dict(shlex.split(line.removeprefix("#SBATCH "))[0].removeprefix("--").split("=", 1)
                 for line in script.read_text().splitlines() if line.startswith("#SBATCH "))
+
+
+def fake_resident_sources(deps, solver):
+    for relative in ("elmm/src/SConstruct", "PoisFFT/src/SConstruct", "VkFFT/vkFFT/vkFFT.h"):
+        path = deps / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("")
+    for relative in ("CMakeLists.txt", "dependencies.lock.json", "src/device_api.cpp",
+                     "include/poisson-solver/device_api.h"):
+        path = solver / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("")
 
 
 def test_node_default_submission_and_full_case(sandbox):
@@ -108,12 +124,38 @@ def test_node_default_submission_and_full_case(sandbox):
     assert values(argv, "--output-dir") == [env["OUTPUT_DIR"]]
 
 
+def test_node_missing_pipeline_fails_before_submission(sandbox):
+    _, env, capture, stub, invoke = sandbox
+    workspace = fake_workspace(sandbox)
+    (workspace / "elmm-pipeline/elmm_pipeline/__init__.py").unlink()
+    stub("sbatch")
+    result = invoke("run_node.sh", "bw01")
+    assert result.returncode != 0
+    assert "ELMM pipeline checkout is missing or incomplete" in result.stderr
+    assert "submodule update --init -- elmm-pipeline" in result.stderr
+    assert not capture.exists()
+    assert not Path(env["OUTPUT_DIR"]).exists()
+
+
+def test_node_bad_pipeline_override_fails_without_suggesting_submodule_update(sandbox):
+    tmp, _, capture, stub, invoke = sandbox
+    fake_workspace(sandbox)
+    stub("sbatch")
+    missing = tmp / "external pipeline"
+    result = invoke("run_node.sh", "bw01", overrides={"PIPELINE_ROOT": str(missing)})
+    assert result.returncode != 0
+    assert str(missing) in result.stderr and "PIPELINE_ROOT" in result.stderr
+    assert "submodule update" not in result.stderr
+    assert not capture.exists()
+
+
 def test_node_resident_mode_forwards_sources_and_resources(sandbox):
     tmp, _, capture, _, invoke = sandbox
     fake_workspace(sandbox)
     deps, solver = tmp / "pinned dependencies", tmp / "solver checkout"
     deps.mkdir()
     solver.mkdir()
+    fake_resident_sources(deps, solver)
     result = invoke("run_node.sh", "hopper01", "--dry-run", "--runtime", "native",
                     "--experiment", "resident", "--deps", deps, "--solver", solver,
                     "--steps", "2", "--repeats", "1")
@@ -134,6 +176,7 @@ def test_node_resident_apptainer_receives_checkout_paths(sandbox):
     deps, solver = tmp / "deps", tmp / "solver"
     deps.mkdir()
     solver.mkdir()
+    fake_resident_sources(deps, solver)
     env["SIF_FILE"] = str(tmp / "image.sif")
     result = invoke("run_node.sh", "hopper01", "--dry-run", "--runtime", "apptainer",
                     "--experiment", "resident", "--deps", deps, "--solver", solver)
@@ -145,6 +188,31 @@ def test_node_resident_apptainer_receives_checkout_paths(sandbox):
     assert record["env"]["DEPS_ROOT"] == str(deps)
     assert record["env"]["SOLVER_ROOT"] == str(solver)
     assert values(record["argv"], "--output-dir") == ["/output"]
+
+
+@pytest.mark.parametrize("missing", ["elmm/src/SConstruct", "PoisFFT/src/SConstruct", "VkFFT/vkFFT/vkFFT.h"])
+def test_node_resident_missing_dependency_fails_before_submission(sandbox, missing):
+    tmp, _, capture, stub, invoke = sandbox
+    fake_workspace(sandbox)
+    deps, solver = tmp / "deps", tmp / "solver"
+    fake_resident_sources(deps, solver)
+    (deps / missing).unlink()
+    stub("sbatch")
+    result = invoke("run_node.sh", "bw01", "--experiment", "resident", "--deps", deps, "--solver", solver)
+    assert result.returncode != 0 and "dependency checkout is missing" in result.stderr
+    assert not capture.exists()
+
+
+def test_node_resident_missing_solver_source_fails_before_submission(sandbox):
+    tmp, _, capture, stub, invoke = sandbox
+    fake_workspace(sandbox)
+    deps, solver = tmp / "deps", tmp / "solver"
+    fake_resident_sources(deps, solver)
+    (solver / "src/device_api.cpp").unlink()
+    stub("sbatch")
+    result = invoke("run_node.sh", "bw01", "--experiment", "resident", "--deps", deps, "--solver", solver)
+    assert result.returncode != 0 and "Poisson solver checkout is incomplete" in result.stderr
+    assert not capture.exists()
 
 
 @pytest.mark.parametrize("case_name", ["channel-simple", "channel", "second-order", "fourth-order"])

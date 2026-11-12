@@ -110,6 +110,26 @@ for name in threads jobs repeats cpus gpus; do positive "$name" "${!name}"; done
 esac
 workspace="$(cd -- "$workspace" && pwd -P)"
 [[ -x "$workspace/containers/entrypoint.sh" ]] || fail "workspace entrypoint is missing"
+pipeline="${PIPELINE_ROOT:-$workspace/elmm-pipeline}"
+if [[ ! -f "$pipeline/pipeline.py" || ! -f "$pipeline/elmm_pipeline/__init__.py" ]]; then
+    if [[ ${PIPELINE_ROOT+x} ]]; then
+        fail "ELMM pipeline checkout is missing or incomplete: $pipeline; set PIPELINE_ROOT to a complete checkout"
+    fi
+    printf -v initialize '%q ' git -C "$workspace" submodule update --init -- elmm-pipeline
+    fail "ELMM pipeline checkout is missing or incomplete: $pipeline; initialize it with: ${initialize% }"
+fi
+if [[ "$experiment" == resident ]]; then
+    [[ -f "$deps/elmm/src/SConstruct" || -f "$deps/ELMM/src/SConstruct" ]] || \
+        fail "ELMM dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
+    [[ -f "$deps/PoisFFT/src/SConstruct" ]] || \
+        fail "PoisFFT dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
+    [[ -f "$deps/VkFFT/vkFFT/vkFFT.h" ]] || \
+        fail "VkFFT dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
+    for source in CMakeLists.txt dependencies.lock.json src/device_api.cpp include/poisson-solver/device_api.h; do
+        [[ -f "$solver/$source" ]] || \
+            fail "Poisson solver checkout is incomplete: $solver/$source; initialize the solver submodule or select a complete --solver checkout"
+    done
+fi
 [[ -z "$config" ]] || config="$(cd -- "$config" && pwd -P)"
 [[ -n "$output" ]] || output="$workspace/results/runs/$node-$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p -- "$output"

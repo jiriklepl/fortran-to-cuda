@@ -69,6 +69,12 @@ if [[ "${FROM_DOCKER}" -eq 1 ]]; then
     echo "Converting local Docker image '${DOCKER_TAG}' to SIF..."
     "${APPTAINER_BIN}" build "${EXTRA_ARGS[@]}" "${SIF_OUTPUT}" "docker-daemon:${DOCKER_TAG}"
 else
+    if [[ ! -f "$WORKSPACE_ROOT/elmm-pipeline/pipeline.py" || \
+          ! -f "$WORKSPACE_ROOT/elmm-pipeline/elmm_pipeline/__init__.py" ]]; then
+        printf 'ERROR: ELMM pipeline checkout is missing or incomplete: %s\n' "$WORKSPACE_ROOT/elmm-pipeline" >&2
+        printf 'Initialize it with: git -C %q submodule update --init -- elmm-pipeline\n' "$WORKSPACE_ROOT" >&2
+        exit 1
+    fi
     # %files has no Docker-style ignore support. Stage source before building,
     # so caches and 100+ GB result archives never enter the image or sandbox.
     context="$(mktemp -d "${CONTAINER_BUILD_TMPDIR:-${TMPDIR:-/tmp}}/fortran-image.XXXXXXXX")"

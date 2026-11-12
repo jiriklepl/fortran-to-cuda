@@ -1,5 +1,18 @@
 # GPU node experiments
 
+After a fresh clone, initialize the pipeline and solver submodules before
+building an image or submitting jobs. Run source preparation on a worker with
+network access:
+
+```bash
+git submodule update --init -- elmm-pipeline poisson-solver
+git submodule status
+```
+
+For an existing checkout, inspect its submodule state first; initialization
+should not be used to replace local work. An explicit `PIPELINE_ROOT` must
+point to a complete pipeline checkout.
+
 ## Current resident comparison
 
 The current full-application comparison is `resident`, not the older SGS-only
@@ -112,7 +125,7 @@ smoke run is not evidence of full-workload performance.
 `./run_on_node.sh` remains the top-level Slurm command. It forwards to
 `containers/run_node.sh`; local, Docker/Podman and Apptainer entrypoints run the
 same experiment. The experiment builds **native ELMM on the reviewed common source basis and a
-fresh compiler-generated SGS sections/direct variant**, checks final and available
+fresh compiler-generated SGS graph with sections/direct transfers**, checks final and available
 averaged VTK fields,
 verifies actual GPU launches separately, then measures complete process time.
 The target is 20% less wall time than original native (`GPU/native <= 0.80`),
@@ -121,7 +134,7 @@ not another 20% over the previous SGS result. Reports also give the speedup fact
 ## On the MFF clusters
 
 The [cluster guide](https://gitlab.mff.cuni.cz/mff/hpc/clusters) supplied with this
-work confirms these presets: `hopper01` uses `gpu-ffa-gpulab`; `bw01` uses
+work lists these presets: `hopper01` uses `gpu-ffa-gpulab`; `bw01` uses
 `ffa-gpulab`. Both have two GPUs. The guide's Blackwell GRES label conflicts with
 its hardware description, so the runner requests one GPU without a model name
 and queries the allocated CUDA device for its actual architecture. Presets only
@@ -129,7 +142,7 @@ select a partition; `--partition` overrides them. Check live availability with
 `sinfo` and choose an account with `--account` when needed.
 
 ```bash
-# Existing invocation: options may precede the node, as before.
+# SGS-only experiment; use the bw01 partition preset and the kdss account.
 ./run_on_node.sh -p gpu-short -A kdss bw01
 
 # Inspect the job script without submitting or executing numerical work.
@@ -190,7 +203,9 @@ recorded with the figures. An explicit `PLOT_PYTHON` is checked, never silently
 replaced. Existing source environments and system plotting packages are reused;
 the launcher does not install packages into a system Python on the headnode.
 An already prepared `elmm-pipeline/.cache` is reused, as in the original workflow;
-missing preparation uses writable work storage. Native execution also retains
+missing or unusable cached Python environments trigger a fresh setup in writable
+work storage, which may require network access. The old cache is left untouched.
+Native execution also retains
 the original preference for `gfortran-15` when available, unless `FC` is supplied.
 After upstream setup or cache reuse, the workflow reconstructs clean comparison
 checkouts under `WORK_DIR/application-basis`. Upstream caches are never patched.
@@ -282,7 +297,7 @@ series is eligible for this comparison target. `--jobs` controls builds only.
 `--nvcc` and `--cuda-host` are forwarded to the same workflow. Run
 `entrypoint.sh run-elmm --help` or `run_on_node.sh --help` for options.
 
-`--scope-transfers {direct,pinned,pipelined,auto,coalesced}` transports the compiler's
+`--scope-transfers {direct,pinned,auto,coalesced}` transports the compiler's
 existing transfer selection; `direct` remains the default. The compiler owns
 eligibility and fallback. Reports and plots identify the selected control.
 For node runs, supply it after `--`, for example
