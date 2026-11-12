@@ -130,7 +130,7 @@ def test_node_default_submission_and_full_case(sandbox):
 
 
 @pytest.mark.parametrize(("options", "expected"), [
-    (("--case", "channel"), "04:00:00"),
+    (("--case", "channel"), "02:00:00"),
     (("--case", "channel", "--steps", "2"), "01:30:00"),
     (("--case", "channel", "--time", "08:00:00"), "08:00:00"),
 ])

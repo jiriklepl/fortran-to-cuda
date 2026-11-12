@@ -93,7 +93,7 @@ administrator's subuid/subgid setup; alternatively use an existing image.
 
 ./run_on_node.sh hopper01 \
     --runtime apptainer --sif /work/$USER/fortran-resident.sif \
-    --time 04:00:00 --output-dir /work/$USER/resident-smoke \
+    --time 02:00:00 --output-dir /work/$USER/resident-smoke \
     --work-dir /scratch/tmp/$USER-resident-smoke \
     --steps 2 --repeats 1 --warmups 0
 ```
