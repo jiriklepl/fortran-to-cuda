@@ -124,11 +124,14 @@ def test_long_run_policy_only_applies_to_default_natural_channel(case, config, s
 
 
 def test_long_run_requires_the_approved_natural_endpoint():
-    with pytest.raises(ValueError, match="2458 steps"):
-        runner.require_natural_channel({"application_timing": {"completed_steps": 2457}}, "Time limit reached.")
-    with pytest.raises(ValueError, match="2458 steps"):
+    with pytest.raises(ValueError, match="time limit"):
+        runner.require_natural_channel({"application_timing": {"completed_steps": 0}}, "Time limit reached.")
+    with pytest.raises(ValueError, match="time limit"):
         runner.require_natural_channel({"application_timing": {"completed_steps": 2458}}, "Steady state reached.")
+    with pytest.raises(ValueError, match="2513 != 2514"):
+        runner.require_natural_channel({"application_timing": {"completed_steps": 2513}}, "Time limit reached.", 2514)
     runner.require_natural_channel({"application_timing": {"completed_steps": 2458}}, "Time limit reached.")
+    runner.require_natural_channel({"application_timing": {"completed_steps": 2514}}, "Time limit reached.", 2514)
 
 
 def test_long_run_fields_retain_strict_failure_and_require_matching_bounds():
@@ -299,9 +302,10 @@ def test_doctor_checks_explicit_fortran_not_ambient_fc(monkeypatch):
 
 @pytest.mark.parametrize("provision", [False, True])
 @pytest.mark.parametrize("failed_diagnostic", [None, "native-repeat", "resident"])
-@pytest.mark.parametrize("natural", [False, True])
+@pytest.mark.parametrize("natural_steps", [None, 2458, 2514])
 def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, monkeypatch, provision,
-                                                                   failed_diagnostic, natural):
+                                                                   failed_diagnostic, natural_steps):
+    natural = natural_steps is not None
     args = SimpleNamespace(output_dir=tmp_path / "output", work_dir=tmp_path / "work",
         app_root=None if provision else tmp_path, solver=tmp_path, vkfft=None if provision else tmp_path,
         case="channel" if natural else "channel-simple", config=None, steps=None if natural else 2, threads=4,
@@ -348,7 +352,7 @@ def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, mon
                       env.get("POISSON_SOLVER_KERNEL_CACHE_DIR")))
         directory.mkdir(parents=True)
         return {"directory": str(directory), "wall_seconds": 2.0 if "native" in binary else 1.0,
-            "application_timing": {"completed_steps": 2458 if natural else 2}}, "vtk", "Time limit reached."
+            "application_timing": {"completed_steps": natural_steps if natural else 2}}, "vtk", "Time limit reached."
 
     monkeypatch.setattr(runner, "prepare_config", prepare)
     monkeypatch.setattr(runner, "command", build)

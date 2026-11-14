@@ -121,7 +121,10 @@ an excluded warmup populates the timing cache. With zero warmups the first
 timing includes cache misses and compilation.
 
 For the unmodified natural `channel`, every run must reach the time limit at
-2,458 steps and retain all 20 fields and 114 outputs. The approved rule requires
+the native reference's step count (2,458 steps in the 4-thread reference setup;
+adaptive CFL timestepping and thread-dependent seeding can yield a different
+step count on other thread counts or platforms) and retain all 20 fields and
+114 outputs. The approved rule requires
 at most 1% relative L2 error independently per field and output component;
 zero-reference components use maximum absolute error `1e-6`. Bounds, layouts,
 coordinates, labels and output inventories must match exactly. Time columns

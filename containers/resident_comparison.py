@@ -287,10 +287,15 @@ def uses_natural_channel_policy(case, config, steps):
     return case == "channel" and config is None and steps is None
 
 
-def require_natural_channel(row, log):
+def require_natural_channel(row, log, expected_steps=None):
     timing = row["application_timing"]
-    if timing["completed_steps"] != 2458 or "Time limit reached." not in log:
-        raise ValueError("The approved 1% rule requires natural channel completion at 2458 steps")
+    steps = timing["completed_steps"]
+    if steps < 1 or "Time limit reached." not in log:
+        raise ValueError("The approved 1% rule requires natural channel completion at the time limit")
+    if expected_steps is not None and steps != expected_steps:
+        raise ValueError(
+            f"The approved 1% rule requires matching natural channel completion ({steps} != {expected_steps} steps)"
+        )
 
 
 def require_long_comparison(row, label):
@@ -406,7 +411,7 @@ def run(args):
             row.update(mode=mode, traced=is_gpu, timing_sample=False)
             report["diagnostics"].append(row)
             if natural_channel:
-                require_natural_channel(row, log)
+                require_natural_channel(row, log, expected_steps)
             field_count = None if reference_fields is None else len(reference_fields)
             actual_fields = read_fields(Path(row["directory"]), field_count)
             row["field_count"] = len(actual_fields)
@@ -456,7 +461,7 @@ def run(args):
                 if natural_channel:
                     if reference_directory is None:
                         raise RuntimeError("Natural channel reference directory is missing")
-                    require_natural_channel(row, log)
+                    require_natural_channel(row, log, expected_steps)
                     row["vtk_pointwise"] = compare_outputs(reference_vtk, vtk, compare_vtk)
                     row["outputs"] = compare_long_outputs(reference_directory / "output", directory / "output")
                     require_long_comparison(row, f"round {round_number} {mode}")
