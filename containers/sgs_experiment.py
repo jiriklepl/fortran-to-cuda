@@ -232,7 +232,9 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                    native_library_dir, output, work_dir=None, config=None,
                    case="channel-simple", gpu_options=None, build_args=(), jobs=8,
                    threads=4, steps=None, timeout=900, repeats=7, warmups=1,
-                   allow_native_variation=False, scope_transfers="direct"):
+                   allow_native_variation=False, scope_transfers="direct",
+                   precision="dp", grid=None, domain_size=None, end_time=None,
+                   cfl=None, advection=None, re_number=None):
     """Run one fresh paired experiment; return the immutable raw JSON receipt.
 
     ``output`` and ``work_dir`` must be absent. Default work is output/work.
@@ -276,11 +278,13 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
     from elmm_pipeline.validation import compare_vtk, read_vtk, validate_log
     contract = read(DEFAULT_CONTRACT)
     whole_original = repository_provenance(originals, contract, command)
-    if preprocessing_defines(list(build_args)) != contract["defines"]:
-        raise ValueError("reviewed SGS preset supports only the retained DPREC preprocessing configuration")
+    expected_defines = contract["defines"] if precision == "dp" else [d for d in contract["defines"] if d != "DPREC"]
+    if preprocessing_defines(list(build_args), precision=precision) != expected_defines:
+        raise ValueError("reviewed SGS preset supports only the retained DPREC/sp preprocessing configuration")
     label = configuration_label(case, config)
     preset = case if config is None else None
-    config, advection = select_configuration(originals, case, config)
+    config, preset_advection = select_configuration(originals, case, config)
+    effective_advection = advection if advection is not None else preset_advection
     output.mkdir(parents=True)
     work.mkdir(parents=True)
     provenance_path = output / "original-sources.json"
@@ -330,9 +334,10 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                 shutil.copytree(source, destination / name,
                                 ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc", "*.o", "*.mod", ".sconsign*", "SConstruct.pipeline"))
             verify_contract(destination, contract)
-        defines = preprocessing_defines(list(build_args))
+        defines = preprocessing_defines(list(build_args), precision=precision)
         binary = build(work / "native/application/elmm", work / "native/application/PoisFFT", work / "native/build",
-                       scons_python, native_library_dir, jobs=jobs, threads=threads, extra_args=list(build_args))
+                       scons_python, native_library_dir, jobs=jobs, threads=threads, extra_args=list(build_args),
+                       precision=precision)
         receipt["builds"]["native"] = {"binary": str(binary), "sha256": digest(binary),
                                         "build_receipt": str(binary.parent / "build-command.json")}
         write(report_path, receipt)
@@ -355,10 +360,14 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
         binary = build(current_paths["elmm"], current_paths["PoisFFT"], work / "current/build", scons_python,
                        native_library_dir, jobs=jobs, threads=threads, extra_args=list(build_args),
                        extra_sources=[Path(path) for path in metadata["extra_sources"]], patched_sources=changed,
-                       gpu_sources=metadata["gpu_sources"], gpu_options=options)
+                       gpu_sources=metadata["gpu_sources"], gpu_options=options, precision=precision)
         receipt["builds"]["current"] = {"binary": str(binary), "sha256": digest(binary),
                                          "build_receipt": str(binary.parent / "build-command.json")}
-        configuration = prepare_config(config, output / "config", steps=steps, advection=advection)
+        configuration = prepare_config(
+            config, output / "config", steps=steps, advection=effective_advection,
+            grid=grid, domain_size=domain_size, end_time=end_time, cfl=cfl,
+            re_number=re_number,
+        )
         receipt["configuration"] = configuration
         receipt["config_sha256"] = {str(path.relative_to(output / "config")): digest(path)
                                      for path in (output / "config").rglob("*") if path.is_file()}
@@ -484,6 +493,13 @@ def main(argv=None):
     parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--steps", type=int)
+    parser.add_argument("--precision", choices=("dp", "sp"), default="dp")
+    parser.add_argument("--grid")
+    parser.add_argument("--domain-size")
+    parser.add_argument("--end-time", type=float)
+    parser.add_argument("--cfl", type=float)
+    parser.add_argument("--advection", type=int, choices=(2, 4, 5, 6))
+    parser.add_argument("--re", dest="re_number", type=float)
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--repeats", type=int, default=7)
     parser.add_argument("--warmups", type=int, default=1)

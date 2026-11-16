@@ -132,6 +132,7 @@ def test_node_default_submission_and_full_case(sandbox):
 @pytest.mark.parametrize(("options", "expected"), [
     (("--case", "channel"), "02:00:00"),
     (("--case", "channel", "--steps", "2"), "01:30:00"),
+    (("--case", "channel", "--grid", "64x32x32"), "01:30:00"),
     (("--case", "channel", "--time", "08:00:00"), "08:00:00"),
 ])
 def test_node_natural_channel_time_limit(sandbox, options, expected):
@@ -139,6 +140,29 @@ def test_node_natural_channel_time_limit(sandbox, options, expected):
     result = sandbox[4]("run_node.sh", "hopper01", "--dry-run", *options)
     assert result.returncode == 0, result.stderr
     assert batch_request(sandbox)["time"] == expected
+
+
+def test_node_forwards_simple_config_overrides(sandbox):
+    fake_workspace(sandbox)
+    stub = sandbox[3]
+    stub("sbatch")
+    result = sandbox[4](
+        "run_node.sh", "hopper01", "--case", "channel-simple",
+        "--grid", "64x32x32", "--domain-size", "6,2,1",
+        "--end-time", "1.0", "--cfl", "0.25", "--advection", "4",
+        "--re", "10000", "--timeout", "1200", "--build-timeout", "1800",
+    )
+    assert result.returncode == 0, result.stderr
+    assert execute_payload(sandbox).returncode == 0
+    argv = json.loads(sandbox[2].read_text())["argv"]
+    assert values(argv, "--grid") == ["64x32x32"]
+    assert values(argv, "--domain-size") == ["6,2,1"]
+    assert values(argv, "--end-time") == ["1.0"]
+    assert values(argv, "--cfl") == ["0.25"]
+    assert values(argv, "--advection") == ["4"]
+    assert values(argv, "--re") == ["10000"]
+    assert values(argv, "--timeout") == ["1200"]
+    assert values(argv, "--build-timeout") == ["1800"]
 
 
 def test_node_missing_pipeline_fails_before_submission(sandbox):

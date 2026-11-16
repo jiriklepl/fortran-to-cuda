@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workspace="${WORKSPACE_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 node="" partition="" account="" config="" steps=""
+precision="" grid="" domain_size="" end_time="" cfl="" advection="" re_number="" timeout="" build_timeout=""
 experiment=resident deps="${DEPS_ROOT:-}" solver="${SOLVER_ROOT:-}"
 output="${OUTPUT_DIR:-}" work="${WORK_DIR:-}"
 case_name=channel-simple threads=4 jobs="" repeats=7 warmups=1 arch=auto
@@ -23,7 +24,16 @@ Submit a fresh comparison; no local fallback or headnode setup.
   --case NAME                     channel-simple (default), channel,
                                   second-order or fourth-order
   --config DIR                    Explicit application configuration
+  --precision dp|sp               Floating-point precision (default: dp; resident requires dp)
+  --grid NXxNYxNZ                 Override grid cell counts (e.g. 64x32x32 or 64,32,32)
+  --domain-size LXxLYxLZ          Override domain lengths (e.g. 12x4x2 or 12,4,2)
   --steps N                       Optional timestep cap (smoke experiment)
+  --end-time T                    Override time_stepping.conf end_time
+  --cfl VAL                       Override time_stepping.conf CFL
+  --advection 2|4|5|6             Override main.conf advection method
+  --re VAL                        Override main.conf Reynolds number Re
+  --timeout SEC                   Per-process application timeout in seconds
+  --build-timeout SEC             Build timeout in seconds (resident only)
   --threads N --jobs N             Defaults: 4 runtime threads, build jobs = CPUs
   --repeats N --warmups N          Defaults: 7 measured, 1 warmup
   --arch ARCH                     Default: auto, detected on the worker GPU
@@ -53,7 +63,16 @@ while [[ $# -gt 0 ]]; do
         --deps) value "$@"; deps="$2"; shift 2 ;;
         --solver) value "$@"; solver="$2"; shift 2 ;;
         --config) value "$@"; config="$2"; shift 2 ;;
+        --precision) value "$@"; precision="$2"; shift 2 ;;
+        --grid) value "$@"; grid="$2"; shift 2 ;;
+        --domain-size) value "$@"; domain_size="$2"; shift 2 ;;
         --steps) value "$@"; steps="$2"; shift 2 ;;
+        --end-time) value "$@"; end_time="$2"; shift 2 ;;
+        --cfl) value "$@"; cfl="$2"; shift 2 ;;
+        --advection) value "$@"; advection="$2"; shift 2 ;;
+        --re) value "$@"; re_number="$2"; shift 2 ;;
+        --timeout) value "$@"; timeout="$2"; shift 2 ;;
+        --build-timeout) value "$@"; build_timeout="$2"; shift 2 ;;
         --threads) value "$@"; threads="$2"; shift 2 ;;
         --jobs) value "$@"; jobs="$2"; jobs_explicit=1; shift 2 ;;
         --repeats) value "$@"; repeats="$2"; shift 2 ;;
@@ -80,7 +99,7 @@ while [[ $# -gt 0 ]]; do
 done
 for argument in "${extra[@]}"; do
     case "${argument%%=*}" in
-        --case|--config|--steps|--threads|--jobs|--repeats|--warmups|--arch|--output-dir|--output|-o|--work-dir|--app-root|--vkfft|--solver)
+        --case|--config|--precision|--grid|--domain-size|--steps|--end-time|--cfl|--advection|--re|--timeout|--build-timeout|--threads|--jobs|--repeats|--warmups|--arch|--output-dir|--output|-o|--work-dir|--app-root|--vkfft|--solver)
             fail "use ${argument%%=*} before -- so resource and container paths can be checked" ;;
     esac
 done
@@ -88,10 +107,18 @@ done
 [[ "$experiment" == sgs || "$experiment" == resident ]] || fail "experiment must be sgs or resident"
 if [[ -z "$time_limit" ]]; then
     time_limit=01:30:00
-    if [[ "$experiment" == resident && "$case_name" == channel && -z "$steps" && -z "$config" ]]; then
+    if [[ "$experiment" == resident && "$case_name" == channel && -z "$steps" && -z "$config" && \
+          ( -z "$precision" || "$precision" == dp ) && -z "$grid" && -z "$domain_size" && \
+          -z "$end_time" && -z "$cfl" && -z "$advection" && -z "$re_number" ]]; then
         time_limit=02:00:00
     fi
 fi
+[[ -z "$precision" || "$precision" == dp || "$precision" == sp ]] || fail "--precision must be dp or sp"
+[[ -z "$advection" || "$advection" == 2 || "$advection" == 4 || "$advection" == 5 || "$advection" == 6 ]] || \
+    fail "--advection must be 2, 4, 5 or 6"
+[[ -z "$timeout" ]] || positive timeout "$timeout"
+[[ -z "$build_timeout" ]] || positive build-timeout "$build_timeout"
+[[ -z "$build_timeout" || "$experiment" == resident ]] || fail "--build-timeout is only supported for --experiment resident"
 case "$case_name" in
     channel-simple|channel|second-order|fourth-order) ;;
     *) fail "case must be channel-simple, channel, second-order or fourth-order" ;;
@@ -157,6 +184,15 @@ if [[ -n "$config" ]]; then
     workflow+=(--config "$config")
 fi
 [[ -z "$steps" ]] || workflow+=(--steps "$steps")
+[[ -z "$precision" ]] || workflow+=(--precision "$precision")
+[[ -z "$grid" ]] || workflow+=(--grid "$grid")
+[[ -z "$domain_size" ]] || workflow+=(--domain-size "$domain_size")
+[[ -z "$end_time" ]] || workflow+=(--end-time "$end_time")
+[[ -z "$cfl" ]] || workflow+=(--cfl "$cfl")
+[[ -z "$advection" ]] || workflow+=(--advection "$advection")
+[[ -z "$re_number" ]] || workflow+=(--re "$re_number")
+[[ -z "$timeout" ]] || workflow+=(--timeout "$timeout")
+[[ -z "$build_timeout" ]] || workflow+=(--build-timeout "$build_timeout")
 workflow+=("${extra[@]}")
 
 # Keep resource requests in the batch file, as in the original launcher. Slurm

@@ -276,6 +276,9 @@ def test_default_work_directory_follows_output(monkeypatch, tmp_path):
     ([], 900),
     (["--case", "channel"], 3600),
     (["--case", "channel", "--steps", "300"], 900),
+    (["--case", "channel", "--precision", "sp"], 900),
+    (["--case", "channel", "--grid", "64x32x32"], 900),
+    (["--case", "channel", "--end-time", "5"], 900),
     (["--case", "channel", "--timeout", "1200"], 1200),
 ])
 def test_case_specific_default_timeout(monkeypatch, tmp_path, argv, timeout):
@@ -283,6 +286,15 @@ def test_case_specific_default_timeout(monkeypatch, tmp_path, argv, timeout):
     monkeypatch.setattr(runner, "run", arguments.append)
     runner.main(["--output-dir", str(tmp_path), *argv])
     assert arguments[0].timeout == timeout
+
+
+def test_resident_accepts_single_precision_and_rejects_invalid_grid(tmp_path, monkeypatch):
+    arguments = []
+    monkeypatch.setattr(runner, "run", arguments.append)
+    runner.main(["--output-dir", str(tmp_path), "--precision", "sp"])
+    assert arguments[0].precision == "sp"
+    with pytest.raises(SystemExit):
+        runner.main(["--output-dir", str(tmp_path), "--grid", "64x32"])
 
 
 def test_doctor_checks_explicit_fortran_not_ambient_fc(monkeypatch):

@@ -20,6 +20,12 @@ module fort_resident_domain
   ! Compiler-owned temporaries. The domain owns their backing allocation until
   ! close; a source invocation borrows a slot, not its storage lifetime. Replica
   ! validity and queued users remain exclusively in the scoped runtime.
+  type :: work_real32_3_slot
+    integer(c_int64_t) :: site=0,handle=0
+    real(c_float), pointer, contiguous :: values(:,:,:)=>null()
+    logical :: borrowed=.false.
+  end type
+
   type :: work_real64_3_slot
     integer(c_int64_t) :: site=0,handle=0
     real(c_double), pointer, contiguous :: values(:,:,:)=>null()
@@ -30,19 +36,30 @@ module fort_resident_domain
     integer(c_int64_t) :: domain=0, context=0, generation=0
     logical :: active=.false.
     type(registered_storage), allocatable, private :: storage(:)
+    type(work_real32_3_slot), allocatable, private :: work3_f32(:)
     type(work_real64_3_slot), allocatable, private :: work3(:)
   contains
     procedure :: begin_epoch
     procedure :: register_storage
+    procedure :: bind_real32
     procedure :: bind_real64
+    generic :: bind_real => bind_real32, bind_real64
     procedure :: bind_integer32
     procedure :: observe
     procedure :: host_begin
     procedure :: host_end
+    procedure :: host_box_real32
     procedure :: host_box_real64
+    generic :: host_box_real => host_box_real32, host_box_real64
+    procedure :: release_real32
     procedure :: release_real64
+    generic :: release_real => release_real32, release_real64
+    procedure :: acquire_work_real32_3
     procedure :: acquire_work_real64_3
+    generic :: acquire_work_real_3 => acquire_work_real32_3, acquire_work_real64_3
+    procedure :: release_work_real32_3
     procedure :: release_work_real64_3
+    generic :: release_work_real_3 => release_work_real32_3, release_work_real64_3
     procedure :: publish
     procedure :: end_epoch
     procedure :: close
@@ -188,6 +205,21 @@ contains
     self%storage=[self%storage,item]
   end function
 
+  function bind_real32(self, values, lower, initialized, persistent, origin) result(handle)
+    class(resident_domain), intent(inout) :: self
+    real(c_float), contiguous, target, intent(in) :: values(..)
+    integer, intent(in) :: lower(:)
+    logical, intent(in) :: initialized
+    logical, optional, intent(in) :: persistent
+    character(*), optional, intent(in) :: origin
+    integer(c_int64_t) :: handle
+    logical :: saved
+    saved=.false.
+    if (present(persistent)) saved=persistent
+    handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
+                                 FORT_SCOPE_REAL32,4_c_size_t,initialized,saved,origin)
+  end function
+
   function bind_real64(self, values, lower, initialized, persistent, origin) result(handle)
     class(resident_domain), intent(inout) :: self
     real(c_double), contiguous, target, intent(in) :: values(..)
@@ -238,6 +270,28 @@ contains
     call resident_require(fort_scope_host_end(self%context,handle))
   end subroutine
 
+  function host_box_real32(self, values, lower, first, last, writing) result(handle)
+    class(resident_domain), intent(inout) :: self
+    real(c_float), contiguous, target, intent(in) :: values(:,:,:)
+    integer, intent(in) :: lower(3), first(3), last(3)
+    logical, intent(in) :: writing
+    integer(c_int64_t) :: handle
+    integer(c_size_t), target :: lo(3), hi(3)
+    type(fort_scope_section), target :: section
+    type(fort_scope_access) :: access
+    if (any(first>last) .or. any(last<lower) .or. any(first>lower+shape(values)-1)) &
+      error stop 'invalid resident native section'
+    handle=self%bind_real32(values,lower,.true.)
+    lo=int(max(first,lower)-lower,c_size_t)
+    hi=int(min(last,lower+shape(values)-1)-lower+1,c_size_t)
+    section%lower=c_loc(lo); section%upper=c_loc(hi)
+    access%read_count=1; access%reads=c_loc(section)
+    if (writing) then
+      access%write_count=1; access%writes=c_loc(section)
+    endif
+    call self%host_begin(handle,access)
+  end function
+
   function host_box_real64(self, values, lower, first, last, writing) result(handle)
     class(resident_domain), intent(inout) :: self
     real(c_double), contiguous, target, intent(in) :: values(:,:,:)
@@ -260,6 +314,24 @@ contains
     call self%host_begin(handle,access)
   end function
 
+  subroutine release_real32(self, values)
+    class(resident_domain), intent(inout) :: self
+    real(c_float), contiguous, target, intent(in) :: values(..)
+    integer(c_int64_t) :: allocation_id
+    logical, allocatable :: keep(:)
+    integer :: i
+    if (.not. self%active) return
+    allocation_id=transfer(c_loc(values),allocation_id)
+    do i=1,size(self%storage)
+      if (self%storage(i)%identity /= allocation_id) cycle
+      if (self%storage(i)%persistent) error stop 'persistent storage retired through a borrowed view'
+      call resident_require(fort_scope_retire_v1(self%context,self%storage(i)%handle))
+      allocate(keep(size(self%storage))); keep=.true.; keep(i)=.false.
+      self%storage=pack(self%storage,keep)
+      return
+    enddo
+  end subroutine
+
   subroutine release_real64(self, values)
     class(resident_domain), intent(inout) :: self
     real(c_double), contiguous, target, intent(in) :: values(..)
@@ -278,6 +350,51 @@ contains
       self%storage=pack(self%storage,keep)
       return
     enddo
+  end subroutine
+
+  subroutine acquire_work_real32_3(self,site,lower,upper,values)
+    class(resident_domain), intent(inout) :: self
+    integer(c_int64_t), intent(in) :: site
+    integer, intent(in) :: lower(3),upper(3)
+    real(c_float), pointer, contiguous, intent(out) :: values(:,:,:)
+    type(work_real32_3_slot) :: slot
+    integer :: i
+    if (.not.self%active.or.site==0) error stop 'workspace outside a checked epoch'
+    if (any(upper<lower)) error stop 'empty workspace must be skipped by its reached caller'
+    if (.not.allocated(self%work3_f32)) allocate(self%work3_f32(0))
+    do i=1,size(self%work3_f32)
+      if (self%work3_f32(i)%site/=site) cycle
+      if (any(lbound(self%work3_f32(i)%values)/=lower).or.any(ubound(self%work3_f32(i)%values)/=upper)) cycle
+      if (self%work3_f32(i)%borrowed) error stop 'overlapping use of a compiler workspace slot'
+      call resident_require(fort_scope_discard_v1(self%context,self%work3_f32(i)%handle))
+      self%work3_f32(i)%borrowed=.true.
+      values=>self%work3_f32(i)%values
+      return
+    enddo
+    slot%site=site
+    allocate(slot%values(lower(1):upper(1),lower(2):upper(2),lower(3):upper(3)))
+    slot%handle=self%bind_real32(slot%values,lower,.false.,persistent=.true.)
+    slot%borrowed=.true.
+    self%work3_f32=[self%work3_f32,slot]
+    values=>slot%values
+  end subroutine
+
+  subroutine release_work_real32_3(self,site,values)
+    class(resident_domain), intent(inout) :: self
+    integer(c_int64_t), intent(in) :: site
+    real(c_float), pointer, contiguous, intent(inout) :: values(:,:,:)
+    integer :: i
+    if (.not.self%active.or..not.associated(values).or..not.allocated(self%work3_f32)) &
+      error stop 'invalid compiler workspace release'
+    do i=1,size(self%work3_f32)
+      if (self%work3_f32(i)%site/=site) cycle
+      if (.not.associated(values,self%work3_f32(i)%values)) cycle
+      if (.not.self%work3_f32(i)%borrowed) error stop 'compiler workspace released twice'
+      self%work3_f32(i)%borrowed=.false.
+      nullify(values)
+      return
+    enddo
+    error stop 'foreign compiler workspace release'
   end subroutine
 
   subroutine acquire_work_real64_3(self,site,lower,upper,values)
@@ -343,6 +460,9 @@ contains
 
   subroutine end_epoch(self)
     class(resident_domain), intent(inout) :: self
+    if (allocated(self%work3_f32)) then
+      if (any(self%work3_f32%borrowed)) error stop 'unmanaged return with borrowed workspace'
+    endif
     if (allocated(self%work3)) then
       if (any(self%work3%borrowed)) error stop 'unmanaged return with borrowed workspace'
     endif
@@ -355,6 +475,11 @@ contains
     integer :: i
     if (self%domain == 0) return
     call self%end_epoch()
+    if (allocated(self%work3_f32)) then
+      do i=1,size(self%work3_f32)
+        call resident_require(fort_scope_discard_v1(self%context,self%work3_f32(i)%handle))
+      enddo
+    endif
     if (allocated(self%work3)) then
       do i=1,size(self%work3)
         ! Private work values are dead, including any pending final writes.
@@ -364,6 +489,12 @@ contains
     endif
     call resident_require(fort_scope_close(self%context))
     call resident_require(fort_scope_domain_close_v1(self%domain))
+    if (allocated(self%work3_f32)) then
+      do i=1,size(self%work3_f32)
+        deallocate(self%work3_f32(i)%values)
+      enddo
+      deallocate(self%work3_f32)
+    endif
     if (allocated(self%work3)) then
       do i=1,size(self%work3)
         deallocate(self%work3(i)%values)

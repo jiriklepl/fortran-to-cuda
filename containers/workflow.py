@@ -214,6 +214,9 @@ def run_elmm(args):
                           "case": configuration_label(args.case, args.config), "requested_case": args.case,
                           "configuration_preset": args.case if args.config is None else None,
                           "config": str(args.config) if args.config else None, "steps": args.steps,
+                          "precision": args.precision, "grid": args.grid,
+                          "domain_size": args.domain_size, "end_time": args.end_time,
+                          "cfl": args.cfl, "advection": args.advection, "re": args.re,
                           "threads": args.threads, "jobs": args.jobs, "repeats": args.repeats,
                           "warmups": args.warmups, "architecture": args.arch,
                           "allow_native_variation": args.allow_native_variation,
@@ -276,6 +279,12 @@ def run_elmm(args):
         command.extend(["--config", str(args.config)])
     if args.steps is not None:
         command.extend(["--steps", str(args.steps)])
+    command.extend(["--precision", str(args.precision)])
+    for flag, value in (("grid", args.grid), ("domain-size", args.domain_size),
+                        ("end-time", args.end_time), ("cfl", args.cfl),
+                        ("advection", args.advection), ("re", args.re)):
+        if value is not None:
+            command.extend(["--" + flag, str(value)])
     if args.allow_native_variation:
         command.append("--allow-native-variation")
     print("Source-analysis interpreter:", compiler_python, flush=True)
@@ -392,6 +401,14 @@ def main():
             child.add_argument("--case", choices=CASE_NAMES, default="channel-simple")
             child.add_argument("--config", type=Path)
             child.add_argument("--steps", type=int, help="Explicit smoke-run cap; default preserves original duration")
+            child.add_argument("--precision", choices=("dp", "sp"), default="dp",
+                               help="Floating-point precision: dp (double, default) or sp (single)")
+            child.add_argument("--grid", help="Override grid cell counts as NXxNYxNZ or NX,NY,NZ")
+            child.add_argument("--domain-size", help="Override domain lengths as LXxLYxLZ or LX,LY,LZ")
+            child.add_argument("--end-time", type=float, help="Override time_stepping.conf end_time")
+            child.add_argument("--cfl", type=float, help="Override time_stepping.conf CFL")
+            child.add_argument("--advection", type=int, choices=(2, 4, 5, 6), help="Override main.conf advection method")
+            child.add_argument("--re", type=float, help="Override main.conf Reynolds number Re")
             child.add_argument("--scope-transfers", choices=("direct", "pinned", "auto", "coalesced"), default="direct")
             child.add_argument("--threads", type=int, default=4)
             child.add_argument("--jobs", type=int, default=8)
@@ -423,6 +440,9 @@ def main():
         if (min(args.threads, args.jobs, args.repeats, args.timeout) <= 0 or args.warmups < 0
                 or args.steps is not None and args.steps <= 0):
             parser.error("budgets/repetitions/steps must be positive; warmups may be zero")
+        for flag, value in (("--end-time", args.end_time), ("--cfl", args.cfl), ("--re", args.re)):
+            if value is not None and value <= 0:
+                parser.error(f"{flag} must be positive")
         run_elmm(args)
     elif args.command == "doctor":
         print(json.dumps(doctor(args), indent=2))

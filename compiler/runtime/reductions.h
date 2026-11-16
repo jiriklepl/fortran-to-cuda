@@ -10,6 +10,9 @@ extern "C" {
  * Synchronous result; all device work uses the domain stream and budget.
  * The report distinguishes rejection from submission failure; never replay
  * source work following a started failure. Output scalars change on success. */
+int fort_scope_max_real32_v1(fort_scope_t context, fort_buffer_t input,
+    uint32_t rank, size_t elements, float initial, float *maximum,
+    int32_t *any_nan, fort_scope_external_report_v1 *report);
 int fort_scope_max_real64_v1(fort_scope_t context, fort_buffer_t input,
     uint32_t rank, size_t elements, double initial, double *maximum,
     int32_t *any_nan, fort_scope_external_report_v1 *report);

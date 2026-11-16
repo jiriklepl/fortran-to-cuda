@@ -28,7 +28,7 @@ except RuntimeError as error:
 
 from elmm_pipeline.campaigns.halos import compare_fields, fields
 from elmm_pipeline.campaigns.run import environment
-from elmm_pipeline.configuration import prepare_config
+from elmm_pipeline.configuration import parse_domain_size_spec, parse_grid_spec, prepare_config
 from elmm_pipeline.resident_rk import verify_resident_execution
 from elmm_pipeline.validation import compare_vtk, read_vtk, validate_log
 
@@ -121,19 +121,33 @@ def run_application(binary, config, configuration, directory, env, timeout, expe
             "application_timing": timing}, vtk, log
 
 
-def compare_vtks(reference, actual):
-    result = compare_outputs(reference, actual, compare_vtk)
+def compare_vtks(reference, actual, *, precision="dp"):
+    if precision == "sp":
+        result = compare_outputs(
+            reference,
+            actual,
+            lambda expected, observed, **_kw: compare_vtk(expected, observed, atol=5e-3, rtol=5e-3),
+        )
+    else:
+        result = compare_outputs(reference, actual, compare_vtk)
     if not result["passed"]:
         raise ValueError("Final or averaged VTK comparison failed")
     return result
 
 
-def read_fields(directory, expected_count=None):
+def field_policy(precision="dp"):
+    if precision == "sp":
+        return {**FIELD_POLICY, "dtype": "float32", "atol": 1.0, "rtol": 1e-2}
+    return {**FIELD_POLICY, "dtype": "float64"}
+
+
+def read_fields(directory, expected_count=None, *, policy=None):
     paths = {path.name for path in directory.glob("fields-*.bin")}
     if not REQUIRED_FIELDS.issubset(paths):
         raise ValueError("Missing required full-precision diagnostic fields")
-    policy = {**FIELD_POLICY, "field_count": len(paths) if expected_count is None else expected_count}
-    return fields(directory, policy)
+    active_policy = dict(policy or FIELD_POLICY)
+    active_policy["field_count"] = len(paths) if expected_count is None else expected_count
+    return fields(directory, active_policy)
 
 
 def compare_long_vectors(reference, actual, *, criterion="relative_l2"):
@@ -257,8 +271,8 @@ class FieldComparisonError(ValueError):
         super().__init__(prefix + "Full-precision field comparison failed: " + ", ".join(details))
 
 
-def checked_fields(actual, reference):
-    result = compare_fields(actual, reference, FIELD_POLICY)
+def checked_fields(actual, reference, *, policy=None):
+    result = compare_fields(actual, reference, policy or FIELD_POLICY)
     if not all(row["passed"] for row in result.values()):
         raise FieldComparisonError(result)
     return result
@@ -266,13 +280,16 @@ def checked_fields(actual, reference):
 
 def inspect_diagnostics(directory):
     directory = Path(directory)
-    reference = read_fields(directory / "native-reference")
+    shape_file = directory / "native-reference/fields-U.shape"
+    precision = "sp" if shape_file.is_file() and shape_file.read_text().split()[0] == "32" else "dp"
+    policy = field_policy(precision)
+    reference = read_fields(directory / "native-reference", policy=policy)
     comparisons = {}
     for name in ("native-repeat", "resident"):
         candidate = directory / name
         if not candidate.is_dir():
             continue
-        result = compare_fields(read_fields(candidate, len(reference)), reference, FIELD_POLICY)
+        result = compare_fields(read_fields(candidate, len(reference), policy=policy), reference, policy)
         failed = {field: row for field, row in result.items() if not row["passed"]}
         comparisons[name] = {"passed": not failed, "failed_fields": failed}
     if not comparisons:
@@ -283,8 +300,8 @@ def inspect_diagnostics(directory):
         raise SystemExit(1)
 
 
-def uses_natural_channel_policy(case, config, steps):
-    return case == "channel" and config is None and steps is None
+def uses_natural_channel_policy(case, config, steps, *, precision="dp", overrides=None):
+    return case == "channel" and config is None and steps is None and precision == "dp" and not overrides
 
 
 def require_natural_channel(row, log, expected_steps=None):
@@ -310,6 +327,8 @@ def require_long_comparison(row, label):
 
 
 def run(args):
+    precision = getattr(args, "precision", "dp")
+    policy = field_policy(precision)
     output = args.output_dir.resolve() / "resident"
     work = args.work_dir.resolve() / "resident"
     output.mkdir(parents=True, exist_ok=False)
@@ -334,9 +353,19 @@ def run(args):
         basis = prepare_application_basis(app_root, work / "application-basis")
         application = application_paths(basis)
         source, advection = select_configuration(application, args.case, args.config)
-        configuration = prepare_config(source, work / "config", steps=args.steps, advection=advection)
-        natural_channel = uses_natural_channel_policy(args.case, args.config, args.steps)
-        report.update(hardware=hardware, configuration=configuration, case=args.case,
+        if getattr(args, "advection", None) is not None:
+            advection = args.advection
+        configuration = prepare_config(
+            source, work / "config", steps=args.steps, advection=advection,
+            grid=getattr(args, "grid", None), domain_size=getattr(args, "domain_size", None),
+            end_time=getattr(args, "end_time", None), cfl=getattr(args, "cfl", None),
+            re_number=getattr(args, "re", None),
+        )
+        natural_channel = uses_natural_channel_policy(
+            args.case, args.config, args.steps,
+            precision=precision, overrides=configuration.get("overrides"),
+        )
+        report.update(hardware=hardware, configuration=configuration, case=args.case, precision=precision,
                       dependencies={"application_root": str(app_root), "vkfft": str(vkfft)},
                       source_identities={"compiler": source_identity(COMPILER / "compiler"),
                                          "pipeline": source_identity(PIPELINE),
@@ -349,7 +378,9 @@ def run(args):
                       timing_scope=("complete process including startup, cache lookup or compilation, "
                                     "output and teardown"),
                       validation_policy=("natural-channel-componentwise-relative-l2-1-percent"
-                                         if natural_channel else "pointwise-1e-6-1e-5"),
+                                         if natural_channel else (
+                                             "pointwise-1e-6-1e-5" if precision == "dp" else "pointwise-sp-1.0-1e-2"
+                                         )),
                       validation_scope=("all full-precision fields, bounds and outputs; original time checks"
                                         if natural_channel else
                                         "full-precision allocated fields and bounds; final and available averaged VTK"),
@@ -359,7 +390,8 @@ def run(args):
                          "--elmm", application["elmm"], "--poisfft", application["PoisFFT"],
                          "--compiler", COMPILER, "--solver", args.solver, "--vkfft", vkfft,
                          "--output", build, "--fortran", fortran, "--cxx", cxx, "--nvcc", nvcc,
-                         "--architecture", architecture, "--jobs", str(args.jobs)]
+                         "--architecture", architecture, "--jobs", str(args.jobs),
+                         "--precision", precision]
         report["build_command"] = list(map(str, build_command))
         write(report_path, report)
         build_env = dict(os.environ)
@@ -413,7 +445,11 @@ def run(args):
             if natural_channel:
                 require_natural_channel(row, log, expected_steps)
             field_count = None if reference_fields is None else len(reference_fields)
-            actual_fields = read_fields(Path(row["directory"]), field_count)
+            actual_fields = (
+                read_fields(Path(row["directory"]), field_count)
+                if precision == "dp"
+                else read_fields(Path(row["directory"]), field_count, policy=policy)
+            )
             row["field_count"] = len(actual_fields)
             if reference_fields is None:
                 reference_fields, reference_vtk = actual_fields, vtk
@@ -433,11 +469,19 @@ def run(args):
                 require_long_comparison(row, name)
             else:
                 try:
-                    row["fields"] = checked_fields(actual_fields, reference_fields)
+                    row["fields"] = (
+                        checked_fields(actual_fields, reference_fields)
+                        if precision == "dp"
+                        else checked_fields(actual_fields, reference_fields, policy=policy)
+                    )
                 except FieldComparisonError as error:
                     row["fields"] = error.comparison
                     raise FieldComparisonError(error.comparison, label=name) from None
-                row["vtk"] = compare_vtks(reference_vtk, vtk)
+                row["vtk"] = (
+                    compare_vtks(reference_vtk, vtk)
+                    if precision == "dp"
+                    else compare_vtks(reference_vtk, vtk, precision=precision)
+                )
             if is_gpu:
                 row["gpu_activity"] = verify_resident_execution(
                     packages, log, ["subgrid::sgs_sigma_uniform", "dynamics::convection"])
@@ -466,7 +510,11 @@ def run(args):
                     row["outputs"] = compare_long_outputs(reference_directory / "output", directory / "output")
                     require_long_comparison(row, f"round {round_number} {mode}")
                 else:
-                    row["vtk"] = compare_vtks(reference_vtk, vtk)
+                    row["vtk"] = (
+                    compare_vtks(reference_vtk, vtk)
+                    if precision == "dp"
+                    else compare_vtks(reference_vtk, vtk, precision=precision)
+                )
                 write(report_path, report)
                 print(mode, "round", round_number, "seconds", round(row["wall_seconds"], 3), flush=True)
         verify_binaries()
@@ -500,6 +548,14 @@ def main(argv=None):
     parser.add_argument("--case", choices=("channel-simple", "channel"), default="channel-simple")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--steps", type=int)
+    parser.add_argument("--precision", choices=("dp", "sp"), default="dp",
+                        help="Floating-point precision: dp (double, default) or sp (single)")
+    parser.add_argument("--grid", help="Override grid cell counts as NXxNYxNZ or NX,NY,NZ")
+    parser.add_argument("--domain-size", help="Override domain lengths as LXxLYxLZ or LX,LY,LZ")
+    parser.add_argument("--end-time", type=float, help="Override time_stepping.conf end_time")
+    parser.add_argument("--cfl", type=float, help="Override time_stepping.conf CFL")
+    parser.add_argument("--advection", type=int, choices=(2, 4, 5, 6), help="Override main.conf advection method")
+    parser.add_argument("--re", type=float, help="Override main.conf Reynolds number Re")
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--repeats", type=int, default=7)
@@ -521,8 +577,27 @@ def main(argv=None):
         return
     if args.work_dir is None:
         args.work_dir = args.output_dir / "work"
+    if args.grid is not None:
+        try:
+            parse_grid_spec(args.grid)
+        except ValueError as error:
+            parser.error(str(error))
+    if args.domain_size is not None:
+        try:
+            parse_domain_size_spec(args.domain_size)
+        except ValueError as error:
+            parser.error(str(error))
+    for flag, value in (("--end-time", args.end_time), ("--cfl", args.cfl), ("--re", args.re)):
+        if value is not None and (not math.isfinite(value) or value <= 0):
+            parser.error(f"{flag} must be a positive finite number")
     if args.timeout is None:
-        args.timeout = 3600 if uses_natural_channel_policy(args.case, args.config, args.steps) else 900
+        has_overrides = any(
+            getattr(args, key) is not None
+            for key in ("grid", "domain_size", "end_time", "cfl", "advection", "re")
+        ) or args.precision != "dp"
+        args.timeout = 3600 if uses_natural_channel_policy(
+            args.case, args.config, args.steps, precision=args.precision, overrides=has_overrides
+        ) else 900
     if min(args.threads, args.jobs, args.repeats, args.timeout, args.build_timeout) < 1 or args.warmups < 0:
         parser.error("threads, jobs, repeats and timeouts must be positive; warmups must be nonnegative")
     if args.steps is not None and args.steps < 1:
