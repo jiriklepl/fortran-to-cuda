@@ -6,6 +6,7 @@ source scopes. The owner retains scalar control flow, native effects and
 allocation epochs. Every exported entry still goes through ordinary numerical
 lowering and dependence analysis before it can execute on a device.
 """
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 from fparser.two.utils import walk
@@ -40,15 +41,41 @@ def _entry_groups(sequence):
         yield tuple(pending)
 
 
-def export_resident_entries(paths, procedures, directory, *, analysis_sources=None):
+def _resolve_procedures(analysis, procedures, *, allow_patterns=False):
+    available = sorted(analysis.routines)
+    if procedures is None:
+        return available
+    selected = []
+    seen = set()
+    for spec in procedures:
+        pattern = spec.lower()
+        is_pattern = allow_patterns or any(ch in pattern for ch in "*?[")
+        if is_pattern:
+            matches = [name for name in available if fnmatchcase(name, pattern)]
+            if not matches:
+                raise CompilationError("Resident procedure pattern matched no routines: " + spec)
+            for name in matches:
+                if name not in seen:
+                    seen.add(name)
+                    selected.append(name)
+        else:
+            if pattern not in analysis.routines:
+                raise CompilationError("Resident procedure is unavailable: " + spec)
+            if pattern not in seen:
+                seen.add(pattern)
+                selected.append(pattern)
+    return selected
+
+
+def export_resident_entries(paths, procedures, directory, *, analysis_sources=None, allow_patterns=False):
+    """Export resident numerical entries for explicit procedures or glob patterns."""
     analysis = SourceEffects(paths, analysis_sources=analysis_sources)
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
+    resolved_procedures = _resolve_procedures(analysis, procedures, allow_patterns=allow_patterns)
     entries, rejected, grouping_rejections = [], [], []
-    for procedure in procedures:
-        routine = analysis.routines.get(procedure.lower())
-        if routine is None:
-            raise CompilationError("Resident procedure is unavailable: " + procedure)
+    for procedure in resolved_procedures:
+        routine = analysis.routines[procedure]
 
         def emit(nodes, sequence):
             first = min(statement_span(node)[0] for node in nodes)
