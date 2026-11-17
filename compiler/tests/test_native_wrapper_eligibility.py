@@ -200,7 +200,7 @@ def test_call_site_external_provider_precedence_is_not_bypassed(tmp_path, monkey
     assert not native_only_wrapper(owner, call, routine)
 
 
-@pytest.mark.parametrize("attribute", ["_reached_window_binding", "_mapped_reached_child"])
+@pytest.mark.parametrize("attribute", ["_mapped_reached_child"])
 def test_registered_mapped_routes_are_not_replaced(tmp_path, attribute):
     _path, builder, owner, call, routine = setup(tmp_path)
     setattr(builder, attribute, object())

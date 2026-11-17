@@ -10,7 +10,6 @@ from compiler.analysis import build_execution_plan
 from compiler.frontend import discover_file, lower_file
 from compiler.ir import Assignment, Binary, CompilationError, If, Literal, Loop, Reference, walk_expr
 from compiler.emission import read_common_header
-from compiler._legacy.emission import generate_sources
 from compiler.tests.test_native import cuda_device as cuda_device
 
 
@@ -297,75 +296,3 @@ value=t(1,1)*t(2,2)*t(3,3)-t(1,1)*t(2,3)*t(3,2)-t(1,2)*t(2,1)*t(3,3)&
 end function
 end subroutine
 """
-
-
-@pytest.mark.native
-@pytest.mark.parametrize("precision", [4, 8])
-@pytest.mark.parametrize("backend", ["cpp", pytest.param("cuda", marks=[pytest.mark.cuda])])
-def test_spectral_helper_closure_executes_like_native_fortran(tmp_path, precision, backend, request):
-    fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
-    if not fortran or not shutil.which("g++"):
-        pytest.skip("native compilers are unavailable")
-    if backend == "cuda":
-        request.getfixturevalue("cuda_device")
-    path = source(tmp_path, SPECTRAL.replace("WP", str(precision)))
-    function = lower_file(path, "advance")
-    plan = build_execution_plan(function)
-    assert len(plan.regions) == 1
-    generated = generate_sources(function, plan)
-    (tmp_path / "implementation.cpp").write_text(generated.cpp)
-    (tmp_path / "interface.f90").write_text(generated.fortran)
-    (tmp_path / "common_functions.cuh").write_text(read_common_header())
-    driver = f"""program check
-use renamed_math
-use ieee_arithmetic
-use ieee_exceptions
-implicit none
-real({precision})::a(9,21),b(4,21)
-integer::i,j
-logical::before,after
-call ieee_get_halting_mode(ieee_invalid,before)
-call ieee_set_halting_mode(ieee_invalid,.false.)
-call ieee_set_halting_mode(ieee_divide_by_zero,.false.)
-a=0
-a(1,2)=1
-a(5,2)=1
-a(9,2)=1
-a(1,3)=-0.0_{precision}
-do i=4,19
-do j=1,9
-a(j,i)=sin(real(11*i+7*j+j*j*i,{precision}))*real(0.4,{precision})
-enddo
-enddo
-a(1,20)=ieee_value(0.0_{precision},ieee_positive_inf)
-a(1,21)=ieee_value(0.0_{precision},ieee_negative_inf)
-call advance(a,b,21)
-print *,b
-call ieee_set_halting_mode(ieee_invalid,before)
-call ieee_get_halting_mode(ieee_invalid,after)
-print *,merge(1,0,before.eqv.after)
-end program
-"""
-    (tmp_path / "driver.f90").write_text(driver)
-
-    def run(args):
-        completed = subprocess.run(args, cwd=tmp_path, text=True, capture_output=True, timeout=45,
-                                   env={**os.environ, "OMP_NUM_THREADS": "4"})
-        assert completed.returncode == 0, completed.stdout + completed.stderr
-        return completed.stdout
-
-    run([fortran, "-O3", "-ffp-contract=off", str(path), "driver.f90", "-o", "native"])
-    expected = [float(value) for value in run([str(tmp_path / "native")]).split()]
-    if backend == "cpp":
-        run(["g++", "-O3", "-ffp-contract=off", "-std=c++17", "-fopenmp", "-c", "implementation.cpp"])
-        run([fortran, "-O3", "-ffp-contract=off", "-fopenmp", "interface.f90", "driver.f90",
-             "implementation.o", "-lstdc++", "-o", "generated"])
-    else:
-        (tmp_path / "implementation.cu").write_text(generated.cuda)
-        run(["nvcc", "-O3", "--fmad=false", "-std=c++17", "-c", "implementation.cu", "-o", "implementation.o"])
-        run([fortran, "-O3", "-ffp-contract=off", "-c", "interface.f90", "driver.f90"])
-        run(["nvcc", "implementation.o", "interface.o", "driver.o", "-lgfortran", "-o", "generated"])
-    actual = [float(value) for value in run([str(tmp_path / "generated")]).split()]
-    assert actual[-1] == expected[-1] == 1
-    tolerance = 2e-5 if precision == 4 else 2e-12
-    assert actual[:-1] == pytest.approx(expected[:-1], rel=tolerance, abs=tolerance, nan_ok=True)

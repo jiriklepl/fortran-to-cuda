@@ -36,31 +36,6 @@ end subroutine
     return source
 
 
-@pytest.mark.parametrize("supplied", [False, True], ids=["omitted", "present"])
-@pytest.mark.parametrize("nested", [False, True], ids=["direct", "native-forwarding"])
-def test_native_optional_children_share_the_owner_without_optional_numerical_lowering(tmp_path, supplied, nested):
-    _, output, manifest = generate(tmp_path, program(supplied=supplied, nested=nested))
-    assert manifest["scope_count"] == 1, manifest["boundaries"]
-    scope, = manifest["scopes"]
-    assert scope["gpu_leaves"] == ["original::consumer", "original::producer"]
-    assert {resource["resource"] for resource in scope["resources"]} == {"argument::a", "argument::b", "argument::out"}
-    target = "original::forward" if nested else "original::transform"
-    native = next(item for item in manifest["numerical_decisions"] if item["procedure"] == target)
-    assert not native["supported"]
-    assert "descriptor-aware numerical variants" in native["reason"]
-    assert all((output / source["path"]).is_file() for source in manifest["build_sources"])
-
-
-def test_readonly_allocatable_native_child_gets_the_original_allocation_descriptor(tmp_path):
-    original, output, manifest = generate(tmp_path, program(supplied=True, allocatable=True))
-    assert manifest["scope_count"] == 1, manifest["boundaries"]
-    scope, = manifest["scopes"]
-    assert scope["allocation_preflight"]["resources"] == ["argument::a"]
-    edited = (output / manifest["sources"][str(original)]["replacement"]).read_text().lower()
-    assert "allocatable, target, intent(in)" in edited
-    assert "original::transform" not in scope["gpu_leaves"]
-
-
 @pytest.mark.native
 @pytest.mark.parametrize(("supplied", "nested", "allocatable"), [
     (False, False, False), (True, False, False), (False, True, False), (True, True, False), (True, False, True),

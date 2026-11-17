@@ -419,16 +419,3 @@ def generate_cooperative_kernel(region, proof, *, addressing=None, scalar_bytes=
     lines += ["        if (fort_tile_count - fort_tile_slot <= gridDim.x) break;",
               "        fort_tile_slot += gridDim.x;", "    }", "}", ""]
     return lines
-
-
-def generate_cooperative_launch(region, proof, arguments, *, context, stream,
-                                first="fort_tile_first", count="fort_tile_count"):
-    proof.validate(region)
-    if len(arguments) != len(kernel_parameters(region)):
-        raise ValueError("cooperative tile kernel argument inventory differs")
-    return [f"if ({count} == 0) return FORT_SCOPE_OK;",
-            f"const unsigned fort_tile_blocks = static_cast<unsigned>({count} > 65535 ? 65535 : {count});",
-            f"kernel_tile_private_cta_{region.id}<<<fort_tile_blocks, 128, 0, {stream}>>>("
-            + ", ".join([*arguments, first, count]) + ");",
-            "if (cudaGetLastError() != cudaSuccess) return FORT_SCOPE_EXECUTION;",
-            f"return fort_scope_note_launch({context}) == FORT_SCOPE_OK ? FORT_SCOPE_OK : FORT_SCOPE_EXECUTION;"]

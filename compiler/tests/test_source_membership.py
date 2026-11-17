@@ -157,18 +157,3 @@ def test_unsealed_syntax_changes_still_require_fresh_authority(tmp_path):
     routine.execution.content[-1].items = ()
     with pytest.raises(CompilationError, match="original source-backed"):
         analysis._selected_source(routine.qualified, selected)
-
-
-def test_generated_artifacts_are_identical_to_fresh_selection_walks(tmp_path, monkeypatch):
-    from compiler.frontend.summary_cache import SummaryCache
-    from compiler.tests.test_collective_source_scopes import generate
-
-    monkeypatch.setattr(source_effects, "_DEFAULT_SUMMARY_CACHE", SummaryCache())
-    _, indexed, indexed_report, _ = generate(tmp_path)
-    monkeypatch.setattr(SourceSession, "execution_overlaps", lambda *_: None)
-    monkeypatch.setattr(SourceSession, "execution_nodes", lambda _, _analysis, current:
-                        {id(node): node for node in walk(current.execution)})
-    monkeypatch.setattr(source_effects, "_DEFAULT_SUMMARY_CACHE", SummaryCache())
-    _, original, original_report, _ = generate(tmp_path)
-    assert indexed == original
-    assert indexed_report == original_report

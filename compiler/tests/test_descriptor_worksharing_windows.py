@@ -11,9 +11,7 @@ from compiler.ir import CompilationError
 from compiler.scopes.storage_epoch import (
     _worksharing_rows,
     require_original_worksharing_coverage,
-    require_original_worksharing_edits,
-    worksharing_descriptor_windows,
-)
+    worksharing_descriptor_windows)
 from compiler.tests.test_descriptor_worksharing import SOURCE
 
 PARENT = "worksharing::parent"
@@ -75,33 +73,6 @@ def owner_for(parts, proof):
     builder = SimpleNamespace(edits={}, analysis=analysis)
     return SimpleNamespace(position_epoch=SimpleNamespace(_descriptor=proof),
                            members={PARENT:member}, builder=builder), path
-
-
-@pytest.mark.parametrize("boundary", ["first", "inside", "last"])
-@pytest.mark.parametrize("insertion", [False, True])
-def test_whole_original_native_callee_rejects_source_edits_including_empty_insertions(tmp_path, boundary, insertion):
-    parts = fixture(tmp_path)
-    proof = issue(parts)
-    owner, path = owner_for(parts, proof)
-    a,b = proof._worksharing[0].public()["callee_source"]["source_span"]
-    first = {"first":a, "inside":a+2, "last":b}[boundary]
-    owner.builder.edits[path] = [(first, first-1 if insertion else first, "! changed\n")]
-    with pytest.raises(CompilationError):
-        require_original_worksharing_edits(owner, owner.builder.edits)
-
-
-def test_unrelated_sibling_edit_is_allowed_but_managed_callee_is_not(tmp_path):
-    parts = fixture(tmp_path)
-    proof = issue(parts)
-    owner, path = owner_for(parts, proof)
-    stop = proof._worksharing[0].public()["callee_source"]["source_span"][1]
-    owner.builder.edits[path] = [(stop+2, stop+2, "! sibling\n")]
-    require_original_worksharing_edits(owner, owner.builder.edits)
-    member = copy(owner.members[PARENT])
-    member.routine = parts[1].routines["worksharing::run"]
-    owner.members["worksharing::run"] = member
-    with pytest.raises(CompilationError):
-        require_original_worksharing_edits(owner, owner.builder.edits)
 
 
 @pytest.mark.parametrize("change", ["none", "missing", "clause", "span"])

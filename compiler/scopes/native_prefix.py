@@ -38,8 +38,7 @@ def _readonly_assignments(scope, definitions):
 def fresh_native_prefix(member, unit):
     """Consume existing exact checked units; borrowed/live entries keep hooks."""
     owner = member.owner
-    if (member is not owner or member.parent is not None or member.control_guard is not None
-            or member.builder.config.scope_execution != "graph" or not owner.leaves
+    if (member is not owner or member.parent is not None or member.control_guard is not None or not owner.leaves
             or unit.leaves or unit.source_guard is not None or unit.native_source is not None
             or unit.publication_only or not unit.arrays
             or not _readonly_assignments(unit.scope, unit.definition_summary)):

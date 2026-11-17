@@ -11,10 +11,15 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from hashlib import sha256
 
 from compiler.ir import CompilationError
-from compiler.offload.exact_window import digest
 from compiler.scopes.execution_plan import CheckedExecutionPlan
+
+
+
+def digest(value):
+    return sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +28,6 @@ class IntervalApplicability:
 
     _plan: object
     _demand: object
-    _placement: object
     _native: tuple
     _record: str
 
@@ -34,8 +38,6 @@ class IntervalApplicability:
             raise CompilationError("interval applicability demand belongs to another checked plan")
         # Demand validation already validates this exact plan and all contexts.
         self._demand.validate()
-        if plan.exact_window_placement() is not self._placement:
-            raise CompilationError("interval applicability placement changed; inspect the checked plan again")
         for proof, graph in self._native:
             if proof.native_graph is not graph:
                 raise CompilationError("interval applicability native graph changed after inspection")
@@ -103,12 +105,6 @@ def analyze_interval_applicability(plan):
     # The cached demand authenticates this exact plan; do not rescan its inventory.
     demand = plan.resource_demand()
     public = plan.public()
-    placement = plan.exact_window_placement()
-    existing = None
-    if placement is not None:
-        issued = placement.public()
-        existing = {key: issued[key] for key in (
-            "available", "selection", "reason", "contract_sha256", "evidence_sha256", "capture") if key in issued}
     candidates, dependencies = _key_inputs(demand)
     native, numerical, controls, proofs, requirements = [], [], [], [], []
 
@@ -190,14 +186,6 @@ def analyze_interval_applicability(plan):
     require("application_build_attestation", "Bind executed compiler/options/source/header/object receipts for every original and generated object to a compiler-issued application build contract.")
     require("actual_execution_outcome", "Record whether the measured resident invocation executed the admitted alternative or guarded native fallback, with the independently observed native identity.")
     require("complete_interval_observations", "Measure paired complete original invocations including guards, inspectors, original teams, entry/interruption/exit transfers, synchronization, planning and cleanup; do not add these costs twice.")
-    if placement is not None:
-        from compiler.offload.selection_cost import PROTOCOL
-
-        attached = placement.public()
-        if attached["contract"].get("protocol") == PROTOCOL and attached.get("available") is True:
-            for requirement in requirements:
-                requirement["status"] = "covered_by_checked_interval_attachment"
-                requirement["attachment"] = attached["contract_sha256"]
     record = {
         "schema_version": 1, "kind": "checked-interval-cost-applicability",
         "plan_identity": plan.identity, "execution_identity": plan.execution_identity,
@@ -206,13 +194,13 @@ def analyze_interval_applicability(plan):
         "unclassified_dependencies": dependencies, "original_control_trees": controls,
         "native_operations": native, "numerical_operations": numerical,
         "requirements": requirements,
-        "existing_exact_window": existing,
+        "existing_exact_window": None,
         "placement_authorized": False, "execution_authorized": False,
         "existing_placement_unchanged": True,
         "identity_policy": "Exact existing policy/configuration identity retained; no measured/production equivalence inferred.",
         "coverage": "Application measurement attachment requirements, not a replacement for existing exact-window admission or its issued decision.",
     }
     record["identity"] = digest(record)
-    result = IntervalApplicability(plan, demand, placement, tuple(proofs),
+    result = IntervalApplicability(plan, demand, tuple(proofs),
                                    json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False))
     return result

@@ -347,13 +347,14 @@ def test_registered_completion_copy_cannot_become_an_arena_handle(tmp_path):
 def generation_fixture(tmp_path):
     from hashlib import sha256
 
-    from compiler._legacy.config import LegacyCompilerOptions, LegacyOffloadConfig
+    from compiler.driver.options import CompilerOptions
+    from compiler.offload.config import OffloadConfig
     from compiler.scopes.source import ScopeBuilder
     path = tmp_path / 'source.f90'
     path.write_text(source())
     parent = ScopeBuilder([path], PROC, facts={'schema_version': 1, 'participation': 'serial',
         'sources': {str(path): sha256(path.read_bytes()).hexdigest()}, 'captures': {}},
-        options=LegacyCompilerOptions(), config=LegacyOffloadConfig(policy='sections', scope_execution='graph'))
+        options=CompilerOptions(), config=OffloadConfig(policy='sections', scope_execution='graph'))
     routine = parent.analysis.routines[PROC]
     group, = [row for row in grouped_original_sequence(routine.execution.content, {})
               if isinstance(row, NativeGroupCandidate)]

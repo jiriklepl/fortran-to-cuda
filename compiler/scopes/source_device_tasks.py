@@ -285,7 +285,7 @@ def admit_source_device_task(member, nodes):
 def _admit_source_device_task(member, nodes, *, transport="direct"):
     """Private checked-emission hook; regular policy keeps its existing backend."""
     config = member.builder.config
-    if config.scope_execution != "graph" or config.policy not in {"sections", "auto"}:
+    if config.policy not in {"sections", "auto"}:
         return False
     # Source quotes snapshot the domain's AUTO copy policy and its calibrated
     # physical-copy costs through the ordinary coherence simulator. Requiring

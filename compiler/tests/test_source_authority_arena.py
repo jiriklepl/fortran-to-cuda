@@ -154,7 +154,8 @@ def test_live_source_is_verified_at_publication_even_after_cached_validation(tmp
 
 
 def test_transaction_rollback_drops_child_handles_and_keeps_parent_facts(tmp_path):
-    from compiler._legacy.config import LegacyCompilerOptions, LegacyOffloadConfig
+    from compiler.driver.options import CompilerOptions
+    from compiler.offload.config import OffloadConfig
     from compiler.scopes.generation_transaction import GenerationTransaction
     from compiler.scopes.source import ScopeBuilder
 
@@ -163,8 +164,8 @@ def test_transaction_rollback_drops_child_handles_and_keeps_parent_facts(tmp_pat
     facts = {"schema_version": 1, "participation": "serial", "sources": {
         str(path): sha256(path.read_bytes()).hexdigest()}, "captures": {}}
     parent = ScopeBuilder([path], "local_storage::advance", facts=facts,
-                          options=LegacyCompilerOptions(),
-                          config=LegacyOffloadConfig(policy="sections", scope_execution="graph"))
+                          options=CompilerOptions(),
+                          config=OffloadConfig(policy="sections", scope_execution="graph"))
     analysis, routine = parent.analysis, parent.entry
     backing, scratch = (routine.scope.bindings[name] for name in ("backing", "scratch"))
     first = allocation.original_local_allocation(analysis, routine, backing)
@@ -283,7 +284,8 @@ def test_process_local_context_keys_do_not_enter_public_proof_or_graph_records(t
 
 
 def test_rollback_reuses_one_complete_fact_with_a_new_legal_handle(tmp_path):
-    from compiler._legacy.config import LegacyCompilerOptions, LegacyOffloadConfig
+    from compiler.driver.options import CompilerOptions
+    from compiler.offload.config import OffloadConfig
     from compiler.scopes.generation_transaction import GenerationTransaction
     from compiler.scopes.source import ScopeBuilder
 
@@ -292,8 +294,8 @@ def test_rollback_reuses_one_complete_fact_with_a_new_legal_handle(tmp_path):
     facts = {"schema_version": 1, "participation": "serial", "sources": {
         str(path): sha256(path.read_bytes()).hexdigest()}, "captures": {}}
     parent = ScopeBuilder([path], "local_storage::advance", facts=facts,
-                          options=LegacyCompilerOptions(),
-                          config=LegacyOffloadConfig(policy="sections", scope_execution="graph"))
+                          options=CompilerOptions(),
+                          config=OffloadConfig(policy="sections", scope_execution="graph"))
     analysis, routine = parent.analysis, parent.entry
     binding = routine.scope.bindings["backing"]
     context = analysis.source_authority_context()

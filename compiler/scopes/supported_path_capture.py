@@ -138,7 +138,7 @@ def capture_many(epoch, builder, bindings, *, _consumer_check=None):
                 or builder.facts is not facts or facts.get("captures") is not captures
                 or any(getattr(config, name) is not value for name, value in config_fields)
                 or _encoded(config.profile) != profile_record
-                or config.policy != "sections" or config.scope_execution != "graph"
+                or config.policy != "sections"
                 or any(getattr(analysis, name, None) is not value for name, value in owners)
                 or any(getattr(analysis, name, None) is not table or len(table) != len(items)
                        or any(table.get(key) is not value for key, value in items) for name, table, items in tables)

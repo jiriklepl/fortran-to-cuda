@@ -118,7 +118,6 @@ def test_graph_owner_keeps_device_state_across_known_native_only_recurrence(tmp_
     def forbidden(*_args, **_kwargs):
         pytest.fail("graph execution used window enumeration or eager interval closure collection")
 
-    monkeypatch.setattr(window_discovery, "discover_reached_window", forbidden)
     monkeypatch.setattr(interval_draft, "prepare_interval_draft", forbidden)
     path, outputs, report = emit(tmp_path)
     (owner,) = report["scopes"]

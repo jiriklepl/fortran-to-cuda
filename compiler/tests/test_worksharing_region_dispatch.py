@@ -9,8 +9,8 @@ import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.ir import CompilationError
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
@@ -121,15 +121,6 @@ def test_worksharing_preparation_rejects_copied_proof_before_lowering(tmp_path, 
     assert not builder.inline.regions
 
 
-def test_serial_and_worksharing_candidates_share_the_attempt_budget(tmp_path):
-    builder, loops, joined = example(tmp_path)
-    proof = builder.analysis.worksharing_completion(builder.entry.qualified, joined, (loops[1],))
-    builder.inline.attempts = 32
-    with pytest.raises(CompilationError, match="bounded inline region/operation budget exhausted"):
-        builder.inline.prepare_worksharing(loops[1], proof)
-    assert not builder.inline.regions
-
-
 def test_native_worksharing_corrections_do_not_exhaust_later_generation(tmp_path):
     native = '!$omp do\ndo i=1,n\na(i)=a(i)+sum(b)\nenddo\n!$omp end do\n'
     position = SOURCE.rfind('!$omp do\n')
@@ -144,21 +135,6 @@ def test_native_worksharing_corrections_do_not_exhaust_later_generation(tmp_path
     node = builder.inline.prepare_worksharing(loops[-1], proof)
     assert builder.inline.generated[node.fort_inline_region].scoped['team']['available']
     assert builder.inline.attempts == 1
-
-
-def test_reached_dispatcher_identity_never_demands_flattened_owner_summary(tmp_path, monkeypatch):
-    builder, loops, joined = example(tmp_path)
-    builder.config = replace(builder.config, scope_execution='reached')
-    proof = builder.analysis.worksharing_completion(builder.entry.qualified, joined, (loops[1],))
-    node = builder.inline.prepare_worksharing(loops[1], proof)
-    def summarize(*args, **kwargs):
-        raise AssertionError('reached dispatcher demanded an eagerly flattened owner summary')
-    monkeypatch.setattr(builder.analysis, 'summarize', summarize)
-    handles = {root: 'handle' for root in builder.inline.arrays}
-    values = {root: binding.name for root, binding in builder.inline.bindings.items()}
-    builder.inline.emit_call(builder.inline.call(node), handles, values, [], query=False, collective=True)
-    variant, = builder.variants.public()['procedures'][0]['variants']
-    assert variant['summary_identity'] == builder.analysis.structure(builder.entry.qualified).identity
 
 
 @pytest.mark.native

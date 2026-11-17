@@ -1,4 +1,4 @@
-"""Shared graph execution configuration; historical policies are private."""
+"""Shared graph execution configuration."""
 
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
@@ -25,11 +25,16 @@ class OffloadConfig:
     # This describes cost applicability only; it cannot authorize execution.
     source_applicability: "SourceComputeApplicability | None" = None
     def __post_init__(self):
-        self._validate_policy()
+        if self.policy not in {"sections", "auto"}:
+            raise ValueError("Ordinary GPU policies were removed; use sections or auto")
         if type(self.host_threads) is not int or self.host_threads < 1:
             raise ValueError("Host thread budget must be positive")
-        self._validate_transfers()
-        self._validate_scope_execution()
+        if self.scope_transfers == "pipelined":
+            raise ValueError("Pipelined slab batching was removed; use shared graph execution")
+        if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
+            raise ValueError("Unknown scope transfer mode")
+        if self.scope_execution != "graph":
+            raise ValueError("Source scopes use graph execution")
         if self.native_participation not in {None, "serial", "fork_join", "fork_join_runtime", "existing_team", "unknown"}:
             raise ValueError("Unknown native Fortran participation")
         if self.source_applicability is not None:
@@ -46,35 +51,6 @@ class OffloadConfig:
                 # Reading legacy evidence does not authorize a changed backend.
                 object.__setattr__(self, "profile", None)
                 object.__setattr__(self, "profile_reason", "hardware profile " + str(error))
-
-    def _validate_policy(self):
-        if self.policy not in {"sections", "auto"}:
-            raise ValueError("Ordinary GPU policies were removed; use sections or auto")
-
-    def _validate_transfers(self):
-        if self.scope_transfers == "pipelined":
-            raise ValueError("Pipelined slab batching was removed; use shared graph execution")
-        if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
-            raise ValueError("Unknown scope transfer mode")
-
-    @property
-    def reached_execution(self):
-        """Graph tasks evaluate accesses when their original source is reached."""
-        return True
-
-    def _validate_scope_execution(self):
-        if self.scope_execution != "graph":
-            raise ValueError("Source scopes use graph execution")
-
-    @property
-    def exact_window(self):
-        """Graph placement uses per-task costs and the complete dependency graph."""
-        return None
-
-    @property
-    def scope_measurement(self):
-        """Complete-owner observation variants are private reference tooling."""
-        return None
 
     def for_numerical_entry(self, **updates):
         """Keep code-generation options when entering a numerical worker."""

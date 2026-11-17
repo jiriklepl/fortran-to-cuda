@@ -111,8 +111,6 @@ class CollectiveScopeBuilder(ScopeBuilder):
                 # Constructor participation proofs remain mandatory even when
                 # missing costs retain every original call unchanged.
                 raise CompilationError(missing_cost_reason)
-            if self.config.scope_execution == "reached":
-                raise CompilationError("reached lexical ownership requires a serial original caller; collective execution remains native")
             if any("allocatable" in self.entry.scope.bindings[formal].attributes
                    for formal in self.entry.arguments):
                 # Even an unused allocatable OUT dummy deallocates its actual

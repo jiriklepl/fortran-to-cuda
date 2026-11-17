@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from hashlib import sha256
 from unittest.mock import patch
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 
 ENTRY = "amber_owner::advance"

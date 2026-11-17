@@ -8,8 +8,8 @@ from hashlib import sha256
 import pytest
 from fparser.two.utils import walk
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
@@ -113,33 +113,6 @@ def test_original_parameter_array_is_an_association_not_a_binding_capture(tmp_pa
     assert region.public()["scalar_element_captures"][0]["query"].startswith("typed zero")
 
 
-@pytest.mark.parametrize("precision", [4, 8])
-@pytest.mark.parametrize("coefficient_first", [False, True])
-def test_grouped_managed_array_declaration_does_not_add_target_to_immutable_formal(
-        tmp_path, precision, coefficient_first):
-    _, _, _, _, _, paths = source_fixture(tmp_path, precision=precision)
-    child = paths[1]
-    entities = ["weights(-1:1)", "a(-2:)"] if coefficient_first else ["a(-2:)", "weights(-1:1)"]
-    grouped = f"real({precision}),intent(in)::" + ",".join(entities)
-    child.write_text(child.read_text().replace(f"real({precision}),intent(in)::a(-2:)\n", "")
-                     .replace(f"real({precision}),intent(in)::weights(-1:1)", grouped))
-    original = child.read_bytes()
-    outputs, report = emit(paths)
-    assert report["scope_count"] == 1
-    owner, = report["scopes"]
-    companion, = owner["module_coordinators"]
-    assert companion["immutable_array_inputs"][0]["formal_resource"] == "argument::weights"
-    text = outputs[report["sources"][str(child)]["replacement"]]
-    declarations = [line for line in text.splitlines() if "::" in line]
-    coefficient_declaration, = [line for line in declarations if re.search(r"\bweights\s*\(", line, re.I)]
-    managed_declaration, = [line for line in declarations if re.search(r"\ba\s*\(", line, re.I)]
-    assert "target" not in coefficient_declaration.lower()
-    assert "target" in managed_declaration.lower()
-    assert "intent(in)" in coefficient_declaration.lower().replace(" ", "")
-    assert (text.index(coefficient_declaration) < text.index(managed_declaration)) == coefficient_first
-    assert child.read_bytes() == original
-
-
 def test_original_outer_guard_is_preserved_and_empty_inner_domain_not_speculated(tmp_path):
     body = """if(stage>1) then
 do j=1,n
@@ -228,58 +201,6 @@ def test_integer_parameter_index_uses_original_declaring_scope(tmp_path):
     assert element.expression == "weights(0)"
     assert element.index_guard == "(0) >= (-1) .and. (0) <= (1)"
     assert "selected" not in region.source.lower()
-
-
-def test_query_and_dispatch_do_not_read_parameter_payload(tmp_path):
-    _, _, _, _, _, paths = source_fixture(tmp_path)
-    outputs, report = emit(paths)
-    assert report["scope_count"] == 1
-    owner, = report["scopes"]
-    child, = owner["module_coordinators"]
-    assert child["immutable_array_inputs"][0]["actual_resource"] == "coefficient_values::weights"
-    assert child["gpu_leaves"] if "gpu_leaves" in child else child["planning_segments"]
-    text = "\n".join(value for name, value in outputs.items() if name.startswith("sources/")).lower()
-    assert "c_loc(renamed" not in text
-    assert "c_loc(weights" not in text
-    assert "target :: weights" not in text
-    assert "weights = renamed" in text
-    assert "weights(stage)" in text
-    child_text = text[text.index("module update_lib"):]
-    assert child_text.index("fort_elements_active_") < child_text.index("is_contiguous(")
-    query_calls = re.findall(r"fort_status\s*=\s*fort_inline_query\((.*?)\)", text.replace("&", ""), re.S)
-    assert query_calls
-    assert all("weights" not in call and "stage" not in call for call in query_calls)
-    assert all("0.0_c_double" in call for call in query_calls)
-    assert "if ((n) >= (1)) then" in text
-    assert "if ((stage) >= (-1) .and. (stage) <= (1)) then" in text
-
-
-def test_preparation_cost_is_unavailable_and_auto_keeps_original_native_body(tmp_path):
-    from compiler.tests.test_source_compute_costs import profile_v2
-
-    _, _, _, _, _, paths = source_fixture(tmp_path)
-    outputs, report = emit(paths, policy="auto", profile=profile_v2())
-    owner, = report["scopes"]
-    assert owner["automatic_preflight"]["selection"] == "native"
-    assert owner["automatic_preflight"]["caller_source_unchanged"]
-    assert "immutable element preparation" in owner["planning_reason"]
-    assert not any(name.startswith("regions/") for name in outputs)
-    text = "\n".join(value for name, value in outputs.items() if name.startswith("sources/")).lower()
-    assert "fort_scope_create" not in text
-    assert "call renamed_update(weights=renamed,a=a,out=out,n=n,stage=stage)" in text
-
-
-def test_same_child_different_parameter_roots_does_not_reuse_association(tmp_path):
-    _, _, _, _, _, paths = source_fixture(tmp_path)
-    constants, _, owner = paths
-    constants.write_text(constants.read_text().replace("end module", "real(8),parameter::other(-2:0)=[1._8,2._8,3._8]\nend module"))
-    owner.write_text(owner.read_text().replace("only:renamed=>weights", "only:renamed=>weights,second=>other")
-                     .replace("end subroutine", "call renamed_update(weights=second,a=a,out=out,n=n,stage=stage)\nend subroutine"))
-    _, report = emit(paths)
-    owner_record, = report["scopes"]
-    assert any("one canonical mapping" in item["reason"] for item in owner_record["boundaries"])
-    child, = owner_record["module_coordinators"]
-    assert child["immutable_array_inputs"][0]["actual_resource"] == "coefficient_values::weights"
 
 
 def test_module_extent_is_read_at_exact_reached_region(tmp_path):

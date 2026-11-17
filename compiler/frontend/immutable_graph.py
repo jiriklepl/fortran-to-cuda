@@ -257,7 +257,3 @@ class GraphFreezer:
             object.__setattr__(value, "__class__", _sealed_type(type(value)))
             return value
         raise CompilationError("immutable graph ownership is unspecified for " + type(value).__name__)
-
-
-def freeze_graph(value, **ownership):
-    return GraphFreezer(**ownership).freeze(value)

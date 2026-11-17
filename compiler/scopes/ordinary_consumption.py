@@ -21,7 +21,7 @@ class _OrdinaryPairConsumption:
 
     def __enter__(self):
         self.builder._check_reached_publication()
-        if self._active or self._closed or getattr(self.builder, "_reached_window_binding", None) is not None:
+        if self._active or self._closed:
             raise CompilationError("ordinary numerical consumption requires a new original lexical pass")
         self.facts = _hash(self.builder.facts)
         self.policy = self._policy(self.builder)
@@ -46,8 +46,7 @@ class _OrdinaryPairConsumption:
                 or builder.analysis is not self.builder.analysis
                 or self.builder.region_owners.get(builder.entry.qualified) is not registry
                 or builder.region_owners.get(builder.entry.qualified) is not registry
-                or builder.analysis.routines.get(builder.entry.qualified) is not builder.entry
-                or getattr(builder, "_reached_window_binding", None) is not None):
+                or builder.analysis.routines.get(builder.entry.qualified) is not builder.entry):
             raise CompilationError("ordinary numerical consumer is copied, foreign, failed or expired")
         if _hash(builder.facts) != self.facts or _hash(self.builder.facts) != self.facts:
             raise CompilationError("ordinary numerical consumer admitted facts changed")

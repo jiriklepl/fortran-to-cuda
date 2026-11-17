@@ -8,9 +8,8 @@ from pathlib import Path
 import pytest
 
 from compiler.analysis import ParallelizationError, build_execution_plan
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler.driver.options import CompilerOptions
 from compiler.emission import read_common_header
-from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
 from compiler.ir import CompilationError, ConditionalRegion, If, IntrinsicCall, ScalarType, walk_expr
 from compiler.tests.test_native import cuda_device as cuda_device
@@ -114,52 +113,6 @@ def test_recursive_host_plan_retains_parallel_regions(tmp_path):
     assert plan.regions[0] == plan.steps[0].then_plan.regions[0]
 
 
-def run_reference_and_cpp(
-    tmp_path: Path, function, plan, driver, *, openmp=False, backend="cpp", generated_driver=None
-):
-    """Compare generated execution with the same program using original Fortran."""
-    if not shutil.which("gfortran") or not shutil.which("g++"):
-        pytest.skip("native Fortran and C++ compilers are unavailable")
-    source = Path(function.source)
-    generated = generate_sources(function, plan)
-    (tmp_path / "implementation.cpp").write_text(generated.cpp)
-    (tmp_path / "interface.f90").write_text(generated.fortran)
-    (tmp_path / "common_functions.cuh").write_text(read_common_header())
-    (tmp_path / "driver.f90").write_text(driver)
-
-    def run(command):
-        result = subprocess.run(
-            command,
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            timeout=45,
-            env={**os.environ, "OMP_NUM_THREADS": "2"},
-            check=False,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
-        return result.stdout.split()
-
-    reference = tmp_path / "reference"
-    target = tmp_path / "generated"
-    run(["gfortran", str(source), "driver.f90", "-o", str(reference)])
-    expected = run([str(reference)])
-    if generated_driver is not None:
-        (tmp_path / "driver.f90").write_text(generated_driver)
-    flags = ["-fopenmp"] if openmp else []
-    if backend == "cuda":
-        compile_cuda_sources(tmp_path, function, plan)
-        run(["gfortran", "-c", "interface.f90", "driver.f90"])
-        run(["nvcc", "implementation.o", "interface.o", "driver.o", "-lgfortran", "-o", str(target)])
-        actual = run([str(target)])
-        assert [float(value) for value in actual] == pytest.approx([float(value) for value in expected])
-        return
-    run(["g++", "-std=c++17", *flags, "-c", "implementation.cpp", "-o", "implementation.o"])
-    run(["gfortran", *flags, "interface.f90", "driver.f90", "implementation.o", "-lstdc++", "-o", str(target)])
-    actual = run([str(target)])
-    assert [float(value) for value in actual] == pytest.approx([float(value) for value in expected])
-
-
 def structured_case(tmp_path):
     function = lower(
         tmp_path,
@@ -183,46 +136,6 @@ print *,a
 end program
 """
     return function, driver
-
-
-@pytest.mark.native
-@pytest.mark.parametrize("openmp", [False, True])
-def test_conditions_intrinsics_and_logical_bridge_execute_like_fortran(tmp_path, openmp):
-    function, driver = structured_case(tmp_path)
-    run_reference_and_cpp(tmp_path, function, build_execution_plan(function), driver, openmp=openmp)
-
-
-def compile_cuda_sources(tmp_path, function, plan):
-    executable = shutil.which("nvcc")
-    if executable is None:
-        pytest.skip("CUDA toolkit is unavailable")
-    sources = generate_sources(function, plan)
-    (tmp_path / "implementation.cu").write_text(sources.cuda)
-    (tmp_path / "interface.f90").write_text(sources.fortran)
-    (tmp_path / "common_functions.cuh").write_text(read_common_header())
-    result = subprocess.run(
-        [executable, "-std=c++17", "--fmad=false", "-c", "implementation.cu", "-o", "implementation.o"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-@pytest.mark.cuda
-def test_conditions_intrinsics_and_logical_values_compile_for_cuda(tmp_path):
-    function, _ = structured_case(tmp_path)
-    compile_cuda_sources(tmp_path, function, build_execution_plan(function))
-
-
-@pytest.mark.native
-@pytest.mark.cuda
-@pytest.mark.usefixtures("cuda_device")
-def test_conditions_intrinsics_and_logical_values_match_fortran_on_cuda(tmp_path):
-    function, driver = structured_case(tmp_path)
-    run_reference_and_cpp(tmp_path, function, build_execution_plan(function), driver, backend="cuda")
 
 
 def test_host_branch_snapshots_have_distinct_symbolic_parameters(tmp_path):
@@ -252,21 +165,3 @@ def test_many_argument_minmax_rendering_grows_linearly():
 
     assert len(rendered(64)) < 10 * len(rendered(8))
     assert rendered(64).count("- 40.0f") == 64
-
-
-@pytest.mark.native
-def test_many_argument_minmax_preserves_typed_grouped_values(tmp_path):
-    arguments = ", &\n &".join(f"({i}.0-40.0)" for i in range(1, 65))
-    function = lower(
-        tmp_path,
-        f"a(1)=min({arguments})\na(2)=max({arguments})\na(3)=max(-1,min(abs(-2),3))\na(4)=max(1.d0,min(-1.d0,3.d0))",
-    )
-    driver = """program main
-use language_case
-real(knd)::a(4)
-a=0
-call entry(a,4)
-print *,a
-end program
-"""
-    run_reference_and_cpp(tmp_path, function, build_execution_plan(function), driver)

@@ -277,15 +277,3 @@ def validate_gpu_execution_profile(profile):
             raise NumericalGpuExecutionError("saved GPU evidence differs from strict raw reconstruction")
     except (KeyError, TypeError, OverflowError, ValueError) as error:
         raise NumericalGpuExecutionError(str(error)) from error
-
-
-def require_current_gpu_execution(profile):
-    """Authenticate current observations, still granting no compute/placement model."""
-    validate_gpu_execution_profile(profile)
-    section = profile[SECTION]
-    source, registry, generator, renderer = current_gpu_identities(profile["precision_bits"])
-    identity = section["identity"]
-    if (identity["source_generator_id"], identity["registry_id"], identity["generator_id"],
-            identity["renderer_sources"]) != (source, registry, generator, renderer):
-        raise NumericalGpuExecutionError("GPU current source/renderer identity mismatch")
-    return deepcopy(section)

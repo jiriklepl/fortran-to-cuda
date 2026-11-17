@@ -215,27 +215,6 @@ def _samples(row):
     return values
 
 
-def parse_execution_measurements(text):
-    records = []
-    for line in text.splitlines():
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except ValueError as error:
-            raise NumericalExecutionError("execution benchmark emitted non-JSON output") from error
-        if not isinstance(row, dict) or not isinstance(row.get("kind"), str) or row["kind"] not in KINDS:
-            raise NumericalExecutionError("unknown execution observation kind")
-        if row["kind"] in {"numerical_execution_startup_v1", "numerical_execution_cost_v1"}:
-            _samples(row)
-        records.append(row)
-        if len(records) > MAX_RECORDS:
-            raise NumericalExecutionError("execution observation budget exhausted")
-    if not records:
-        raise NumericalExecutionError("execution benchmark emitted no observations")
-    return records
-
-
 def _identity(profile, identity, generator, registry_id):
     _hash(identity)
     if (identity.get("protocol_id") != PROTOCOL_ID or identity.get("backend_id") != BACKEND_ID
@@ -664,51 +643,6 @@ def execution_startup_memory_costs(profile, backend, *, access_class):
             "fortran": deepcopy(section["identity"]["fortran"]),
             "generator_id": section["generator_id"], "registry_id": section["registry_id"],
             "fixed_cost_coverage": FIXED_COVERAGE}
-
-
-def execution_cpu_costs(profile, backend, counts, *, workload_class, workload_features, access_class):
-    """Independent CPU evidence; this API never authorizes GPU placement."""
-    section = _current_section(profile)
-    if backend not in CPU_BACKENDS or access_class != ACCESS_CLASS:
-        raise NumericalExecutionError("execution backend or source memory access class unavailable")
-    try:
-        pairs = list(counts.items()) if isinstance(counts, dict) else list(counts)
-        if any(not isinstance(pair, (tuple, list)) or len(pair) != 2 for pair in pairs):
-            raise ValueError("invalid primitive pair")
-    except (TypeError, ValueError) as error:
-        raise NumericalExecutionError("execution primitive counts unavailable") from error
-    if (len(pairs) > len(PRIMITIVES) or any(not isinstance(name, str) for name, _ in pairs)
-            or len({name for name, _ in pairs}) != len(pairs)
-            or any(name not in PRIMITIVES or type(count) is not int or not 0 < count <= 100000 for name, count in pairs)):
-        raise NumericalExecutionError("execution primitive counts unavailable")
-    selected = "ordinary_expression_v2" if workload_class == "scalar_expression_v2" and\
-        not any(name != "divide" for name, _ in pairs) else workload_class
-    if selected not in CLASSES or section["workload_validation"][selected][backend]["status"] != "accepted":
-        raise NumericalExecutionError("independent execution workload class rejected")
-    features = workload_features.to_dict() if hasattr(workload_features, "to_dict") else workload_features
-    if (not isinstance(features, dict) or type(features.get("schema_version")) is not int
-            or features["schema_version"] != 2 or features.get("classification_complete") is not True):
-        raise NumericalExecutionError("execution private-array classification unavailable")
-    if workload_class == "fixed_private_array_v2":
-        recipes = [r for r in section["registry"] if r["workload_class"] == workload_class]
-        for key in ("private_array_groups", "private_array_elements", "max_private_array_elements", "max_private_array_rank"):
-            limit = max(r["private_features"].get(key, 0) for r in recipes)
-            if type(features.get(key)) is not int or not 0 < features[key] <= limit:
-                raise NumericalExecutionError("execution private workload outside validated applicability")
-    elif type(features.get("private_array_elements")) is not int or features["private_array_elements"] != 0:
-        raise NumericalExecutionError("execution scalar workload contains private arrays")
-    for primitive, _ in pairs:
-        if primitive in section["domain_validation"] and section["domain_validation"][primitive][backend]["status"] != "accepted":
-            raise NumericalExecutionError("execution primitive domain holdout rejected")
-    fitting = {r["family"]: r for r in section["registry"] if r["role"] in {"coefficient", "memory"}}
-    coefficients = _coefficients(section["families"], fitting, backend, tuple(name for name, _ in pairs))
-    return {**coefficients, "backend_identity": backend, "fixed_seconds": section["startup"][backend]["fixed_seconds"],
-        "fixed_cost_coverage": FIXED_COVERAGE, "item_range": [min(SIZES), max(SIZES)],
-        "intrinsic_seconds_per_item": math.fsum(count * coefficients["intrinsic_seconds_per_operation"][name]
-                                                for name, count in pairs),
-        "cpu_affinity": deepcopy(section["identity"]["cpu_affinity"]), "fortran": deepcopy(section["identity"]["fortran"]),
-        "cpu_protocol_environment": {name: section["identity"][name] for name in ("omp_wait_policy", "gomp_spincount")},
-        "generator_id": section["generator_id"], "registry_id": section["registry_id"], "access_class": ACCESS_CLASS}
 
 
 def execution_compute_model(profile, counts, *, workload_class="scalar_expression_v2",

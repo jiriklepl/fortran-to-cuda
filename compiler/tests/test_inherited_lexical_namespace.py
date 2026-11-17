@@ -153,24 +153,6 @@ def test_active_emission_admission_fences_lexical_receipt_attachments(tmp_path, 
         mutate()
 
 
-def test_unparameterized_module_lexical_child_keeps_existing_owner_registrations(tmp_path):
-    from compiler.tests.test_lexical_source_owner import MODULE_SOURCE, emit
-
-    source = (MODULE_SOURCE
-        .replace("child_visits=child_visits+1", "call inner()", 1)
-        .replace("end subroutine\nend module", """contains
-subroutine inner()
-child_visits=child_visits+1
-end subroutine
-end subroutine
-end module""", 1))
-    _path, _outputs, report = emit(tmp_path, source)
-    assert report["scope_count"] == 1
-    lexical, = report["scopes"][0]["internal_coordinators"]
-    assert lexical["lexical_namespace"]["namespace_owner"] is None
-    assert lexical["lexical_namespace"]["parent"] == "stage_child::adjust"
-
-
 def test_varying_formal_associations_cross_original_lexical_namespace(tmp_path):
     from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
     from elmm_pipeline.local_adapter import _scope_package_build

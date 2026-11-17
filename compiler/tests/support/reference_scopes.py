@@ -11,7 +11,8 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from compiler._legacy.config import LegacyCompilerOptions, LegacyOffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.driver.cli import _offload_config, _parse_args
 from compiler.scopes.source import ScopeBuilder
 
@@ -27,13 +28,13 @@ def main():
     args = _parse_args()
     if not args.form_scopes:
         raise SystemExit("private reference adapter only accepts source-scope fixtures")
-    options = LegacyCompilerOptions(
+    options = CompilerOptions(
         opt_level=args.opt_level, schedule=args.schedule, tile_sizes=args.tile_sizes,
         fallback=args.fallback, indexing=args.indexing, gpu_policy=args.gpu_policy,
         memory_model=args.memory_model, scope_transfers=args.scope_transfers, scope_execution=execution)
     config = asdict(_offload_config(args))
     config["scope_execution"] = execution
-    configuration = LegacyOffloadConfig(**config)
+    configuration = OffloadConfig(**config)
     parameters = {
         "facts": json.loads(Path(args.scope_facts).read_text()),
         "options": options, "config": configuration,

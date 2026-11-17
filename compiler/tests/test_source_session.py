@@ -241,21 +241,6 @@ def test_scope_roles_bind_only_the_session_and_explicit_overrides(tmp_path):
         _validate_scope_roles(projection, roles, {id(routine.scope)})
 
 
-def test_transaction_shares_original_roots_and_rolls_back_only_mutable_analysis(tmp_path):
-    from compiler.scopes.generation_transaction import GenerationTransaction
-    from compiler.tests.test_generation_transaction import builder_fixture
-    parent = builder_fixture(tmp_path / "source")
-    session = parent.analysis._source_session
-    roots = dict(session.roots)
-    with GenerationTransaction(parent) as transaction:
-        candidate = transaction.builder
-        assert candidate.analysis.session_identity == session.identity
-        assert all(getattr(candidate.analysis, name) is value for name, value in roots.items())
-        candidate.analysis.summaries["private-test-entry"] = {"private": True}
-    assert "private-test-entry" not in parent.analysis.summaries
-    assert all(getattr(parent.analysis, name) is value for name, value in roots.items())
-
-
 def test_parser_uses_captured_input_during_a_live_change_and_restore(tmp_path, monkeypatch):
     from compiler.frontend.source_inputs import SourceInputs
     from compiler.tests.test_source_syntax_authority import ENTRY, SOURCE

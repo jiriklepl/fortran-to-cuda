@@ -216,7 +216,7 @@ class SupportedPathStorageEpoch:
         if any(not hasattr(member, "eligibility_allowed") for member in owner.members.values()):
             raise CompilationError("supported path epoch omitted a checked child activation veto")
         require_attachments()
-        if (builder.config.policy != "sections" or builder.config.scope_execution != "graph"
+        if (builder.config.policy != "sections"
                 or (self._entry_preservation is None) != (self._reached_position is None)):
             raise CompilationError("supported path epoch changed its explicit policy or original entry proof")
         if self._entry_preservation is not None:
@@ -435,7 +435,7 @@ class OwnerLocalSupportedPath(GraphOwner, OriginalSelectionOwner):
     def __init__(self, builder, path, gate):
         ClosedIntervalOwner._validate_edit_boundaries(builder, path._originals)
         super().__init__(builder, path._originals)
-        if builder.config.policy != "sections" or builder.config.scope_execution != "graph":
+        if builder.config.policy != "sections":
             raise CompilationError("supported source path first slice requires explicit unpriced sections graph")
         self.eligibility_allowed = gate._flag.name
         self.supported_path = path

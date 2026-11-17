@@ -174,32 +174,6 @@ def _plan_inventory(plan):
     return inventory
 
 
-def _reached_inventory(builder, proof):
-    inventory = _Inventory()
-    analysis = builder.analysis
-
-    def visit(procedure, originals, record, children, mappings):
-        routine = analysis.routines[procedure]
-
-        def canonical(binding):
-            return mappings.get(binding.root, binding)
-        inventory.select(analysis, procedure, originals, canonical)
-        for state in record["states"]:
-            binding = builder.visible_binding(routine, state["resource"])
-            inventory.add(procedure, binding, canonical(binding), "managed")
-            inventory.add(procedure, binding, canonical(binding), "registered")
-        for child in children:
-            child.coordinates.validate(analysis, procedure, child.original_call)
-            child_mappings = {item.formal.root: canonical(item.actual) for item in child.coordinates._arrays}
-            visit(child.procedure, child.selection, child.public()["plan"], child.children, child_mappings)
-
-    visit(proof.procedure, proof._selection, proof.public(), proof._children, {})
-    for _root, sections in proof._activation_resources:
-        for dependency in sections.dependencies:
-            inventory.add(proof.procedure, dependency.binding, role="section_" + dependency.kind)
-    return inventory
-
-
 def _covered_nodes(graph, selected):
     covered, pending = set(), list(selected)
     while pending:
@@ -335,15 +309,3 @@ def resource_demand_from_plan(plan):
         raise CompilationError("resource demand requires an exact checked execution plan")
     plan.validate()
     return _issue(plan._owner.builder, _plan_inventory(plan), plan=plan)
-
-
-def resource_demand_from_reached_window(builder, proof):
-    """Issue only from registered full-window states, never a scanned prefix."""
-    from compiler.frontend.reached_windows import ReachedWindowProof
-
-    if type(proof) is not ReachedWindowProof:
-        raise CompilationError("resource demand requires a registered reached-window proof")
-    proof.validate(builder.analysis, builder.entry.qualified, proof._selection)
-    if proof.public()["entry_facts_identity"] != _digest(builder.facts):
-        raise CompilationError("resource demand reached-window capture facts differ")
-    return _issue(builder, _reached_inventory(builder, proof), proof=proof)

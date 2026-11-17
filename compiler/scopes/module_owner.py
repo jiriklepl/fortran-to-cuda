@@ -55,7 +55,7 @@ def _caller_arrays(parent, resolved, child, immutable_inputs, reached):
     associations = [mapping for mapping in resolved.mappings if mapping.formal_binding.rank
                     and mapping.formal_binding.root not in immutable_inputs]
     numbers = set(child.handle_numbers())
-    parameterized = parent.builder.config.scope_execution == "graph" and reached is None
+    parameterized = reached is None
     native_roots = ({root for unit in child.units for operation in unit.scope.native
                      for root in operation.native_opaque_accesses}
                     | set(getattr(child, "parameterized_native_bindings", {}))) if parameterized else set()
@@ -146,8 +146,6 @@ def _body_input_intents(builder, routine):
     This policy cannot apply to allocatables, pointers, derived types or any
     entry action with finalization/association effects.
     """
-    if builder.config.scope_execution != "graph":
-        return frozenset(), ()
     outputs = {binding.root for name, binding in routine.scope.bindings.items()
                if name in routine.arguments and binding.rank and binding.intent == "out"
                and binding.dtype in {"real", "integer", "logical"}
@@ -172,12 +170,9 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         if reached is not None:
             proxy._mapped_reached_path, proxy._mapped_reached_child = reached
         proxy.immutable_inputs = dict(immutable_inputs or {})
-        consumption = getattr(proxy, "_reached_consumption", None)
-        if consumption is not None:
-            consumption.bind_child(proxy)
         proxy.inline = InlineRegions(proxy)
         super().__init__(proxy, parent=parent)
-        if proxy.config.scope_execution == "graph" and reached is None:
+        if reached is None:
             # This parameterized helper can be shared by independently checked
             # roots. Its live context supplies the invocation owner; embedding
             # its first caller's identity would make otherwise identical source
@@ -208,11 +203,11 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         # but must reauthenticate this CALL and its canonical actuals.
         self.original_source_call = original_call
         proxy._native_host_owner = self
-        self.resource_slot_namespace = self if proxy.config.scope_execution == "graph" and reached is None else None
+        self.resource_slot_namespace = self if reached is None else None
         self.resource_slot_roots = {}
         # Mapping values are exact original actuals retained from the resolved
         # source CALL. No capture fact or initialized coverage is inferred.
-        proxy._native_host_array_actuals = dict(mappings) if proxy.config.scope_execution == "graph" else {}
+        proxy._native_host_array_actuals = dict(mappings)
         self.resources = {}
         self.forwarded_handles = set()
         self.entry = _name("fort_scope_entry_", routine.qualified)
@@ -356,8 +351,7 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         label = next((number for number in range(99999, 99900, -1) if number not in labels), None)
         if label is None:
             raise CompilationError("original module companion has no bounded free statement label")
-        graph_controls = ([self.epoch_pristine, self.query_plan]
-                          if builder.config.scope_execution == "graph" else [])
+        graph_controls = ([self.epoch_pristine, self.query_plan])
         if hasattr(self, "retention_allowed"):
             graph_controls.append(self.retention_allowed)
         if hasattr(self, "eligibility_allowed"):
@@ -393,8 +387,7 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         builder.variants.register(routine.qualified, interface="original_module_entry_v1", role="coordinator",
             name=self.entry, summary_identity=self.graph.identity,
             requirements=("original unsaved module body", "shared owning context control",
-                          "per-call original actual handles" if builder.config.scope_execution == "graph"
-                          else "one canonical actual mapping"),
+                          "per-call original actual handles"),
             shared_artifacts=("sources/" + _name("source_", str(routine.scope.path)) + ".f90",))
         return tuple(edits)
 
@@ -402,7 +395,7 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         return {"procedure": self.routine.qualified, "entry": self.entry,
                 "interface": "original_module_entry_v1",
                 "control_version": (6 if hasattr(self, "eligibility_allowed") else 5 if hasattr(self, "retention_allowed") else 4 if self.resource_slot_namespace is self else
-                                    3 if self.builder.config.scope_execution == "graph" else 1),
+                                    3),
                 **({"eligibility_control": {"argument": self.eligibility_allowed,
                     "association": "same original owner SAVE exclusion gate forwarded INOUT",
                     "activation": "required before every registration, fresh context and child device dispatch"}}
@@ -423,7 +416,7 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                     for index, unit in enumerate(self.owner.execution_plan.units(self))],
                 "mapped_reached_plan": (self.builder._mapped_reached_child.public()
                     if hasattr(self.builder, "_mapped_reached_child") else None),
-                "parameterized_handles": self.builder.config.scope_execution == "graph",
+                "parameterized_handles": True,
                 **({"storage_identity": "caller canonical allocation identity forwarded separately from helper-local slots"}
                    if self.resource_slot_namespace is self else {}),
                 "body_intent_diagnostics": list(self.body_intent_diagnostics),
@@ -432,9 +425,7 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                    if self.readonly_allocatable_inputs else {}),
                 **({"qualified_opaque_storage": list(self.opaque_saved_storage)} if self.opaque_saved_storage else {}),
                 "numerical_team_declines": list(self.numerical_team_declines),
-                "limits": ("ordinary numeric formals and read-only optional scalars; per-call original actual handles; shared original SAVE scalars; saved arrays remain native"
-                           if self.builder.config.scope_execution == "graph" else
-                           "ordinary numeric formals and read-only optional scalars; one canonical mapping; shared original SAVE scalars; saved arrays remain native")}
+                "limits": ("ordinary numeric formals and read-only optional scalars; per-call original actual handles; shared original SAVE scalars; saved arrays remain native")}
 
 
 def borrow_module(parent, node, *, reached=None, allow_native_collapse=True):
@@ -495,7 +486,7 @@ def borrow_module(parent, node, *, reached=None, allow_native_collapse=True):
     if routine.qualified in owner.active or len(owner.active) >= parent.builder.analysis.depth_limit:
         raise CompilationError("recursive or over-depth original module companion")
     readonly_inputs = []
-    if parent.builder.config.scope_execution == "graph" and reached is None:
+    if reached is None:
         from compiler.frontend.readonly_allocatable_input import prove_readonly_allocatable_input
 
         for name in routine.arguments:
@@ -531,7 +522,7 @@ def borrow_module(parent, node, *, reached=None, allow_native_collapse=True):
     if len({binding.root for binding in mappings.values()}) != len(mappings):
         raise CompilationError("original module companion has uncertain actual aliases")
     existing = owner.members.get(routine.qualified)
-    parameterized = parent.builder.config.scope_execution == "graph" and reached is None
+    parameterized = reached is None
     if existing is not None:
         from compiler.scopes.native_ancestor import native_only
         if (getattr(existing, "native_ancestor_only", None) is not None
@@ -580,9 +571,6 @@ def borrow_module(parent, node, *, reached=None, allow_native_collapse=True):
             owner.members.update(members)
             owner.resources.clear()
             owner.resources.update(resources)
-            consumption = getattr(parent.builder, "_reached_consumption", None)
-            if consumption is not None:
-                consumption.retain_children(member.builder for member in members.values())
             parent.refresh()
             raise
         finally:
@@ -603,8 +591,7 @@ def borrow_module(parent, node, *, reached=None, allow_native_collapse=True):
     placeholders[marker] = existing, parent.context
     controls = [marker, f"{existing.enabled} = {parent.enabled}",
                 *([f"{existing.epoch_pristine} = {parent.epoch_pristine}",
-                   f"{existing.query_plan} = {parent.query_plan}"]
-                  if parent.builder.config.scope_execution == "graph" else []),
+                   f"{existing.query_plan} = {parent.query_plan}"]),
                 *([f"{existing.retention_allowed} = {parent.retention_allowed}"]
                   if hasattr(existing, "retention_allowed") else []),
                 *([f"{existing.eligibility_allowed} = {parent.eligibility_allowed}"]

@@ -132,19 +132,6 @@ def test_original_association_registration_is_rechecked_before_publication(tmp_p
         scalar_elements.check_scalar_element_closure(analysis, resolved.procedure, resolved.mappings)
 
 
-def test_changed_original_callee_file_rejected_at_artifact_publication(tmp_path):
-    from compiler.tests.test_scalar_element_inputs import scalar_element_fixture
-
-    paths, builder, _proof, _originals = scalar_element_fixture(tmp_path, numerical_source=overloaded_source())
-    analysis = builder.analysis
-    caller = analysis.routines["tide_numerics::bridge"]
-    call = next(node for node in caller.execution.content if type(node).__name__ == "Call_Stmt")
-    scalar_elements.resolve_original_call(analysis, caller.scope, call)
-    paths[1].write_text(paths[1].read_text().replace("to=to+from", "to=to-from"))
-    with pytest.raises(CompilationError):
-        analysis.verify_publication()
-
-
 @pytest.mark.parametrize("consumer", ["validate", "issuer"])
 @pytest.mark.parametrize("change", ["missing", "copy"])
 def test_coordinate_token_does_not_heal_missing_nested_association(tmp_path, consumer, change):

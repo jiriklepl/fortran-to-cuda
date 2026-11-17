@@ -195,44 +195,6 @@ def test_simulated_cuda_sessions_preserve_values_and_transfer_counts(simulated_c
 
 
 @pytest.mark.native
-@pytest.mark.parametrize("backend", ["serial", "openmp", "cuda-simulated"])
-def test_sessions_preserve_logical_arguments_and_host_conditionals(tmp_path, monkeypatch, backend):
-    from compiler.driver.pipeline import prepare_function
-    from compiler._legacy.emission import generate_sources
-    from compiler.tests import test_language as language
-    from compiler.tests.test_language_cuda import CUDA_RUNTIME
-
-    function, driver = language.structured_case(tmp_path)
-    optimized, plan = prepare_function(function)
-    resident_driver = """program main
-use language_case
-real(knd)::a(4)
-type(entry_workspace)::work
-a=[-4.d0,1.d0,3.d0,9.d0]
-call entry_create(work,a)
-call entry_run(work,4,.true.)
-call entry_update_host(work,a=a)
-print *,a
-call entry_run(work,4,.false.)
-call entry_update_host(work,a=a)
-print *,a
-call entry_destroy(work)
-end program
-"""
-    if backend == "cuda-simulated":
-        (tmp_path / "cuda_runtime.h").write_text(CUDA_RUNTIME)
-
-        def simulated_sources(function, plan):
-            sources = generate_sources(function, plan)
-            return replace(sources, cpp=_simulate_cuda(sources.cuda))
-
-        monkeypatch.setattr(language, "generate_sources", simulated_sources)
-    language.run_reference_and_cpp(
-        tmp_path, optimized, plan, driver, openmp=backend == "openmp", generated_driver=resident_driver
-    )
-
-
-@pytest.mark.native
 @pytest.mark.parametrize("output_first", [True, False])
 def test_session_input_initialization_with_mixed_intents(tmp_path, output_first):
     parameters = "a, b, n" if output_first else "b, a, n"

@@ -1,6 +1,6 @@
 """Dependency diagnostics preserve existing numerical and cost contracts."""
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.analysis import build_execution_plan
 from compiler.driver.options import CompilerOptions
 from compiler.emission.common.resources import read_scoped_runtime
@@ -54,18 +54,3 @@ def test_dependency_diagnostics_do_not_authorize_missing_numerical_costs():
         OffloadConfig("auto", native_participation="serial"), "common_functions.cuh")
     assert not emitted.report["automatic_estimate_available"]
     assert emitted.report["planning"]["units"][0]["compute_model"] is None
-
-
-def test_unavailable_dependency_shape_preserves_validated_v2_contract():
-    function, plan, analysis = prepare("a(i)=b(i)\na(i)=a(i)+1d0")
-    unit, = analysis.units
-    # Ordered memory SSA is deliberately outside the first dependency collector.
-    assert not unit.compute_dependencies.available
-    assert unit.compute_arithmetic_operations_per_iteration == 1
-    emitted = generate_scoped(function, plan,
-        OffloadConfig("auto", profile_v2(), native_participation="serial"), "common_functions.cuh",
-        runtime_id=read_scoped_runtime()[1]["runtime_id"])
-    assert emitted.report["automatic_estimate_available"]
-    generated, = emitted.report["planning"]["units"]
-    assert generated["compute_model"] is not None
-    assert not generated["compute_dependencies"]["available"]

@@ -351,7 +351,7 @@ def admit_external_device_task(member, node):
     proof = external_device_task(member.builder.analysis, member.routine, node)
     if proof is None:
         return False
-    if (member.builder.config.scope_execution != "graph" or member.builder.config.policy != "sections"
+    if (member.builder.config.policy != "sections"
             or proof.public()["version"] == 1 and (member is not member.owner or member.control_guard is not None)):
         raise CompilationError("external device first slice requires an owning serial forced-sections graph")
     associations = tuple(item for item in proof._resolved.associations if item.binding is not None and item.binding.rank)

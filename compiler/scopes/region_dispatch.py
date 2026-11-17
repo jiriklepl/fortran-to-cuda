@@ -284,11 +284,8 @@ class InlineRegions:
         """Charge attempts before extraction, across both participation modes."""
         operations = sum(_kind(item) in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct", "If_Stmt", "If_Construct"}
                          for node in nodes for item in walk(node))
-        if self.builder.config.scope_execution == "graph":
-            if operations > self.builder.analysis.operation_limit:
-                raise CompilationError("inline numerical candidate exceeds per-candidate operation budget")
-        elif self.attempts >= 32 or self.operations + operations > 256:
-            raise CompilationError("bounded inline region/operation budget exhausted")
+        if operations > self.builder.analysis.operation_limit:
+            raise CompilationError("inline numerical candidate exceeds per-candidate operation budget")
         self.attempts += 1
         self.operations += operations
 
@@ -376,9 +373,6 @@ class InlineRegions:
             return region
         if builder.validate_reached_window() is not None:
             raise CompilationError("combined numerical team requires its registered reached preparation")
-        if (builder.config.scope_execution != "graph"
-                and len(self.original_numerical_regions) >= min(32, builder.analysis.operation_limit)):
-            raise CompilationError("ordinary numerical region registry budget exhausted")
         provider = NumericalPreparationProvider(builder.analysis, options=builder.options, config=builder.config,
             environment_root=builder._numerical_environment_root,
             immutable_inputs=getattr(builder, "immutable_inputs", {}))
@@ -399,10 +393,6 @@ class InlineRegions:
     def validate_numerical_regions(self):
         """Check retained local capabilities again before source publication."""
         from compiler.frontend.reached_windows import _ResolvedNumericalRegion
-
-        if (self.builder.config.scope_execution != "graph"
-                and len(self.original_numerical_regions) > min(32, self.builder.analysis.operation_limit)):
-            raise CompilationError("ordinary numerical region registry budget exhausted")
         for key, region in self.original_numerical_regions.items():
             if type(region) is not _ResolvedNumericalRegion or key != tuple(id(node) for node in region.selection):
                 raise CompilationError("ordinary numerical region registry selection changed")
@@ -693,9 +683,7 @@ class InlineRegions:
         self.builder.variants.register(
             self.builder.entry.qualified, interface="source_inline_dispatch_v1", role="region_dispatcher",
             name=self.name + "::run", summary_identity=(
-                self.builder.analysis.structure(self.builder.entry.qualified).identity
-                if self.builder.config.reached_execution else
-                self.builder.analysis.summarize(self.builder.entry.qualified)["summary_identity"]),
+                self.builder.analysis.structure(self.builder.entry.qualified).identity),
             requirements=("bounded original region IDs", "original saved storage and guards retained", "mode-bearing CPU/GPU execution"),
             shared_artifacts=(self.path,))
         target = "query" if query else "run_team" if collective else "run"
@@ -794,8 +782,7 @@ class InlineRegions:
         return {"dispatcher": self.name + "::run" if self.used else None, "variant_interface": "source_inline_dispatch_v1",
                 "team_dispatcher": self.name + "::run_team" if self.used & self.collective_regions else None,
                 "limits": ({"regions": None, "cumulative_operations": None,
-                            "operations_per_candidate": self.builder.analysis.operation_limit}
-                           if self.builder.config.scope_execution == "graph" else {"regions": 32, "operations": 256}),
+                            "operations_per_candidate": self.builder.analysis.operation_limit}),
                 "regions": [{**region.public(), "region_id": index + 1, "used": procedure in self.used,
                              "execution_participation": "qualified_original_team" if procedure in self.collective_regions else "serial_coordinator",
                              "source_compute_applicability": (self.compute_applicability[procedure].public()

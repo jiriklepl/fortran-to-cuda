@@ -6,10 +6,14 @@ from dataclasses import is_dataclass
 from pathlib import Path
 
 import pytest
-
-from compiler.frontend.immutable_graph import freeze_graph
 from compiler.scopes.indirect_access import build_indirect_accesses
 from compiler.tests.test_indirect_native_sections import compile_inspector, fixture
+
+
+def freeze_graph(value, **ownership):
+    from compiler.frontend.immutable_graph import GraphFreezer
+
+    return GraphFreezer(**ownership).freeze(value)
 
 
 def emitted(sections):

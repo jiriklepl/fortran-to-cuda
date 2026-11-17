@@ -12,10 +12,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler.offload.config import OffloadConfig
+from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler._legacy.emission import generate_sources
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.frontend import lower_source
 from compiler.numerical_contract import (
@@ -131,23 +130,6 @@ def test_empty_hidden_options_are_harmless_and_never_scrubbed(monkeypatch):
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "")
     require_explicit_cuda_environment({"NVCC_APPEND_FLAGS": ""})
     assert os.environ["NVCC_APPEND_FLAGS"] == ""
-
-
-def test_library_and_scoped_runtime_publish_the_same_contract():
-    function = lower_source(SOURCE, "advance", source_name="source.f90")
-    function, plan = prepare_function(function, options=CompilerOptions())
-    generated = generate_sources(function, plan)
-    contract = numerical_build_contract()
-    assert generated.numerical_contract == contract
-    assert contract["identity"] in generated.cuda
-    runtime, manifest = read_scoped_runtime()
-    assert manifest["numerical_contract"] == contract
-    assert contract["identity"] in runtime["scoped_runtime.cu"]
-    for item in manifest["sources"]:
-        if item["language"] == "cuda":
-            assert item["numerical_contract"] == contract
-        else:
-            assert "numerical_contract" not in item
 
 
 def test_source_scopes_publish_contract_on_every_cuda_artifact(tmp_path):

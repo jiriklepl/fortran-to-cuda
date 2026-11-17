@@ -6,7 +6,7 @@ from hashlib import sha256
 
 import pytest
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission.common.resources import read_scoped_runtime
@@ -129,44 +129,3 @@ def source_scope(tmp_path, transfers, *, collective=False, structured=False, pol
     replacement = outputs[report["sources"][str(source)]["replacement"]]
     owner = replacement.split("subroutine " + scope["owner"], 1)[1].split("end subroutine " + scope["owner"], 1)[0]
     return outputs, report, owner
-
-
-@pytest.mark.parametrize("collective", [False, True])
-@pytest.mark.parametrize("transfers", ["direct", "pinned", "auto", "coalesced"])
-def test_owners_configure_once_before_registration_and_planning(tmp_path, collective, transfers):
-    _, report, owner = source_scope(tmp_path, transfers, collective=collective)
-    scope, = report["scopes"]
-    assert scope["transfer_configuration"]["requested"] == transfers
-    if transfers == "direct":
-        assert "fort_configure" not in owner
-        return
-    assert owner.count("= fort_configure(") == 1
-    configure = owner.index("= fort_configure(")
-    assert owner.index("fort_scope_set_device_budget(") < configure < owner.index("fort_scope_register(")
-    assert configure < owner.index("fort_scope_plan_reset(")
-    if collective:
-        assert owner.rfind("!$omp master", 0, configure) > owner.rfind("!$omp end master", 0, configure)
-        assert "fort_state%status = fort_configure(fort_state%context)" in owner
-
-
-@pytest.mark.parametrize("structured", [False, True])
-def test_pinned_automatic_source_keeps_native_when_old_profile_has_only_direct_costs(tmp_path, structured):
-    from compiler.offload.numerical_calibration import profile_from_compute_measurements
-    from compiler.tests.test_numerical_calibration_v2 import observations_v2
-
-    profile = profile_from_compute_measurements(calibration(), observations_v2(), calibration={})
-    outputs, report, owner = source_scope(tmp_path, "pinned", policy="auto", profile=profile, structured=structured)
-    assert not report["automatic_estimate_available"]
-    scope, = report["scopes"]
-    assert scope["planning_reason"] == "transfer_estimates_unavailable"
-    assert scope["transfer_configuration"]["placement_estimate_reason"] == "transfer_estimates_unavailable"
-    preflight = scope["automatic_preflight"]
-    assert preflight["successful"] and preflight["selection"] == "native"
-    assert "transfer_estimates_unavailable" in preflight["reason"]
-    assert preflight["runtime_decision_inputs"] == []
-    assert preflight["contexts_created"] == preflight["registrations"] == preflight["queries_constructed"] == 0
-    assert "Successful static native selection:" in owner
-    assert "fort_scope_create(" not in owner
-    assert "fort_scope_register(" not in owner
-    assert "fort_scope_plan_reset" not in owner
-    assert "fort_configure(" not in owner

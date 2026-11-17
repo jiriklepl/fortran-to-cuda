@@ -4,9 +4,17 @@ from itertools import product
 import pytest
 
 from compiler.analysis import build_execution_plan
-from compiler.analysis.conditional_affine import ConditionalAffineUnsupported, analyze_conditional_affine
+from compiler.analysis.conditional_affine import ConditionalAffineUnsupported
 from compiler.frontend import lower_source
 from compiler.ir import CompilationError
+
+
+def analyze_conditional_affine(function, *, operation_budget=4096, isl_operation_budget=1000000):
+    from compiler.analysis.conditional_affine import collect_conditional_affine
+
+    models = collect_conditional_affine(function, operation_budget=operation_budget,
+                                       isl_operation_budget=isl_operation_budget)
+    return models.project(tuple(range(len(models._models))))
 
 
 def source(body, *, declarations="", arguments="n", dimensions=":"):

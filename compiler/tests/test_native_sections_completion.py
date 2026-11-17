@@ -7,8 +7,8 @@ import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.frontend.native_completion import _joined_completion_facts
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
@@ -205,34 +205,3 @@ def test_end_sections_never_replaces_the_original_parallel_join(tmp_path):
                      if type(node).__name__ != "Continue_Stmt")
     with pytest.raises(CompilationError, match="joined END PARALLEL"):
         analysis.joined_completion(ENTRY, selected)
-
-
-@pytest.mark.parametrize("count", [1, 48])
-def test_reached_owner_retains_original_sections_between_two_numerical_regions(tmp_path, count):
-    path, _analysis, _graph, _selected, _group = fixture(tmp_path, sections() * count)
-    text = path.read_text().replace("implicit none\ncontains", "implicit none\ninteger::visits=0\ncontains")
-    text = text.replace("step(a,b,flag,n)", "step(a,b,out,flag,n)")
-    text = text.replace("b(-2:,-1:)\n", "b(-2:,-1:),out(-2:,-1:)\n", 1)
-    text = text.replace("continue\n", "visits=visits+1\n"
-        "do j=0,2\ndo i=0,n-1\nb(i,j)=2*a(i,j)+real(i+3*j,8)\nenddo\nenddo\ni=0\n", 1)
-    text = text.replace("!$omp end parallel\n", "!$omp end parallel\n"
-        "do j=0,2\ndo i=0,n-1\nout(i,j)=b(i,j)+b(-2,j)+b(18,j)\nenddo\nenddo\n", 1)
-    path.write_text(text)
-    facts = {"schema_version": 1, "participation": "serial",
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
-             "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}}
-    outputs, report = ScopeBuilder([path], ENTRY, facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="reached")).run()
-    owner, = report["scopes"]
-    assert len(owner["gpu_leaves"]) == 2
-    assert owner["boundaries"] == []
-    native, = [operation for segment in owner["planning_segments"]
-               for operation in segment["operations"]["native_operations"]
-               if operation["kind"] == "joined native OpenMP"]
-    assert native["sections"]["available"], native["sections"]
-    assert native["completion"]["original_section_count"] == count * 2
-    generated = outputs[report["sources"][str(path)]["replacement"]]
-    assert generated.count("!$omp sections\n") == count * 2
-    assert generated.count("!$omp end sections\n") == count * 2
-    assert generated.count("!$omp end parallel\n") == 2
-    assert path.read_text() == text

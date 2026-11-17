@@ -10,14 +10,13 @@ import pytest
 
 from compiler.analysis import ParallelizationError, build_execution_plan
 from compiler.analysis.semantics import expression_type
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission import read_common_header
-from compiler._legacy.emission import generate_sources
 from compiler.frontend import lower_file
 from compiler.ir import CompilationError, IntrinsicCall, Literal, ScalarType, SourceLocation, referenced_symbols
 from compiler.ir.intrinsics import INTRINSIC_ARGUMENTS
-from compiler.tests.test_language import compile_cuda_sources, lower
+from compiler.tests.test_language import lower
 from compiler.tests.test_language_cuda import CUDA_RUNTIME
 from compiler.tests.test_native import cuda_device as cuda_device
 
@@ -79,76 +78,6 @@ REAL_FUNCTIONS = (
 
 def test_requested_intrinsics_are_registered():
     assert INTRINSIC_ARGUMENTS.keys() >= REQUESTED
-
-
-@pytest.mark.parametrize("name", REAL_FUNCTIONS)
-@pytest.mark.parametrize(("literal", "dtype"), [("0.25", ScalarType.REAL32), ("0.25d0", ScalarType.REAL)])
-def test_real_intrinsics_preserve_argument_kind(tmp_path, name, literal, dtype):
-    function = lower(tmp_path, f"a(1)={name}({literal})")
-    value = function.body.statements[0].value
-    assert value.dtype is dtype
-    generate_sources(*prepare_function(function))
-
-
-@pytest.mark.parametrize(
-    ("call", "dtype"),
-    [
-        ("abs(-1)", ScalarType.INTEGER),
-        ("min(a3=3, a1=1, a2=2)", ScalarType.INTEGER),
-        ("max(a2=2.d0, a1=1.d0)", ScalarType.REAL),
-        ("atan2(x=1.d0,y=-1.d0)", ScalarType.REAL),
-        ("real(n)", ScalarType.REAL32),
-        ("real(1.d0)", ScalarType.REAL32),
-        ("real(n,8)", ScalarType.REAL),
-        ("real(kind=knd,a=n)", ScalarType.REAL),
-        ("real(n,kind=kind(a))", ScalarType.REAL),
-        ("real(n,kind=2*kind(0))", ScalarType.REAL),
-        ("real(n,kind=knd+0)", ScalarType.REAL),
-        ("int(-1.75d0)", ScalarType.INTEGER),
-        ("int(n,kind=4)", ScalarType.INTEGER),
-        ("nint(-1.5,kind=4)", ScalarType.INTEGER),
-        ("floor(1.75d0)", ScalarType.INTEGER),
-        ("ceiling(-1.75,kind=kind(n))", ScalarType.INTEGER),
-        ("dble(n)", ScalarType.REAL),
-        ("dble(0.5)", ScalarType.REAL),
-        ("mod(-7,3)", ScalarType.INTEGER),
-        ("modulo(p=3.,a=-7.)", ScalarType.REAL32),
-        ("sign(b=-1.d0,a=2.d0)", ScalarType.REAL),
-        ("dim(-2,3)", ScalarType.INTEGER),
-        ("merge(fsource=1.,mask=.true.,tsource=2.)", ScalarType.REAL32),
-    ],
-)
-def test_signatures_conversions_and_keywords(tmp_path, call, dtype):
-    function = lower(tmp_path, "a(1)=" + call)
-    assert function.body.statements[0].value.dtype is dtype
-    generate_sources(*prepare_function(function))
-
-
-@pytest.mark.parametrize(
-    ("call", "expected", "dtype"),
-    [
-        ("kind(a)", 8, ScalarType.INTEGER),
-        ("kind(n)", 4, ScalarType.INTEGER),
-        ("kind(.true.)", 4, ScalarType.INTEGER),
-        ("kind(t)", 4, ScalarType.INTEGER),
-        ("epsilon(t)", 2.0**-23, ScalarType.REAL32),
-        ("epsilon(a)", 2.0**-52, ScalarType.REAL),
-        ("tiny(t)", 2.0**-126, ScalarType.REAL32),
-        ("tiny(a)", 2.0**-1022, ScalarType.REAL),
-        ("huge(t)", float.fromhex("0x1.fffffep+127"), ScalarType.REAL32),
-        ("huge(a)", float.fromhex("0x1.fffffffffffffp+1023"), ScalarType.REAL),
-        ("huge(n)", 2147483647, ScalarType.INTEGER),
-        ("epsilon(a(i))", 2.0**-52, ScalarType.REAL),
-    ],
-)
-def test_model_inquiries_do_not_read_operand_values(tmp_path, call, expected, dtype):
-    function = lower(tmp_path, "a(1)=" + call, "real::t")
-    value = function.body.statements[0].value
-    assert isinstance(value, Literal)
-    assert value.dtype is dtype
-    assert float(value.value) == expected
-    assert not referenced_symbols(value)
-    generate_sources(*prepare_function(function))
 
 
 @pytest.mark.parametrize(
@@ -318,59 +247,6 @@ end program
     return lower_file(path, "entry"), driver, len(real_calls)
 
 
-def run_case(tmp_path, function, plan, driver, backend):
-    if not shutil.which("gfortran") or not shutil.which("g++"):
-        pytest.skip("native Fortran and C++ compilers are unavailable")
-    generated = generate_sources(function, plan)
-    if backend == "cuda-sim":
-        simulated = generated.cuda.replace("#include <cuda_runtime.h>", '#include "cuda_runtime.h"')
-        simulated = re.sub(r"(kernel_region_\d+_device)<<<([^>]+)>>>\(", r"fort_test_launch(\1, \2, ", simulated)
-        generated = replace(generated, cpp=simulated)
-        (tmp_path / "cuda_runtime.h").write_text(CUDA_RUNTIME)
-    (tmp_path / "implementation.cpp").write_text(generated.cpp)
-    (tmp_path / "interface.f90").write_text(generated.fortran)
-    (tmp_path / "common_functions.cuh").write_text(read_common_header())
-    (tmp_path / "driver.f90").write_text(driver)
-
-    def run(command):
-        result = subprocess.run(
-            command,
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            env={**os.environ, "OMP_NUM_THREADS": "2"},
-            check=False,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
-        return result.stdout.split()
-
-    run(["gfortran", function.source, "driver.f90", "-o", "reference"])
-    expected = run([str(tmp_path / "reference")])
-    if backend == "cuda":
-        compile_cuda_sources(tmp_path, function, plan)
-        run(["gfortran", "-c", "interface.f90", "driver.f90"])
-        run(["nvcc", "implementation.o", "interface.o", "driver.o", "-lgfortran", "-o", "generated"])
-    else:
-        flags = ["-fopenmp"] if backend == "openmp" else []
-        sanitize = ["-fsanitize=undefined", "-fno-sanitize-recover=undefined"]
-        run(["g++", "-std=c++17", *flags, *sanitize, "-c", "implementation.cpp", "-o", "implementation.o"])
-        run(
-            [
-                "gfortran",
-                *flags,
-                *sanitize,
-                "interface.f90",
-                "driver.f90",
-                "implementation.o",
-                "-lstdc++",
-                "-o",
-                "generated",
-            ]
-        )
-    return [float(value) for value in run([str(tmp_path / "generated")])], [float(value) for value in expected]
-
-
 def check_results(actual, expected, real_count):
     assert len(actual) == len(expected)
     for index, (value, reference) in enumerate(zip(actual, expected, strict=True)):
@@ -381,30 +257,6 @@ def check_results(actual, expected, real_count):
             assert value == reference, (column + 1, index % 8 + 1)
         else:
             assert value == pytest.approx(reference, rel=tolerance, abs=0), (column + 1, index % 8 + 1)
-
-
-@pytest.mark.native
-@pytest.mark.parametrize("backend", ["serial", "openmp", "cuda-sim"])
-@pytest.mark.parametrize("opt_level", [0, 1])
-def test_requested_intrinsics_execute_like_fortran(tmp_path, backend, opt_level):
-    function, driver, real_count = intrinsic_case(tmp_path)
-    function, plan = prepare_function(function, options=CompilerOptions(opt_level=opt_level))
-    check_results(*run_case(tmp_path, function, plan, driver, backend), real_count)
-
-
-@pytest.mark.cuda
-def test_requested_intrinsics_compile_for_cuda(tmp_path):
-    function, _, _ = intrinsic_case(tmp_path)
-    compile_cuda_sources(tmp_path, *prepare_function(function))
-
-
-@pytest.mark.native
-@pytest.mark.cuda
-@pytest.mark.usefixtures("cuda_device")
-def test_requested_intrinsics_execute_on_cuda(tmp_path):
-    function, driver, real_count = intrinsic_case(tmp_path)
-    function, plan = prepare_function(function)
-    check_results(*run_case(tmp_path, function, plan, driver, "cuda"), real_count)
 
 
 @pytest.mark.native

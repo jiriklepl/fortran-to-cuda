@@ -373,18 +373,6 @@ def validate_dependency_profile(profile):
     return saved
 
 
-def cpu_dependency_costs(profile, graph, backend, *, workload_class, workload_features,
-                         primitive_domains, access_class, compiled_form=None):
-    """Return cost-only coefficients after every required independent proof."""
-    require_numerical_profile_contract(profile)
-    if backend not in CPU_BACKENDS or access_class != ACCESS_CLASS:
-        raise NumericalCalibrationError("CPU dependency execution/access class unavailable")
-    section = validate_dependency_profile(profile)
-    return _cpu_costs_from_section(profile, section, graph, backend, workload_class=workload_class,
-        workload_features=workload_features, primitive_domains=primitive_domains,
-        access_class=access_class, compiled_form=compiled_form)
-
-
 def _cpu_costs_from_section(profile, section, graph, backend, *, workload_class, workload_features,
                             primitive_domains, access_class, compiled_form=None):
     """Select costs from independently validated evidence; issue no profile authority."""

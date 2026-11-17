@@ -104,39 +104,6 @@ def test_new_array_math_retains_native_ieee_environment_guard(tmp_path):
         extracted(tmp_path, "a=a*scale", observer)
 
 
-@pytest.mark.parametrize("statement", ["a=scale", "a=a*scale", "a=b*scale"])
-def test_whole_array_effects_retain_descriptor_origins_and_typed_guards(tmp_path, statement):
-    from compiler._legacy.config import LegacyCompilerOptions, LegacyOffloadConfig
-    from compiler.frontend.numerical_effects import prove_numerical_effects
-    from compiler.frontend.numerical_preparation import NumericalPreparationProvider, _prepare
-
-    analysis, routine, node, extraction, _, _ = extracted(tmp_path, statement)
-    provider = NumericalPreparationProvider(
-        analysis,
-        options=LegacyCompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="reached"),
-        config=LegacyOffloadConfig(policy="sections", scope_execution="reached"),
-        environment_root=routine.qualified,
-    )
-    prepared = _prepare(analysis, routine.qualified, (node,), provider,
-                        extraction=extraction, require_effects=False)
-    effects = prove_numerical_effects(analysis, routine.qualified, (node,), prepared)
-    assert set(extraction.runtime_guards) == {guard.runtime_expression for guard in effects.preconditions}
-    roles = {guard.role for guard in effects.preconditions}
-    assert "array_extent_range" in roles
-    assert ("array_shape_equal" in roles) == (statement == "a=b*scale")
-    target = next(item for item in effects.sections.resources if item.resource == "argument::a")
-    assert target.lower_bounds == (-3, -2)
-    assert target.overwrites
-    assert bool(target.reads) == (statement == "a=a*scale")
-    assert any(item.kind == "descriptor_read" and item.resource == "argument::a"
-               for item in target.dependencies)
-    if statement == "a=b*scale":
-        source = next(item for item in effects.sections.resources if item.resource == "argument::b")
-        assert source.lower_bounds == (-7, -6)
-        assert source.reads
-        assert not source.writes
-
-
 @pytest.mark.parametrize("statement", [
     "a(-2:1,-2)=b(-6:-3,-6)+scale",
     "a(1:-2:-1,-2)=b(-3:-6:-1,-6)+scale",

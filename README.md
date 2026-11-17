@@ -1,13 +1,12 @@
 # Automatic GPU Offloading of Fortran Stencil Kernels
 
 A source-to-source compiler that translates annotated Fortran stencil modules into
-CUDA and C++ implementations, together with a comprehensive benchmark suite and a
-proof-of-concept framework for transparent lazy GPU memory management.
+CUDA and C++ implementations, together with a comprehensive benchmark suite.
 
 The project demonstrates that serial Fortran stencil code can be automatically
 offloaded to a GPU — with the generated kernel running **~40–60× faster** than serial
 Fortran — and identifies host↔device data transfer as the dominant remaining
-bottleneck, motivating the memory framework work.
+bottleneck.
 
 The [2026-10-22 graph offloading checkpoint](benchmarks/reports/graph-redesign-snapshot-20261022/README.md)
 records the current compiler snapshot, test results, and ELMM channel-simple/channel
@@ -31,9 +30,6 @@ path-to-this-repository/
 │
 ├── benchmarks/             ← full benchmark suite (7 variants × 3 kernels)
 │   └── README.md           ← build, run, test, and plotting documentation
-│
-├── memory-framework/       ← proof-of-concept: transparent lazy GPU memory
-│   └── README.md           ← concept, state machine, and PoC documentation
 │
 ├── requirements.txt        ← Python dependencies (fparser, islpy, matplotlib)
 └── README.md               ← this file
@@ -239,20 +235,6 @@ Includes:
   shared correctness/timing drivers, CPU/CUDA sessions and archived measurements.
 
 → Full documentation: [`benchmarks/README.md`](benchmarks/README.md)
-
-### `memory-framework/` — Lazy GPU Memory Management (PoC)
-
-The benchmark results show that memory transfers, not computation, are the
-bottleneck.  This component explores a transparent solution: instead of changing
-how Fortran allocates memory, the framework uses `mprotect(2)` to withdraw the
-process's own access rights to GPU-owned pages.  Any Fortran read or write then
-raises `SIGSEGV`, which a custom handler intercepts to perform the lazy transfer
-and restore access — entirely invisibly to the Fortran code.
-
-The `proof-of-concept/` subdirectory demonstrates the mechanism without CUDA
-using a simple integer-doubling computation.
-
-→ Full documentation: [`memory-framework/README.md`](memory-framework/README.md)
 
 ### `fortran-stencils/` — Input Kernels
 

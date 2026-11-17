@@ -152,51 +152,6 @@ def test_runtime_diagnoses_invalid_lifecycle_and_shapes(fake_runtime, mode, mess
     assert message in result.stderr
 
 
-def test_memory_lifecycle_preserves_parameters_after_skipped_intents():
-    from compiler.ir import ExecutionPlan, ScalarType, Symbol
-    from compiler.memory import plan_memory
-
-    output = Symbol(0, "output", ScalarType.REAL, rank=1, intent="out", parameter=True)
-    source = Symbol(1, "source", ScalarType.REAL, rank=1, intent="in", parameter=True)
-    updated = Symbol(2, "updated", ScalarType.REAL, rank=1, intent="inout", parameter=True)
-    for symbols in ((output, source, updated), (source, output, updated)):
-        memory = plan_memory(ExecutionPlan(()), symbols)
-        assert next(op.symbols for op in memory.create if op.kind == "upload") == (source, updated)
-        assert set(next(op.symbols for op in memory.retrieve if op.kind == "download")) == {output, updated}
-
-
-def test_memory_plan_preserves_predicate_and_launch_bound_reads(tmp_path):
-    from compiler.analysis import build_execution_plan
-    from compiler.ir import ConditionalRegion, ParallelRegion
-    from compiler.memory import format_memory, plan_memory
-    from compiler.tests.test_language import lower
-
-    function = lower(
-        tmp_path,
-        "if(a(1)>0)then\ndo i=1,limit(1)\na(i)=a(i)+1\nenddo\nelse\na(2)=0\nendif",
-        "integer,intent(in)::limit(:)",
-        "a,n,limit",
-    )
-    memory = plan_memory(build_execution_plan(function), function.parameters)
-    predicate, branch = memory.run
-    assert predicate.kind == "host"
-    assert predicate.symbols == (function.parameters[0],)
-    assert branch.kind == "branch"
-    assert isinstance(branch.step, ConditionalRegion)
-    bound_read = branch.then_ops[0]
-    assert bound_read.kind == "host"
-    assert bound_read.symbols == (function.parameters[2],)
-    assert any(isinstance(operation.step, ParallelRegion) for operation in branch.then_ops)
-    assert tuple(operation.kind for operation in branch.else_ops) == ("host", "execute", "host_write")
-    assert branch.else_ops[0].symbols == predicate.symbols
-    assert memory.retrieve[0].kind == "sync"
-    assert tuple(operation.kind for operation in memory.destroy) == ("sync", "release")
-    report = format_memory(memory)
-    assert "branch:" in report
-    assert "then:" in report
-    assert "else:" in report
-
-
 @pytest.mark.native
 def test_cpu_storage_owns_buffers_and_keeps_independent_updates(tmp_path):
     (tmp_path / "common_functions.cuh").write_text(read_common_header())

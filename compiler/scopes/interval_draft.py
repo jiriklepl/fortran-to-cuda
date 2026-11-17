@@ -329,56 +329,6 @@ class SourceIntervalDraft:
             return owner.execution_plan.validate()
         return build_execution_plan(owner)
 
-    def cost_entry(self):
-        """Only visible entry values; child-local preparation is never hoisted."""
-        plan, owner = self._owner.execution_plan, self._owner
-        if plan is None:
-            raise CompilationError("interval cost entry requires its finalized checked plan")
-        self.validate(plan)
-        arrays, integers = [], []
-        initialized = tuple(getattr(owner, "closed_initializations", ()))
-        for binding in self.demand.bindings:
-            try:
-                visible = owner.builder.visible_binding(owner.routine, binding.root)
-            except CompilationError:
-                continue
-            if visible is not binding:
-                continue
-            if binding.attributes & {"pointer", "optional", "volatile", "asynchronous"}:
-                continue
-            if binding.rank:
-                # A later local allocation or child descriptor is not an entry
-                # key. Ordinary original dummies and module objects can be
-                # queried only under the existing allocation/presence guards.
-                if (binding.declaring_scope is owner.routine.scope
-                        and binding.name not in owner.routine.arguments):
-                    continue
-                arrays.append(binding)
-            elif binding.dtype == "integer" and (
-                    "parameter" in binding.attributes or any(binding is item for item in initialized)
-                    or binding.declaring_scope is owner.routine.scope
-                    and binding.name in owner.routine.arguments and binding.intent == "in"):
-                integers.append(binding)
-        identity = _digest({"interval": self.identity,
-                            "arrays": [value.public() for value in arrays],
-                            "integers": [value.public() for value in integers]})
-        return {"arrays": tuple(arrays), "integers": tuple(integers), "identity": identity}
-
-    def completion_manifest(self):
-        plan = self._owner.execution_plan
-        if plan is None:
-            raise CompilationError("interval completion requires its finalized checked plan")
-        self.validate(plan)
-        return {"schema_version": 1, "interval_identity": self.identity,
-                "checked_execution_identity": plan.execution_identity,
-                "normal_completion": "only after successful final publication and cleanup",
-                "fallback": "sticky owning-decline count; planned native operations are not fallback",
-                "operations": [{"procedure": member["procedure"],
-                                "units": [{"ordinal": unit["ordinal"],
-                                           "selected_node_ids": unit["selected_node_ids"]}
-                                          for unit in member["units"]]}
-                               for member in plan.public()["procedures"]]}
-
 
 def prepare_interval_draft(owner, originals):
     """Collect original source and nested numerical anchors before admission."""

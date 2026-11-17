@@ -112,10 +112,9 @@ def _profile_identity(profile, budget):
 
 
 def _configuration(options, config, environment_root, immutable_inputs, budget):
-    from compiler._legacy.config import LegacyCompilerOptions, LegacyOffloadConfig
     from compiler.driver.options import CompilerOptions
     from compiler.offload.config import OffloadConfig
-    if type(options) not in {CompilerOptions, LegacyCompilerOptions} or type(config) not in {OffloadConfig, LegacyOffloadConfig}:
+    if type(options) is not CompilerOptions or type(config) is not OffloadConfig:
         raise CompilationError("original numerical preparation requires validated compiler options and offload configuration")
     if not isinstance(environment_root, str):
         raise CompilationError("original numerical preparation requires an original environment root")
@@ -761,11 +760,3 @@ def _prepare(analysis, procedure, exact_original_selection, provider, *, consume
             del registry[identity]
         raise
     return token
-
-
-def prepare_original_region(analysis, procedure, exact_original_selection, *, options, config, environment_root,
-                            immutable_inputs=None, consume=None):
-    """Demand one original candidate without capture, artifact or runtime work."""
-    provider = NumericalPreparationProvider(analysis, options=options, config=config, environment_root=environment_root,
-                                            immutable_inputs=immutable_inputs)
-    return provider.prepare(analysis, procedure, exact_original_selection, consume=consume)

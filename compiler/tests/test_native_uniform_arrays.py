@@ -7,8 +7,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 from compiler.scopes.segments import grouped_nodes
@@ -274,40 +274,3 @@ def test_proof_copy_and_changed_source_cannot_supply_new_payload_authority(tmp_p
     path.write_text(path.read_text().replace("gate(0)>0", "gate(1)>0"))
     with pytest.raises(CompilationError, match="changed"):
         analysis.native_sections_for_nodes(ENTRY, group, completion=proof, capture_locals=True)
-
-
-def test_reached_source_hooks_publish_the_point_before_the_unchanged_complete_team(tmp_path):
-    text = source_text()
-    text = text.replace("continue\n!$omp parallel", """do i=1,n
-gate(i)=a(i)
-b(i)=2*a(i)+real(i,8)
-enddo
-!$omp parallel""")
-    text = text.replace("!$omp end parallel\nend subroutine", """!$omp end parallel
-do i=1,n
-out(i)=b(i)+b(1)
-enddo
-end subroutine""")
-    path = tmp_path / "producer_branch_consumer.f90"
-    path.write_text(text)
-    facts = {"schema_version": 1, "participation": "serial",
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
-             "captures": {"argument::" + name: FACT for name in ("a", "gate", "b", "out")}}
-    outputs, report = form_source_scopes([path], ENTRY, facts=facts,
-        options=CompilerOptions(fallback="host", gpu_policy="sections", memory_model="scoped", scope_execution="reached"),
-        config=OffloadConfig("sections"))
-    owner, = report["scopes"]
-    assert len(owner["gpu_leaves"]) == 2
-    assert not owner.get("boundaries"), owner.get("boundaries")
-    operation, = [item for item in owner["native_operations"] if item["kind"] == "joined native OpenMP"]
-    assert operation["sections"]["available"], operation["sections"]
-    point, = [item for item in operation["sections"]["resources"] if item["resource"] == "argument::gate"]
-    assert point["reads"][0]["axes"][0]["lower"]["value"] == 0
-    generated = outputs[report["sources"][str(path)]["replacement"]]
-    begin = generated.index("fort_scope_access_begin_v1(")
-    opening = generated.lower().index("!$omp parallel private(i)", begin)
-    ending = generated.lower().index("!$omp end parallel", opening)
-    assert begin < opening
-    assert generated.find("fort_scope_host_end(", ending) >= 0
-    assert "if(gate(0)>0)then" in generated.lower().replace(" ", "")
-    assert text == path.read_text()

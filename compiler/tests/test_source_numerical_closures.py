@@ -5,7 +5,7 @@ from hashlib import sha256
 
 import pytest
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.frontend import lower_source
@@ -75,29 +75,6 @@ def test_pure_private_closure_is_rebased_and_tiled_domain_is_proved(tmp_path):
                                       options=CompilerOptions())
     assert len(plan.regions) == 1
     assert not any(symbol.rank for symbol in function.symbols if not symbol.parameter)
-
-
-def test_guarded_public_owner_keeps_internal_helper_native_fallback_at_caller(tmp_path):
-    path = tmp_path / "original.f90"
-    path.write_text(SOURCE)
-    facts = {"schema_version": 1, "participation": "serial",
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
-             "captures": {"argument::a": FACT}}
-    outputs, report = ScopeBuilder([path], "renamed_numerics::advance", facts=facts,
-                                  options=CompilerOptions(), config=OffloadConfig(policy="sections")).run()
-    assert report["scope_count"] == 1, report["boundaries"]
-    original = outputs[report["sources"][str(path)]["replacement"]]
-    kind_alias = re.search(r"(fort_scope_guard_i64_\w+)\s*=>\s*c_int64_t", original).group(1)
-    compact = "".join(original.replace("&", "").split())
-    assert f"int(tile,kind={kind_alias})>0_{kind_alias}" in compact
-    assert f"+int(tile,kind={kind_alias})<=2147483647_{kind_alias}" in compact
-    environment_alias = re.search(r"(fort_scope_environment_\w+)\s*=>\s*fort_scope_numerical_environment_supported", original).group(1)
-    assert environment_alias + "()/=0" in compact
-    assert "if (fort_native_" in original
-    assert original.count("pure subroutine derivative") == 1
-    scope, = report["scopes"]
-    assert scope["runtime_preflight"]["position"] == "original reached segment after allocation and bounds guards"
-    assert report["inline_numerical_regions"]["regions"][0]["numerical_environment"]["exceptions"] == "host traps disabled"
 
 
 def test_unrelated_type_and_contains_do_not_reject_a_supported_candidate(tmp_path):
@@ -182,25 +159,6 @@ end subroutine
 end module""")
     _, _, region = extraction(tmp_path, source)
     assert region.numerical_helpers
-
-
-def test_guard_kind_import_keeps_original_c_int64_t_binding_visible_to_native_fallback(tmp_path):
-    source = SOURCE.replace("real(8)::g(2),s", "real(8)::g(2),s,c_int64_t").replace(
-        "do block=-3,n,tile", "c_int64_t=17.d0\ndo block=-3,n,tile").replace(
-        "a(i)=s+real(i,8)", "a(i)=s+c_int64_t+real(i,8)")
-    path = tmp_path / "original.f90"
-    path.write_text(source)
-    facts = {"schema_version": 1, "participation": "serial",
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest()}, "captures": {"argument::a": FACT}}
-    outputs, report = ScopeBuilder([path], "renamed_numerics::advance", facts=facts,
-                                  options=CompilerOptions(), config=OffloadConfig(policy="sections")).run()
-    assert report["scope_count"] == 1, report["boundaries"]
-    text = outputs[report["sources"][str(path)]["replacement"]]
-    imports = [line for line in re.sub(r"&\s*\n\s*&?", "", text).splitlines()
-               if line.startswith("use iso_c_binding, only:") and "c_int64_t" in line]
-    assert imports
-    assert all("=> c_int64_t" in line for line in imports)
-    assert "a(i)=s+c_int64_t+real(i,8)" in text  # Unchanged native caller fallback.
 
 
 def test_shadowed_int_conversion_is_an_explicit_tile_guard_boundary(tmp_path):

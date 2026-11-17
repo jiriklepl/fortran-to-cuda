@@ -5,14 +5,12 @@ from hashlib import sha256
 
 import pytest
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.native_call_coordinates import prove_native_call_coordinates
-from compiler.frontend.reached_windows import plan_reached_window
 from compiler.frontend.source_effects import SourceEffects, _children
 from compiler.ir import CompilationError
-from compiler.scopes.reached_owner import ReachedWindowOwner
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
 
@@ -100,28 +98,6 @@ def scalar_element_call(directory, **sources):
     return paths, analysis, caller, original, resolved
 
 
-def scalar_element_fixture(directory, *, precision=8, roots=ROOTS, device_budget=None, **sources):
-    paths = scalar_element_sources(directory, precision=precision, **sources)
-    facts = {"schema_version": 1, "participation": "serial",
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest() for path in paths},
-             "captures": {root: deepcopy(FACT) for root in roots}}
-    if device_budget is not None:
-        facts["device_budget_bytes"] = device_budget
-    builder = ScopeBuilder(paths, ENTRY, facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="reached"))
-    originals = tuple(_children(builder.entry.execution))[1:]
-    proof = plan_reached_window(builder.analysis, ENTRY, originals, roots, facts)
-    return paths, builder, proof, originals
-
-
-def emit_scalar_element_fixture(directory, **options):
-    paths, builder, proof, originals = scalar_element_fixture(directory, **options)
-    owner = ReachedWindowOwner(builder, proof, originals)
-    assert owner.run()
-    outputs, report = owner.builder.finish()
-    return paths, outputs, report, owner
-
-
 @pytest.mark.parametrize("precision", [4, 8])
 def test_element_is_not_an_array_or_renamed_scalar_resource(tmp_path, precision):
     _paths, analysis, caller, original, resolved = scalar_element_call(tmp_path, precision=precision)
@@ -145,72 +121,6 @@ def test_element_is_not_an_array_or_renamed_scalar_resource(tmp_path, precision)
     assert "argument::ratio" not in coordinates.scalar_mapping
     assert "argument::ratio" not in coordinates.public()["scalar_bounds"]
     assert coordinates.validate(analysis, caller.qualified, original) is coordinates
-
-
-@pytest.mark.parametrize("precision", [4, 8])
-def test_original_guard_and_selected_scalar_dummy_survive_selector_change(tmp_path, precision):
-    paths, outputs, report, owner = emit_scalar_element_fixture(tmp_path, precision=precision)
-    root_text = outputs[report["sources"][str(paths[2])]["replacement"]]
-    child_text = outputs[report["sources"][str(paths[1])]["replacement"]]
-    assert "selector=next_selector" in root_text
-    assert "weights(selector)" in root_text.lower().replace(" ", "")
-    assert root_text.lower().index("if(enabled) then") < root_text.lower().index("weights(selector)")
-    assert "selector=1" in child_text
-    assert "ratio" in child_text
-    assert "weights" not in child_text.lower()
-    assert not owner.boundaries
-    assert not report["scopes"][0]["reached_window"]["planned_closures"]["closed_path_possible"]
-    scope = report["scopes"][0]
-    reservation, = (item for item in scope["resource_bindings"]["resources"] if item["resource"] == TABLE_ROOT)
-    assert reservation["role"] == "opaque_scalar_element_alias_reservation"
-    assert reservation["managed_payload"] is False
-    assert reservation["definition_authority"] is False
-    assert TABLE_ROOT not in scope["reached_window"]["managed_resources"]
-    assert all(TABLE_ROOT not in unit.arrays for member in owner.members.values() for unit in member.units)
-    assert paths[0].read_text().startswith("module tide_values")
-    assert "weights(selector)" in paths[2].read_text()
-    # A caller may change next_selector before every invocation. When enabled
-    # is false, even an out-of-range selector remains outside the original CALL.
-    assert "weights(selector)" not in root_text[:root_text.lower().index("if(enabled) then")].lower()
-
-
-def test_alias_reservation_is_at_the_original_guarded_call_after_the_gpu_prefix(tmp_path):
-    paths, outputs, report, _owner = emit_scalar_element_fixture(tmp_path)
-    text = outputs[report["sources"][str(paths[2])]["replacement"]].lower()
-    compact = text.replace(" ", "")
-    branch = compact.index("if(enabled)then")
-    reserve = compact.index("c_loc(weights)", branch)
-    actual = compact.index("weights(selector)", reserve)
-    assert branch < reserve < actual
-    assert "fort_scope_bytes" in compact[reserve:actual]
-    assert "fort_scope_register(" in compact[reserve:actual]
-    assert "fort_scope_close(" in compact[reserve:actual]
-    assert "c_loc(weights)" not in compact[:branch]
-    # The reservation conservatively handles physical overlaps. Original
-    # lifetime-wide dummy alias restrictions remain an independent obligation.
-
-
-def test_second_import_alias_does_not_rebind_the_original_table_reservation(tmp_path):
-    source = OWNER_SOURCE.replace("only:weights,selector", "only:weights,selector,fort_actual_status=>weights")
-    paths, outputs, report, owner = emit_scalar_element_fixture(tmp_path, owner_source=source)
-    text = outputs[report["sources"][str(paths[2])]["replacement"]].lower().replace(" ", "")
-    branch = text.index("if(enabled)then")
-    reservation = text.index("c_loc(weights)", branch)
-    actual = text.index("weights(selector)", reservation)
-    assert branch < reservation < actual
-    assert "c_loc(fort_actual_status)" not in text
-    assert not owner.boundaries
-    assert paths[2].read_text() == source
-
-
-def test_original_table_spelling_cannot_be_shadowed_by_registration_locals(tmp_path):
-    source = OWNER_SOURCE.replace("only:weights,selector", "only:fort_actual_status=>weights,selector")
-    source = source.replace("weights(selector)", "fort_actual_status(selector)")
-    paths, builder, proof, originals = scalar_element_fixture(tmp_path, owner_source=source)
-    owner = ReachedWindowOwner(builder, proof, originals)
-    with pytest.raises(CompilationError, match="generated name conflicts with original reference: fort_actual_status"):
-        owner.run()
-    assert paths[2].read_text() == source
 
 
 @pytest.mark.parametrize("change", ["none", "hidden_write", "writable_forward"])
@@ -302,18 +212,6 @@ def test_original_storage_association_cannot_hide_a_backing_table_write(tmp_path
 
     with pytest.raises(CompilationError):
         resolve_and_prove()
-
-
-def test_a_managed_backing_table_closes_before_the_original_call(tmp_path):
-    _paths, builder, proof, originals = scalar_element_fixture(tmp_path, roots=(*ROOTS, TABLE_ROOT))
-    planned = proof.public()["planned_closures"]
-    point, = planned["close_points"]
-    graph = builder.analysis.structure(ENTRY)
-    original, = graph.source_nodes(point["node_id"])
-    assert type(original).__name__ == "Call_Stmt"
-    assert "weights(selector)" in str(original).lower().replace(" ", "")
-    assert planned["closed_path_possible"]
-    assert proof.validate(builder.analysis, ENTRY, originals) is proof
 
 
 @pytest.mark.parametrize("mutation", ["source", "backing_binding", "formal_binding", "actual_ast"])

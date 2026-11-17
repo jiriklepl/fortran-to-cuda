@@ -11,7 +11,7 @@ from compiler.analysis import build_execution_plan
 from compiler.emission import generate_sources
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.frontend import lower_file
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.offload.numerical_calibration import MIX_FAMILIES, profile_from_measurements
 from compiler.tests.test_numerical_calibration import observations
 from compiler.tests.test_offload_profile import scoped_profile
@@ -78,66 +78,3 @@ end module
     generated = generate_sources(function, build_execution_plan(function),
         offload_config=OffloadConfig(policy="auto", profile=calibration), memory_model="scoped")
     return generated
-
-
-def test_public_scoped_emission_supplies_independently_validated_intrinsic_costs(tmp_path, planning):
-    generated = emitted_numerical_case(tmp_path, "accepted")
-    public = generated.scoped
-    assert public["automatic_estimate_available"] and public["planning"]["available"]
-    unit, = public["planning"]["units"]
-    assert unit["intrinsic_work_per_iteration"] == {"acos": 1, "cos": 1, "sqrt": 1}
-    assert unit["work_per_iteration"] > 0
-    cpu = unit["cpu_numerical_seconds_per_iteration"]
-    gpu = unit["gpu_numerical_seconds_per_iteration"]
-    assert math.isfinite(cpu) and cpu > 0
-    assert math.isfinite(gpu) and 0 < gpu < cpu
-    assert generated.offload is None
-
-    # Consume the emitted public unit's additional seconds through the versioned
-    # planner interface. This requires no CUDA numerical work or device setup.
-    add = planning.fort_scope_plan_add_costs_v2
-    add.argtypes = [TOKEN, c.c_uint32, TOKEN, c.POINTER(Binding), c.c_size_t,
-                   c.c_double, c.c_double, c.c_int, c.c_double, c.c_double]
-    scope = Scope(planning)
-    scope.check(planning.fort_scope_plan_reset(scope.handle))
-    iterations = 10_000_000
-    scope.check(add(scope.handle, 1, unit["id"], None, 0,
-                   unit["work_per_iteration"]*iterations, 0, 1, cpu*iterations, gpu*iterations))
-    decision = select(scope, costs())
-    assert decision.available and decision.gpu_units == 1
-    assert math.isfinite(decision.estimated_seconds)
-    assert decision.native_seconds >= cpu*iterations
-    assert scope.stats().allocations == scope.stats().uploads == scope.stats().launches == 0
-    chosen = c.c_int(-1)
-    scope.check(planning.fort_scope_plan_next(scope.handle, unit["id"], None, 0, c.byref(chosen)))
-    assert chosen.value == 1
-    scope.close()
-
-
-@pytest.mark.parametrize("evidence,reason", [("missing", "numerical calibration"),
-                                             ("rejected", "mixed holdout")])
-def test_public_scoped_missing_or_rejected_intrinsic_costs_keep_auto_native(tmp_path, planning, evidence, reason):
-    generated = emitted_numerical_case(tmp_path, evidence)
-    public = generated.scoped
-    assert not public["automatic_estimate_available"]
-    assert not public["planning"]["available"]
-    assert reason in public["automatic_reason"]
-    unit, = public["planning"]["units"]
-    assert unit["work_per_iteration"] is None
-    assert unit["cpu_numerical_seconds_per_iteration"] == 0
-    assert unit["gpu_numerical_seconds_per_iteration"] == 0
-    assert generated.offload is None
-
-    add = planning.fort_scope_plan_add_costs_v2
-    add.argtypes = [TOKEN, c.c_uint32, TOKEN, c.POINTER(Binding), c.c_size_t,
-                   c.c_double, c.c_double, c.c_int, c.c_double, c.c_double]
-    scope = Scope(planning)
-    scope.check(planning.fort_scope_plan_reset(scope.handle))
-    scope.check(add(scope.handle, 1, unit["id"], None, 0, 0, 0, 0, 0, 0))
-    decision = select(scope, costs())
-    assert not decision.available and decision.gpu_units == 0
-    chosen = c.c_int(-1)
-    scope.check(planning.fort_scope_plan_next(scope.handle, unit["id"], None, 0, c.byref(chosen)))
-    assert chosen.value == 0
-    assert scope.stats().allocations == scope.stats().uploads == scope.stats().launches == 0
-    scope.close()

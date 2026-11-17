@@ -74,10 +74,6 @@ class OriginalNumericalPrecondition:
             return values[0] + " == " + values[1]
         raise CompilationError("unknown original numerical precondition")
 
-    def render_activation(self, resolve):
-        return tuple(f"int(({resolve(item.lower)}),kind=c_int64_t) <= "
-                     f"int(({resolve(item.upper)}),kind=c_int64_t)" for item in self.activation_domains)
-
     def public(self):
         return {"role": self.role, "operands": [item.public() for item in self.operands],
                 "activation_domains": [item.public() for item in self.activation_domains],

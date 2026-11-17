@@ -268,10 +268,6 @@ class NativeEnvironmentProof:
     _record: object = field(repr=False, compare=False)
 
     @property
-    def native_state_bindings(self):
-        return tuple(state.binding for state in self.native_states)
-
-    @property
     def state_roots(self):
         return tuple(state.binding.root for state in self.native_states)
 

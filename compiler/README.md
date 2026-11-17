@@ -120,37 +120,24 @@ compiler/
 ├── transforms/              Checked scalar setup motion and greedy loop fusion
 ├── scheduling/              Task placement, locality ordering and explicit spatial tile plans
 ├── addressing/              Static integer ranges and proved subscript widths
-├── memory/                  Explicit acquisition, coherence, and lifecycle plans
 ├── scopes/                  Source task graphs, residency epochs, native hooks, helper composition
 ├── runtime/                 Coherence, budgeted residency, completion, CUDA graphs, numeric helpers
 ├── emission/
 │   ├── driver.py            Generate all sources from one shared ABI
-│   ├── common/              ABI, expressions, loops, session glue, runtime header
-│   ├── c/                   C declarations and serial/OpenMP C++ generation
-│   ├── cuda/                Device kernels, launches, memory-plan execution
-│   └── fortran/             C bindings, public bridge, workspace procedures
-├── tests/                   Python and native acceptance tests
-└── debugging/               Standalone fparser tree viewer
+│   ├── common/              ABI, expressions, loops, runtime header
+│   ├── c/                   C declarations
+│   ├── cuda/                Scoped entries, device kernels, launches, task providers
+│   └── fortran/             Fortran source formatting
+└── tests/                   Python and native acceptance tests
 ```
 
 The frontend and analyzer depend on the IR. Emitters consume the IR and checked
-plans without importing fparser or ISL. `emission/driver.py` derives the memory plan
-after scheduling and addressing, and shared session glue renders buffer ownership through the
-runtime. Shared emission helpers do not import backends; each backend owns its language-specific rendering. The runtime
+plans without importing fparser or ISL. `emission/driver.py` emits the shared graph
+backend (scoped entry, Fortran interface and versioned runtime) after scheduling and
+addressing. Shared emission helpers do not import backends; each backend owns its language-specific rendering. The runtime
 header combines the template under `emission/common/templates/` with numeric,
 profiling, and storage units in `runtime/`, preserving a single distributable
 support header and `--common-header` behavior.
-
-Source scope generation uses one checked consumption pass in
-`scopes/reached_consumption.py`. It authenticates the original source, admitted
-facts and compiler configuration before generation, then indexes exact prepared
-numerical regions together with their physical effects and mapped child calls.
-Only explicitly enrolled child builders can use that pass. It expires on exit;
-source authority is checked again before returning generated work and adopting
-or publishing it. This avoids reconstructing the complete reached plan for each
-lookup without retaining proof state across compiler invocations. Replanning
-replaces the view and rebinds staged children; the existing generation
-transaction owns rollback.
 
 Ordinary lexical generation also reuses exact prepared/effect pairs within one
 read-only planning and emission pass. Newly issued pairs retain their fresh
@@ -214,12 +201,8 @@ replicas; returning to an unmanaged owner requires explicit publication or domai
 retirement. Read-only host/device accesses preserve the other valid replica.
 
 The `call` memory model, `always`, `chunked` and `hybrid` GPU policies, ordinary
-CUDA/C++/Fortran output switches, and owned-session application API are retired.
-The public CLI and Python generator reject them with migration errors. The old
-four-unit interval planner has no production generation consumer. Historical
-numerical tests explicitly use `compiler._legacy.emission`; that reference module
-is never an application fallback or a public compatibility mode. Some private
-reference machinery and configuration coupling still await final cleanup.
+CUDA/C++/Fortran output switches, and owned-session application API have been
+removed. The public CLI and Python generator reject them with migration errors.
 
 For the primary ELMM configurations, use the pipeline's `resident-build` command.
 It generates the hot path and builds the explicitly supplied local Poisson
@@ -340,8 +323,6 @@ keeps its existing costs and behavior.
 The old `pipelined` slab-batching switch is retired. Production graph generation
 does not enumerate the old four-unit intervals, even when transfer mode is
 `auto`; numerical work uses the complete checked graph and common command queue.
-The slab executor and its analyses remain private historical reference machinery
-pending final deletion, and cannot become a production fallback.
 
 The additive `fort_scope_set_transfers` metadata operation configures a context
 before registration/planning and initializes no CUDA resources. Generated
@@ -1182,8 +1163,7 @@ Each original procedure supplies its numerical regions, descriptor bounds and
 source dispatcher. Repeated calls share one generated helper with actual resource
 handles, rather than duplicating a transitive list per source span. Effect-proof
 budgets remain local to each requested proof; they do not cap the invocation's
-task graph. Historical bounded/reached configurations are private reference
-fixtures under `compiler._legacy`, and cannot be selected through the public CLI.
+task graph. The historical bounded/reached configurations have been removed.
 For compatibility, rejected initial inline extraction attempts remain in the
 top-level `boundaries` list with their original reasons, labeled
 `kind: candidate_rejection` and `phase: inline_numerical_extraction`. A later
@@ -1773,30 +1753,6 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 16 transfers separately supplied entry facts through
-these prefix and descriptor proofs to an exact contiguous window, at top level
-or in the first traversal of one top-level serial counted loop. Branches meet
-conservatively and definitions retain original ordering. Hidden read-only native
-prefix allocations require no GPU capture; array dependencies in the selected
-window still do. Its conditional lifecycle is dormant → active → spent, with a
-mandatory close before the excluded tail or any enclosing backedge. Entry facts,
-prior nonescape, allocation presence, layout and alias guards require independent
-admission. Within the selected window, exact original assignments and
-single-assignment affine loops can establish bounded partial definitions. Later
-reads must be covered, conditional paths meet conservatively, and scalar changes
-invalidate rectangles that used the old bound. These return rectangles are
-conditional diagnostics; they never seed registration or whole-return facts.
-Runtime workers still validate actual physical coverage before numerical work.
-These APIs do not create an owner or authorize execution. For the ordinary
-complete-window proof, partial definitions before activation, deeper or
-conditional activation, direct OpenMP cuts, unknown effects, local allocation
-ownership and prefix allocation replacement remain limitations. No address/shape
-freshness or owner reopening is inferred.
-
-The compiler's `plan_reached_window` uses the same transfer to identify exact
-close-before-original operations within a selected window. The ordinary
-complete-window proof API retains its complete prefix requirement. Planned
-windows additionally track dormant prefix eligibility at original source points.
 Plain numeric whole-name copies and single-object explicit-shape `ALLOCATE` or
 plain `DEALLOCATE` may precede activation only when their destination capture
 explicitly has `lifetime: "selected_window"` and `initialized: "none"`.
@@ -1819,16 +1775,6 @@ absorbing for that invocation, including `CYCLE`, `EXIT`, `RETURN` and later loo
 eligible branches contribute activation coverage. Source/token and budget
 failures remain hard; incomplete generic native-prefix proofs are not converted
 into support declines.
-
-Active planned owners can likewise retain residency across an original
-single-line `IF` whose unsupported action needs closure. The compiler authenticates
-the complete parent span, condition and sole action. For a supported condition
-with no managed payload reads, it evaluates the condition once and publishes and
-closes only in the true branch, immediately before the original action. The
-false path retains its device state and definitions. Closed paths remain native
-for the rest of the owner and never reopen or replay earlier work. Conditions
-that read managed payloads, unsafe shared source spans and forced whole-parent
-cuts retain conservative closure before the complete original `IF`.
 
 Before expanding a dormant native call's effects, a bounded original-source
 support check identifies native I/O and OpenMP team shapes outside the supported
@@ -2131,41 +2077,6 @@ resolution authentication as their enclosing procedures. Numerical preparation
 can retain those aliases without bypassing original binding, parent or source
 checks. Unsupported selectors remain local boundaries.
 
-The internal `ReachedWindowOwner` emitter consumes an exact registered window
-proof together with the same independently admitted capture document. It keeps
-the original native prefix and excluded tail in place, declares control at
-procedure entry, and activates once at the selected source point. The attempt
-is spent before prefix eligibility, allocation, layout, alias or placement guards.
-An invocation-local eligibility flag gates all later associations, registration
-and queries; the serial-caller guard cannot overwrite a prefix disable. It closes before
-the excluded tail or an enclosing backedge, including resource failures; later
-traversals remain native. Source-position definition coverage is private to the
-window-bound builder and does not rewrite entry facts or whole-procedure
-descriptor proofs. Per-unit native summaries reissue descriptor tokens in their
-own analysis, and managed captures require exact original bindings. Numerical
-lowering and existing native coherence/failure checks remain separate gates.
-Reached-window proof version 16 also accepts bounded literal physical entry
-`sections` when an `expected_descriptor` supplies the original lower bounds and
-extents. Physical coordinates remain zero-based and half-open; the proof converts
-each rectangle separately to logical inclusive coordinates. Empty rectangles
-define nothing, and an uncovered halo or gap does not become a whole definition.
-The original descriptor expectation is checked after allocation/layout guards
-and before registration. These are independently admitted entry definitions,
-not source-proven overwrites; the manifest records that distinction in
-`entry_section_facts`. Original `INTENT(OUT)` events still kill them, and
-selected-position assertions cannot authorize earlier native-prefix reads.
-Partial caller-to-child mapping with unproved descriptor origins remains a
-conservative boundary. This extension does not authorize repeated activation.
-Reached child calls preserve every original actual association, while only already
-managed IN/INOUT actuals and visible managed module resources inherit definition
-and coherence state. Unused array actuals require no new capture facts or handles.
-The first reached payload or descriptor effect on an unproved array publishes
-managed outputs and closes before the unchanged original operation. An unmanaged
-INTENT(OUT) actual closes at the caller because its definition event occurs on
-entry; an empty managed projection also closes there. Managed nested OUT events,
-caller allocation/bounds/contiguity guards, original alias checks and original
-procedure storage remain authoritative. Public child plans identify managed and
-unmanaged associations; reached proof version 16 invalidates earlier authority.
 Supported child coordinators reuse the same context, handles and enabled flag.
 Caller descriptors are registered under their original allocation/layout guards
 before child argument association can rebase bounds. The emitted child retains
@@ -2209,9 +2120,6 @@ The checked plan also retains one `IntervalResourceDemand`, available through
 `plan.resource_demand()`. It covers all admitted members, canonical child
 associations, later numerical uses, section dependencies, and original controls,
 including guards that close ownership without containing a numerical unit.
-`resource_demand_from_reached_window` can issue a prospective inventory from
-registered interval states before scanning. Every such inventory must cover
-the final plan before emission; a prefix-only inventory is insufficient.
 These inventories establish neither native effects nor storage separation or
 cost coverage. They do not change placement or public build manifests.
 
@@ -2220,8 +2128,8 @@ into an optional scope-level `interval_applicability` schema-version-1 record.
 It lists descriptor/control key candidates, original controls and native graphs,
 and independent missing measurement, workload-stability, build and execution-outcome
 evidence. Candidates grant no permission to evaluate source expressions. This
-diagnostic retains the exact configuration identity and existing exact-window
-decision; it neither attaches calibration nor supplies an automatic selector.
+diagnostic retains the exact configuration identity; it neither attaches
+calibration nor supplies an automatic selector.
 The pipeline validates its linkage before edits and preserves it through
 composition. Missing interval estimates continue to select native execution.
 
@@ -3018,9 +2926,10 @@ general bounds checking and broader Fortran semantics are outside this subset.
 
 The public CLI no longer accepts `--scope-cost`, `--scope-measurement`, or
 `--scope-execution bounded|reached`. Source graphs use canonical memory coherence,
-checked dependencies and hardware costs. Historical complete-window evidence
-protocols remain private test/reference tooling under `compiler._legacy`; they do
-not select production graph execution. Use the fresh application comparison in
+checked dependencies and hardware costs. The historical complete-window evidence
+protocols (exact-window, scope measurement, checked-interval selection costs and
+application-build attestation) have been removed together with their reference
+backend. Use the fresh application comparison in
 [containers](../containers/README.md) to validate full fields and measure the
 original application, archived compiler and current graph compiler separately.
 
@@ -3045,8 +2954,8 @@ domains compared with source execution. Scheduling tests execute serial/OpenMP
 and simulated CUDA coordinate maps for signed strides, tile tails, oversized
 tiles, and arbitrary rank; CUDA launches are also compiled with nvcc when available.
 Native tests exercise both optimization
-levels and compile and compare original Fortran,
-generated serial C++, OpenMP, and CUDA using deterministic nonuniform inputs and
+levels and compile and compare original Fortran
+and generated CUDA using deterministic nonuniform inputs and
 absolute tolerance `1e-10` for real values and exact comparison for integers.
 Coverage includes fill/scale, non-cubic/singleton/empty domains, sentinel halos,
 CDU/CDV/CDW, signed/runtime strides, rank-5 integer arrays, rank-15 bridge
@@ -3056,16 +2965,7 @@ scalar live-outs, final induction values, neighboring parallel regions, and CUDA
 host/device transitions; invalid source is checked under both execution policies.
 Runtime tests also check CPU ownership, selective host/device coherence, pinned
 registration lifetimes, stale tokens, shape/size errors, and profiling events with
-instrumented CUDA calls. Session tests cover temporary inputs, changed scalars,
-selective updates, multiple workspaces, aliases, and lifecycle errors. Generated
-CUDA sessions are also executed with a simulated runtime to check exact transfer
-counts without a GPU. Resident fallback and logical arguments are compared with
-original Fortran across serial C++, OpenMP, and simulated CUDA.
-Pool tests distinguish allocation requests from backing reuse, exercise concurrent
-callers on multiple simulated devices, and check fallback, cleanup failures,
-retention settings, and unchanged transfers. Native pool tests compile both CUDA
-default-stream modes; when hardware is available they check retained backing and
-cache release/reset, and record cold/warm timings without performance thresholds.
+instrumented CUDA calls.
 Native compiler absence skips the corresponding capability;
 CUDA compilation requires `nvcc`, and execution also requires a usable device. Once
 those capabilities are available, build or runtime failures fail the tests. All builds and outputs use temporary directories.
@@ -3074,9 +2974,8 @@ those capabilities are available, build or runtime failures fail the tests. All 
 # Parser/analysis checks without native builds:
 python -m pytest compiler/tests -m "not native and not cuda"
 
-# Reached-generation authority and numerical source integration:
-python -m pytest compiler/tests/test_reached_consumption.py \
-  compiler/tests/test_reached_numerical_effects.py \
+# Numerical source integration:
+python -m pytest compiler/tests/test_reached_numerical_effects.py \
   compiler/tests/test_combined_numerical_team.py
 ```
 

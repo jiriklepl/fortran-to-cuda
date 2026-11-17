@@ -170,7 +170,7 @@ def _host_read_storage_candidate(builder, binding):
             and ("allocatable" in binding.attributes or fixed) and not binding.attributes & forbidden
             and binding.dtype in {"real", "integer"} and binding.kind in {4, 8})
     scope = module
-    if not candidate and binding.root.startswith("argument::") and builder.config.scope_execution == "graph":
+    if not candidate and binding.root.startswith("argument::"):
         # Formals of this invocation denote caller-owned allocations. A child
         # may refer to the same root through its original canonical mapping;
         # it cannot reserve an unrelated procedure's similarly named dummy.
@@ -296,17 +296,6 @@ def original_roots(nodes):
     return tuple(node for identity, node in unique.items() if identity not in descendants)
 
 
-def joined_group_completion(builder, nodes):
-    """Compatibility view of the registered original-source completion proof.
-
-    Source extraction may carry compiler-owned projections. Only its exact
-    registry can recover originals; manufactured spans or attributes grant no
-    authority. Simple analysis callers must supply the actual original nodes.
-    """
-    originals = original_roots(builder.inline.original_selection(nodes) if hasattr(builder, "inline") else tuple(nodes))
-    return builder.analysis.joined_completion(builder.entry.qualified, originals).public()
-
-
 def grouped_nodes(nodes):
     """Keep whole joined groups as one native scheduling operation."""
     expanded = []
@@ -386,7 +375,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
         kind == "guarded original numerical fallback"
         and any(directive(item) is not None for node in original for item in walk(node)))
     complete_source = ()
-    if joined and builder.config.scope_execution == "graph":
+    if joined:
         # A source spelling, parser clone or arbitrary larger limit cannot
         # authorize this demand: recover the exact retained original team.
         _graph, identities = builder.analysis._selected_source(builder.entry.qualified, full_original)
@@ -540,7 +529,6 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
         else:
             summary = analysis.segment_summary(builder.entry.qualified, selection, capture_locals=True)
     if (deferred is None and not summary["complete"] and completion_proof is not None
-            and builder.config.reached_execution
             and any('budget exhausted' in reason for reason in summary['reasons'])):
         from compiler.scopes.native_atomic import summarize
         summary = summarize(analysis, builder.entry.qualified, selection, completion_proof)
@@ -604,9 +592,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
                                                 if item.resource not in private_roots
                                                 and item.resource not in native_states))
     source_reads = None
-    if ((getattr(builder, "_selection_activation_binding", None) is not None
-            or builder.config.scope_execution == "graph")
-            and selected is None and kind in {"native source", "joined native OpenMP"} and sections.available
+    if (selected is None and kind in {"native source", "joined native OpenMP"} and sections.available
             and any(item.reads for item in sections.resources)):
         from compiler.frontend.reached_read_requirements import prove_native_read_requirements
 
@@ -773,8 +759,7 @@ def native_demand_fragment(builder, nodes, demand, *, context=None):
                 raise CompilationError("demand-relative native whole access requires whole initialized storage: "
                                        + root + "; " + str(sections.reason))
     source_reads = None
-    if (context is not None and (getattr(builder, "_selection_activation_binding", None) is not None
-            or builder.config.scope_execution == "graph")
+    if (context is not None
             and sections.available and any(item.reads for item in sections.resources)):
         from compiler.frontend.reached_read_requirements import prove_native_read_requirements
 
@@ -804,7 +789,7 @@ def native_call_fragment(builder, nodes):
     """
     from compiler.frontend.native_call_effects import prove_native_call_effects
     originals = tuple(builder.inline.original_selection(nodes))
-    if (builder.config.scope_execution != "graph" or len(originals) != 1
+    if (len(originals) != 1
             or originals[0] is not nodes[0] or _kind(originals[0]) != "Call_Stmt"
             or hasattr(originals[0], "fort_inline_region")):
         raise CompilationError("complete native CALL requires original graph execution")
@@ -820,7 +805,7 @@ def native_group_fragment(builder, nodes, *, whole=False):
     from compiler.frontend.native_call_effects import prove_native_group_effects
 
     originals = tuple(builder.inline.original_selection(nodes))
-    if (builder.config.scope_execution != "graph" or len(originals) != len(nodes)
+    if (len(originals) != len(nodes)
             or any(a is not b for a, b in zip(originals, nodes, strict=True))
             or any(hasattr(node, "fort_inline_region") for node in originals)):
         raise CompilationError("complete native group requires original graph execution")
@@ -1083,8 +1068,6 @@ class StructuredScope:
             self.tree = [operation]
         else:
             self.tree = self.parse(nodes, original_if=original_if, condition=original_if)
-        if builder.config.scope_execution != "graph" and (len(self.calls) > 32 or self.operation_count > 256):
-            raise CompilationError("bounded structured owner exceeds call/operation budget")
         self.first, self.last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
         original = builder.analysis.source_text(builder.entry.scope.path).splitlines()[self.first - 1:self.last]
         if any(line.lstrip().startswith("#") for line in original):
@@ -1125,7 +1108,7 @@ class StructuredScope:
                 flush()
                 operation = fragment(self.builder, node, kind="joined native OpenMP", native_metadata=self.native_metadata,
                                      native_host_reads=self.native_host_reads)
-                if self.lexical_native and self.builder.config.scope_execution == "graph":
+                if self.lexical_native:
                     # Keep the existing strict transaction when complete
                     # original effects/storage cannot authorize may-access.
                     with suppress(CompilationError):
@@ -1138,7 +1121,7 @@ class StructuredScope:
             if kind == "Comment" and not str(node).lstrip().lower().startswith("!$omp"):
                 continue
             if kind == "Call_Stmt":
-                if self.builder.config.reached_execution and not hasattr(node, "fort_inline_region"):
+                if not hasattr(node, "fort_inline_region"):
                     from compiler.frontend.scalar_clock import is_system_clock
                     scope = self.builder.analysis.source_scope_for(node, self.builder.entry.scope)
                     if is_system_clock(self.builder.analysis, scope, node):
@@ -1148,7 +1131,7 @@ class StructuredScope:
                         self.operation_count += len(operation.summary["operations"])
                         result.append(operation)
                         continue
-                if self.builder.config.reached_execution and not hasattr(node, "fort_inline_region"):
+                if not hasattr(node, "fort_inline_region"):
                     from compiler.frontend.native_environment import intrinsic_export
                     scope = self.builder.analysis.source_scope_for(node, self.builder.entry.scope)
                     if intrinsic_export(self.builder.analysis, scope, node.items[0]) in {
@@ -1412,10 +1395,6 @@ class StructuredScope:
                     result.append(item)
             return result
         self.tree = visit(self.tree)
-        cleared = {root for call in self.calls for root in self.builder.roots_for(call)[1]}
-        if (not self.builder.config.reached_execution
-                and any(root in cleared for segment in self.segments for root in segment.payload)):
-            raise CompilationError("planning payload publication requires complete definitions across ownership")
 
     def segment(self, calls, arrays):
         written = {root for call in calls for root, actions in self.builder.roots_for(call)[0].items()
@@ -1443,9 +1422,6 @@ class StructuredScope:
         self.validate_opaque_control()
 
         def reduction_diagnostic(operation):
-            if not self.builder.config.reached_execution:
-                return self.builder.analysis.reduction_candidates(
-                    self.builder.entry.qualified, operation.summary.get("selected_node_ids", ()))
             # Serialization must not expand another proof search. Explicit
             # reduction analysis remains a separate source API until execution
             # requests such a proof at the reached operation.
@@ -1569,7 +1545,7 @@ class StructuredScope:
         def task_completion():
             # Graph-mode host acquisitions enforce their own exact hazards.
             # A source unit/query boundary does not imply device completion.
-            return [] if builder.config.scope_execution == "graph" else _checked("fort_scope_wait(fort_context)")
+            return []
 
         def refined(operation, *, query):
             from compiler.scopes.access import build_native_accesses

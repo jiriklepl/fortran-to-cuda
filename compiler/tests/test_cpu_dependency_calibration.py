@@ -10,16 +10,35 @@ from compiler.offload.cpu_dependency_calibration import (
     DOMAINS,
     PROTOCOL_ID,
     _hash_json,
-    cpu_dependency_costs,
     dependency_generator_identity,
     profile_from_dependency_measurements,
-    validate_dependency_profile,
-)
+    validate_dependency_profile)
 from compiler.offload.cpu_dependency_model import COEFFICIENT_FAMILIES, Coefficient, evaluate_work_span
 from compiler.offload.cpu_dependency_workloads import dependency_recipes
 from compiler.offload.cpu_protocol_calibration import CPU_BACKENDS, cpu_protocol_costs
 from compiler.offload.numerical_calibration import COMPUTE_FIT_SIZES, COMPUTE_SIZES, NumericalCalibrationError
 from compiler.tests.test_cpu_protocol_calibration import corrected, samples
+
+
+def cpu_dependency_costs(profile, graph, backend, *, workload_class, workload_features,
+                         primitive_domains, access_class, compiled_form=None):
+    # Resolve through the module at call time, like the original module-level API.
+    from compiler.offload.cpu_dependency_calibration import (
+        ACCESS_CLASS,
+        CPU_BACKENDS,
+        NumericalCalibrationError,
+        _cpu_costs_from_section,
+        require_numerical_profile_contract,
+        validate_dependency_profile,
+    )
+
+    require_numerical_profile_contract(profile)
+    if backend not in CPU_BACKENDS or access_class != ACCESS_CLASS:
+        raise NumericalCalibrationError("CPU dependency execution/access class unavailable")
+    section = validate_dependency_profile(profile)
+    return _cpu_costs_from_section(profile, section, graph, backend, workload_class=workload_class,
+        workload_features=workload_features, primitive_domains=primitive_domains,
+        access_class=access_class, compiled_form=compiled_form)
 
 
 def observations():

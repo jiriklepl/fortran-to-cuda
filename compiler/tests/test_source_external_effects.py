@@ -4,7 +4,7 @@ from hashlib import sha256
 
 import pytest
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
@@ -261,53 +261,6 @@ def test_duplicate_external_definitions_are_rejected(tmp_path):
     second = write(tmp_path, "second.f90", "subroutine duplicate()\nend subroutine\n")
     with pytest.raises(CompilationError, match="duplicate source procedure"):
         SourceEffects([first, second])
-
-
-def test_free_entry_and_nested_native_external_calls_remain_execution_boundaries(tmp_path):
-    path = write(tmp_path, "native_boundaries.f90", """subroutine inspect(value)
-integer,intent(inout)::value
-value=value+1
-end subroutine
-module caller
-contains
-subroutine gpu(field,n)
-real(8),intent(inout)::field(:)
-integer,intent(in)::n
-integer::i
-do i=1,n
-field(i)=2*field(i)
-enddo
-end subroutine
-subroutine middle(field,value)
-real(8),intent(inout)::field(:)
-integer,intent(inout)::value
-field(1)=field(1)+1
-call inspect(value)
-end subroutine
-subroutine step(field,value,n)
-real(8),intent(inout)::field(:)
-integer,intent(inout)::value
-integer,intent(in)::n
-call gpu(field,n)
-call middle(field,value)
-call gpu(field,n)
-end subroutine
-end module
-""")
-    capture = {"storage": "stable", "initialized": "whole", "escapes": False, "allocation_changes": False}
-    facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
-             "captures": {"argument::field": capture}}
-    _outputs, report = form_source_scopes([path], "caller::step", facts=facts, options=CompilerOptions(),
-                                         config=OffloadConfig(policy="sections"))
-    assert report["native_effects"]["complete"]
-    assert any("external source entry execution requires standalone procedure variants" in boundary["reason"]
-               for boundary in report["boundaries"])
-    assert all("caller::middle" not in scope["calls"] for scope in report["scopes"])
-    _outputs, external = form_source_scopes([path], "$external::inspect", facts=facts, options=CompilerOptions(),
-                                           config=OffloadConfig(policy="sections"))
-    assert external["scope_count"] == 0
-    assert external["native_effects"]["complete"]
-    assert external["boundaries"][0]["reason"].startswith("external source entry execution")
 
 
 def test_module_argument_cannot_collide_with_formal_resource_namespace(tmp_path):

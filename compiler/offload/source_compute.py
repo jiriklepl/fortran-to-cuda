@@ -6,21 +6,6 @@ from dataclasses import replace
 from compiler.offload.numerical_calibration import NumericalCalibrationError, numerical_compute_model
 
 
-def fork_join_schedule_compatible(nodes):
-    """Require the original scheduling contract priced by offline evidence.
-
-    The native fork/join fixture uses static worksharing. SCHEDULE(runtime)
-    needs the separate validated runtime-schedule contract and original-caller
-    guard, so it does not satisfy this fixed-schedule predicate. This affects
-    estimates only: a joined-completion proof can retain the original directive
-    for forced execution.
-
-    Inspect only the supplied original region, so an unrelated sibling cannot
-    invalidate an independently selected numerical region.
-    """
-    return fork_join_participation(nodes) == "fork_join"
-
-
 def fork_join_participation(nodes):
     """Distinguish fixed static worksharing from a checked runtime schedule.
 

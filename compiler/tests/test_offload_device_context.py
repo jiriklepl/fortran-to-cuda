@@ -9,45 +9,8 @@ import pytest
 
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.emission.cuda.offload import generate_offload
 from compiler.frontend import lower_file
 from compiler.offload.config import OffloadConfig
-
-
-@pytest.mark.parametrize("collective", [False, True])
-def test_section_emission_captures_device_before_execution_team(tmp_path, collective):
-    source = tmp_path / "source.f90"
-    source.write_text("""module device_case
-contains
-subroutine advance(a,b,n)
-real(8),intent(inout)::a(:)
-real(8),intent(in)::b(:)
-integer,intent(in)::n
-integer::i
-do i=1,n
- a(i)=b(i)*2.0_8
-end do
-end subroutine
-end module
-""")
-    function, plan = prepare_function(
-        lower_file(source, "advance"), options=CompilerOptions(gpu_policy="sections")
-    )
-    generated = generate_offload(function, plan, OffloadConfig("sections", host_threads=2, collective=collective))
-    gpu = generated.helpers.split("_gpu(", 1)[1].split("_team(", 1)[0]
-    assert gpu.index("offload::DeviceScope device_scope(d.device)") < gpu.index("offload::Allocation")
-    team = generated.helpers.split("_team(", 1)[1]
-    assert team.index("if (!prepared)") < team.index("cudaGetDevice(&shared->device)")
-    assert "if (!prepared) delete shared;" in team
-    body = "\n".join(generated.body)
-    if collective:
-        assert "#pragma omp parallel" not in body
-        assert "#pragma omp barrier" in body
-        assert "&check" not in body
-    else:
-        assert body.index("cudaGetDevice(&check.device)") < body.index("#pragma omp parallel num_threads(2)")
-        assert "_team(" in body
-        assert ", &check);" in body
 
 
 @pytest.mark.native

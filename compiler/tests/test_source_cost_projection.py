@@ -15,13 +15,34 @@ from compiler.offload import cpu_dependency_calibration as cpu_calibration
 from compiler.offload import numerical_gpu_execution as gpu_execution
 from compiler.offload import numerical_gpu_execution_costs as gpu_costs
 from compiler.offload.cost_projection import _SourceCostProjection
-from compiler.offload.cpu_dependency_calibration import ACCESS_CLASS, DOMAINS, cpu_dependency_costs
+from compiler.offload.cpu_dependency_calibration import ACCESS_CLASS, DOMAINS
 from compiler.offload.dependency_source import dependency_source_model
 from compiler.offload.numerical_calibration import NumericalCalibrationError
 from compiler.offload.numerical_gpu_execution_costs import gpu_execution_costs
 from compiler.offload.source_compute import apply_source_compute_costs
 from compiler.tests.test_current_source_compute import bundle as bundle
 from compiler.tests.test_current_source_compute import prepared_source
+
+
+def cpu_dependency_costs(profile, graph, backend, *, workload_class, workload_features,
+                         primitive_domains, access_class, compiled_form=None):
+    # Resolve through the module at call time, like the original module-level API.
+    from compiler.offload.cpu_dependency_calibration import (
+        ACCESS_CLASS,
+        CPU_BACKENDS,
+        NumericalCalibrationError,
+        _cpu_costs_from_section,
+        require_numerical_profile_contract,
+        validate_dependency_profile,
+    )
+
+    require_numerical_profile_contract(profile)
+    if backend not in CPU_BACKENDS or access_class != ACCESS_CLASS:
+        raise NumericalCalibrationError("CPU dependency execution/access class unavailable")
+    section = validate_dependency_profile(profile)
+    return _cpu_costs_from_section(profile, section, graph, backend, workload_class=workload_class,
+        workload_features=workload_features, primitive_domains=primitive_domains,
+        access_class=access_class, compiled_form=compiled_form)
 
 
 @pytest.fixture(scope="module")

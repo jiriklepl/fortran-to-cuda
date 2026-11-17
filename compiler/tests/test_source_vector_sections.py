@@ -12,7 +12,7 @@ import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
@@ -144,38 +144,6 @@ def test_helper_free_vectors_keep_native_minmax_ordering_restriction(tmp_path):
     vector = "a(i-2:i+1,j,k)"
     with pytest.raises(CompilationError, match="real MIN/MAX with more than two operands"):
         fixture(tmp_path, expression=f"sum(max({vector},{vector},{vector}))")
-
-
-@pytest.mark.parametrize("observer", [False, True])
-def test_lowered_vector_environment_controls_original_source_guard_and_flag_observers(tmp_path, observer):
-    _, _, _, paths = fixture(tmp_path)
-    source = paths[1]
-    text = source.read_text().replace("integer::i,j,k", "integer::i,j,k\nreal(8)::g(4)")
-    text = text.replace("out(i,j,k)=sum(coeff*a(i-2:i+1,j,k))*gain",
-                        "g=sqrt(a(i-2:i+1,j,k))\nout(i,j,k)=g(1)")
-    if observer:
-        text = text.replace("end module", """subroutine observer
-use,intrinsic::ieee_exceptions,only:ieee_get_flag,ieee_invalid
-logical::seen
-call ieee_get_flag(ieee_invalid,seen)
-end subroutine
-end module""")
-    source.write_text(text)
-    facts = {"schema_version": 1, "participation": "serial",
-             "captures": {"argument::a": FACT, "argument::out": FACT},
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest() for path in paths}}
-    outputs, manifest = ScopeBuilder(paths, "renamed_windows::advance", facts=facts,
-        options=CompilerOptions(), config=OffloadConfig("sections")).run()
-    if observer:
-        assert manifest["scope_count"] == 0
-        assert "source-observable floating-point exception flags" in str(manifest["boundaries"])
-    else:
-        assert manifest["scope_count"] == 1, manifest["boundaries"]
-        region, = manifest["inline_numerical_regions"]["regions"]
-        assert region["numerical_environment"]["required"]
-        original = outputs[manifest["sources"][str(source)]["replacement"]]
-        alias = re.search(r"(fort_scope_environment_\w+)\s*=>\s*fort_scope_numerical_environment_supported", original).group(1)
-        assert alias + "()/=0" in "".join(original.replace("&", "").split())
 
 
 def test_helper_dummy_cannot_shadow_generated_captured_bounds(tmp_path):

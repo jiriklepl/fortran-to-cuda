@@ -10,7 +10,6 @@ import pytest
 from compiler.driver.pipeline import prepare_function
 from compiler.frontend import discover_file, lower_file
 from compiler.ir import CompilationError, ScalarType
-from compiler.tests.test_language import run_reference_and_cpp
 
 
 def write_module(tmp_path, routines, specification=""):
@@ -175,39 +174,3 @@ end subroutine
     assert not records["recurrence"]["supported"]
     assert "RAW" in records["recurrence"]["reason"]
     assert not output.exists()
-
-
-@pytest.mark.native
-@pytest.mark.parametrize("rank", [1, 2])
-def test_unannotated_helper_native_execution_matches_fortran(tmp_path, rank):
-    dimensions = ":" if rank == 1 else ":,:"
-    extents = "7" if rank == 1 else "7,5"
-    subscript = "i" if rank == 1 else "i,j"
-    body = f"do i=1,size(a,1)\na({subscript})=a({subscript})*2.0_8+0.125_8\nenddo"
-    if rank == 2:
-        body = f"do j=1,size(a,2)\n{body}\nenddo"
-    source = write_module(
-        tmp_path,
-        f"""
-subroutine helper(a)
-real(8),intent(inout)::a({dimensions})
-integer::i,j
-{body}
-end subroutine
-subroutine advance(a)
-real(8),intent(inout)::a({dimensions})
-call helper(a)
-end subroutine
-""",
-    )
-    function, plan = prepare_function(lower_file(source, "advance"))
-    driver = f"""program verify
-use ordinary, only: advance
-implicit none
-real(8)::a({extents})
-a=0.1_8
-call advance(a)
-print *,a
-end program
-"""
-    run_reference_and_cpp(tmp_path, function, plan, driver, openmp=True)

@@ -121,14 +121,13 @@ class ScopeBuilder:
         kwargs = {"program_roots": metadata} if metadata else {}
         self.analysis = SourceEffects(paths, contracts=contracts, analysis_sources=analysis_sources,
                                       summary_cache=summary_cache, **kwargs)
-        if config.scope_execution == "graph":
-            # A source skeleton retains the input program rather than expanding
-            # a proof. Give every original helper enough room for its own syntax
-            # while retaining the ordinary per-demand effect/numerical budgets.
-            self.analysis.source_graph_operation_limit = {
-                name: max(self.analysis.operation_limit,
-                          sum(getattr(node, "item", None) is not None for node in walk(routine.execution)))
-                for name, routine in self.analysis.routines.items()}
+        # A source skeleton retains the input program rather than expanding
+        # a proof. Give every original helper enough room for its own syntax
+        # while retaining the ordinary per-demand effect/numerical budgets.
+        self.analysis.source_graph_operation_limit = {
+            name: max(self.analysis.operation_limit,
+                      sum(getattr(node, "item", None) is not None for node in walk(routine.execution)))
+            for name, routine in self.analysis.routines.items()}
         if facts.get("sources") != self.analysis.sources:
             raise CompilationError("scope capture facts do not match the supplied source hashes")
         names = [name for name in self.analysis.routines
@@ -209,45 +208,8 @@ class ScopeBuilder:
         owner = self.region_owners.get(procedure.partition("#region")[0])
         return owner if owner is not None and procedure in owner.regions else None
 
-    def bind_reached_window(self, proof, original_selection):
-        """Bind admitted entry facts to one authenticated source-position owner.
-
-        The copy shares artifact registries, but neither rewrites the supplied
-        facts nor changes the original analysis's descriptor authority. Only
-        the proved window may consume the resulting definition coverage.
-        """
-        from compiler.frontend.reached_windows import ReachedWindowProof
-
-        if not isinstance(proof, ReachedWindowProof):
-            raise CompilationError("reached owner requires a registered original window proof")
-        proof.validate(self.analysis, self.entry.qualified, original_selection)
-        if proof._numerical_provider is not None:
-            proof._numerical_provider.validate_configuration(options=self.options, config=self.config,
-                environment_root=self._numerical_environment_root,
-                immutable_inputs=getattr(self, "immutable_inputs", {}))
-        record = proof.public()
-        identity = sha256(json.dumps(self.facts, sort_keys=True, separators=(",", ":"),
-                                    allow_nan=False).encode()).hexdigest()
-        if record["entry_facts_identity"] != identity:
-            raise CompilationError("reached owner entry facts differ from independently admitted captures")
-        for state in record["states"]:
-            binding = self.visible_binding(self.entry, state["resource"])
-            self.capture_fact(binding)
-        result = copy(self)
-        result._reached_window_binding = proof, original_selection
-        result._reached_window_parent = self
-        # Inline source authority stays original, but summary consumers must
-        # use the window-bound builder rather than its invocation-wide parent.
-        result.inline = copy(self.inline)
-        result.inline.builder = result
-        result.inline.definition_proofs = {}
-        result.region_owners = dict(self.region_owners)
-        result.region_owners[self.entry.qualified] = result.inline
-        return result
-
     def validate_reached_window(self):
-        consumption = getattr(self, "_reached_consumption", None)
-        return consumption.check(self) if consumption is not None else self._validate_reached_window_fresh()
+        return self._validate_reached_window_fresh()
 
     def bind_selection_activation(self, proof, original_selection, demanded):
         """Bind unknown definitions after one unchanged original native prefix."""
@@ -255,8 +217,7 @@ class ScopeBuilder:
 
         if type(proof) is not SelectionActivationProof:
             raise CompilationError("selection activation requires registered source authority")
-        if (getattr(self, "_reached_window_binding", None) is not None
-                or getattr(self, "_selection_activation_binding", None) is not None):
+        if (getattr(self, "_selection_activation_binding", None) is not None):
             raise CompilationError("selection activation cannot replace an existing owner binding")
         proof.validate(self.analysis, self.entry.qualified, original_selection, demanded)
         proof.validate_configuration(self)
@@ -290,11 +251,6 @@ class ScopeBuilder:
             raise CompilationError("selection activation admitted entry facts changed")
         return proof
 
-    def consume_reached_plan(self):
-        from compiler.scopes.reached_consumption import _ReachedPlanConsumption
-
-        return _ReachedPlanConsumption(self)
-
     def _check_reached_publication(self):
         """Fence every projection sharing a failed or active parent's outputs."""
         builder, seen = self, set()
@@ -302,35 +258,13 @@ class ScopeBuilder:
             ordinary = builder._ordinary_pair_state
             if ordinary.active is not None or ordinary.failed:
                 raise CompilationError("source publication requires a completed successful ordinary numerical pass")
-            if (getattr(builder, "_reached_consumption", None) is not None
-                    or getattr(builder, "_reached_consumption_failed", False)):
-                raise CompilationError("source publication requires a completed successful reached consumption pass")
             if len(seen) > self.analysis.procedure_limit:
                 raise CompilationError("reached publication parent projection budget exhausted")
             seen.add(id(builder))
-            builder = getattr(builder, "_reached_window_parent", None)
+            builder = None
 
     def _validate_reached_window_fresh(self):
-        binding = getattr(self, "_reached_window_binding", None)
-        if binding is None:
-            return None
-        proof, selection = binding
-        child = getattr(self, "_mapped_reached_child", None)
-        if proof._numerical_provider is not None:
-            proof._numerical_provider.validate_configuration(options=self.options, config=self.config,
-                environment_root=self._numerical_environment_root,
-                immutable_inputs=(proof._numerical_provider.immutable_inputs if child is not None
-                                  else getattr(self, "immutable_inputs", {})))
-        proof.validate(self.analysis, proof.procedure if child is not None else self.entry.qualified, selection)
-        if child is not None:
-            original = proof._child_plan(getattr(self, "_mapped_reached_path", ()), child.original_call)
-            if original is not child or child.procedure != self.entry.qualified:
-                raise CompilationError("mapped child builder lacks its exact registered procedure authority")
-        identity = sha256(json.dumps(self.facts, sort_keys=True, separators=(",", ":"),
-                                    allow_nan=False).encode()).hexdigest()
-        if proof.public()["entry_facts_identity"] != identity:
-            raise CompilationError("reached owner admitted entry facts changed")
-        return proof
+        return None
 
     def bind_reached_child(self, original_call):
         """Borrow only the exact mapped child of a registered root plan."""
@@ -344,18 +278,13 @@ class ScopeBuilder:
         if len(selected) != 1:
             raise CompilationError("mapped child call identity is ambiguous")
         path = (*getattr(self, "_mapped_reached_path", ()), selected[0])
-        consumption = getattr(self, "_reached_consumption", None)
-        child = (consumption.view.child(consumption, path, originals[0]) if consumption is not None else
-                 proof._child_plan(path, originals[0]))
+        child = (proof._child_plan(path, originals[0]))
         return path, child
 
     def reached_plan_record(self):
         proof = self.validate_reached_window()
         if proof is None:
             return None
-        consumption = getattr(self, "_reached_consumption", None)
-        if consumption is not None:
-            return consumption.view.record(consumption, getattr(self, "_mapped_reached_path", ()))
         child = getattr(self, "_mapped_reached_child", None)
         return child.public()["plan"] if child is not None else proof.public()
 
@@ -368,9 +297,6 @@ class ScopeBuilder:
         proof = self.validate_reached_window()
         if proof is None:
             return self.inline.resolved_numerical_region(selection)
-        consumption = getattr(self, "_reached_consumption", None)
-        if consumption is not None:
-            return consumption.numerical_region(self, procedure, selection)
         region = proof.numerical_region(procedure, selection)
         if region is not None:
             region[0].validate_configuration(options=self.options, config=self.config,
@@ -391,23 +317,10 @@ class ScopeBuilder:
                 raise CompilationError("ordinary numerical owner compiler policy changed")
             registry.validate_numerical_regions()
 
-    def call_numerical_region(self, call):
-        if call.region is None:
-            return None
-        owner = self.inline_for(call.procedure)
-        if owner is None:
-            raise CompilationError("numerical effect lookup lacks an original inline owner")
-        originals = owner.original_selection(call.node)
-        return owner.builder.resolved_numerical_region(owner.builder.analysis, owner.builder.entry.qualified, originals)
-
-    def call_numerical_effect(self, call):
-        region = self.call_numerical_region(call)
-        return region.effects if region is not None else None
-
     def _consume_numerical_region(self, analysis, procedure, selection):
         """Private lexical lookup; public resolution remains a fresh demand."""
         consumer = self._ordinary_pair_state.active
-        if consumer is None or getattr(self, "_reached_window_binding", None) is not None:
+        if consumer is None:
             return self.resolved_numerical_region(analysis, procedure, selection)
         if analysis is not self.analysis or procedure != self.entry.qualified:
             self._ordinary_pair_state.failed = True
@@ -581,7 +494,7 @@ class ScopeBuilder:
                for mapping in resolved.mappings):
             raise CompilationError("allocatable callee formals require a source-proven stable original descriptor")
         self.check_whole_view_formals(callee)
-        coordinator = self.coordinator(procedure) if self.config.reached_execution else None
+        coordinator = self.coordinator(procedure)
         summary = coordinator.summary if coordinator is not None else self.analysis.summarize(procedure)
         if coordinator is None and not summary["complete"]:
             raise CompilationError("native effects incomplete: " + "; ".join(summary["reasons"]))
@@ -695,7 +608,7 @@ class ScopeBuilder:
             return self.generated[procedure]
         routine = self.analysis.routines[procedure]
         leaf = not any(_kind(node) == "Call_Stmt" for node in walk(routine.execution))
-        if self.config.reached_execution and not leaf:
+        if not leaf:
             self.generated[procedure] = None
             self.numerical_reasons[procedure] = "source calls require their reached workers"
             return None
@@ -863,21 +776,11 @@ class ScopeBuilder:
                 and len(self.coordinator_attempts) >= self.analysis.procedure_limit)):
             return None
         self.coordinator_attempts.add(procedure)
-        routine = self.analysis.routines[procedure]
         if self.numerical(procedure):
             self.coordinators[procedure] = None
             return None
         self.coordinator_visiting.append(procedure)
         try:
-            children = [node for node in _children(routine.execution) if _kind(node) != "Comment"]
-            if (not self.config.reached_execution and children
-                    and all(_kind(node) == "Call_Stmt" for node in children)
-                    and not any(self.coordinator(self.execution_source_call(routine, node).procedure)
-                                for node in children)):
-                # Existing straight wrappers retain their shared query unless a
-                # descendant explicitly owns reached source decisions.
-                self.coordinators[procedure] = None
-                return None
             from compiler.scopes.procedures import BorrowedCoordinator
             coordinator = BorrowedCoordinator(self, procedure, tuple(self.coordinator_visiting))
             self.coordinators[procedure] = coordinator
@@ -895,20 +798,19 @@ class ScopeBuilder:
         return self._native_effects(procedure, mapping, active, allow_views=allow_views)
 
     def _native_effects(self, procedure, mapping=None, active=(), *, allow_views=False, summary=None):
-        if self.config.reached_execution:
-            # Classification creates the coordinator. Numerical leaf probing
-            # also asks for native effects and must not recursively classify
-            # the same unfinished procedure here.
-            coordinator = self.coordinators.get(procedure)
-            if coordinator is not None:
-                mapping = {} if mapping is None else mapping
-                effects = {}
-                for root, actions in coordinator.effects.items():
-                    mapped = mapping.get(root, root)
-                    if mapped is not None:
-                        effects.setdefault(mapped, set()).update(actions)
-                definitions = {mapping.get(root, root) for root in coordinator.definitions} - {None}
-                return effects, definitions, set()
+        # Classification creates the coordinator. Numerical leaf probing
+        # also asks for native effects and must not recursively classify
+        # the same unfinished procedure here.
+        coordinator = self.coordinators.get(procedure)
+        if coordinator is not None:
+            mapping = {} if mapping is None else mapping
+            effects = {}
+            for root, actions in coordinator.effects.items():
+                mapped = mapping.get(root, root)
+                if mapped is not None:
+                    effects.setdefault(mapped, set()).update(actions)
+            definitions = {mapping.get(root, root) for root in coordinator.definitions} - {None}
+            return effects, definitions, set()
         if procedure in active:
             raise CompilationError("recursive native effects")
         if self.analysis.routines[procedure].source_kind != "module":
@@ -1068,12 +970,8 @@ class ScopeBuilder:
         if proof is not None:
             if self.visible_binding(self.entry, binding.root) is not binding:
                 raise CompilationError("reached owner capture requires its exact original storage binding")
-            consumption = getattr(self, "_reached_consumption", None)
-            if consumption is not None:
-                state, sections = consumption.view.capture(consumption, binding.root)
-            else:
-                state = proof.capture_state(binding.root)
-                sections = proof.activation_sections(binding.root) if state["initialized"] == "sections" else None
+            state = proof.capture_state(binding.root)
+            sections = proof.activation_sections(binding.root) if state["initialized"] == "sections" else None
             result = {**fact, "initialized": state["initialized"]}
             if state["initialized"] == "sections":
                 if sections is None:
@@ -1278,19 +1176,15 @@ class ScopeBuilder:
         if not leaves:
             if self.config.scope_transfers != "direct":
                 raise CompilationError("external-only graph requires direct transport")
-            if self.config.scope_execution == "graph":
-                # Ordinary worker configuration already enables the runtime's
-                # graph planner. Source/external-only graphs have no worker
-                # module, but need the SAME live pending-state simulator.
-                # Bind the existing C API locally; no runtime ABI is added.
-                return [f"if ({status} == FORT_SCOPE_OK) then", "block", "interface",
-                    "function fort_enable_checked_graph(context) bind(C, name='fort_scope_task_graph_enable_v1') result(code)",
-                    "import c_int, c_int64_t", "integer(c_int64_t), value :: context", "integer(c_int) :: code",
-                    "end function fort_enable_checked_graph", "end interface",
-                    f"{status} = fort_enable_checked_graph({context})", "end block", "endif"]
-            return []
-        if self.config.scope_transfers == "direct" and self.config.scope_execution != "graph":
-            return []
+            # Ordinary worker configuration already enables the runtime's
+            # graph planner. Source/external-only graphs have no worker
+            # module, but need the SAME live pending-state simulator.
+            # Bind the existing C API locally; no runtime ABI is added.
+            return [f"if ({status} == FORT_SCOPE_OK) then", "block", "interface",
+                "function fort_enable_checked_graph(context) bind(C, name='fort_scope_task_graph_enable_v1') result(code)",
+                "import c_int, c_int64_t", "integer(c_int64_t), value :: context", "integer(c_int) :: code",
+                "end function fort_enable_checked_graph", "end interface",
+                f"{status} = fort_enable_checked_graph({context})", "end block", "endif"]
         public, _ = self.entry_artifacts(sorted(leaves)[0])
         configuration = public["transfer_configuration"]
         imports.append(f"use {public['fortran_module']}, only: fort_configure => {configuration['fortran_procedure']}")
@@ -1412,10 +1306,9 @@ class ScopeBuilder:
         if self.inline_for(procedure) is not None:
             return set()  # Extraction proved every loop-written scalar dead/private.
         mapping = {} if mapping is None else mapping
-        if self.config.reached_execution:
-            coordinator = self.coordinator(procedure)
-            if coordinator is not None:
-                return {mapping.get(root, root) for root in coordinator.scalar_changes} - {None}
+        coordinator = self.coordinator(procedure)
+        if coordinator is not None:
+            return {mapping.get(root, root) for root in coordinator.scalar_changes} - {None}
         routine = self.analysis.routines[procedure]
         result = {mapping.get(binding.root, binding.root) for binding in routine.scope.bindings.values()
                   if not binding.rank and binding.intent == "out" and binding.name in routine.arguments}
@@ -1562,7 +1455,7 @@ class ScopeBuilder:
         """Original scalar reads used by reached physical native footprints."""
         if call.region is not None:
             return {}
-        if self.config.reached_execution and self.coordinator(call.procedure) is not None:
+        if self.coordinator(call.procedure) is not None:
             return {}  # Child native bounds are read only in its reached worker.
         sections = self.analysis.native_sections(call.procedure)
         if not sections.available:
@@ -1763,7 +1656,7 @@ class ScopeBuilder:
             return
         coordinator = self.coordinator(call.procedure)
         if coordinator is not None:
-            if self.config.reached_execution and reached_definitions:
+            if reached_definitions:
                 # Reached owners validate these obligations against current
                 # coverage before entering the child, after earlier producers.
                 coordinator.check_aliases(call)
@@ -2522,13 +2415,6 @@ class ScopeBuilder:
     def owner_calls(self, calls, mode, handles, parameters, actuals, imports, *, batch=True, terminal=False,
                     view_codes=None):
         """Run original approved calls, or one generic direct-leaf batch chain."""
-        if (self.config.scope_execution != "graph" and batch
-                and not any(view_call(call) or call.region is not None for call in calls)
-                and self.config.scope_transfers in {"pipelined", "auto"}):
-            from compiler.scopes.batch import execute_calls
-            return execute_calls(self, calls, mode, handles, parameters, actuals, imports,
-                                 lambda group: self.owner_calls(group, mode, handles, parameters, actuals, imports, batch=False),
-                                 terminal=terminal)
         routine = self.entry
         body = []
         for call in calls:
@@ -2658,11 +2544,6 @@ class ScopeBuilder:
                                     "reason":str(error)})
 
     def scope_budget(self, calls):
-        # Reusable source graphs are bounded per procedure. Reached segments
-        # have their own expansion budget; mutually exclusive branches must not
-        # spend one eagerly flattened transitive closure budget together.
-        if self.config.scope_execution != "graph" and len(calls) > 32:
-            raise CompilationError("bounded source scope exceeds call generation budget")
         summaries, graphs, depth = {}, {}, 0
         for call in calls:
             if call.region is not None:
@@ -2672,7 +2553,7 @@ class ScopeBuilder:
                 summaries[call.procedure] = operations
                 continue
             summary = call.summary
-            coordinator = self.coordinator(call.procedure) if self.config.reached_execution else None
+            coordinator = self.coordinator(call.procedure)
             if coordinator is None and not summary["complete"]:
                 raise CompilationError("reached source-call effects incomplete")
             graph = self.analysis.structure(call.procedure)
@@ -2843,151 +2724,22 @@ class ScopeBuilder:
                 self.scan(node.content)
         self.build_span(run)
 
-    def _attempt_lexical_owner(self, nodes, *, finalize=False):
-        """Isolate a lexical attempt before retaining or falling back from it."""
-        from compiler.scopes.generation_transaction import GenerationTransaction
-        from compiler.scopes.lexical import LexicalOwner, lexical_attempt_diagnostics
-
-        scope_count = len(self.scopes)
-        boundary_count = len(self.boundaries)
-        inline_before = {"attempts": self.inline.attempts, "operations": self.inline.operations}
-        owner = None
-
-        def diagnostics(builder, outcome, error=None):
-            return lexical_attempt_diagnostics(builder, owner, outcome=outcome,
-                scope_count_before=scope_count, inline_before=inline_before, finalize=finalize, error=error)
-
-        def attempt(builder):
-            nonlocal owner
-            owner = LexicalOwner(builder)
-            accepted = owner.run(nodes)
-            outcome = "accepted" if accepted else "no_numerical_leaves"
-            scopes = builder.scopes[scope_count:]
-            if accepted and scopes and all(scope.get("automatic_preflight", {}).get("generated_owner_invoked") is False
-                                           for scope in scopes):
-                outcome = "successful_native"
-            builder.lexical_owner_attempt = diagnostics(builder, outcome)
-            return (builder.finish() if finalize else True) if accepted else False
-
-        # Existing candidate callers already have an isolated generation graph.
-        # Their caller must reject a failed candidate; do not open an overlapping
-        # analysis transaction or fall back through its poisoned artifact maps.
-        if getattr(self, "_generation_transaction_marker", None) is not None:
-            try:
-                return attempt(self)
-            except CompilationError as error:
-                self.lexical_owner_attempt = diagnostics(self, "error", error)
-                self._ordinary_pair_state.failed = True
-                raise
-
-        candidate, adopted = None, False
-        try:
-            with GenerationTransaction(self) as transaction:
-                candidate = transaction.builder
-                result = attempt(candidate)
-                if result:
-                    transaction.adopt(candidate)
-            if result:
-                adopted = True
-                return (self.outputs, result[1]) if finalize else True
-            self.lexical_owner_attempt = deepcopy(candidate.lexical_owner_attempt)
-            self.boundaries.extend(deepcopy(candidate.boundaries[boundary_count:]))
-        except CompilationError as error:
-            if candidate is None:
-                raise  # An unavailable transaction is not a native-owner decline.
-            self.lexical_owner_attempt = diagnostics(candidate, "error", error)
-            candidate._ordinary_pair_state.failed = True
-            self.boundaries.extend(deepcopy(candidate.boundaries[boundary_count:]))
-            self.boundaries.append({"reason": "lexical owner unavailable: " + str(error),
-                                    "fallback": "existing bounded source scopes"})
-            if self.config.scope_measurement is not None:
-                raise CompilationError("scope measurement requires an admitted complete lexical owner: " + str(error)) from error
-        finally:
-            if candidate is not None and not adopted:
-                # Per-owner generation work remains charged after a declined
-                # attempt, even though its mutable artifact graph is discarded.
-                for procedure, registry in self.region_owners.items():
-                    spent = candidate.region_owners.get(procedure)
-                    if spent is not None:
-                        registry.attempts = max(registry.attempts, spent.attempts)
-                        registry.operations = max(registry.operations, spent.operations)
-        return False
-
     def _missing_automatic_cost_reason(self):
         """Decline work that cannot be priced before discovering any owner.
 
         Exact-window evidence is independent of the per-kernel profile. Even
         an explicit empty request must reach its own validation path.
         """
-        if (self.config.policy != "auto" or self.config.profile is not None
-                or self.config.exact_window is not None):
+        if (self.config.policy != "auto" or self.config.profile is not None):
             return None
         reason = ("no calibration profile or exact-window evidence supplied; "
                   "automatic policy retains unchanged native source")
         return f"{self.config.profile_reason}; {reason}" if self.config.profile_reason else reason
 
     def run(self):
-        if self.config.scope_execution == "graph":
-            from compiler.scopes.graph import run_graph_owner
+        from compiler.scopes.graph import run_graph_owner
 
-            return run_graph_owner(self)
-        reason = self._missing_automatic_cost_reason()
-        if reason:
-            # Construction authenticated inputs, packages and entry identity.
-            # Native execution needs neither speculative owners nor a complete
-            # effect closure. Publication still rechecks every live input.
-            self.boundaries.append({"procedure": self.entry.qualified, "reason": reason,
-                                    "execution": "unchanged native source"})
-            return self.finish(materialize_native_effects=False)
-        if self.entry.source_kind != "module":
-            if self.config.scope_measurement is not None:
-                raise CompilationError("scope measurement requires an admitted module procedure owner")
-            first = _span(_part(self.entry.scope.node, "Subroutine_Stmt"))[0]
-            last = _span(_part(self.entry.scope.node, "End_Subroutine_Stmt"))[1]
-            self.boundaries.append({"first_line": first, "last_line": last,
-                                   "reason": "external source entry execution requires standalone procedure variants"})
-            return self.finish()
-        if self.config.reached_execution:
-            from compiler.scopes.lexical import check_structured_entry
-            try:
-                check_structured_entry(self.entry)
-            except CompilationError as error:
-                if self.config.scope_measurement is not None:
-                    raise CompilationError("scope measurement requires a structured lexical owner: " + str(error)) from error
-                # Do not fall through to outlined scopes: a source label can
-                # enter an outlined statement or bypass its coherence setup.
-                self.boundaries.append({"procedure": self.entry.qualified, "reason": str(error),
-                                        "execution": "unchanged native source"})
-                return self.finish()
-            from compiler.scopes.window_discovery import discover_reached_window
-            if (self.config.exact_window or {}).get("coverage") == "checked_interval":
-                from compiler.scopes.closed_selection import discover_closed_selections
-
-                # Repeated original intervals have one checked admission path.
-                # A decline cannot retry through the one-shot or whole-entry
-                # owner with different source-position/lifetime semantics.
-                discover_closed_selections(self)
-                return self.finish()
-            if self.config.scope_measurement is None and discover_reached_window(self):
-                return self.finish()
-        from compiler.scopes.closed_selection import discover_closed_selections, has_residual_candidates
-        closed = discover_closed_selections(self)
-        if closed and ((self.config.exact_window or {}).get("coverage") == "original_selection"
-                       or not has_residual_candidates(self, closed)):
-            return self.finish()
-        nodes = (self.inline.prepare(_children(self.entry.execution), closed_selections=closed)
-                 if not self.config.collective else _children(self.entry.execution))
-        self.generated.update(self.inline.generated)
-        self.numerical_ir.update(self.inline.ir)
-        self.numerical_reasons.update({procedure: None for procedure in self.inline.regions})
-        if self.config.reached_execution and not self.config.collective:
-            result = self._attempt_lexical_owner(nodes, finalize=True)
-            if result:
-                return result
-            if self.config.scope_measurement is not None:
-                raise CompilationError("scope measurement requires an admitted complete lexical owner with numerical work")
-        self.scan(nodes)
-        return self.finish()
+        return run_graph_owner(self)
 
     def _materialize_code_artifacts(self):
         """Finish code artifacts without publishing a report or manifest."""
@@ -3021,7 +2773,7 @@ class ScopeBuilder:
             destination = "sources/" + _name("source_",str(path)) + ".f90"
             self.outputs[destination] = "".join(lines)
             provenance[str(path)] = {"sha256":self.analysis.sources[str(path)], "replacement":destination}
-        if self.scopes and self.config.scope_measurement != "native":
+        if self.scopes:
             self.outputs.update(self.runtime_outputs)
             self.outputs["scoped-runtime.json"] = json.dumps(self.runtime,indent=2)+"\n"
         return provenance, patches
@@ -3064,26 +2816,19 @@ class ScopeBuilder:
                     "supported_consumers": ["original_lexical", "original_module_companion"],
                     "unsupported_consumers": ["synthetic_owner", "qualified_collective_owner"]},
                 "scope_execution": self.config.scope_execution,
-                **({"scope_measurement": self.config.scope_measurement} if self.config.scope_measurement is not None else {}),
-                **({"reached_plan_schema_version": 1} if self.config.reached_execution else {}),
-                **({"reached_window_discovery": self.reached_window_discovery}
-                   if hasattr(self, "reached_window_discovery") else {}),
-                **({"original_interval_discovery": self.original_interval_discovery}
-                   if hasattr(self, "original_interval_discovery") else {}),
-                **({"lexical_owner_attempt": deepcopy(self.lexical_owner_attempt)}
-                   if hasattr(self, "lexical_owner_attempt") else {}),
+                **({"reached_plan_schema_version": 1}),
                 **({"graph_owner_attempt": deepcopy(self.graph_owner_attempt)}
                    if hasattr(self, "graph_owner_attempt") else {}),
                 **({"hierarchical_region_attempt": deepcopy(self.hierarchical_region_attempt)}
                    if hasattr(self, "hierarchical_region_attempt") else {}),
                 "automatic_scope_available":bool(self.scopes), "scope_count":len(self.scopes),
                 "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
-                "runtime_provenance": self.runtime_provenance.public(available=bool(self.scopes) and self.config.scope_measurement != "native", additional=[
+                "runtime_provenance": self.runtime_provenance.public(available=bool(self.scopes), additional=[
                     *[item.scoped.get("runtime_provenance", {}) for item in self.generated.values() if item],
                     *[item.report.get("runtime_provenance", {}) for item in self.view_generated.values()]]),
-                "sources":provenance, "runtime":self.runtime if self.scopes and self.config.scope_measurement != "native" else None,
+                "sources":provenance, "runtime":self.runtime if self.scopes else None,
                 "native_effects":self.analysis.report(self.entry.qualified,
-                    materialize=(not self.config.reached_execution
+                    materialize=(False
                                  if materialize_native_effects is None else materialize_native_effects)),
                 "resolved_calls": [self.resolved_calls[key] for key in sorted(self.resolved_calls)],
                 "implementation_variants": self.variants.public(),
@@ -3113,7 +2858,7 @@ class ScopeBuilder:
                                                    for procedure, reason in sorted(self.coordinator_reasons.items()) if reason],
                 "artifacts_sha256":{name:sha256(content.encode()).hexdigest() for name,content in self.outputs.items()},
                 "device_budget_bytes":self.device_budget,
-                "limits":{"calls_per_span":None if self.config.scope_execution == "graph" else 32,
+                "limits":{"calls_per_span":None,
                           "closure_depth":8,
                           "physical_native_sections":"bounded original-coordinate rectangles; conservative whole-resource fallback",
                           "native_rectangles_per_resource":32},
@@ -3123,7 +2868,7 @@ class ScopeBuilder:
                      "role":"common_runtime" if name in self.runtime_outputs else
                             "original_source" if name.startswith("sources/") else "shared_entry"}
                     for name in self.outputs if name.endswith((".cu",".f90"))
-                ],
+                ]
             }
             self.analysis.verify_publication()
             if getattr(self, "provider_only_lifetime", None) is not None:

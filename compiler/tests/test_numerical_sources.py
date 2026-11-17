@@ -147,28 +147,6 @@ def generate(directory, *, original=ORIGINAL, normalized=NORMALIZED):
     return source,output,manifest
 
 
-def test_package_rebases_original_bounds_and_resolves_reexported_roots(tmp_path):
-    source,output,manifest=generate(tmp_path)
-    assert manifest["scopes"][0]["gpu_leaves"]==["original::consumer","original::producer"]
-    assert "settings::weights" in {r["resource"] for r in manifest["scopes"][0]["resources"]}
-    text=(output/manifest["sources"][str(source)]["replacement"]).read_text()
-    assert "lbound(a, 1)" in text
-    assert "lbound(b, 1)" in text
-    assert "lbound(weights, 1)" in text
-    assert "!$OMP PARALLEL DO" not in text[text.index("subroutine fort_scope_clone_"):]
-    assert "INTENT(INOUT), TARGET" in text[text.index("subroutine fort_scope_clone_"):]
-    assert "!$omp parallel do private(i)" in text # original fallback retained
-    assert manifest["numerical_sources"][0]["procedure"]=="original::producer"
-    scope, = manifest["scopes"]
-    hidden = next(p for p in scope["parameters"] if p["resource"] == "settings::weights")
-    assert hidden["actual"] == "weights"
-    assert hidden["name"] != "weights"
-    owner = text[text.index("subroutine " + scope["owner"]):]
-    assert "USE relay" in owner
-    assert f"intent(in) :: {hidden['name']}(:)" in owner
-    assert f"{hidden['name']}_view => {hidden['name']}" in owner
-
-
 @pytest.mark.parametrize(("field","value","reason"),[
     ("sha256","stale","hash differs"), ("normalization","compact","coordinate facts"),
     ("capture_safe",False,"capture/coordinate facts"),
@@ -191,29 +169,6 @@ def test_package_rejects_wrong_array_mapping_and_missing_write_intent(tmp_path):
     source,_normalized,document=package(tmp_path,normalized=NORMALIZED.replace("intent(inout)::b", "intent(in)::b"))
     with pytest.raises(CompilationError,match="written resource"):
         load_numerical_sources(document,SourceEffects([source]))
-
-
-def test_original_output_definition_is_kept_outside_normalized_access_intents(tmp_path):
-    source,output,manifest=generate(tmp_path,original=ORIGINAL.replace("intent(inout)::b(-2:)","intent(out)::b(-2:)"))
-    text=(output/manifest["sources"][str(source)]["replacement"]).read_text()
-    clone=text[text.index("subroutine fort_scope_clone_"):]
-    assert clone.index("fort_scope_forget_definition") < clone.index("fort_status = fort_run(")
-
-
-def test_module_and_formal_alias_is_an_explained_native_boundary(tmp_path):
-    # A read-only alias is valid native Fortran, but separate GPU descriptors
-    # would prepare the same handle twice. Reject before any transformed work.
-    source=ORIGINAL.replace("call producer(a,b,n)","call producer(weights,b,n)")
-    original,_numerical,document=package(tmp_path,original=source)
-    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
-    from compiler.driver.options import CompilerOptions
-    from compiler.scopes.source import form_source_scopes
-
-    facts={"schema_version":1,"participation":"serial","sources":document["source_inputs"],
-           "captures":{root:FACT for root in ("argument::a","argument::b","argument::out","settings::weights")}}
-    _outputs,manifest=form_source_scopes([original],"original::step",facts=facts,options=CompilerOptions(opt_level=1),
-                                         config=OffloadConfig(policy="sections"),numerical_sources=document)
-    assert any("merged entry access descriptors" in boundary["reason"] for boundary in manifest["boundaries"])
 
 
 def test_effects_keep_do_header_after_leading_openmp_comment(tmp_path):
@@ -252,20 +207,3 @@ def compiled_package(tmp_path_factory):
     run([fortran,"-fopenmp","-fcheck=all",str(driver),*objects,"-L/usr/local/cuda/lib64",
          "-Wl,-rpath,/usr/local/cuda/lib64","-lcudart","-lstdc++","-o",str(target)],cwd=output)
     return target,output
-
-
-@pytest.mark.native
-def test_normalized_package_full_fields_without_cuda(compiled_package):
-    target,output=compiled_package
-    response=run([str(target)],cwd=output,env={**os.environ,"CUDA_VISIBLE_DEVICES":"","OMP_NUM_THREADS":"4"})
-    assert "FIELDS_OK" in response.stdout
-
-
-@pytest.mark.cuda
-def test_normalized_package_full_fields_and_shared_module_input(compiled_package):
-    target,output=compiled_package
-    response=run([str(target)],cwd=output,env={**os.environ,"FORT_RUNTIME_TRACE":"1","OMP_NUM_THREADS":"4"})
-    if "FORT_SCOPED launch" not in response.stderr:
-        pytest.skip("CUDA device unavailable")
-    assert "FIELDS_OK" in response.stdout
-    assert response.stderr.count("FORT_SCOPED launch")==8

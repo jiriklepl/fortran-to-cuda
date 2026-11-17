@@ -80,9 +80,7 @@ def pool_program(tmp_path_factory):
         pytest.skip("C++ compiler unavailable")
     directory = tmp_path_factory.mktemp("shared_staging")
     (directory / "cuda_runtime.h").write_text(MOCK)
-    # The packaging path inlines this exact header text into ordinary support.
     header = (RUNTIME / "staging.hpp").read_text()
-    assert header in read_common_header()
     (directory / "ordinary.cuh").write_text(header)
     (directory / "ordinary.cpp").write_text(r'''
 #define CUCH(call) ordinary_policy_is_not_part_of_the_shared_pool(call)

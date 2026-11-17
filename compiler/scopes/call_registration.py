@@ -68,19 +68,15 @@ def finish_original_registrations(owner, text):
         block = _name("fort_actuals_", key)
         spec = ["integer(c_int) :: fort_actual_status", "type(c_ptr) :: fort_actual_pointer",
                 "type(fort_scope_layout) :: fort_actual_layout"]
-        if owner.builder.config.scope_execution == "graph":
-            spec += ["integer(c_int) :: fort_actual_handle_valid"]
+        spec += ["integer(c_int) :: fort_actual_handle_valid"]
 
         def refresh_epoch_handle(handle):
-            if owner.builder.config.scope_execution != "graph":
-                return []
             return ["fort_actual_handle_valid = 0", "if (fort_actual_status == FORT_SCOPE_OK) &",
                     f"fort_actual_status = fort_scope_buffer_valid_v1({owner.context}, {handle}, fort_actual_handle_valid)",
                     f"if (fort_actual_status == FORT_SCOPE_OK .and. fort_actual_handle_valid == 0) {handle} = 0"]
         from compiler.scopes.provider_lifetime import context_creation, registration_generation
         generation = registration_generation(owner)
-        create = context_creation(owner, owner.context, "fort_scope_resident_create_v1"
-                                  if owner.builder.config.scope_execution == "graph" else "fort_scope_create")
+        create = context_creation(owner, owner.context, "fort_scope_resident_create_v1")
         lines = ["fort_actual_status = FORT_SCOPE_OK", f"if ({owner.enabled}) then",
                  f"if ({owner.context} == 0) then",
                  f"fort_actual_status = {create}",
@@ -126,7 +122,7 @@ def finish_original_registrations(owner, text):
                 on_error=tuple(failure), parameters=parameters,
                 logical_lower_bounds={binding.root: tuple(f"lbound({name},{axis},kind=c_int64_t)"
                                                           for axis in range(1, binding.rank+1))},
-                entry_guard=owner.epoch_pristine if owner.builder.config.scope_execution == "graph" else None,
+                entry_guard=owner.epoch_pristine,
                 generation=generation)
             spec += code.specification
             lines += [*code.prepare, "endif"]

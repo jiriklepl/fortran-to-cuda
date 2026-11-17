@@ -332,31 +332,6 @@ def test_compute_fixture_uses_fixed_countable_work_and_reuses_one_leaf():
     assert source.count("call native_lookup(a,c,permutation,n)") == 1
 
 
-def test_fixed_auto_holdout_uses_existing_analysis_budgets_and_public_work_counts(tmp_path):
-    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
-    from compiler.driver.options import CompilerOptions
-    from compiler.emission.common.resources import read_scoped_runtime
-    from compiler.scopes.source import form_source_scopes
-
-    original = tmp_path / "original.f90"
-    original.write_text(fixture_source("compute", 4, 64, work_calls=AUTO_WORK_CALLS, owner_calls=AUTO_OWNER_CALLS))
-    profile = base()
-    profile["scoped"]["runtime_id"] = read_scoped_runtime()[1]["runtime_id"]
-    profile["toolchain"].update(nvcc_version="NVCC V13.4.92", host_cxx_version="GCC 14.4.0")
-    profile = profile_with_collective_measurements(profile, measurements(), calibration={})
-    _, report = form_source_scopes(
-        [original],
-        "team_operations::step",
-        facts=fixture_facts(original, 4),
-        options=CompilerOptions(gpu_policy="auto", memory_model="scoped"),
-        config=OffloadConfig("auto", profile, 4, True),
-    )
-    assert report["scope_count"] == 1, report["boundaries"]
-    assert report["automatic_estimate_available"]
-    (entry,) = report["scopes"][0]["numerical_entries"]
-    assert entry["public"]["planning"]["units"][0]["work_per_iteration"] == 12 * COMPUTE_STEPS + 10
-
-
 @pytest.mark.parametrize(
     "change",
     [

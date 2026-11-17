@@ -17,13 +17,11 @@ def read_common_header() -> str:
         [runtime.joinpath(name).read_text(encoding="utf-8") for name in ("numeric.hpp", "timing.hpp")] + [storage]
     )
     section_copy = runtime.joinpath("section_copy.hpp").read_text(encoding="utf-8")
-    staging = runtime.joinpath("staging.hpp").read_text(encoding="utf-8")
     floating_environment = runtime.joinpath("floating_environment.hpp").read_text(encoding="utf-8")
     experimental = [runtime.joinpath(name).read_text(encoding="utf-8")
                     .replace('#include "section_copy.hpp"', section_copy)
-                    .replace('#include "staging.hpp"', staging)
                     .replace('#include "floating_environment.hpp"', floating_environment)
-                    for name in ("offload.hpp", "hybrid.hpp") if runtime.joinpath(name).is_file()]
+                    for name in ("offload.hpp",)]
     units += "\n" + floating_environment
     units += "\n" + runtime.joinpath("copy_startup.hpp").read_text(encoding="utf-8")
     units += "\n#ifdef FORT_OFFLOAD_ENABLED\n" + "\n".join(experimental) + "\n#endif\n"
@@ -298,7 +296,7 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "staging_slots": 2,
             "staging_streams": "two reusable non-default streams in the process-wide pool",
             "pinned_budget_bytes": 64 * 1024 * 1024,
-            "budget_scope": "active, allocating and cached staging for scoped and chunked/hybrid calls",
+            "budget_scope": "active, allocating and cached staging for scoped calls",
             "automatic_placement": "calibrated pinned synchronous pricing; AUTO may use exact compact physical copies only with matching bounded layout calibration; otherwise direct placement baseline",
             "physical_copies": {
                 "abi_version": 3, "configure": "fort_scope_set_copy_costs_v3",

@@ -8,8 +8,8 @@ from fparser.two import Fortran2003 as F
 from fparser.two.parser import ParserFactory
 from fparser.two.utils import walk
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.frontend import numerical_preparation
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.numerical_preparation import NumericalPreparationProvider, NumericalPreparationUnsupported
@@ -17,8 +17,8 @@ from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 
 ENTRY = "environment_route::evolve"
-OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="reached")
-CONFIG = OffloadConfig(policy="sections", scope_execution="reached")
+OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
+CONFIG = OffloadConfig(policy="sections", scope_execution="graph")
 STRUCTURAL_SOURCE = """module nested_calls
 type receiver
 contains

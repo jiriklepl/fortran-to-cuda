@@ -28,7 +28,7 @@ def latch(member):
     latch. Hits call that companion's unchanged ordinary entry instead.
     """
     root = member.owner
-    if (root.builder.config.scope_execution != "graph" or root.builder.config.policy != "auto"
+    if (root.builder.config.policy != "auto"
             or any(hasattr(root, name) for name in ("closed_selection", "interval_site", "window_proof"))):
         return None
     current = member

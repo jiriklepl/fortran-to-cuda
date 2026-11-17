@@ -152,13 +152,6 @@ def _overlap(first, last, span):
     return first <= span[1] and max(first, last) >= span[0]
 
 
-def require_original_worksharing_edits(owner, final_builder_edits):
-    """Reject source edits or managed members inside the exact native callee."""
-    windows = _worksharing_windows(owner)
-    requirements = [item for row in _worksharing_rows(windows) for item in row["worksharing_requirements"]]
-    _require_original_worksharing_edits(owner, final_builder_edits, requirements)
-
-
 def _require_original_worksharing_edits(owner, final_builder_edits, requirements):
     """Use detached source rows at the final callback-free boundary."""
     for requirement in requirements:

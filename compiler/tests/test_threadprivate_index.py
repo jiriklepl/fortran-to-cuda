@@ -140,23 +140,3 @@ def test_replaced_original_registry_cannot_reuse_syntax_index(tmp_path):
     object.__setattr__(analysis, "modules", replacement)
     with pytest.raises(CompilationError, match="original registry changed"):
         participation._threadprivate(analysis)
-
-
-def test_generated_collective_artifacts_are_identical_to_fresh_walks(tmp_path, monkeypatch):
-    from compiler.frontend import source_effects
-    from compiler.frontend.source_session import SourceSession
-    from compiler.frontend.summary_cache import SummaryCache
-    from compiler.tests.test_collective_source_scopes import generate
-
-    monkeypatch.setattr(source_effects, "_DEFAULT_SUMMARY_CACHE", SummaryCache())
-    _, indexed, indexed_report, _ = generate(tmp_path)
-
-    def fresh_walks(self, analysis):
-        self.verify(analysis)
-        return {}
-
-    monkeypatch.setattr(SourceSession, "specification_comments", fresh_walks)
-    monkeypatch.setattr(source_effects, "_DEFAULT_SUMMARY_CACHE", SummaryCache())
-    _, original, original_report, _ = generate(tmp_path)
-    assert indexed == original
-    assert indexed_report == original_report

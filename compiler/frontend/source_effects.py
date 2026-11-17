@@ -3049,45 +3049,6 @@ class SourceEffects:
             self._worksharing_native_completions[proof.identity] = proof
         return self._worksharing_native_completions[proof.identity]
 
-    def reduction_candidates(self, requested, selected=None, *, limit=32):
-        """Lazily prove intrinsic reductions in authenticated reached nodes.
-
-        The local skeleton bounds this scan; direct callees are never expanded.
-        Returned source facts do not grant an executable reduction strategy or
-        calibrated automatic placement. The original native statement remains
-        the implementation until a separately admitted worker is generated.
-        """
-        from compiler.frontend.reductions import analyze_reduction, candidate_nodes
-        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
-            raise CompilationError("reduction candidate limit must be positive")
-        limit = min(limit, 32, self.operation_limit)
-        graph = self.structure(requested)
-        identities = None if selected is None else self._selected_source(requested, selected)[1]
-        key = graph.identity, identities, limit
-        if key not in self._reduction_candidates:
-            candidates = candidate_nodes(graph, identities) if graph.available else ()
-            records = [analyze_reduction(self, requested, identity).public() for identity in candidates[:limit]]
-            result = {"schema_version": 1, "procedure": requested,
-                      "structured_identity": graph.identity,
-                      "source_analysis_available": graph.available,
-                      "execution_supported": False,
-                      "execution_reason": "source proofs only; generated reduction execution is not implemented",
-                      "selected_original_nodes": list(identities) if identities is not None else None,
-                      "candidate_limit": limit, "candidate_count": len(candidates),
-                      "truncated": len(candidates) > limit,
-                      "reason": "; ".join(graph.reasons) if not graph.available else
-                          "bounded reduction candidate limit exceeded" if len(candidates) > limit else None,
-                      "records": records}
-            if len(self._reduction_candidates) >= self.procedure_limit:
-                self._reduction_candidates.pop(next(iter(self._reduction_candidates)))
-            self._reduction_candidates[key] = deepcopy(result)
-        return deepcopy(self._reduction_candidates[key])
-
-    def openmp_reduction(self, requested, selected):
-        """Prove one requested original joined reduction group, without lowering."""
-        from compiler.frontend.omp_reductions import analyze_openmp_reduction
-        return analyze_openmp_reduction(self, requested, selected)
-
     def native_sections_for_nodes(self, requested, selected, *, include_entry=False, capture_locals=False,
                                  completion=None, descriptor_window=None):
         """Typed original-coordinate refinement for a demanded source segment."""

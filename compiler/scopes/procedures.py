@@ -23,7 +23,7 @@ class BorrowedCoordinator:
         self.root = getattr(builder, "_coordinator_root", builder)
         self.routine = builder.analysis.routines[procedure]
         self.procedure = procedure
-        self.reached = builder.config.reached_execution
+        self.reached = True
         graph = builder.analysis.structure(procedure) if self.reached else None
         self.summary = ({"summary_identity": graph.identity, "proof_role": "structured_execution"}
                         if graph else builder.analysis.summarize(procedure))

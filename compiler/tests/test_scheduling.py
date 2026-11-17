@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 
 from compiler.driver.options import CompilerOptions
-from compiler.emission.c.generator import generate_cpp
 from compiler.emission.common.abi import abi_arguments
 from compiler.emission.common.resources import read_common_header
 from compiler.emission.cuda.kernels import generate_kernel, generate_launch, kernel_name
@@ -186,93 +185,6 @@ def _expected(shape: tuple[int, ...], bounds: tuple[tuple[int, int, int], ...]) 
         offset = sum((index - 1) * math.prod(shape[:axis]) for axis, index in enumerate(coordinates))
         result[offset] = sum(10**axis * index for axis, index in enumerate(coordinates))
     return result
-
-
-@pytest.mark.native
-@pytest.mark.parametrize("backend", ["serial", "openmp", "cuda-coordinate-map"])
-@pytest.mark.parametrize("tiles", [(), (2,), (2, 4, 3, 2, 3), (512, 8)])
-def test_native_tails_signed_strides_arbitrary_rank(tmp_path: Path, backend: str, tiles: tuple[int, ...]) -> None:
-    shape = (9, 5, 3, 2, 3)
-    bounds = ((9, 1, -2), (1, 5, 1), (3, 1, -1), (1, 2, 1), (1, 3, 1))
-    function, plan = _example(5, bounds)
-    plan = schedule_plan(function, plan, options=CompilerOptions(tile_sizes=tiles))
-    if backend == "cuda-coordinate-map":
-        region = plan.regions[0]
-        kernel = "\n".join(generate_kernel(region))
-        extents = tuple(len(range(lower, upper + (1 if step > 0 else -1), step)) for lower, upper, step in bounds)
-        schedule = region.schedule
-        tile_sizes = schedule.tile_sizes
-        total = (
-            math.prod((extent - 1) // size + 1 for extent, size in zip(extents, tile_sizes, strict=True))
-            if tile_sizes
-            else math.prod(extents)
-        )
-        arguments = ["a", *(str(size) for size in shape)]
-        for (lower, _, stride), extent in zip(bounds, extents, strict=True):
-            arguments.extend((str(lower), str(stride), str(extent)))
-        arguments.append(str(total))
-        if tile_sizes:
-            arguments.append(
-                str(math.prod(min(size, extent) for size, extent in zip(tile_sizes, extents, strict=True)))
-            )
-        source = (
-            '#include <cstdlib>\n#include "support.cuh"\n#define __global__\n'
-            "struct dimension { unsigned x; };\n"
-            "dimension blockIdx, threadIdx, blockDim{3}, gridDim{2};\n"
-            "using namespace generated_kernels::indexing;\n" + kernel + '\nextern "C" void test(int* a) {\n'
-            "  for (blockIdx.x = 0; blockIdx.x < gridDim.x; ++blockIdx.x)\n"
-            "    for (threadIdx.x = 0; threadIdx.x < blockDim.x; ++threadIdx.x)\n"
-            f"      {kernel_name(region)}({', '.join(arguments)});\n"
-            "}\n"
-        )
-    else:
-        source = generate_cpp(function, plan, abi_arguments(function.parameters), "support.cuh")
-    library = _compile_shared(tmp_path, source, openmp=backend == "openmp")
-    values = (ctypes.c_int * math.prod(shape))(*([-1] * math.prod(shape)))
-    if backend == "cuda-coordinate-map":
-        procedure = library.test
-        procedure.argtypes = [ctypes.POINTER(ctypes.c_int)]
-        procedure(values)
-    else:
-        procedure = library.cpp_example
-        procedure.argtypes = [ctypes.POINTER(ctypes.c_int), *([ctypes.c_size_t] * len(shape))]
-        procedure(values, *shape)
-    assert list(values) == _expected(shape, bounds)
-
-
-@pytest.mark.native
-@pytest.mark.parametrize("tiles", [(), (3, 2)])
-def test_empty_outer_loop_suppresses_invalid_inner_stride(tmp_path: Path, tiles: tuple[int, ...]) -> None:
-    function, plan = _example(2, ((2, 1, 1), (1, 3, 0)))
-    plan = schedule_plan(function, plan, options=CompilerOptions(tile_sizes=tiles))
-    source = generate_cpp(function, plan, abi_arguments(function.parameters), "support.cuh")
-    library = _compile_shared(tmp_path, source)
-    values = (ctypes.c_int * 9)(*([-1] * 9))
-    library.cpp_example.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_size_t, ctypes.c_size_t]
-    library.cpp_example(values, 3, 3)
-    assert list(values) == [-1] * 9
-
-
-@pytest.mark.native
-@pytest.mark.cuda
-def test_tiled_cuda_launch_compiles(tmp_path: Path) -> None:
-    from compiler.emission.cuda.generator import generate_cuda
-
-    compiler = shutil.which("nvcc")
-    if compiler is None:
-        pytest.skip("Native capability unavailable: nvcc is not installed")
-    function, plan = _scheduled(5, tile_sizes=(512, 8, 2, 3, 4))
-    (tmp_path / "support.cuh").write_text(read_common_header())
-    (tmp_path / "test.cu").write_text(generate_cuda(function, plan, abi_arguments(function.parameters), "support.cuh"))
-    result = subprocess.run(
-        [compiler, "-std=c++17", "-c", "test.cu", "-o", "test.o"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=60,
-    )
-    assert result.returncode == 0, result.stderr
 
 
 def test_constant_integer_division_stride_receives_locality_credit() -> None:

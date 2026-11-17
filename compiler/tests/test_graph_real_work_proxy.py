@@ -5,8 +5,14 @@ from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.frontend import lower_source
 from compiler.ir import Binary, Block, Literal, Loop, Reference, ScalarType, Symbol
-from compiler.offload.analysis import _compute_arithmetic_operations
 from compiler.offload.graph_costs import graph_work_proxy
+
+
+def _compute_arithmetic_operations(block):
+    from compiler.offload.analysis import _compute_operation_counts
+
+    operations, _, reason = _compute_operation_counts(block)
+    return operations, reason
 
 SOURCE = '''module work_proxy
 implicit none

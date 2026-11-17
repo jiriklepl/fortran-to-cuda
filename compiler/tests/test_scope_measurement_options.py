@@ -7,31 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.frontend.numerical_preparation import _Budget, _configuration
-
-
-@pytest.mark.parametrize("updates", [
-    {"scope_measurement": "auto"}, {"scope_measurement": []}, {"scope_measurement": True},
-    {"policy": "auto"}, {"policy": "always"}, {"scope_execution": "bounded"},
-    {"collective": True}, {"exact_window": {}},
-])
-def test_measurement_rejects_incompatible_execution_modes(updates):
-    options = {"policy": "sections", "scope_execution": "reached", "scope_measurement": "native"}
-    options.update(updates)
-    with pytest.raises(ValueError, match="Scope measurement|Exact window"):
-        OffloadConfig(**options)
-
-
-def test_observation_variant_does_not_change_numerical_preparation_identity():
-    config = OffloadConfig(policy="sections", scope_execution="reached")
-    options = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="reached")
-    identities = [_configuration(options, replace(config, scope_measurement=variant), "original", {}, _Budget())
-                  for variant in (None, "native", "resident")]
-    assert len(set(identities)) == 1
-    changed = _configuration(options, replace(config, host_threads=8), "original", {}, _Budget())
-    assert changed != identities[0]
 
 
 @pytest.mark.parametrize("extra", [[], ["--form-scopes"],

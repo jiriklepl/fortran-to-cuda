@@ -34,8 +34,6 @@ def ordinary_entry_guard(owner):
     Both guards are always-present local LOGICALs. Do not combine them with an
     ENTRY-only dummy expression: Fortran logical operators do not short circuit.
     """
-    if owner.builder.config.scope_execution != "graph":
-        return None
     if owner.control_guard is not None:
         return f".not. ({owner.control_guard})"
     from compiler.scopes.native_owner_hint import latch
@@ -186,13 +184,11 @@ class JoinedTeam(StructuredScope):
                 # this native operation; it cannot establish a definition.
                 operation.affine_sections = operation.sections
                 operation.sections = NativeSections(True, resources=())
-                if (getattr(self.builder, '_selection_activation_binding', None) is not None
-                        or self.builder.config.scope_execution == 'graph'):
-                    from compiler.frontend.reached_read_requirements import prove_native_read_requirements
-                    operation.source_reads = prove_native_read_requirements(self.builder.analysis,
-                        self.builder.entry.qualified, tuple(loops), completion=proof)
-                    if operation.source_reads is not None:
-                        operation.proof_analysis = self.builder.analysis
+                from compiler.frontend.reached_read_requirements import prove_native_read_requirements
+                operation.source_reads = prove_native_read_requirements(self.builder.analysis,
+                    self.builder.entry.qualified, tuple(loops), completion=proof)
+                if operation.source_reads is not None:
+                    operation.proof_analysis = self.builder.analysis
         # These units are never reproduced from prepared text or renamed ASTs.
         operation.preserve_original = True
         operation.completion_proof = proof
@@ -330,10 +326,8 @@ class JoinedTeam(StructuredScope):
         original_owner, original_handles = owner, handles
         owner = copy(owner)
         owner.context, owner.enabled, owner.control_guard = 'fort_team_context', 'fort_team_enabled', None
-        graph_epoch = builder.config.scope_execution == 'graph'
-        if graph_epoch:
-            owner.epoch_pristine = 'fort_team_epoch_pristine'
-            owner.query_plan = 'fort_team_query_plan'
+        owner.epoch_pristine = 'fort_team_epoch_pristine'
+        owner.query_plan = 'fort_team_query_plan'
         handles = {root: 'fort_team_buffer_' + str(index) for index, root in enumerate(original_handles)}
         extra = ['logical :: fort_team_run, fort_team_native, fort_team_owned, fort_team_enabled',
                  'integer(c_int64_t) :: fort_team_context',
@@ -344,12 +338,11 @@ class JoinedTeam(StructuredScope):
                   'fort_team_owned = .true.']
         after = ['if (fort_team_owned) then', f'{original_owner.context} = fort_team_context',
                  f'{original_owner.enabled} = fort_team_enabled', 'endif']
-        if graph_epoch:
-            extra += ['logical :: fort_team_epoch_pristine, fort_team_query_plan']
-            before += [f'fort_team_epoch_pristine = {original_owner.epoch_pristine}',
-                       f'fort_team_query_plan = {original_owner.query_plan}']
-            after[-1:-1] = [f'{original_owner.epoch_pristine} = fort_team_epoch_pristine',
-                            f'{original_owner.query_plan} = fort_team_query_plan']
+        extra += ['logical :: fort_team_epoch_pristine, fort_team_query_plan']
+        before += [f'fort_team_epoch_pristine = {original_owner.epoch_pristine}',
+                   f'fort_team_query_plan = {original_owner.query_plan}']
+        after[-1:-1] = [f'{original_owner.epoch_pristine} = fort_team_epoch_pristine',
+                        f'{original_owner.query_plan} = fort_team_query_plan']
         patches = []
         numeric = {id(self.guarded[id(call.node)]): call for call in self.calls}
         lowers = {root: tuple(f'lbound({values[root]}, {axis}, kind=c_int64_t)'
@@ -476,10 +469,6 @@ class JoinedTeam(StructuredScope):
                     public, _ = builder.entry_artifacts(call.procedure)
                     imports.append(f"use {public['fortran_module']}, only: fort_team_choose_{number} => {public['planning']['fortran_selector']}")
                     lines += [f'if (fort_status == FORT_SCOPE_OK) fort_status = fort_team_choose_{number}(fort_context, fort_decision)']
-                if owner.interval_placement:
-                    from compiler.offload.selection_cost import choice
-                    lines += ['if (fort_status == FORT_SCOPE_OK) then',
-                              *choice(owner, unit, handles, values), 'endif']
                 if price_units:
                     # The original native operation below has independent
                     # effect/completion authority. Replace only a wholly
@@ -502,9 +491,7 @@ class JoinedTeam(StructuredScope):
             # still pending in the context. Complete that execution before the
             # next reached query validates definitions, without publishing any
             # unrelated device-current fields. Native work commits first.
-            suffix = coordinated(['if (fort_team_native) then', *ends, 'endif',
-                                  *([] if builder.config.scope_execution == "graph" else
-                                    _checked('fort_scope_wait(fort_context)'))])
+            suffix = coordinated(['if (fort_team_native) then', *ends, 'endif'])
             first, last = operation.span
             if call is not None:
                 run = builder.inline.emit_call(call, handles, values, imports, query=False, collective=True,

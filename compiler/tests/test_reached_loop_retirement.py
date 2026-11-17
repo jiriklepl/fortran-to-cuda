@@ -194,13 +194,3 @@ def test_strict_transport_checks_actual_generated_first_entry_cut(tmp_path, part
         )
     with pytest.raises(ValueError, match="reached loop retirement"):
         validate_checked_execution_plans(manifest)
-
-
-def test_empty_loop_cut_cannot_authorize_an_unconditional_closed_suffix(tmp_path):
-    from compiler.scopes.lexical import LexicalClosedSuffix
-
-    _path, _builder, middle, patch, _outputs, _report = emit(tmp_path)
-    assert patch.counted_entry is not None
-    suffix = LexicalClosedSuffix((), (), patch, "")
-    with pytest.raises(CompilationError, match="unconditional original close"):
-        suffix.validate(middle)

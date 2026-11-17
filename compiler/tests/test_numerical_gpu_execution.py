@@ -128,19 +128,6 @@ def test_exact_argv_grammar_rejects_contradictory_option_spellings(override):
         gpu.profile_from_gpu_execution_measurements(profile, records, calibration)
 
 
-def test_historical_reading_is_metadata_only_and_current_use_is_separate(monkeypatch):
-    from compiler.offload import numerical_execution_workloads as workloads
-
-    profile, records, calibration = observations()
-    result = gpu.profile_from_gpu_execution_measurements(profile, records, calibration)
-    monkeypatch.setattr(workloads, "execution_recipes", lambda *_: pytest.fail("reader lowered source"))
-    gpu.validate_gpu_execution_profile(result)
-    monkeypatch.setattr(gpu, "current_gpu_identities", lambda _: ("0" * 64, "0" * 64, "0" * 64, {}))
-    with pytest.raises(gpu.NumericalGpuExecutionError, match="current source"):
-        gpu.require_current_gpu_execution(result)
-    gpu.validate_gpu_execution_profile(result)
-
-
 def test_optional_cpu_evidence_can_evolve_without_rebinding_gpu_observations(monkeypatch):
     from compiler.offload import numerical_execution as cpu
     from compiler.tests.test_numerical_execution import observations as cpu_observations

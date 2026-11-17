@@ -7,9 +7,6 @@ from compiler.scopes.registration import RegistrationCode
 
 def prepare_source_reads(builder, call):
     """Retain a source token before the ordered execution plan is sealed."""
-    if (getattr(builder, "_selection_activation_binding", None) is None
-            and builder.config.scope_execution != "graph"):
-        return None
     from compiler.frontend.reached_read_requirements import (
         ReachedReadRequirementsUnsupported,
         prove_reached_read_requirements,
@@ -25,8 +22,6 @@ def prepare_source_reads(builder, call):
         return prove_reached_read_requirements(builder.analysis, builder.entry.qualified,
                                               prepared._selection, prepared)
     except ReachedReadRequirementsUnsupported:
-        if builder.config.scope_execution != "graph":
-            raise
         # Some conservative GPU upload envelopes include values the original
         # source overwrites first. They have no source-read authority. Existing
         # runtime coverage may still satisfy the task; a reopened empty epoch

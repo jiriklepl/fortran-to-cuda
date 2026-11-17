@@ -95,7 +95,7 @@ def _storage_topology(member):
             "original_scalar_element_reservations", "scalar_element_resources",
             "resource_slot_roots", "parameterized_native_bindings", "_issued_lexical_calls")
     sequences = ("units", "patches", "internal_calls", "call_sites", "counted_controls",
-                 "return_calls", "return_conditions", "closed_suffixes", "source_lexical_calls",
+                 "return_calls", "return_conditions", "source_lexical_calls",
                  "source_companion_calls", "graph_native_tasks")
     controls = ("context", "enabled", "epoch_pristine", "query_plan", "control_guard",
                 "retention_allowed", "eligibility_allowed", "resource_slot_namespace")
@@ -541,8 +541,8 @@ def _supported(plan):
     plan._require_owner()
     owner = plan._owner
     epoch = getattr(owner, "position_epoch", None)
-    if (not sealed(owner) or owner.builder.config.scope_execution != "graph"
-            or owner.builder.config.policy not in {"sections", "auto"} or owner.builder.config.scope_measurement is not None):
+    if (not sealed(owner)
+            or owner.builder.config.policy not in {"sections", "auto"}):
         return False
     if type(epoch) is CallGroupStorageEpoch:
         return epoch._managed is not None

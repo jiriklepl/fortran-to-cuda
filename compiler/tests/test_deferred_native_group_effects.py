@@ -5,8 +5,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 from compiler.scopes.native_atomic import summarize
@@ -256,26 +256,3 @@ def test_calls_or_lifetime_and_exit_effects_remain_boundaries(tmp_path, body):
     else:
         with pytest.raises(CompilationError, match="completion unavailable"):
             analysis.joined_completion(ENTRY, group.original_nodes)
-
-
-def test_deferred_team_retains_one_owner_between_numerical_producer_and_consumer(tmp_path):
-    path = tmp_path / "owner.f90"
-    path.write_text(source())
-    facts = {"schema_version": 1, "participation": "serial",
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
-             "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}}
-    outputs, report = ScopeBuilder([path], ENTRY, facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="reached")).run()
-    owner, = report["scopes"]
-    assert len(owner["gpu_leaves"]) == 2
-    assert len(owner["boundaries"]) == 1
-    assert "opaque" in owner["boundaries"][0]["reason"]
-    native, = [operation for segment in owner["planning_segments"]
-               for operation in segment["operations"]["native_operations"]
-               if operation["kind"] == "joined native OpenMP"]
-    assert native["sections"]["available"], native["sections"]
-    assert native["atomic_effects"]["deferred_native_group"]["unit_count"] == 97
-    text = outputs[report["sources"][str(path)]["replacement"]]
-    assert text.count("!$omp parallel private(j)") == 2
-    assert text.count("!$omp end parallel") == 2
-    assert path.read_text() == source()

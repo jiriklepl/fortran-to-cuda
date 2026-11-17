@@ -247,7 +247,7 @@ def admit_atomic_joined_team(member, nodes):
     config = member.builder.config
     # The existing cost protocol does not cover this new atomic alternative.
     # AUTO retains its original/native route rather than inventing a price.
-    if config.scope_execution != "graph" or config.policy != "sections":
+    if config.policy != "sections":
         return False
     originals = tuple(member.builder.inline.original_selection(tuple(nodes)))
     team = prove_atomic_worksharing_team(member.builder.analysis, member.routine, originals)

@@ -48,22 +48,6 @@ class ClosedSelectionBoundary:
         return self.tofortran()
 
 
-def has_residual_candidates(builder, selections):
-    covered = {id(node) for selection in selections for original in selection for node in walk(original)}
-    for node in walk(builder.entry.execution):
-        if id(node) in covered:
-            continue
-        if _kind(node) in {"Call_Stmt", "Block_Nonlabel_Do_Construct"}:
-            return True
-        if _kind(node) == "Assignment_Stmt":
-            target = node.items[0]
-            base = target.items[0] if _kind(target) == "Part_Ref" else target
-            binding = builder.analysis._binding(builder.entry.scope, base)
-            if binding is not None and binding.rank:
-                return True
-    return False
-
-
 def selection_context(builder, originals, prefix, controls):
     """Source-only selection identity, shared by discovery and checked owners."""
     _, selected = builder.analysis._selected_source(builder.entry.qualified, tuple(originals))
@@ -90,8 +74,6 @@ def candidates(builder):
         before = list(prefix)
         for item in grouped_original_sequence(nodes, {}):
             visits += 1
-            if builder.config.scope_execution != "graph" and visits > builder.analysis.operation_limit:
-                raise CompilationError("closed numerical selection discovery budget exhausted")
             if isinstance(item, NativeGroupCandidate):
                 original = item.original_nodes
                 if is_combined_group(builder, original):
@@ -182,8 +164,6 @@ class OriginalSelectionOwner(LexicalOwner):
         if self.execution_plan is None:
             raise CompilationError("original selection control requires its checked execution plan")
         self.execution_plan.validate()
-        from compiler.offload.exact_window import control
-        specification, entry = control(self) if self.exact_window is not None else ([], [])
         declarations = [f"integer({self.kind}) :: {self.context}", f"logical :: {self.enabled}",
                         *[f"integer({self.kind}) :: fort_buffer_{number}" for _binding, number in self.resources.values()]]
         retention_initialization = []
@@ -191,28 +171,24 @@ class OriginalSelectionOwner(LexicalOwner):
             declarations += [f"logical :: {self.retention_allowed}"]
             retention_initialization = [f"{self.retention_allowed} = .true."]
         epoch_initialization = []
-        if self.builder.config.scope_execution == "graph":
-            from compiler.scopes.graph_epochs import initial_entry_snapshot
+        from compiler.scopes.graph_epochs import initial_entry_snapshot
 
-            declarations += [f"logical :: {self.epoch_pristine}", f"logical :: {self.query_plan}"]
-            # A fresh reached context inherits entry definitions only through
-            # its separately bound original-prefix preservation proof.
-            pristine = ".true." if initial_entry_snapshot(self) else ".false."
-            epoch_initialization = [f"{self.epoch_pristine} = {pristine}",
-                                    f"{self.query_plan} = .false."]
+        declarations += [f"logical :: {self.epoch_pristine}", f"logical :: {self.query_plan}"]
+        # A fresh reached context inherits entry definitions only through
+        # its separately bound original-prefix preservation proof.
+        pristine = ".true." if initial_entry_snapshot(self) else ".false."
+        epoch_initialization = [f"{self.epoch_pristine} = {pristine}",
+                                f"{self.query_plan} = .false."]
         before = ["block", f"use iso_c_binding, only: {self.kind} => c_int64_t",
-                  "use fort_scoped_memory, only: fort_scope_serial_caller", *specification, *declarations,
+                  "use fort_scoped_memory, only: fort_scope_serial_caller", *declarations,
                   f"{self.context} = 0",
                   *[f"fort_buffer_{number} = 0" for _binding, number in self.resources.values()],
                   f"{self.enabled} = fort_scope_serial_caller() /= 0", *retention_initialization,
-                  *epoch_initialization, *entry]
+                  *epoch_initialization]
         first, last = self.selection_context["first_line"], self.selection_context["last_line"]
         self.builder.add_edit(self.routine.scope.path, first, first - 1,
                               "\n".join(fortran_lines(before)) + "\n", prepend=True)
         ending = []
-        if self.exact_window is not None:
-            from compiler.offload.selection_cost import finish
-            ending = finish(self)
         after = [*self.close(disable=False, reason="closed original selection end", span=(last, last)),
                  *ending, "end block"]
         self.builder.add_edit(self.routine.scope.path, last + 1, last,
@@ -448,8 +424,6 @@ class ClosedIntervalOwner(OriginalSelectionOwner):
         from compiler.scopes.lexical import LexicalBoundaryPatch
 
         for member in self.members.values():
-            for suffix in member.closed_suffixes:
-                suffix.validate(member)
             originals = (self.closed_selection if member is self else tuple(_children(member.routine.execution)))
             allowed = {id(node) for original in originals for node in walk(original)}
             patches = [(first, last, patch) for first, last, patch in member.patches
@@ -520,83 +494,3 @@ class ClosedIntervalOwner(OriginalSelectionOwner):
             for loop in self.interval_site.loops:
                 descriptor_loop_body(self.builder, loop)
         self.builder.analysis._selected_source(self.routine.qualified, self.closed_selection)
-
-
-
-def discover_closed_selections(builder):
-    """Use the same block control for original teams and checked intervals."""
-    request = builder.config.exact_window or {}
-    interval = request.get("coverage") == "checked_interval"
-    if builder.config.scope_execution != ("reached" if interval else "bounded"):
-        return ()
-    if interval:
-        from compiler.scopes.interval_ordering import order_intervals
-
-        sites, builder.original_interval_discovery = order_intervals(builder, interval_candidates(builder))
-        choices = tuple((site.originals, site.prefix, site.controls) for site in sites)
-    else:
-        choices = tuple(candidates(builder))
-    if not choices:
-        return ()
-    if len(choices) > 32:
-        raise CompilationError("closed numerical selection owner budget exhausted")
-    from compiler.offload.exact_window import digest
-    from compiler.scopes.generation_transaction import GenerationTransaction
-    with GenerationTransaction(builder) as transaction:
-        candidate, admitted = transaction.builder, []
-        checkpoint = candidate.scope_checkpoint()
-        # First retain every independently admitted exact original inventory.
-        # Unsupported groups remain native; they cannot prevent another branch
-        # from using a proved alternative or silently enter the priced bundle.
-        for originals, prefix, controls in choices:
-            before = candidate.scope_checkpoint()
-            try:
-                factory = ClosedIntervalOwner if interval else ClosedNumericalOwner
-                owner = factory(candidate, originals, prefix, controls)
-                if not owner._prepare_lexical(originals):
-                    raise CompilationError("closed original selection has no numerical alternative")
-                admitted.append(owner)
-                if interval:
-                    candidate = owner.builder
-                    candidate.original_interval_discovery["selected"] = {
-                        "first_line": statement_span(originals[0])[0], "last_line": statement_span(originals[-1])[1]}
-                    break  # One nonoverlapping alternative per priced bundle.
-            except CompilationError as error:
-                candidate.restore_scope_checkpoint(before)
-                candidate.boundaries.append({"first_line": statement_span(originals[0])[0],
-                    "last_line": statement_span(originals[-1])[1], "reason": str(error),
-                    "execution": "unchanged original selection" if interval else "unchanged original complete team",
-                    "kind": "original_interval_decline" if interval else "closed_numerical_selection_decline"})
-                if interval:
-                    candidate.original_interval_discovery["attempts"].append(candidate.boundaries[-1])
-        bundle = {"schema_version": 1, "entry": candidate.entry.qualified, "groups": []}
-        for owner in admitted:
-            # Pricing and build attestation bind the issued interval source
-            # context. Owner lifecycle diagnostics are a separate record.
-            context = owner.interval_draft.selection_context
-            bundle["groups"].append({"selection_identity": digest(context), **{key: context[key] for key in
-                                     ("first_line", "last_line", "original_source_sha256")}})
-        bundle["identity"] = digest(bundle)
-        for owner in admitted:
-            owner.selection_bundle = bundle
-            owner._emit_lexical(owner.closed_selection, candidate.scope_checkpoint(), native_cleanup=False)
-            candidate.scopes[-1]["original_interval" if interval else "closed_selection"] = dict(owner.selection_context)
-        native_capture = (request.get("coverage") in {"original_selection", "checked_interval"}
-                          and request.get("calibration") == "native")
-        static_native = (candidate.config.policy == "auto" and admitted
-                         and all(owner.execution_plan.automatic_native_reason() is not None for owner in admitted))
-        if native_capture or static_native:
-            # All native observers were prepared while the admitted regions
-            # remained available. Discard numerical artifacts once for the
-            # complete bundle, preserving only observer edits and helpers.
-            edits = {path: list(rows) for path, rows in candidate.edits.items()}
-            observers = {name: text for name, text in candidate.outputs.items() if name.startswith("exact/")}
-            candidate.restore_scope_checkpoint(checkpoint)
-            candidate.edits = edits
-            candidate.outputs.update(observers)
-            for owner in admitted:
-                owner.execution_plan.validate()
-        transaction.adopt(candidate)
-    # This class has one orchestration path. A decline never retries it through
-    # the superseded synthetic owner with different proof/placement semantics.
-    return tuple(tuple(originals) for originals, _prefix, _controls in choices)

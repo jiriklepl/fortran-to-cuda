@@ -4,7 +4,7 @@ from hashlib import sha256
 
 import pytest
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.ir import CompilationError
 from compiler.scopes.source import ScopeBuilder
@@ -78,23 +78,6 @@ def test_conflicting_artifacts_cannot_reuse_an_old_variant_identity():
     with pytest.raises(CompilationError, match="variant identity changed"):
         registry.register("library::apply", interface="root_handles_v1", role="call_worker", name="different",
                           summary_identity="source-proof")
-
-
-def test_repeated_wrapper_calls_share_mode_workers_and_numerical_artifacts(tmp_path):
-    compiler = builder(tmp_path, WRAPPER_PROGRAM)
-    outputs, report = compiler.run()
-    assert report["scope_count"] == 1, report["boundaries"]
-    variants = report["implementation_variants"]
-    assert variants["limits"] == {"per_procedure": 4, "compilation": 128}
-    procedures = {item["procedure"]: item["variants"] for item in variants["procedures"]}
-    assert len(procedures["original::wrapper"]) == 1
-    for procedure in ("original::producer", "original::consumer"):
-        assert {item["role"] for item in procedures[procedure]} == {"call_worker", "numerical_entry"}
-        numerical = next(item for item in procedures[procedure] if item["role"] == "numerical_entry")
-        assert all(artifact in outputs for artifact in numerical["shared_artifacts"])
-    owner, = procedures["original::step"]
-    assert report["scopes"][0]["owner_variant"] == owner["identity"]
-    assert all(item["native_entry"] == item["procedure"] for item in variants["procedures"])
 
 
 def test_generation_limit_keeps_native_source_without_dangling_artifacts(tmp_path):

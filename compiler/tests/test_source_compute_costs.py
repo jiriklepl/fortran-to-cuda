@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.analysis import build_execution_plan
 from compiler.emission import generate_sources
 from compiler.emission.common.resources import read_scoped_runtime
@@ -13,12 +13,16 @@ from compiler.offload.analysis import analyze_offload
 from compiler.offload.numerical_calibration import profile_from_compute_measurements
 from compiler.offload.source_compute import (
     apply_source_compute_costs,
-    fork_join_schedule_compatible,
-    native_participation,
-)
+    native_participation)
 from compiler.tests.test_numerical_calibration import observations
 from compiler.tests.test_numerical_calibration_v2 import observations_v2
 from compiler.tests.test_offload_profile import scoped_profile
+
+
+def fork_join_schedule_compatible(nodes):
+    from compiler.offload.source_compute import fork_join_participation
+
+    return fork_join_participation(nodes) == "fork_join"
 
 SOURCE = """module generic_source_compute
 contains
@@ -173,79 +177,3 @@ def test_missing_existing_team_and_shared_fork_join_contracts_remain_unavailable
     multiple = replace(analysis, units=analysis.units * 2)
     assert all("multi-loop cost contract" in unit.work_estimate_reason
                for unit in apply_source_compute_costs(multiple, profile_v2(), "fork_join").units)
-
-
-def test_public_scoped_queries_supply_three_totals_with_runtime_range_and_placement_checks():
-    function, plan, _ = source_analysis()
-    generated = generate_sources(function, plan,
-        offload_config=OffloadConfig(policy="auto", profile=profile_v2(), native_participation="serial"),
-        memory_model="scoped")
-    public = generated.scoped
-    assert public["planning"]["available"]
-    assert public["compute_estimates"]["abi_version"] == 2
-    assert public["compute_estimates"]["native_backend"] == "original Fortran"
-    unit, = public["planning"]["units"]
-    assert unit["workload_class"] == "scalar_expression_v2"
-    assert unit["workload_features"]["schema_version"] == 2
-    assert unit["compute_model"]["item_range"] == [65536, 1048576]
-    source = next(text for name, text in generated.artifacts.items() if name.endswith(".cu") and "record_compute(" in text)
-    assert ".record_compute(" in source
-    assert "fort_compute.native_fortran_seconds" in source
-    assert "fort_compute.generated_cpu_seconds" in source
-    assert "fort_compute.gpu_seconds" in source
-    assert "iterations >= 65536ULL && unit.units[0].iterations <= 1048576ULL" in source
-    assert "sched_getaffinity" in source
-    assert "CPU_COUNT(&actual) != 4" in source
-
-
-@pytest.mark.parametrize("piecewise", [False, True])
-def test_query_records_launch_coverage_only_with_known_gpu_estimate(monkeypatch, piecewise):
-    from copy import deepcopy
-
-    from compiler.offload import source_compute
-
-    original = source_compute.apply_source_compute_costs
-
-    def inclusive(*args, **kwargs):
-        analysis = original(*args, **kwargs)
-        units = []
-        for unit in analysis.units:
-            model = deepcopy(unit.compute_model)
-            model["gpu"]["launch_enqueue_included"] = True
-            if not piecewise:
-                model["gpu"].pop("memory_cost_model", None)
-                model["gpu"]["memory_seconds_per_byte"] = 1e-10
-            units.append(replace(unit, compute_model=model))
-        return replace(analysis, units=tuple(units))
-
-    monkeypatch.setattr(source_compute, "apply_source_compute_costs", inclusive)
-    function, plan, _ = source_analysis()
-    generated = generate_sources(function, plan,
-        offload_config=OffloadConfig(policy="auto", profile=profile_v2(), native_participation="serial"),
-        memory_model="scoped")
-    source = next(text for name, text in generated.artifacts.items()
-                  if name.endswith(".cu") and "record_compute(" in text)
-    flag = "fort_compute.known_backends |= FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED;"
-    assert source.count(flag) == 1
-    assert source.index("fort_compute.gpu_seconds =") < source.index(flag)
-    assert source.index("fort_compute.known_backends |= FORT_SCOPE_COMPUTE_GPU;") < source.index(flag)
-    assert source.index(flag) < source.index(".record_compute(")
-
-
-def test_unavailable_original_object_identity_is_an_explicit_native_requirement(tmp_path, monkeypatch):
-    from compiler.scopes.compute_identity import ComputeIdentityGuard
-    from compiler.tests.test_scoped_planning_sources import generate
-
-    monkeypatch.setattr("compiler.scopes.compute_identity.compute_identity_guard",
-        lambda *args, **kwargs: ComputeIdentityGuard(available=False, required=True,
-            expression=".false.", reason="original child identity unavailable"))
-    outputs, manifest = generate(tmp_path, monkeypatch)
-    scope, = manifest["scopes"]
-    assert not scope["estimate_available"]
-    assert not manifest["automatic_estimate_available"]
-    assert scope["planning_reason"] == "original child identity unavailable"
-    assert not scope["compute_identity"]["available"]
-    source = next(text for name, text in outputs.items() if name.startswith("sources/"))
-    caller = source[source.index("subroutine step"):source.index("end subroutine", source.index("subroutine step"))]
-    assert "if (.false.) then" in caller
-    assert caller.index("else\ncall producer(") < caller.index("call consumer(")

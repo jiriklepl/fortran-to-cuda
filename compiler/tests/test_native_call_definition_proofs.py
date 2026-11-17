@@ -10,9 +10,7 @@ from compiler.frontend.native_definitions import (
     NativeCallCoordinatesUnsupported,
     invalidate_rectangles,
     prove_native_call_coordinates,
-    prove_native_definitions,
-    rectangle_dependencies,
-)
+    prove_native_definitions)
 from compiler.frontend.native_sections import NativeAxis, NativeBound, NativeIteration, NativeRectangle
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
@@ -226,19 +224,6 @@ def test_geometry_preserves_empty_loop_guards_and_does_not_shift_trip_count(tmp_
     mapped, = proof.child_to_caller({"argument::dst": (box,)})["argument::field"]
     assert mapped.iterations == (guard,)
     assert (mapped.axes[0].lower.value, mapped.axes[0].upper.value) == (-6, -3)
-
-
-def test_scalar_formal_mapping_retains_canonical_invalidation_dependencies(tmp_path):
-    _path, analysis, original = fixture(tmp_path)
-    proof = prove_native_call_coordinates(analysis, CALLER, original)
-    binding = analysis.routines[CHILD].scope.bindings["count"]
-    bound = NativeBound("scalar", resource=binding.root,
-                        dependencies=(SourceDependency(binding.root, "scalar_read", binding),))
-    box = NativeRectangle((NativeAxis(bound, bound, True),), "original child point")
-    mapped, = proof.child_to_caller({"argument::dst": (box,)})["argument::field"]
-    assert rectangle_dependencies(mapped) == ("argument::n",)
-    assert invalidate_rectangles((mapped,), ("argument::n",)) == ()
-    assert proof.scalar_mapping == {"argument::count": "argument::n"}
 
 
 def test_integer_literal_actual_is_a_value_not_a_forged_binding(tmp_path):

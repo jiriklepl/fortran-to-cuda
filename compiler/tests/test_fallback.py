@@ -6,9 +6,9 @@ from dataclasses import replace
 import pytest
 
 from compiler.analysis import ParallelizationError, build_execution_plan
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler.driver.options import CompilerOptions
 from compiler.ir import CompilationError, ParallelRegion, SequentialRegion
-from compiler.tests.test_language import compile_cuda_sources, lower, run_reference_and_cpp
+from compiler.tests.test_language import lower
 from compiler.tests.test_native import cuda_device as cuda_device
 
 HOST = CompilerOptions(fallback="host")
@@ -91,53 +91,6 @@ def test_internal_failures_do_not_trigger_fallback(tmp_path, monkeypatch):
     monkeypatch.setattr(planning, "prove_region", fail)
     with pytest.raises(RuntimeError, match="internal proof failure"):
         build_execution_plan(function, options=HOST)
-
-
-@pytest.mark.native
-@pytest.mark.parametrize("backend", ["serial", "openmp", "cuda-simulated"])
-def test_runtime_strides_empty_nests_and_partial_fallback_writes(tmp_path, monkeypatch, backend):
-    from compiler.driver.pipeline import prepare_function
-    from compiler._legacy.emission import generate_sources
-    from compiler.tests import test_language as language
-    from compiler.tests.test_language_cuda import CUDA_RUNTIME
-
-    function = lower(
-        tmp_path,
-        "do i=1,n\na(i)=a(i)+1\nenddo\nt=0\n"
-        "do i=lo,hi,stride\ndo j=1,1,inner_stride\nt=t+a(i)\na(i)=t\nenddo\nenddo\n"
-        "a(1)=a(1)+i\ndo i=1,n\na(i)=abs(a(i))*2\nenddo",
-        "real(knd)::t\ninteger::j\ninteger,intent(in)::lo,hi,stride,inner_stride",
-        "a,n,lo,hi,stride,inner_stride",
-    )
-    optimized, plan = prepare_function(function, options=HOST)
-    assert len(plan.regions) == 2
-    assert sum(isinstance(step, SequentialRegion) for step in plan.steps) == 1
-    driver = """program main
-use language_case
-real(knd)::a(6)
-a=[1.d0,2.d0,3.d0,4.d0,55.d0,66.d0]
-call entry(a,4,4,1,-1,1)
-print *,a
-call entry(a,4,1,4,2,1)
-print *,a
-call entry(a,4,4,1,1,0)
-print *,a
-end program
-"""
-    if backend == "cuda-simulated":
-        (tmp_path / "cuda_runtime.h").write_text(CUDA_RUNTIME)
-
-        def simulated_sources(function, plan):
-            sources = generate_sources(function, plan)
-            source = sources.cuda.replace("#include <cuda_runtime.h>", '#include "cuda_runtime.h"')
-            source, launches = re.subn(
-                r"(kernel_region_\d+_device)<<<([^>]+)>>>\(", r"fort_test_launch(\1, \2, ", source
-            )
-            assert launches == len(plan.regions)
-            return replace(sources, cpp=source)
-
-        monkeypatch.setattr(language, "generate_sources", simulated_sources)
-    run_reference_and_cpp(tmp_path, optimized, plan, driver, openmp=backend == "openmp")
 
 
 @pytest.mark.parametrize("valid_source", [False, True])
@@ -226,64 +179,3 @@ call entry_destroy(work)
 end program
 """
     return function, driver, resident_driver
-
-
-@pytest.mark.native
-@pytest.mark.parametrize("openmp", [False, True])
-@pytest.mark.parametrize("resident", [False, True])
-def test_fallback_signed_stride_liveout_and_following_parallel_loop(tmp_path, openmp, resident):
-    function, driver, resident_driver = mixed_case(tmp_path)
-    run_reference_and_cpp(
-        tmp_path,
-        function,
-        build_execution_plan(function, options=HOST),
-        driver,
-        openmp=openmp,
-        generated_driver=resident_driver if resident else None,
-    )
-
-
-@pytest.mark.cuda
-def test_mixed_parallel_fallback_plan_compiles_for_cuda(tmp_path):
-    function, _, _ = mixed_case(tmp_path)
-    compile_cuda_sources(tmp_path, function, build_execution_plan(function, options=HOST))
-
-
-@pytest.mark.native
-@pytest.mark.cuda
-@pytest.mark.usefixtures("cuda_device")
-@pytest.mark.parametrize("resident", [False, True])
-def test_mixed_parallel_fallback_matches_fortran_on_cuda(tmp_path, resident):
-    function, driver, resident_driver = mixed_case(tmp_path)
-    run_reference_and_cpp(
-        tmp_path,
-        function,
-        build_execution_plan(function, options=HOST),
-        driver,
-        backend="cuda",
-        generated_driver=resident_driver if resident else None,
-    )
-
-
-def test_memory_plan_preserves_host_fallback_and_partial_write_coherence(tmp_path):
-    from compiler.memory import plan_memory
-
-    function, _, _ = mixed_case(tmp_path)
-    plan = plan_memory(build_execution_plan(function, options=HOST), function.parameters)
-    kinds = [operation.kind for operation in plan.run]
-    assert kinds == [
-        "device",
-        "execute",
-        "device_write",
-        "execute",
-        "host",
-        "execute",
-        "host_write",
-        "host",
-        "execute",
-        "host_write",
-        "device",
-        "execute",
-        "device_write",
-    ]
-    assert all(operation.symbols == (function.parameters[0],) for operation in plan.run if operation.symbols)

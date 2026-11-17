@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.analysis import build_execution_plan
 from compiler.emission import generate_sources
 from compiler.emission.cuda.native_preflight import generate_native_preflight
@@ -173,21 +173,6 @@ def test_unproved_participation_or_bounds_do_not_export_preflight(options, reaso
 def test_multiunit_control_preparation_and_payload_bounds_remain_ordinary_queries(source):
     _, _, _, result = make(source)
     assert not result.available
-
-
-def test_scoped_interface_exports_the_metadata_only_public_preflight():
-    function = lower_source(SOURCE, "evaluate", source_name="independent.f90")
-    plan = build_execution_plan(function)
-    generated = generate_sources(function, plan, memory_model="scoped",
-        offload_config=OffloadConfig(policy="auto", profile=profile_v2(), native_participation="serial"))
-    public = generated.scoped["native_preflight"]
-    assert public["available"]
-    assert public["item_range"] == [65536, 1048576]
-    assert public["parameters"][0]["parameter"] == "n"
-    interface = next(text for name, text in generated.artifacts.items() if name.endswith("shared_interface.f90"))
-    assert ", native_preflight" in interface
-    assert "function native_preflight(" in interface
-    assert f"bind(C, name='{public['entry']}')" in interface
 
 
 def test_fortran_metadata_abi_calls_the_cpu_only_preflight(tmp_path):

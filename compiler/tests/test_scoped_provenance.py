@@ -177,17 +177,6 @@ def test_public_identity_mapping_is_full_hash_and_runtime_identity_changes():
     assert public["runtime_provenance"]["set"] == "fort_scope_trace_set_v1"
 
 
-def test_batch_callback_does_not_reenter_diagnostic_context_apis(tmp_path):
-    from compiler.tests.test_scoped_batch_sources import numerical
-    emitted = numerical(tmp_path)
-    batch = emitted.report["batch_execution"]
-    assert batch["enabled"]
-    worker = emitted.cuda.split('extern "C" int '+batch["window_entry"], 1)[1].split("static int", 1)[0]
-    assert "TracePosition" not in worker
-    assert "fort_scope_trace_" not in worker
-    assert emitted.report["runtime_provenance"]["batch_worker_attribution"].startswith("unavailable")
-
-
 def test_collective_worker_tags_are_inside_existing_master_coordinators(tmp_path):
     from compiler.tests.test_scoped_team_sources import emit, team_text
     emitted = emit(tmp_path)
@@ -198,33 +187,6 @@ def test_collective_worker_tags_are_inside_existing_master_coordinators(tmp_path
         # No thread-local guard may restore shared attribution while the master
         # is still preparing copies or launching a kernel.
         assert prefix.rfind("#pragma omp master") > prefix.rfind("#pragma omp barrier")
-
-
-def test_borrowed_call_iso_imports_do_not_shadow_original_actuals(tmp_path):
-    from compiler.tests.test_lexical_source_owner import MODULE_SOURCE, emit
-    source = MODULE_SOURCE.replace("step(a,b,out,n,escape)", "step(a,b,out,n,escape,c_null_char)").replace(
-        "integer,intent(in)::n\nlogical,intent(in)::escape\ninteger::i",
-        "integer,intent(in)::n,c_null_char\nlogical,intent(in)::escape\ninteger::i").replace(
-        "call adjust(b,n,escape)", "call adjust(b,c_null_char,escape)")
-    _path, outputs, report = emit(tmp_path, source)
-    assert report["scope_count"] == 1
-    text = "\n".join(outputs.values())
-    assert re.search(r"fort_trace_i32_[0-9a-f]{12} => c_int32_t", text)
-    assert re.search(r"fort_trace_nul_[0-9a-f]{12} => c_null_char", text)
-    assert "adjust(b,c_null_char,escape)" in text.replace(" ", "").lower()
-
-
-def test_borrowed_state_does_not_shadow_an_imported_original_actual(tmp_path):
-    from compiler.tests.test_lexical_source_owner import MODULE_SOURCE, emit
-    source = ("module original_data\ninteger::fort_parent_trace=7\nend module\n" + MODULE_SOURCE.replace(
-        "module local_owner\n", "module local_owner\nuse original_data,only:fort_parent_trace\n").replace(
-        "call adjust(b,n,escape)", "call adjust(b,fort_parent_trace,escape)"))
-    _path, outputs, report = emit(tmp_path, source)
-    assert report["scope_count"] == 1
-    text = "\n".join(outputs.values())
-    assert "adjust(b,fort_parent_trace,escape)" in text.replace(" ", "").lower()
-    assert re.search(r"target :: fort_trace_saved_[0-9a-f]{12}", text)
-    assert "target :: fort_parent_trace" not in text
 
 
 def test_diagnostic_helper_collision_declines_before_original_call_emission(monkeypatch):

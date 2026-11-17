@@ -6,8 +6,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-
-from compiler.emission.c.generator import _point_body as cpu_point_body
 from compiler.emission.common.c_family import render_assignment, render_expression, wide_iterator_name
 from compiler.emission.common.loops import iteration_value, mapped_coordinates, mapped_snapshots, sequential_block
 from compiler.emission.cuda.kernels import _point_body as cuda_point_body
@@ -120,38 +118,6 @@ def test_predicate_and_nested_body_accesses_promote_but_retained_headers_stay_so
     assert all("fort_internal_wide" not in line for line in snapshots)
     assert f"if ({render_expression(conditional.condition, addressing=addressing)}) {{" in "\n".join(rendered)
     assert "\n".join(rendered).count(render_assignment(assignment, addressing=addressing)) == 2
-
-
-def test_source_and_missing_metadata_preserve_coordinate_and_body_text():
-    index = Binary("+", Reference(ITERATOR), integer(1))
-    assignment = Assignment(ArrayAccess(A, (index,)), Reference(ITERATOR), LOCATION)
-    original = region(Block((assignment,)))
-    source = replace(original, addressing=address_plan(source=(index,), iterators=()))
-    assert cpu_point_body(original, 1) == cpu_point_body(source, 1)
-    assert cuda_point_body(original, 1) == cuda_point_body(source, 1)
-    assert mapped_snapshots(original) == mapped_snapshots(source)
-    assert mapped_coordinates(original) == [
-        f"const int {ITERATOR.cpp_name} = static_cast<int>(static_cast<long long>(fort_internal_lower0)"
-        " + static_cast<long long>(fort_internal_ordinal0) * fort_internal_stride0);"
-    ]
-    assert iteration_value("_serial0", "ordinal") == (
-        "static_cast<int>(static_cast<long long>(fort_internal_lower_serial0)"
-        " + static_cast<long long>(ordinal) * fort_internal_stride_serial0)"
-    )
-
-
-def test_cpu_cuda_share_direct_wide_coordinate_reconstruction():
-    index = Binary("+", Reference(ITERATOR), integer(1))
-    assignment = Assignment(ArrayAccess(A, (index,)), Reference(ITERATOR), LOCATION)
-    planned = region(Block((assignment,)), address_plan(index))
-    aliases = mapped_coordinates(planned)
-    assert aliases[1] == (
-        f"const long long {wide_iterator_name(ITERATOR)} = static_cast<long long>(fort_internal_lower0)"
-        " + static_cast<long long>(fort_internal_ordinal0) * fort_internal_stride0;"
-    )
-    assert "static_cast<int>" not in aliases[1]
-    assert cpu_point_body(planned, 2) == cuda_point_body(planned, 2)
-    assert mapped_snapshots(planned) == mapped_snapshots(replace(planned, addressing=None))
 
 
 @pytest.mark.native

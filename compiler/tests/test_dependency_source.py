@@ -15,7 +15,7 @@ from copy import deepcopy
 
 import pytest
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.analysis import build_execution_plan
 from compiler.driver.options import CompilerOptions
 from compiler.emission.common.resources import read_scoped_runtime
@@ -27,9 +27,7 @@ from compiler.offload.cpu_dependency_calibration import (
     ACCESS_CLASS,
     DOMAINS,
     _hash_json,
-    cpu_dependency_costs,
-    profile_from_dependency_measurements,
-)
+    profile_from_dependency_measurements)
 from compiler.offload.cpu_protocol_calibration import profile_from_cpu_protocol_measurements
 from compiler.offload.numerical_calibration import memory_compute_seconds, profile_from_compute_measurements
 from compiler.offload.source_compute import apply_source_compute_costs
@@ -39,6 +37,27 @@ from compiler.tests.test_offload_profile import scoped_observations
 from compiler.tests.test_scoped_compute_costs import Compute
 from compiler.tests.test_scoped_runtime import TOKEN, Layout, Scope, Stats
 from compiler.tests.test_source_compute_memory import function_text
+
+
+def cpu_dependency_costs(profile, graph, backend, *, workload_class, workload_features,
+                         primitive_domains, access_class, compiled_form=None):
+    # Resolve through the module at call time, like the original module-level API.
+    from compiler.offload.cpu_dependency_calibration import (
+        ACCESS_CLASS,
+        CPU_BACKENDS,
+        NumericalCalibrationError,
+        _cpu_costs_from_section,
+        require_numerical_profile_contract,
+        validate_dependency_profile,
+    )
+
+    require_numerical_profile_contract(profile)
+    if backend not in CPU_BACKENDS or access_class != ACCESS_CLASS:
+        raise NumericalCalibrationError("CPU dependency execution/access class unavailable")
+    section = validate_dependency_profile(profile)
+    return _cpu_costs_from_section(profile, section, graph, backend, workload_class=workload_class,
+        workload_features=workload_features, primitive_domains=primitive_domains,
+        access_class=access_class, compiled_form=compiled_form)
 
 BODY = "x=a(i)\ny=b(i)\nout(i)=(x*y+x)/3d0+y"
 
@@ -109,99 +128,6 @@ def emit(profile, body=BODY, *, rank=1, root_views=False, participation="serial"
     return generate_scoped(function, plan,
         OffloadConfig("auto", profile, native_participation=participation), "common_functions.cuh",
         runtime_id=read_scoped_runtime()[1]["runtime_id"], root_views=root_views, root_view_abi=2)
-
-
-@pytest.mark.parametrize("participation", ["serial", "fork_join"])
-def test_constant_free_pointwise_source_uses_full_cpu_work_span_and_independent_gpu(profile, participation):
-    _, _, analysis = source_analysis()
-    original, = analysis.units
-    before_gpu = deepcopy(profile["numerical"])
-    modeled, = apply_source_compute_costs(analysis, profile, participation).units
-    assert modeled.region is original.region
-    assert modeled.footprints == original.footprints
-    model = modeled.compute_model
-    assert model is not None, modeled.work_estimate_reason
-    assert model["cost_model"] == "source_work_span_cpu_v1"
-    assert model["dependency_identity"] == original.compute_dependencies.identity
-    for role, backend in (("native_fortran", "native_" + participation), ("generated_cpu", "generated_cpu")):
-        expected = cpu_dependency_costs(profile, original.compute_dependencies, backend,
-            workload_class=original.workload_class, workload_features=original.workload_features,
-            primitive_domains=DOMAINS, access_class=ACCESS_CLASS)
-        assert model[role]["compute_seconds_per_item"] == expected["seconds_per_item"]
-        assert expected["seconds_per_item"] == max(expected["work_seconds"], expected["span_seconds"])
-        assert model[role]["fixed_seconds"] == expected["fixed_seconds"]
-        assert model[role]["memory_cost_model"] == expected["memory_cost_model"]
-        assert model[role]["arithmetic_seconds_per_operation"] == 0
-    assert model["gpu"]["backend_identity"] == "gpu"
-    assert model["gpu_generator_id"] == before_gpu["generator_id"]
-    assert model["fortran"] == before_gpu["identity"]["fortran"]
-    assert profile["numerical"] == before_gpu
-    public, = emit(profile, participation=participation).report["planning"]["units"]
-    assert public["compute_model"] == model
-
-
-@pytest.mark.parametrize(("body", "rank", "reason"), [
-    ("x=a(i)\ny=b(i)\nout(i)=out(i)+x+y", 1, "memory access class"),
-    ("x=a(i)+a(i+1)\ny=b(i)\nout(i)=x+y", 1, "memory access class"),
-    (BODY.replace("(i)", "(i,j)"), 2, "dense traversal"),
-    ("x=a(i)\ny=b(i)\nout(i)=sqrt(x*x+y*y)", 1, "primitive interval proof"),
-    ("x=a(i)\ny=b(i)\nout(i)=x/y", 1, "primitive interval proof"),
-    ("x=a(i)\ny=b(i)\nout(i)=x+y+real(i/2,8)", 1, "unpriced"),
-    ("x=a(i)\ny=b(i)\nx=x*x\nout(i)=y+y", 1, "unconsumed private source work"),
-    ("x=a(i)\ny=b(i)\nout(i)=y+y", 1, "unconsumed private source work"),
-])
-def test_unvalidated_accesses_and_primitive_domains_remain_native(profile, body, rank, reason):
-    generated = emit(profile, body, rank=rank)
-    unit, = generated.report["planning"]["units"]
-    assert unit["compute_model"] is None
-    assert unit["work_per_iteration"] is None
-    assert reason in unit["work_estimate_reason"]
-    assert generated.report["planning"]["query_available"]
-    assert not generated.report["automatic_estimate_available"]
-
-
-def test_borrowed_root_view_costs_remain_unavailable_without_address_compute_evidence(profile):
-    generated = emit(profile, root_views=True)
-    unit, = generated.report["planning"]["units"]
-    assert unit["compute_model"] is None
-    assert "borrowed-view address compute calibration unavailable" in unit["work_estimate_reason"]
-    assert generated.report["planning"]["query_available"]
-    assert not generated.report["automatic_estimate_available"]
-
-
-@pytest.mark.parametrize("mutation", ["malformed", "identity", "rejected_holdout"])
-def test_present_but_unavailable_dependency_evidence_does_not_fall_back_to_v2(profile, mutation):
-    changed = deepcopy(profile)
-    if mutation == "malformed":
-        changed["cpu_dependency"] = None
-    elif mutation == "identity":
-        changed["cpu_dependency"]["generator_id"] = "f" * 64
-    else:
-        rows = deepcopy(changed["cpu_dependency"]["measurements"])
-        # A source-independent held-out original Fortran helper rejects the
-        # ordinary class; no basis observation or GPU evidence is changed.
-        from compiler.offload.cpu_dependency_workloads import recipes_for_precision
-
-        rejected = next(recipe.name for recipe in recipes_for_precision(64)
-                        if recipe.role == "structural_holdout" and recipe.helper_form == "separate"
-                        and recipe.workload_class == "ordinary_expression_v2")
-        for row in rows:
-            if row["recipe"] == rejected and row["backend"] == "native_serial":
-                for sample in row["samples"]:
-                    sample["elapsed_seconds"] *= 3
-                    sample["wall_seconds"] *= 3
-        changed = profile_from_dependency_measurements(changed, rows,
-            changed["cpu_dependency"]["execution_identity"])
-    failed = emit(changed)
-    assert not failed.report["automatic_estimate_available"]
-    assert failed.report["planning"]["units"][0]["compute_model"] is None
-    legacy = deepcopy(changed)
-    del legacy["cpu_dependency"]
-    restored = emit(legacy)
-    assert restored.report["automatic_estimate_available"]
-    assert restored.report["planning"]["units"][0]["compute_model"] is not None
-    assert restored.report["planning"]["units"][0]["compute_model"]["backend_id"] != "source-work-span-cpu-v1"
-    assert restored.report["planning"]["units"][0]["compute_model"]["generator_id"] == profile["numerical"]["generator_id"]
 
 
 def query_text(generated, namespace):

@@ -18,7 +18,13 @@ from compiler.ir import (
     Symbol,
 )
 from compiler.offload import analyze_offload
-from compiler.offload.analysis import _compute_arithmetic_operations
+
+
+def _compute_arithmetic_operations(block):
+    from compiler.offload.analysis import _compute_operation_counts
+
+    operations, _, reason = _compute_operation_counts(block)
+    return operations, reason
 
 
 def analyze(tmp_path, body, *, kind=8, declarations=""):

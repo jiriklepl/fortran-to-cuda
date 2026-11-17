@@ -36,11 +36,6 @@ def _body(node):
     return tuple(x for x in _children(node) if _kind(x) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"})
 
 
-def _affine(value):
-    constant, terms = _linear(value)
-    return {"constant": constant, "terms": dict(sorted(terms.items()))}
-
-
 def _sum(left, right, coefficient=1):
     terms = dict(left[1])
     for name, value in right[1].items():

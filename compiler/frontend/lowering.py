@@ -1345,19 +1345,6 @@ class _Lowerer:
         return self.elementwise(arguments, lambda *values: IntrinsicCall(name, values, dtype), dtype, location,
                                 scalar_arguments=frozenset((1,)) if name in KIND_ARGUMENT else frozenset())
 
-    def private_section(self, node, bindings, location):
-        if type(node).__name__ == "Name":
-            array = self.lookup(node, bindings, location)
-            subscripts = (None,) * array.rank
-        elif type(node).__name__ == "Part_Ref":
-            array = self.lookup(node.items[0], bindings, location)
-            subscripts = node.items[1].items
-        else:
-            raise CompilationError("constant sections require private fixed arrays", location)
-        if not isinstance(array, _PrivateArray) or len(subscripts) != array.rank:
-            raise CompilationError("constant sections require private fixed arrays", location)
-        return tuple(value.symbol for value in self.vector_section(array, subscripts, bindings, location).elements)
-
     def _expression(self, node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Expr:
         kind = type(node).__name__
         if kind == "Name":

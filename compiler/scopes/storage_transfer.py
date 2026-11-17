@@ -98,8 +98,6 @@ class StorageTransferPatch:
 
 
 def admit_storage_transfer(member, node):
-    if member.builder.config.scope_execution != "graph":
-        return False
     proof = allocation_exchange(member.builder.analysis, member.routine, node)
     if proof is None:
         return False

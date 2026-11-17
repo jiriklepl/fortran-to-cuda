@@ -8,26 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from compiler._legacy.config import LegacyOffloadConfig
 from compiler.driver.cli import _parse_args
 from compiler.driver.options import CompilerOptions
 from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
-
-
-@pytest.mark.parametrize(("cost_request", "execution"), [({}, "reached"), ({"coverage": "original_selection"}, "bounded")])
-def test_cost_coverage_selects_only_its_execution_mode(cost_request, execution):
-    for policy in ("auto", "sections"):
-        assert LegacyOffloadConfig(policy=policy, scope_execution=execution, exact_window=cost_request).exact_window == cost_request
-    other = "bounded" if execution == "reached" else "reached"
-    with pytest.raises(ValueError, match="Exact window requires"):
-        LegacyOffloadConfig(policy="auto", scope_execution=other, exact_window=cost_request)
-
-
-@pytest.mark.parametrize("cost_request", [[], True, "original_selection", {"coverage": "unknown"}, {"coverage": []}])
-def test_cost_request_rejects_unknown_schema(cost_request):
-    with pytest.raises(ValueError, match="[Ee]xact window"):
-        LegacyOffloadConfig(policy="auto", exact_window=cost_request)
 
 
 @pytest.mark.parametrize("extra", [["--scope-cost", "missing.json"], ["--scope-measurement", "native"],

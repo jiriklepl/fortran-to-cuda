@@ -156,31 +156,6 @@ def _rectangles(boxes):
     return boxes
 
 
-def rectangle_covers(definition, read):
-    """Conditional geometry only; neither rectangle gains source authority."""
-    _rectangles((definition,))
-    _rectangles((read,))
-    return _covers(definition, read)
-
-
-def rectangle_dependencies(box):
-    """Original scalar bounds whose writes invalidate this symbolic box."""
-    _rectangles((box,))
-    return tuple(sorted(_dependencies(box)))
-
-
-def merge_rectangles(*groups):
-    """Deduplicate a bounded union without inferring its bounding hull."""
-    if len(groups) > RECTANGLE_LIMIT:
-        raise CompilationError("native definition geometry group budget exhausted")
-    for boxes in groups:
-        _rectangles(boxes)
-    boxes = tuple(box for group in groups for box in group)
-    if len({len(box.axes) for box in boxes}) > 1:
-        raise CompilationError("native definition geometry requires same-rank rectangles")
-    return _unique(boxes)
-
-
 def intersect_rectangles(left, right):
     """Conservative all-path meet; partial overlaps are not split or widened."""
     _rectangles(left)
@@ -848,16 +823,6 @@ def _derive_definition_state(analysis, procedure, selection, outputs, include_en
     return steps, kills, _thaw(_freeze(record))
 
 
-def _definition_state_registry(analysis):
-    registry = getattr(analysis, "_native_definition_state_proofs", None)
-    if (registry is None
-            or getattr(analysis, "_native_definition_state_registry_owner", None) is not analysis):
-        registry = {}
-        analysis._native_definition_state_proofs = registry
-        analysis._native_definition_state_registry_owner = analysis
-    return registry
-
-
 @dataclass(frozen=True)
 class NativeDefinitionStateProof:
     """Logical native output transfer, separate from device coherence proofs."""
@@ -886,8 +851,8 @@ class NativeDefinitionStateProof:
         if (analysis is not self._analysis or procedure != self.procedure
                 or not isinstance(original_selection, tuple) or len(original_selection) != len(self._selection)
                 or any(left is not right for left, right in zip(original_selection, self._selection, strict=True))
-                or getattr(analysis, "_native_definition_state_registry_owner", None) is not analysis
-                or getattr(analysis, "_native_definition_state_proofs", {}).get(self.identity) is not self):
+                or None is not analysis
+                or None is not self):
             raise CompilationError("native definition state lacks registered exact source authority")
         steps, kills, record = _derive_definition_state(analysis, procedure, original_selection,
             self.outputs, self._include_entry, self._descriptor_window, self._completion, self.immutable_inputs, consume)
@@ -919,34 +884,3 @@ class NativeDefinitionStateProof:
         definitions = {root: () if uncovered else boxes for root, boxes in candidates.items()}
         return NativeDefinitionStateTransfer(MappingProxyType(definitions), MappingProxyType(candidates),
             tuple(uncovered), tuple(immutable), original_reads)
-
-
-def prove_native_definition_state(analysis, procedure, original_selection, *, outputs, include_entry=False,
-                                  descriptor_window=None, completion=None, immutable_inputs=None, consume=None):
-    """Issue conditional native definition state, without physical sections."""
-    if immutable_inputs is None:
-        immutable_inputs = {}
-    if not isinstance(immutable_inputs, (dict, MappingProxyType)):
-        raise CompilationError("native definition immutable inputs require an original association map")
-    associations = tuple(immutable_inputs[key] for key in sorted(immutable_inputs))
-    if any(key != proof.resource for key, proof in zip(sorted(immutable_inputs), associations, strict=True)):
-        raise CompilationError("native definition immutable input key differs from its original formal")
-    steps, kills, record = _derive_definition_state(analysis, procedure, original_selection, outputs,
-        include_entry, descriptor_window, completion, associations, consume)
-    identity = _hash(record)
-    registry = _definition_state_registry(analysis)
-    if identity in registry:
-        proof = registry[identity]
-        if (type(proof) is not NativeDefinitionStateProof or proof._analysis is not analysis
-                or proof.procedure != procedure or len(proof._selection) != len(original_selection)
-                or any(left is not right for left, right in zip(proof._selection, original_selection, strict=True))
-                or _thaw(proof._record) != record
-                or _state_access_authorities(proof.steps) != _state_access_authorities(steps)):
-            raise CompilationError("native definition state cached authority changed")
-        return proof
-    if len(registry) >= analysis.procedure_limit:
-        raise CompilationError("native definition state registry budget exhausted")
-    proof = NativeDefinitionStateProof(procedure, identity, steps, outputs, associations, analysis,
-        original_selection, include_entry, descriptor_window, completion, kills, _freeze(record))
-    registry[identity] = proof
-    return proof

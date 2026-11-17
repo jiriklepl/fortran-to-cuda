@@ -194,11 +194,10 @@ def native_only_wrapper(parent, node, routine):
     builder, owner = parent.builder, parent.owner
     if builder.analysis.routines.get(routine.qualified) is not routine:
         raise CompilationError("native-only wrapper requires its exact original routine")
-    if (GUARDED_NATIVE_ROUTING_VERSION != 2 or builder.config.scope_execution != "graph"
+    if (GUARDED_NATIVE_ROUTING_VERSION != 2
             or builder.config.policy not in {"sections", "auto"} or builder.config.collective
             or owner.interval_draft is not None or parent.interval_draft is not None
             or getattr(owner.builder, "_conditional_return_draft", None) is None
-            or getattr(builder, "_reached_window_binding", None) is not None
             or getattr(builder, "_mapped_reached_child", None) is not None
             or getattr(owner.builder, "provider_only_lifetime", None) is not None
             or routine.source_kind != "module" or routine.qualified in owner.members):

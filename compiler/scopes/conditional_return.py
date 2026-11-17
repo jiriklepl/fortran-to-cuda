@@ -322,7 +322,7 @@ class ConditionalReturnDraft:
     def validate(self):
         owner = self.owner
         if (self._issuer is not _ISSUER or getattr(owner.builder, "_conditional_return_draft", None) is not self
-                or owner.parent is not None or owner.builder.config.scope_execution != "graph"):
+                or owner.parent is not None):
             raise CompilationError("prospective returned-domain capture requires its original checked graph")
         if self.selected_root is not None:
             from compiler.scopes.hierarchical_regions import SelectedRoot

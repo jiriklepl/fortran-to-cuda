@@ -8,8 +8,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
 from compiler.scopes.regions import extract_region
@@ -105,26 +105,6 @@ def test_imported_scalar_initializer_changes_region_identity(tmp_path):
     assert changed.immutable_scalar_captures == original.immutable_scalar_captures
 
 
-@pytest.mark.parametrize("precision", [4, 8])
-def test_reached_scope_transports_original_visible_alias_without_recomputing_initializer(tmp_path, precision):
-    _, _, _, paths = fixture(tmp_path, precision)
-    facts = {"schema_version": 1, "participation": "serial",
-             "captures": {"argument::a": FACT, "argument::out": FACT},
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest() for path in paths}}
-    outputs, manifest = ScopeBuilder(paths, "renamed_owner::advance", facts=facts,
-        options=CompilerOptions(), config=OffloadConfig("sections", scope_execution="reached")).run()
-    assert manifest["scope_count"] == 1, manifest["boundaries"]
-    region, = manifest["inline_numerical_regions"]["regions"]
-    assert region["used"]
-    assert region["immutable_scalar_captures"] == ["renamed_values::angle"]
-    replacement = outputs[manifest["sources"][str(paths[2])]["replacement"]]
-    assert "original_value" in replacement
-    assert "acos" not in replacement.lower()
-    numerical_sources = [text for path, text in outputs.items() if path.startswith("regions/") and path.endswith(".source")]
-    assert len(numerical_sources) == 1
-    assert "acos" not in numerical_sources[0].lower()
-
-
 def test_constant_array_cannot_depend_on_a_scalar_capture(tmp_path):
     _, _, _, paths = fixture(tmp_path)
     paths[0].write_text(paths[0].read_text().replace("end module", "real(8),parameter::weights(2)=[angle,angle]\nend module"))
@@ -135,51 +115,6 @@ def test_constant_array_cannot_depend_on_a_scalar_capture(tmp_path):
     loop = next(node for node in _children(routine.execution) if _kind(node) == "Block_Nonlabel_Do_Construct")
     with pytest.raises(CompilationError, match="proved numeric conversions"):
         extract_region(analysis, routine, loop)
-
-
-@pytest.mark.parametrize("precision", [4, 8])
-def test_distinct_same_spelling_parameters_get_distinct_capture_dummies(tmp_path, precision):
-    left = tmp_path / "left.f90"
-    right = tmp_path / "right.f90"
-    for path, module, expression in [(left, "renamed_left", "-1"), (right, "renamed_right", "0")]:
-        path.write_text(f"module {module}\nimplicit none\nreal({precision}),parameter::angle=acos({expression}._{precision})\nend module\n")
-    caller = tmp_path / "caller.f90"
-    caller.write_text(f"""module renamed_owner
-use renamed_left,only:left_value=>angle
-use renamed_right,only:right_value=>angle
-implicit none
-contains
-subroutine advance(a,out,n)
-real({precision}),intent(in)::a(:)
-real({precision}),intent(inout)::out(:)
-integer,intent(in)::n
-integer::i
-do i=1,n
-out(i)=left_value*a(i)+right_value
-enddo
-end subroutine
-end module
-""")
-    analysis = SourceEffects([left, right, caller])
-    routine = analysis.routines["renamed_owner::advance"]
-    loop = next(node for node in _children(routine.execution) if _kind(node) == "Block_Nonlabel_Do_Construct")
-    region = extract_region(analysis, routine, loop)
-    parameters = [item for item in region.parameters if item.resource in region.immutable_scalar_captures]
-    assert len(parameters) == len({item.name for item in parameters}) == 2
-    assert all(item.name.startswith("fort_region_parameter_") for item in parameters)
-    assert "acos" not in region.source.lower()
-    paths = left, right, caller
-    facts = {"schema_version": 1, "participation": "serial",
-             "captures": {"argument::a": FACT, "argument::out": FACT},
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest() for path in paths}}
-    builder = ScopeBuilder(paths, routine.qualified, facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig("sections", scope_execution="reached"))
-    assert builder.visible(builder.entry, "renamed_left::angle") == "left_value"
-    assert builder.visible(builder.entry, "renamed_right::angle") == "right_value"
-    outputs, manifest = builder.run()
-    assert manifest["scope_count"] == 1, manifest["boundaries"]
-    replacement = "".join(outputs[manifest["sources"][str(caller)]["replacement"]].replace("&", "").split())
-    assert ",left_value,right_value," in replacement
 
 
 @pytest.mark.native

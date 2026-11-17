@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from compiler.numerical_contract import require_explicit_cuda_environment, require_numerical_build_contract
-from compiler.tests.support.numerical_regions import ROOTS, emit_reached_numerical_fixture
+from compiler.tests.support.numerical_regions import ROOTS
 from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import run
 
@@ -96,86 +96,6 @@ def _transfers(trace):
         assert int(generation) == 1
         counts[direction][int(identity)] += int(size)
     return counts
-
-
-def build_reached_numerical_binaries(tmp_path_factory, precision, resource_fallback, *,
-                                    emit_fixture=emit_reached_numerical_fixture, prefix="reached_numerical_",
-                                    driver_source=None, expected_gpu_leaves=3, expected_capture_states=None):
-    """Build the same authenticated chain for source participation fixtures."""
-    nvcc = shutil.which("nvcc")
-    host = shutil.which("g++-14") or shutil.which("g++")
-    fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
-    if not all((nvcc, host, fortran)):
-        pytest.skip("CUDA, C++ and Fortran toolchain required")
-    require_explicit_cuda_environment()
-    directory = tmp_path_factory.mktemp(prefix + str(precision))
-    architecture = actual_profile(directory, nvcc, host)["hardware"]["compute_capability"].replace(".", "")
-    originals, outputs, report, owner = emit_fixture(
-        directory, precision=precision, device_budget=0 if resource_fallback else None)
-    scope, = report["scopes"]
-    assert len(scope["gpu_leaves"]) == expected_gpu_leaves
-    builder = getattr(owner, "builder", owner)
-    expected_capture_states = ({ROOTS[1]: "whole", ROOTS[2]: "none"}
-                               if expected_capture_states is None else expected_capture_states)
-    for root, state in expected_capture_states.items():
-        assert builder.facts["captures"][root]["initialized"] == state
-    resources = {item["resource"]: item for item in scope["resource_bindings"]["resources"]}
-    for name, text in outputs.items():
-        artifact = directory / name
-        artifact.parent.mkdir(parents=True, exist_ok=True)
-        artifact.write_text(text)
-    flags = [fortran, "-O3", "-cpp", "-std=f2018", "-fopenmp", "-fcheck=all,array-temps", "-ffp-contract=off"]
-    order, unchanged_sources = {}, []
-    for index, path in enumerate(originals):
-        source_hash = sha256(path.read_bytes()).hexdigest()
-        assert report["source_inputs"][str(path)] == source_hash
-        if str(path) in report["sources"]:
-            candidate_source = report["sources"][str(path)]["replacement"]
-        else:
-            assert path.parent == directory
-            candidate_source = path.name
-            unchanged_sources.append({"role": "original_source", "path": candidate_source, "language": "fortran",
-                                      "source_input_sha256": source_hash})
-        assert candidate_source not in order
-        order[candidate_source] = index
-    objects, commands = [], []
-    for role in ("common_runtime", "shared_entry", "original_source"):
-        sources = [item for item in report["build_sources"] if item["role"] == role]
-        if role == "original_source":
-            sources.extend(unchanged_sources)
-            sources.sort(key=lambda item: order[item["path"]])
-        for item in sources:
-            artifact = directory / item["path"]
-            target = artifact.with_suffix(".o")
-            if item["language"] == "cuda":
-                contract = item["numerical_contract"]
-                require_numerical_build_contract(contract)
-                compiler = [nvcc, "-O2", "-std=c++17", "-ccbin", host, "-arch=sm_" + architecture,
-                            "-Xcompiler=-fopenmp", *contract["required_cuda_options"],
-                            *("-Xcompiler=" + value for value in contract["required_host_options"])]
-            else:
-                compiler = flags
-            command = [*compiler, "-I", str(directory), "-c", str(artifact), "-o", str(target)]
-            run(command, cwd=directory)
-            commands.append({"role": role, "path": item["path"], "language": item["language"], "argv": command,
-                             "numerical_contract": item.get("numerical_contract"),
-                             "source_input_sha256": item.get("source_input_sha256")})
-            objects.append(str(target))
-    driver = directory / "driver.f90"
-    driver.write_text(_driver(precision) if driver_source is None else driver_source(precision))
-    library = Path(nvcc).resolve().parents[1] / "lib64"
-    candidate, native = directory / "candidate", directory / "native"
-    for role, command in (
-        ("candidate-link", [*flags, "-I", str(directory), str(driver), *objects,
-                            "-L" + str(library), "-Wl,-rpath," + str(library),
-                            "-lcudart", "-lstdc++", "-o", str(candidate)]),
-        ("native-compile-link", [*flags, *(str(path) for path in originals), str(driver), "-o", str(native)]),
-    ):
-        run(command, cwd=directory)
-        commands.append({"role": role, "argv": command})
-    (directory / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
-    (directory / "manifest.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
-    return directory, candidate, native, precision, resource_fallback, resources
 
 
 def check_prepared_chain(binaries, disabled, path):

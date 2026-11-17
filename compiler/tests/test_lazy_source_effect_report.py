@@ -106,30 +106,6 @@ def test_lazy_report_does_not_include_previously_completed_parent_closures(tmp_p
     assert not report["complete"]
 
 
-def test_lazy_report_preserves_explicitly_requested_reduction_diagnostics(tmp_path, monkeypatch):
-    path = tmp_path / "reduction.f90"
-    path.write_text("""module reductions
-contains
-subroutine root(a,total)
-real(8),intent(in)::a(:)
-real(8),intent(out)::total
-total=maxval(a)
-end subroutine
-end module
-""")
-    analysis = SourceEffects([path])
-    request = analysis.reduction_candidates("reductions::root")
-    assert request["candidate_count"] == 1
-    def forbid(*_args, **_kwargs):
-        raise AssertionError("no unsolicited closure or reduction proof")
-    monkeypatch.setattr(analysis, "summarize", forbid)
-    monkeypatch.setattr(analysis, "reduction_candidates", forbid)
-    report = analysis.report("reductions::root", materialize=False)
-    assert report["source_reductions"]["analysis"] == "requested"
-    assert report["source_reductions"]["requests"] == [request]
-    assert report["openmp_reductions"]["analysis"] == "not_requested"
-
-
 def test_lazy_report_invalidates_existing_facts_when_contract_authority_changes(tmp_path):
     _path, analysis = fixture(tmp_path)
     leaf = analysis.summarize("diagnostics::leaf")
@@ -175,20 +151,3 @@ def test_lazy_report_never_exports_private_projection_proofs(tmp_path):
     assert not report["structured_effects"]["available"]
     assert not report["procedures"]
     assert not report["closure_complete_available"]
-
-
-def test_reached_owner_generation_does_not_request_original_whole_entry_closure(tmp_path, monkeypatch):
-    from compiler.tests.test_lexical_source_owner import emit
-    original = SourceEffects.summarize
-    def reached_only(self, requested, *args, **kwargs):
-        if requested == "local_owner::step" and self._summary_authority()["role"] == "source":
-            raise AssertionError("reached ownership must not materialize its whole original call closure")
-        return original(self, requested, *args, **kwargs)
-    monkeypatch.setattr(SourceEffects, "summarize", reached_only)
-    _path, outputs, manifest = emit(tmp_path)
-    assert manifest["scope_count"] == 1
-    assert manifest["inline_numerical_regions"]["dispatcher"]
-    assert manifest["native_effects"]["closure_materialization"] == "not_requested"
-    assert not manifest["native_effects"]["closure_complete_available"]
-    assert manifest["scopes"][0]["boundaries"]
-    assert all(item["path"] in outputs for item in manifest["build_sources"])

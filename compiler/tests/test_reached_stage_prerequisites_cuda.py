@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import FACT, run
@@ -212,94 +212,3 @@ def stage_binary(tmp_path_factory, request):
     expected = (directory / "fields.bin").read_bytes()
     (directory / "native-fields.bin").write_bytes(expected)
     return directory, candidate, expected, precision
-
-
-@pytest.mark.cuda
-@pytest.mark.parametrize("disabled", [False, True])
-@pytest.mark.parametrize("halting_mode", ["uniform", "mixed"])
-def test_reached_stage_complete_arrays_halos_and_escape_once(stage_binary, disabled, halting_mode):
-    directory, candidate, expected, precision = stage_binary
-    environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "FORT_RUNTIME_TRACE": "1"}
-    if disabled:
-        environment["CUDA_VISIBLE_DEVICES"] = "-1"
-    if halting_mode == "mixed":
-        run([str(directory / "native"), halting_mode], cwd=directory, env=environment)
-        mixed_expected = (directory / "fields.bin").read_bytes()
-        (directory / "native-mixed-fields.bin").write_bytes(mixed_expected)
-        assert mixed_expected == expected
-    result = run([str(candidate), halting_mode], cwd=directory, env=environment)
-    label = ("disabled" if disabled else "cuda") + ("-mixed" if halting_mode == "mixed" else "")
-    (directory / (label+".stderr")).write_text(result.stderr)
-    actual = (directory / "fields.bin").read_bytes()
-    (directory / (label+"-fields.bin")).write_bytes(actual)
-    assert actual == expected
-    launches = result.stderr.count("FORT_SCOPED launch ")
-    # Restoring the original trap makes the first parent team decline its
-    # generated numerical path. It closes and disables this invocation's
-    # owner, so subsequent child calls use their original source directly.
-    # There is one GPU child for each nonempty shape and iteration.
-    assert launches == (0 if disabled else 4)
-    contexts = {}
-    for line in result.stderr.splitlines():
-        if not line.startswith("FORT_SCOPED ") or "provenance_version=1" not in line:
-            continue
-        event = line.split()[1]
-        context = re.search(r"\bcontext=(\d+)\b", line).group(1)
-        events = contexts.setdefault(context, [])
-        assert "close" not in events
-        events.append(event)
-    assert len(contexts) == 6
-    assert [events.count("launch") for events in contexts.values()] == (
-        [0, 0, 0, 0, 0, 0] if disabled else [0, 0, 1, 1, 1, 1])
-    for events in contexts.values():
-        assert events[0] == "create"
-        assert events[-1] == "close"
-        assert events.count("create") == 1
-        assert events.count("close") == 1
-    report = json.loads((directory / "manifest.json").read_text())
-    parent_fallback, = [record["id"] for record in report["runtime_provenance"]["records"]
-                        if record["kind"] == "boundary"
-                        and record.get("procedure") == "owner_lib::advance"
-                        and record.get("reason") == "owner cleanup or native fallback at the current source position"]
-    close_lines = [line for line in result.stderr.splitlines() if line.startswith("FORT_SCOPED close ")]
-    assert len(close_lines) == 6
-    assert all("boundary=" + parent_fallback in line for line in close_lines)
-    uploaded = sum(map(int, re.findall(r"FORT_SCOPED upload .*bytes=(\d+)", result.stderr)))
-    downloaded = sum(map(int, re.findall(r"FORT_SCOPED download .*bytes=(\d+)", result.stderr)))
-    receipt = {"precision": precision, "disabled": disabled, "halting_mode": halting_mode,
-               "comparison": "complete native byte agreement",
-               "bytes_compared": len(actual), "launches": launches, "h2d_bytes": uploaded, "d2h_bytes": downloaded,
-               "native_sha256": sha256(expected).hexdigest(), "candidate_sha256": sha256(actual).hexdigest(),
-               "performance_samples": 0}
-    (directory / (label+"-receipt.json")).write_text(json.dumps(receipt, indent=2)+"\n")
-
-
-@pytest.mark.cuda
-@pytest.mark.parametrize("disabled", [False, True])
-def test_restored_invalid_trap_stays_at_original_native_consumer(stage_binary, disabled):
-    directory, candidate, _expected, precision = stage_binary
-    environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE",
-                   "FORT_RUNTIME_TRACE": "1", "GFORTRAN_ERROR_BACKTRACE": "0"}
-    if disabled:
-        environment["CUDA_VISIBLE_DEVICES"] = "-1"
-    # Avoid generated core files while retaining the original SIGFPE outcome.
-    previous_limit = resource.getrlimit(resource.RLIMIT_CORE)
-    outcomes = {}
-    try:
-        resource.setrlimit(resource.RLIMIT_CORE, (0, previous_limit[1]))
-        for label, binary in (("native", directory / "native"), ("candidate", candidate)):
-            result = subprocess.run([str(binary), "trap"], cwd=directory, env=environment,
-                                    capture_output=True, text=True, timeout=30)
-            assert result.returncode == -signal.SIGFPE, result.stdout + result.stderr
-            outcomes[label] = {"returncode": result.returncode,
-                               "launches": result.stderr.count("FORT_SCOPED launch ")}
-            (directory / ("trap-"+label+("-disabled" if disabled else "")+".stderr")).write_text(result.stderr)
-    finally:
-        resource.setrlimit(resource.RLIMIT_CORE, previous_limit)
-    assert outcomes["native"]["launches"] == 0
-    assert outcomes["candidate"]["launches"] == (0 if disabled else 1)
-    receipt = {"precision": precision, "disabled": disabled,
-               "comparison": "original invalid trap after GPU child and native mode restore",
-               "outcomes": outcomes, "performance_samples": 0}
-    (directory / ("trap-"+("disabled" if disabled else "cuda")+"-receipt.json")).write_text(
-        json.dumps(receipt, indent=2)+"\n")

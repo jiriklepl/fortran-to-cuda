@@ -69,27 +69,6 @@ def native_correction(owner):
                 and operation.indirect_sections.available)
 
 
-def test_team_correction_admits_exact_reads_without_whole_entry_credit(tmp_path):
-    _selected, owner, outputs, report = emit_native_team_fixture(tmp_path / "team.f90")
-    member, operation = native_correction(owner)
-    assert operation.source_reads is operation.completion_proof
-    sections = validate_native_source_reads(member.builder, operation)
-    assert sections.public() == operation.indirect_sections.public()
-    assert all(state["initialized"] == "none" for state in owner.emission.selection_prefix.public()["states"])
-    assert owner.execution_plan.numerical_invocations == 3
-    text = outputs[report["sources"][str(tmp_path / "team.f90")]["replacement"]]
-    assert text.count(CORRECTION) == 1
-    assert "fort_scope_admit_source_reads_v1(fort_context, fort_team_buffer_" in text
-    assert owner.execution_plan.validate() is owner.execution_plan
-
-
-def test_pure_write_keeps_native_effects_without_inventing_original_entry_reads(tmp_path):
-    _selected, owner, _outputs, _report = emit_native_team_fixture(tmp_path / "team.f90", read_modify_write=False)
-    _member, operation = native_correction(owner)
-    assert operation.source_reads is None
-    assert operation.indirect_sections.available
-
-
 @pytest.mark.parametrize("body", [
     "a(markers(q)%row,markers(q)%column)=1.d0",
     "a(markers(q)%row,markers(q)%column)=a(markers(q)%row+1,markers(q)%column)",
@@ -116,28 +95,6 @@ def test_repeated_updates_keep_the_same_original_entry_requirement(tmp_path):
                                       require_entry_reads=True)
     assert reads.available, reads.reason
     assert reads.public() == communication.public()
-
-
-@pytest.mark.parametrize("mutation", ["copy", "selection", "analysis", "inspector"])
-def test_native_team_read_authority_cannot_be_borrowed(tmp_path, mutation):
-    _selected, owner, _outputs, _report = emit_native_team_fixture(tmp_path / "team.f90")
-    member, operation = native_correction(owner)
-    analysis, selection, proof = operation.proof_analysis, operation.nodes, operation.source_reads
-    if mutation == "copy":
-        proof = copy(proof)
-    elif mutation == "selection":
-        selection = (copy(selection[0]),)
-    elif mutation == "analysis":
-        analysis = analysis.private_projection()
-        analysis._worksharing_native_completions = {}
-    else:
-        forged = copy(operation)
-        forged.indirect_sections = replace(operation.indirect_sections, references=())
-        with pytest.raises(CompilationError, match="exact source inspector"):
-            validate_native_source_reads(member.builder, forged)
-        return
-    with pytest.raises(CompilationError):
-        native_read_sections(analysis, member.routine.qualified, selection, proof)
 
 
 def test_wrong_numerical_completion_cannot_authorize_native_entry_reads(tmp_path):

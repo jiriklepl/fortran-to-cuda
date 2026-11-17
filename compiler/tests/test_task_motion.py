@@ -7,7 +7,6 @@ import pytest
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.frontend import lower_file
-from compiler.tests.test_language import run_reference_and_cpp
 
 ROOT = Path(__file__).resolve().parents[2]
 GRAPH = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
@@ -71,15 +70,6 @@ end program
 """
 
 
-@pytest.mark.native
-@pytest.mark.parametrize("openmp", [False, True])
-def test_graph_motion_preserves_branches_empty_domains_and_neighbor_versions(tmp_path, openmp):
-    source = tmp_path / "original.f90"
-    source.write_text(SOURCE)
-    function, plan = prepare_function(lower_file(source, "entry"), options=GRAPH)
-    run_reference_and_cpp(tmp_path, function, plan, DRIVER, openmp=openmp)
-
-
 def test_graph_motion_preserves_cross_pass_global_dependence(tmp_path):
     source = tmp_path / "original.f90"
     source.write_text("""module snapshot_case
@@ -138,20 +128,3 @@ call entry(a,b,out,x,1)
 print *,a,b,out,x
 end program
 """
-
-
-@pytest.mark.native
-def test_cpu_only_integer_recurrence_moves_outside_device_group(tmp_path):
-    from dataclasses import replace
-
-    from compiler.ir import SequentialRegion
-
-    source = tmp_path / "original.f90"
-    source.write_text(RECURRENCE_SOURCE)
-    function = lower_file(source, "entry")
-    _, baseline = prepare_function(function, options=CompilerOptions(gpu_policy="sections", fallback="host"))
-    assert len(baseline.regions) == 2
-    function, graph = prepare_function(function, options=replace(GRAPH, fallback="host"))
-    assert isinstance(graph.steps[0], SequentialRegion)
-    assert len(graph.regions) == 1
-    run_reference_and_cpp(tmp_path, function, graph, RECURRENCE_DRIVER, openmp=True)

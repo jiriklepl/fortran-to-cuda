@@ -9,7 +9,6 @@ from fparser.two.utils import walk
 from compiler.frontend.source_effects import SourceEffects
 from compiler.frontend.tile_private import prove_tile_private
 from compiler.ir import CompilationError, ScalarType, Symbol
-from compiler.ir.tile_private import ScratchDescriptor, ScratchResourceError, plan_scratch
 
 SOURCE = """module stencil
 contains
@@ -101,46 +100,6 @@ def test_changed_source_invalidates_issued_tile_proof(tmp_path):
     p.write_text(SOURCE + "! changed\n")
     with pytest.raises(CompilationError):
         proof.validate()
-
-
-def test_zero_tiles_never_query_private_storage():
-    def forbidden():
-        raise AssertionError("unreached descriptor query")
-
-    p = plan_scratch(0, forbidden, 0)
-    assert p.lease_bytes == 0
-    assert list(p.batches()) == []
-
-
-def test_real4_real8_original_bounds_padding_and_odd_batches():
-    x = Symbol(1, "x", ScalarType.REAL32, rank=1)
-    y = Symbol(2, "y", ScalarType.REAL, rank=3)
-    p = plan_scratch(5, lambda: (ScratchDescriptor(x, (-1,), (3,)), ScratchDescriptor(y, (-1, 0, 1), (1, 1, 2))), 400)
-    assert p.arrays[0].payload_bytes == 20
-    assert p.arrays[1].offset_bytes == 24
-    assert p.arrays[1].payload_bytes == 96
-    assert p.bytes_per_tile == 120
-    assert p.lease_bytes == 360
-    assert list(p.batches()) == [(0, 3), (3, 2)]
-    assert p.byte_offset(2, 1, (0, 1, 2)) == 240 + 24 + (1 + 3 + 6) * 8
-    with pytest.raises(IndexError):
-        p.byte_offset(0, 1, (-2, 0, 1))
-
-
-@pytest.mark.parametrize(
-    ("bounds", "budget"),
-    [
-        (((0,), (0,)), 7),
-        (((0,), (-1,)), 1024),
-        (((0, 0, 0), ((1 << 31) - 1,) * 3), (1 << 64) - 1),
-        (((True,), (1,)), 1024),
-        (((-(1 << 31) - 1,), (0,)), 1024),
-    ],
-)
-def test_empty_overflow_and_insufficient_storage_are_prework_resource_failures(bounds, budget):
-    x = Symbol(1, "x", ScalarType.REAL, rank=len(bounds[0]))
-    with pytest.raises(ScratchResourceError):
-        plan_scratch(1, lambda: (ScratchDescriptor(x, *bounds),), budget)
 
 
 SOURCE_3D = """module stencil

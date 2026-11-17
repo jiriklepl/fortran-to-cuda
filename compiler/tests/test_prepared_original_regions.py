@@ -6,22 +6,29 @@ from hashlib import sha256
 
 import pytest
 
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.driver.options import CompilerOptions
+from compiler.offload.config import OffloadConfig
 from compiler.frontend import numerical_preparation
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.numerical_preparation import (
     NumericalPreparationProvider,
     NumericalPreparationUnsupported,
-    PreparedOriginalRegion,
-    prepare_original_region,
-)
+    PreparedOriginalRegion)
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 
+
+def prepare_original_region(analysis, procedure, exact_original_selection, *, options, config, environment_root,
+                            immutable_inputs=None, consume=None):
+    from compiler.frontend.numerical_preparation import NumericalPreparationProvider
+
+    provider = NumericalPreparationProvider(analysis, options=options, config=config, environment_root=environment_root,
+                                            immutable_inputs=immutable_inputs)
+    return provider.prepare(analysis, procedure, exact_original_selection, consume=consume)
+
 ENTRY = "renamed_region::form_field"
-OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="reached")
-CONFIG = OffloadConfig(policy="sections", scope_execution="reached")
+OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
+CONFIG = OffloadConfig(policy="sections", scope_execution="graph")
 ASSOCIATION_SOURCE = """module original_aliases
 implicit none
 contains

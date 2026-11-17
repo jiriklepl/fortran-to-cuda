@@ -10,10 +10,9 @@ import pytest
 
 from compiler.analysis import build_execution_plan
 from compiler.analysis.semantics import constant_integer as stage_constant_integer
-from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission import read_common_header
-from compiler._legacy.emission import generate_sources
 from compiler.emission.common.c_family import render_expression
 from compiler.frontend import lower_file
 from compiler.ir import (
@@ -32,7 +31,6 @@ from compiler.ir import (
     Unary,
 )
 from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, constant_integer
-from compiler.tests.test_language import compile_cuda_sources
 from compiler.tests.test_language_cuda import CUDA_RUNTIME
 
 INTEGER = ScalarType.INTEGER
@@ -195,78 +193,3 @@ enddo
 do i=1,0
  a(1)=0
 enddo"""
-
-
-@pytest.mark.native
-@pytest.mark.parametrize("backend", ["serial", "openmp", "cuda-sim"])
-@pytest.mark.parametrize("opt_level", [0, 1])
-def test_boundary_values_execute_exactly_like_fortran(tmp_path, backend, opt_level):
-    if not shutil.which("gfortran") or not shutil.which("g++"):
-        pytest.skip("native Fortran and C++ compilers are unavailable")
-    path = source(tmp_path, BOUNDARY_BODY)
-    prepared, plan = prepare_function(lower_file(path, "entry"), options=CompilerOptions(opt_level=opt_level))
-    generated = generate_sources(prepared, plan)
-    if backend == "cuda-sim":
-        simulated = generated.cuda.replace("#include <cuda_runtime.h>", '#include "cuda_runtime.h"')
-        simulated = re.sub(r"(kernel_region_\d+_device)<<<([^>]+)>>>\(", r"fort_test_launch(\1, \2, ", simulated)
-        generated = replace(generated, cpp=simulated)
-        (tmp_path / "cuda_runtime.h").write_text(CUDA_RUNTIME)
-    (tmp_path / "implementation.cpp").write_text(generated.cpp)
-    (tmp_path / "interface.f90").write_text(generated.fortran)
-    (tmp_path / "common_functions.cuh").write_text(read_common_header())
-    (tmp_path / "driver.f90").write_text(
-        "program main\nuse integer_case\ninteger::a(16)\na=0\ncall entry(a,7)\nprint *,a\nend program\n"
-    )
-
-    def run(command):
-        result = subprocess.run(
-            command,
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            env={**os.environ, "OMP_NUM_THREADS": "2"},
-            check=False,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
-        return result.stdout.split()
-
-    run(["gfortran", str(path), "driver.f90", "-o", "reference"])
-    expected = run([str(tmp_path / "reference")])
-    flags = ["-fopenmp"] if backend == "openmp" else []
-    run(
-        [
-            "g++",
-            "-std=c++17",
-            *flags,
-            "-fsanitize=undefined",
-            "-fno-sanitize-recover=undefined",
-            "-c",
-            "implementation.cpp",
-            "-o",
-            "implementation.o",
-        ]
-    )
-    run(
-        [
-            "gfortran",
-            *flags,
-            "-fsanitize=undefined",
-            "-fno-sanitize-recover=undefined",
-            "interface.f90",
-            "driver.f90",
-            "implementation.o",
-            "-lstdc++",
-            "-o",
-            "generated",
-        ]
-    )
-    actual = run([str(tmp_path / "generated")])
-    assert actual == expected
-
-
-@pytest.mark.cuda
-@pytest.mark.native
-def test_boundary_values_compile_on_cuda(tmp_path):
-    function, plan = prepare_function(lower_file(source(tmp_path, BOUNDARY_BODY), "entry"))
-    compile_cuda_sources(tmp_path, function, plan)

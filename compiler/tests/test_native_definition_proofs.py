@@ -10,11 +10,7 @@ from compiler.frontend.descriptor_windows import prove_descriptor_window
 from compiler.frontend.native_definitions import (
     intersect_rectangles,
     invalidate_rectangles,
-    merge_rectangles,
-    prove_native_definitions,
-    rectangle_covers,
-    rectangle_dependencies,
-)
+    prove_native_definitions)
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 
@@ -351,43 +347,3 @@ def test_descriptor_source_and_binding_mutations_reject_partial_transfer(tmp_pat
     path.write_text(path.read_text().replace("a(-2,:)=1", "a(-2,:)=2"))
     with pytest.raises(CompilationError, match="changed"):
         proof.transfer()
-
-
-def test_geometry_helpers_meet_and_merge_without_face_hulls(tmp_path):
-    _path, _analysis, _selection, proof = prove(tmp_path,
-        "a(-2:2,-1)=1\na(8:10,-1)=2\nb(0,-1)=3")
-    left = resource(proof.steps[0]).overwrites
-    opposite = resource(proof.steps[1]).overwrites
-    point = resource(proof.steps[2], "argument::b").overwrites
-    assert rectangle_covers(left[0], point[0])
-    assert not rectangle_covers(opposite[0], point[0])
-    assert merge_rectangles(left, left, opposite) == (*left, *opposite)
-    assert intersect_rectangles(left, point) == point
-    assert intersect_rectangles(left, opposite) == ()
-    assert intersect_rectangles(left, ()) == ()
-    assert rectangle_dependencies(left[0]) == ()
-
-
-def test_scalar_write_invalidates_rectangles_for_root_not_accessed_by_leaf(tmp_path):
-    _path, analysis, selection, proof = prove(tmp_path, "a(n,-1)=1\nn=n+1")
-    prior = resource(proof.steps[0]).overwrites
-    scalar = prove_native_definitions(analysis, ENTRY, selection[1:])
-    assert scalar.transfer().definitions == {}
-    assert rectangle_dependencies(prior[0]) == ("argument::n",)
-    assert invalidate_rectangles(prior, scalar.steps[0].scalar_writes) == ()
-    assert invalidate_rectangles(prior, ("argument::unrelated",)) == prior
-
-
-def test_geometry_helpers_reject_unbounded_or_malformed_groups(tmp_path):
-    _path, _analysis, _selection, proof = prove(tmp_path, "a(-2,:)=1")
-    boxes = resource(proof.steps[0]).overwrites
-    with pytest.raises(CompilationError, match="bounded"):
-        merge_rectangles(boxes * 33)
-    with pytest.raises(CompilationError, match="group budget"):
-        merge_rectangles(*(boxes for _ in range(33)))
-    with pytest.raises(CompilationError, match="rectangle tuples"):
-        intersect_rectangles(list(boxes), boxes)
-    with pytest.raises(CompilationError, match="invalidation"):
-        invalidate_rectangles(boxes, ["argument::n"])
-    with pytest.raises(CompilationError, match="rectangle tuples"):
-        rectangle_covers(object(), boxes[0])

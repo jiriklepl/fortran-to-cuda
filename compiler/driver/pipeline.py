@@ -22,9 +22,8 @@ def prepare_function(
 
         function, ordered = order_function_tasks(function, options=options)
         graph_report = ordered.reports
-    explicit_scoped = options.memory_model == "scoped" and options.gpu_policy == "sections"
-    preparation = (replace(options, opt_level=0) if options.gpu_policy != "always"
-                   and options.scope_execution != "graph" and not explicit_scoped else options)
+    preparation = (replace(options, opt_level=0)
+                   if options.gpu_policy == "auto" and options.scope_execution != "graph" else options)
     function, plan = optimize_function(function, options=preparation)
     if graph_report:
         plan = replace(plan, reports=(*graph_report, *plan.reports))

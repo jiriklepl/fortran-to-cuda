@@ -7,7 +7,7 @@ from hashlib import sha256
 import pytest
 from fparser.two.utils import walk
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.source_effects import SourceEffects
@@ -234,37 +234,6 @@ def test_writable_expression_actual_is_rejected(tmp_path):
         resolve(SourceEffects([path]))
 
 
-def test_direct_rectangular_execution_requires_a_borrowed_root_view(tmp_path):
-    path = write(tmp_path, "rectangle.f90", """module clients
-contains
-subroutine leaf(a,n)
-real(8),intent(inout)::a(:)
-integer,intent(in)::n
-integer::i
-do i=1,n
-a(i)=2*a(i)
-enddo
-end subroutine
-subroutine step(a,n)
-real(8),intent(inout)::a(-3:)
-integer,intent(in)::n
-call leaf(n=n,a=a(-2:n))
-call leaf(n=n,a=a(-2:n))
-end subroutine
-end module
-""")
-    facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
-             "captures": {"argument::a": {"storage": "stable", "initialized": "whole", "escapes": False,
-                                         "allocation_changes": False}}}
-    outputs, report = form_source_scopes([path], "clients::step", facts=facts, options=CompilerOptions(),
-                                        config=OffloadConfig(policy="sections"))
-    assert report["scope_count"] == 1, report["boundaries"]
-    assert report["scopes"][0]["borrowed_views"]["abi_version"] == 2
-    assert report["resolved_calls"][0]["resource_mappings"][0]["storage"] == "rectangle"
-    assert report["source_edits"]
-    assert any(path.endswith("_views/shared_entry.cu") for path in outputs)
-
-
 def test_keyword_execution_uses_formal_workers_and_original_native_calls(tmp_path):
     path = write(tmp_path, "keyword_scope.f90", """module clients
 contains
@@ -402,93 +371,3 @@ end module
     analysis = SourceEffects([path])
     with pytest.raises(CompilationError, match="interface closure unavailable: clients::unavailable"):
         resolve(analysis)
-
-
-@pytest.mark.parametrize(("declaration", "call", "leaf", "reason"), [
-    ("real(8),intent(inout)::a(:)", "call inner(a(2:))", "real(8),intent(out)::a(:)\na=7.d0", "canonical root views"),
-    ("real(8),intent(inout)::a(:)", "call inner(a)", "real(8),intent(out)::a(2)\na=7.d0", "explicit dummy extents"),
-])
-def test_complete_nested_summaries_do_not_enable_unsupported_native_views(tmp_path, declaration, call, leaf, reason):
-    inner_arguments = "a,offset" if "optional" in leaf else "a"
-    path = write(tmp_path, "nested_native.f90", f"""module clients
-contains
-subroutine gpu(a,n)
-real(8),intent(inout)::a(:)
-integer,intent(in)::n
-integer::i
-do i=1,n
-a(i)=2*a(i)
-enddo
-end subroutine
-subroutine inner({inner_arguments})
-{leaf}
-end subroutine
-subroutine middle(a)
-{declaration}
-a(1)=a(1)+1.d0
-{call}
-end subroutine
-subroutine step(a,n)
-{declaration}
-integer,intent(in)::n
-call gpu(a,n)
-call middle(a)
-call gpu(a,n)
-end subroutine
-end module
-""")
-    summary = SourceEffects([path]).summarize("clients::middle")
-    assert summary["complete"], summary["reasons"]
-    facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
-             "captures": {"argument::a": {"storage": "stable", "initialized": "whole", "escapes": False,
-                                         "allocation_changes": False}}}
-    _outputs, report = form_source_scopes([path], "clients::step", facts=facts, options=CompilerOptions(),
-                                         config=OffloadConfig(policy="sections"))
-    assert any(reason in boundary["reason"] for boundary in report["boundaries"])
-    assert all("clients::middle" not in scope["calls"] for scope in report["scopes"])
-
-
-def test_native_nested_call_retains_its_hidden_readonly_allocation_descriptor(tmp_path):
-    path = write(tmp_path, "hidden_descriptor.f90", """module clients
-real(8),allocatable::hidden(:)
-contains
-subroutine gpu(a,n)
-real(8),intent(inout)::a(:)
-integer,intent(in)::n
-integer::i
-do i=1,n
-a(i)=2*a(i)
-enddo
-end subroutine
-subroutine inner(field)
-real(8),allocatable,intent(in)::field(:)
-integer::extent
-extent=size(field)
-end subroutine
-subroutine middle(a)
-real(8),intent(inout)::a(:)
-a(1)=a(1)+1.d0
-call inner(hidden)
-end subroutine
-subroutine step(a,n)
-real(8),intent(inout)::a(:)
-integer,intent(in)::n
-call gpu(a,n)
-call middle(a)
-call gpu(a,n)
-end subroutine
-end module
-""")
-    analysis = SourceEffects([path])
-    analysis.authorize_stable_module_allocatables({"clients::hidden"})
-    summary = analysis.summarize("clients::middle")
-    assert summary["complete"], summary["reasons"]
-    capture = {"storage": "stable", "initialized": "whole", "escapes": False, "allocation_changes": False}
-    facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
-             "captures": {"argument::a": capture, "clients::hidden": capture}}
-    _outputs, report = form_source_scopes([path], "clients::step", facts=facts, options=CompilerOptions(),
-                                         config=OffloadConfig(policy="sections"))
-    assert report["scope_count"] == 1, report["boundaries"]
-    assert {resource["resource"] for resource in report["scopes"][0]["resources"]} == {"argument::a"}
-    assert report["native_effects"]["complete"]
-    assert report["scopes"][0]["calls"] == ["clients::gpu", "clients::middle", "clients::gpu"]

@@ -323,7 +323,7 @@ class CombinedNumericalTeam(StructuredScope):
         self.cpu_native, self.cpu_native_decline = None, None
         self.cpu_native_sections = None
         self.cpu_native_section_authority = None
-        if owning_native and builder.config.scope_execution == "graph" and builder.config.policy == "auto":
+        if owning_native and builder.config.policy == "auto":
             from compiler.scopes.access import build_native_accesses
             from compiler.scopes.segments import fragment
 
@@ -545,10 +545,8 @@ class CombinedNumericalTeam(StructuredScope):
         close_owner = copy(owner)
         close_owner.context, close_owner.enabled, close_owner.control_guard = (
             "fort_team_context", "fort_team_enabled", None)
-        graph_epoch = self.builder.config.scope_execution == "graph"
-        if graph_epoch:
-            close_owner.epoch_pristine = "fort_team_epoch_pristine"
-            close_owner.query_plan = "fort_team_query_plan"
+        close_owner.epoch_pristine = "fort_team_epoch_pristine"
+        close_owner.query_plan = "fort_team_query_plan"
         failure = [*close_owner.close(prework=True, prework_status="fort_status"), "fort_native_ready = .false."]
         extra = ["logical :: fort_team_run, fort_team_native, fort_team_owned, fort_team_enabled",
                  "logical :: fort_team_environment_supported", "integer(c_int64_t) :: fort_team_context",
@@ -559,12 +557,11 @@ class CombinedNumericalTeam(StructuredScope):
         after = ["if (fort_team_owned) then", f"{owner.context} = fort_team_context",
                  f"{owner.enabled} = fort_team_enabled",
                  *[f"fort_buffer_{owner.resources[root][1]} = {handle}" for root, handle in handles.items()], "endif"]
-        if graph_epoch:
-            extra += ["logical :: fort_team_epoch_pristine, fort_team_query_plan"]
-            before += [f"fort_team_epoch_pristine = {owner.epoch_pristine}",
-                       f"fort_team_query_plan = {owner.query_plan}"]
-            after[-1:-1] = [f"{owner.epoch_pristine} = fort_team_epoch_pristine",
-                            f"{owner.query_plan} = fort_team_query_plan"]
+        extra += ["logical :: fort_team_epoch_pristine, fort_team_query_plan"]
+        before += [f"fort_team_epoch_pristine = {owner.epoch_pristine}",
+                   f"fort_team_query_plan = {owner.query_plan}"]
+        after[-1:-1] = [f"{owner.epoch_pristine} = fort_team_epoch_pristine",
+                        f"{owner.query_plan} = fort_team_query_plan"]
         all_specification = [*specification, *extra]
         lines, generated = self._emit_team(handles, values, imports, all_specification,
             preparation=preparation, block=block, failure=failure, price_units=price_units,
@@ -617,8 +614,6 @@ class CombinedNumericalTeam(StructuredScope):
         native_begin += _checked(native_access_begin(count))
         native_end = [line for root in sorted(operation.coherence_effects)
                       for line in _checked(f"fort_scope_host_end(fort_context, {handles[root]})")]
-        if self.builder.config.scope_execution != "graph":
-            native_end += _checked("fort_scope_wait(fort_context)")
         before = ["fort_team_context = fort_context", "fort_team_enabled = .true.",
                   "fort_native_ready = fort_mode /= 0_c_int"]
         lines, generated = self._emit_team(handles, values, imports, [*specification, *extra], preparation=preparation,
@@ -634,7 +629,7 @@ class CombinedNumericalTeam(StructuredScope):
         """One original participant protocol for owning and borrowed workers."""
         builder = self.builder
         call, = self.calls
-        inherited = owner is not None and builder.config.scope_execution == "graph"
+        inherited = owner is not None
         imports.append("use omp_lib, only: fort_team_omp_level => omp_get_level, fort_team_omp_threads => omp_get_num_threads")
         from compiler.scopes.source_reads import build_source_reads
         read_code = build_source_reads(builder, self.source_reads, handles, values, "fort_source_read",
@@ -680,10 +675,6 @@ class CombinedNumericalTeam(StructuredScope):
                  *builder.inline.emit_call(call, handles, values, imports, query=True),
                  "endif",
                  "if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)"]
-        if owner is not None and owner.interval_placement:
-            from compiler.offload.selection_cost import choice
-            lines += ["if (fort_status == FORT_SCOPE_OK) then", *choice(owner, unit, handles, values), "endif",
-                      "if (.not. fort_native_ready) exit " + block]
         if price_units:
             public, _ = builder.entry_artifacts(call.procedure)
             imports.append(f"use {public['fortran_module']}, only: fort_team_choose => {public['planning']['fortran_selector']}")
@@ -731,9 +722,6 @@ class CombinedNumericalTeam(StructuredScope):
         else:
             lines += ["if (fort_status /= FORT_SCOPE_OK) error stop 'combined original team numerical execution failed'"]
         lines += [
-                  *([] if self.builder.config.scope_execution == "graph" else [
-                      "fort_status = fort_scope_wait(fort_context)",
-                      "if (fort_status /= FORT_SCOPE_OK) error stop 'combined original team completion failed'"]),
                   "!$omp end master", "!$omp barrier", "end associate", "end block",
                   "endif", "if (.not. fort_team_run) then"]
         native = ([do, *native_body, "!$omp end do"]

@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
+from compiler.offload.config import OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.scopes.source import ScopeBuilder
 

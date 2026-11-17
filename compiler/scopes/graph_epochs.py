@@ -222,8 +222,7 @@ class GraphStorageEpoch:
         owner = self._owner
         builder = owner.builder if builder is None else builder
         if (self._issuer is not _ISSUER or getattr(owner, "position_epoch", None) is not self
-                or builder is not owner.builder or builder.entry is not owner.routine
-                or builder.config.scope_execution != "graph"):
+                or builder is not owner.builder or builder.entry is not owner.routine):
             raise CompilationError("graph allocation epoch requires its exact issuing source owner")
         from compiler.frontend.descriptor_windows import DescriptorWindowProof
         from compiler.scopes.graph_regions import ControlLocalDescriptorRegions
@@ -445,7 +444,7 @@ class CallGroupStorageEpoch:
         builder = owner.builder if builder is None else builder
         if (self._issuer is not _ISSUER or getattr(owner, "position_epoch", None) is not self
                 or getattr(owner, "local_exit", None) is not self._exit or builder is not owner.builder
-                or builder.entry is not owner.routine or builder.config.scope_execution != "graph"):
+                or builder.entry is not owner.routine):
             raise CompilationError("owner-local call group requires its exact issuing source owner")
         selection = builder._native_ancestor_selection
         if (selection is None or selection.validate(builder.analysis).public().get("lifetime") != "owner_local_call_groups"

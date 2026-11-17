@@ -138,23 +138,6 @@ def test_fixed_source_registry_and_complete_global_protocol(monkeypatch, precisi
         assert all(role["status"] == "accepted" for family in section[group].values() for role in family.values())
 
 
-def test_independent_startup_removed_from_memory_and_added_once(evidence):
-    result = build(evidence)
-    for backend in execution.CPU_BACKENDS:
-        model = cpu_model(result, backend, {"divide": 11})
-        assert model["fixed_seconds"] == pytest.approx(FIXED[backend])
-        assert model["arithmetic_seconds_per_operation"] == pytest.approx(ARITHMETIC)
-        assert model["intrinsic_seconds_per_operation"]["divide"] == pytest.approx(INTRINSICS["divide"])
-        assert model["intrinsic_seconds_per_item"] == pytest.approx(11 * INTRINSICS["divide"])
-        assert all(knot["seconds_per_traffic_byte"] == pytest.approx(MEMORY)
-                   for knot in model["memory_cost_model"]["knots"])
-    memory = result["numerical_execution"]["families"]["memory"]["native_fork_join"]
-    holdout = memory["holdouts"][0]
-    traffic = 3 * holdout["items"] * 8
-    assert holdout["predicted_seconds"] == pytest.approx(FIXED["native_fork_join"] + traffic * MEMORY)
-    assert "intercept" not in result["numerical_execution"]["families"]["arithmetic"]["native_fork_join"]["model"]
-
-
 def test_cpu_only_model_never_inherits_legacy_gpu_evidence(evidence):
     result = build(evidence)
     with pytest.raises(execution.NumericalExecutionError, match="CPU-only.*GPU evidence unavailable"):
@@ -249,18 +232,6 @@ def test_startup_dominance_controls_and_negative_subtraction_reject(evidence):
     assert section["families"]["memory"]["generated_cpu"]["reason_codes"] == ["measured_startup_exceeds_training_time"]
 
 
-def test_independent_math_failure_does_not_reject_ordinary_work(evidence):
-    scale(select(evidence[1], recipe="sqrt", backend="native_serial", items=131072), 2)
-    result = build(evidence)
-    section = result["numerical_execution"]
-    assert section["families"]["sqrt"]["native_serial"]["status"] == "rejected"
-    assert section["workload_validation"]["ordinary_expression_v2"]["native_serial"]["status"] == "accepted"
-    assert section["workload_validation"]["scalar_expression_v2"]["native_serial"]["status"] == "rejected"
-    assert cpu_model(result, "native_serial", {"divide": 1})
-    with pytest.raises(execution.NumericalExecutionError, match="class rejected"):
-        cpu_model(result, "native_serial", {"sqrt": 1})
-
-
 @pytest.mark.parametrize(("factor", "status"), [(1.32, "accepted"), (1.34, "rejected")])
 def test_independent_holdout_error_ceiling_remains_twenty_five_percent(evidence, factor, status):
     scale(select(evidence[1], recipe="sqrt", backend="native_serial", items=131072), factor)
@@ -340,45 +311,10 @@ def test_saved_registry_requires_complete_canonical_fixed_contract(evidence, mon
         build(evidence)
 
 
-def test_saved_status_is_reconstructed_and_current_source_identity_is_separate(evidence, monkeypatch):
-    result = build(evidence)
-    monkeypatch.setattr(execution, "_current_identities", lambda precision: ("f" * 64, execution._hash(evidence[2])))
-    execution.validate_execution_profile(result)
-    with pytest.raises(execution.NumericalExecutionError, match="current source"):
-        cpu_model(result)
-    result["numerical_execution"]["families"]["sqrt"]["native_serial"]["status"] = "rejected"
-    with pytest.raises(execution.NumericalExecutionError, match="raw reconstruction"):
-        execution.validate_execution_profile(result)
-
-
 @pytest.mark.parametrize("calibration", [{"application_profiled": True}, [], {"value": float("nan")}])
 def test_application_fits_or_malformed_calibration_are_rejected(evidence, calibration):
     with pytest.raises(execution.NumericalExecutionError):
         execution.profile_from_execution_measurements(evidence[0], evidence[1], calibration)
-
-
-@pytest.mark.parametrize("counts", [[("divide", 1), ("divide", 2)], [None], None, {"divide": True},
-                                   {"divide": 10**1000}, [([], 1)]])
-def test_invalid_counts_have_typed_unavailable_failure(evidence, counts):
-    with pytest.raises(execution.NumericalExecutionError, match="counts"):
-        execution.execution_cpu_costs(build(evidence), "native_serial", counts,
-            workload_class="scalar_expression_v2", workload_features=scalar_features(), access_class=execution.ACCESS_CLASS)
-
-
-def test_private_capacity_and_memory_class_are_source_requirements(evidence):
-    result = build(evidence)
-    features = {"schema_version": 2, "classification_complete": True, "private_array_groups": 2,
-                "private_array_elements": 18, "max_private_array_elements": 9, "max_private_array_rank": 2}
-    assert cpu_model(result, counts={"sqrt": 5}, workload_class="fixed_private_array_v2", workload_features=features)
-    features["private_array_elements"] = 65
-    with pytest.raises(execution.NumericalExecutionError, match="applicability"):
-        cpu_model(result, counts={"sqrt": 5}, workload_class="fixed_private_array_v2", workload_features=features)
-    with pytest.raises(execution.NumericalExecutionError, match="access class"):
-        cpu_model(result, access_class="stencil")
-    features = scalar_features()
-    features["schema_version"] = 1
-    with pytest.raises(execution.NumericalExecutionError, match="classification"):
-        cpu_model(result, workload_features=features)
 
 
 def test_memory_interpolation_has_strict_physical_ranges_and_products():
@@ -419,14 +355,3 @@ def test_nonfinite_unknown_raw_metadata_is_not_silently_retained(evidence):
     evidence[1][-1]["unrecognized_metadata"] = float("nan")
     with pytest.raises(execution.NumericalExecutionError, match="JSON"):
         build(evidence)
-
-
-def test_jsonl_parser_retains_valid_rejections_but_rejects_partial_batches(evidence):
-    records = evidence[1]
-    assert execution.parse_execution_measurements("\n".join(json.dumps(row) for row in records)) == records
-    select(records, recipe="cos", backend="native_serial", items=65536)["samples"].pop()
-    with pytest.raises(execution.NumericalExecutionError, match="seven batches"):
-        execution.parse_execution_measurements("\n".join(json.dumps(row) for row in records))
-    for text in ("", "not json", '{"kind":"unknown"}', '{"kind":[]}'):
-        with pytest.raises(execution.NumericalExecutionError):
-            execution.parse_execution_measurements(text)

@@ -310,9 +310,3 @@ def collect_conditional_affine(function, *, operation_budget=4096, isl_operation
                                        tuple((name, parameters[name]) for name in names))
     except isl.Error as error:
         raise ConditionalAffineUnsupported("conditional affine exact model unavailable: " + str(error)) from error
-
-
-def analyze_conditional_affine(function, *, operation_budget=4096, isl_operation_budget=1000000):
-    models = collect_conditional_affine(function, operation_budget=operation_budget,
-                                       isl_operation_budget=isl_operation_budget)
-    return models.project(tuple(range(len(models._models))))

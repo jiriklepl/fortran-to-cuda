@@ -7,7 +7,7 @@ No synthetic array dummy remains associated across a native escape.
 """
 
 from contextlib import suppress
-from copy import copy, deepcopy
+from copy import copy
 from dataclasses import dataclass
 
 from fparser.two.utils import walk
@@ -97,51 +97,6 @@ def immutable_numerical_unit(scope):
     fallback = scope.guarded.get(id(scope.calls[0].node))
     return (len(scope.native) == 1 and len(scope.guarded) == 1 and scope.native[0] is fallback
             and fallback.kind == "guarded original numerical fallback")
-
-
-def lexical_attempt_diagnostics(builder, owner, *, outcome, scope_count_before, inline_before,
-                                finalize, error=None):
-    """Snapshot existing planning diagnostics without issuing source authority."""
-    routine = builder.entry
-    members = tuple(owner.members.values()) if owner is not None else ()
-    limit = builder.analysis.operation_limit
-    boundaries, numerical_team_declines, member_records = [], [], []
-    for member in members[:builder.analysis.procedure_limit]:
-        path = str(member.routine.scope.path)
-        provenance = {"procedure": member.routine.qualified, "source": path,
-                      "source_sha256": builder.analysis.sources.get(path)}
-        member_records.append({**provenance, "unit_count": len(member.units),
-                               "boundary_count": len(member.boundaries),
-                               "numerical_team_decline_count": member.numerical_team_decline_count,
-                               "inline_preparation": {"attempts": member.builder.inline.attempts,
-                                                      "operations": member.builder.inline.operations}})
-        boundaries.extend({**deepcopy(row), **provenance}
-                          for row in member.boundaries[:max(0, limit - len(boundaries))])
-        numerical_team_declines.extend({**deepcopy(row), **provenance}
-            for row in member.numerical_team_declines[:max(0, limit - len(numerical_team_declines))])
-    total = sum(len(member.boundaries) for member in members)
-    decline_total = sum(member.numerical_team_decline_count for member in members)
-    scopes = builder.scopes[scope_count_before:]
-    admitted = outcome == "accepted" and any(scope.get("owner_variant") is not None for scope in scopes)
-    return {"schema_version": 1, "procedure": routine.qualified, "source": str(routine.scope.path),
-            "source_sha256": builder.analysis.sources.get(str(routine.scope.path)),
-            "outcome": outcome, "planning_succeeded": outcome in {"accepted", "successful_native"},
-            "admitted": admitted, "compiler_source_owner_admitted": admitted,
-            "source_scope_count_delta": len(scopes), "finalize_requested": finalize,
-            "artifacts_published": finalize and outcome in {"accepted", "successful_native"},
-            "execution": "source planning only; no application or GPU execution",
-            "error": str(error) if error is not None else None,
-            "members": member_records, "member_count": len(members),
-            "member_limit": builder.analysis.procedure_limit,
-            "members_truncated": len(member_records) < len(members),
-            "boundaries": boundaries, "boundary_count": total, "boundary_limit": limit,
-            "boundaries_truncated": len(boundaries) < total,
-            "numerical_team_declines": numerical_team_declines,
-            "numerical_team_decline_count": decline_total, "numerical_team_decline_limit": limit,
-            "numerical_team_declines_truncated": len(numerical_team_declines) < decline_total,
-            "inline_preparation": {"before": inline_before,
-                                   "after": {"attempts": builder.inline.attempts,
-                                             "operations": builder.inline.operations}}}
 
 
 @dataclass
@@ -269,7 +224,7 @@ class LexicalBoundaryPatch:
 
     def render(self, member):
         self.validate(member)
-        close = member.close(disable=member.builder.config.scope_execution != "graph",
+        close = member.close(disable=False,
                              reason=self.reason, span=(self.first, self.last),
                              retire_retention=self.lifecycle is None)
         if self.counted_entry is not None:
@@ -283,45 +238,8 @@ class LexicalBoundaryPatch:
         return "\n".join(fortran_lines(close)) + "\n" + self.original_source
 
 
-@dataclass(frozen=True)
-class LexicalClosedSuffix:
-    """Exact native remainder after an unconditional close in one sequence.
-
-    This is source retention, not effect authority. It cannot be used to skip
-    sibling branches, an enclosing continuation, or a later loop activation.
-    """
-
-    sequence: tuple
-    originals: tuple
-    boundary: LexicalBoundaryPatch
-    original_source: str
-
-    def validate(self, member):
-        self.boundary.validate(member, require_source=True)
-        if (self.boundary.conditional_guard is not None or self.boundary.counted_entry is not None
-                or self.boundary.empty_call is not None):
-            raise CompilationError("closed source suffix requires an unconditional original close")
-        graph, selected = member.builder.analysis._selected_source(member.routine.qualified, self.sequence)
-        if graph is not member.graph or not selected:
-            raise CompilationError("closed source suffix lost its original sequence")
-        prefix = self.boundary.originals
-        matches = [index for index in range(len(self.sequence) - len(prefix) + 1)
-                   if all(left is right for left, right in
-                          zip(self.sequence[index:index + len(prefix)], prefix, strict=True))]
-        if len(matches) != 1:
-            raise CompilationError("closed source suffix lacks one exact original boundary")
-        expected = self.sequence[matches[0] + len(prefix):]
-        if (len(expected) != len(self.originals)
-                or any(left is not right for left, right in zip(expected, self.originals, strict=True))
-                or member.original(self.originals) != self.original_source
-                or not any(patch is self.boundary for _first, _last, patch in member.patches)):
-            raise CompilationError("closed source suffix changed its retained native continuation")
-        return self
-
-
 class OwnerEmission:
     def __init__(self):
-        self.exact_window = None
         self.units = {}
         self.selection_prefix = None
 
@@ -377,7 +295,6 @@ class LexicalOwner:
         self.storage_transfers = []
         self.device_tasks = []
         self.source_device_tasks = []
-        self.closed_suffixes = []
         self.emission = OwnerEmission()
         self.execution_plan = None
         self.interval_draft = None
@@ -405,15 +322,6 @@ class LexicalOwner:
         if self.parent is not None:
             self.builder.inline.refresh(self.owner.builder)
 
-    @property
-    def exact_window(self):
-        root = self.owner
-        if root.execution_plan is None:
-            if root.emission.exact_window is not None:
-                raise CompilationError("exact-window placement requires its checked execution plan")
-            return None
-        return root.execution_plan.exact_window_placement()
-
     def unit_emission(self, unit):
         ordinal = next((index for index, admitted in enumerate(self.units) if admitted is unit), None)
         if ordinal is None:
@@ -430,7 +338,7 @@ class LexicalOwner:
         estimates that omit the surrounding ownership. This property does not
         admit any additional complete-window source shapes.
         """
-        return self.builder.config.policy == "auto" and self.owner.exact_window is None
+        return self.builder.config.policy == "auto"
 
     def canonical(self, binding):
         return self.canonical_bindings.get(binding.root, binding)
@@ -486,7 +394,7 @@ class LexicalOwner:
         actuals = {self.canonical(mapping.binding).root for mapping in resolved.mappings
                    if mapping.formal_binding.rank and mapping.binding is not None}
         conflict = actuals & host_reads
-        if conflict and self.builder.config.scope_execution == "graph":
+        if conflict:
             from compiler.scopes.segments import _host_read_candidate
             # Defer classification of original read-only associations until
             # the child has been checked. Its native-only slots get caller
@@ -605,31 +513,21 @@ class LexicalOwner:
     def before_close(self):
         from compiler.scopes.device_tasks import before_close as external_before_close
         external = external_before_close(self)
-        if self.interval_placement:
-            from compiler.offload.selection_cost import before_close
-            return [*before_close(self.owner, self.context), *external]
         return external
-
-    @property
-    def interval_placement(self):
-        from compiler.offload.selection_cost import PROTOCOL
-        placement = self.owner.exact_window
-        return placement is not None and placement.record["contract"].get("protocol") == PROTOCOL
 
     def _query_retirement(self, *, prework, prework_status):
         query_retirement = []
-        if self.builder.config.scope_execution == "graph":
-            if prework:
-                recoverable = [] if prework_status is None else [
-                    f"if ({prework_status} /= FORT_SCOPE_OK .and. {prework_status} /= FORT_SCOPE_ARGUMENT .and. &",
-                    f"{prework_status} /= FORT_SCOPE_BOUNDARY .and. {prework_status} /= FORT_SCOPE_UNINITIALIZED .and. &",
-                    f"{prework_status} /= FORT_SCOPE_PLAN_MISMATCH) error stop 'invalid query prework recovery status'"]
-                query_retirement = [f"if ({self.query_plan}) then", *recoverable,
-                    f"fort_close_status = fort_scope_plan_abandon_remaining_v1({self.context})",
-                    "if (fort_close_status /= FORT_SCOPE_OK) error stop 'query suffix retirement failed'",
-                    f"{self.query_plan} = .false.", "endif"]
-            else:
-                query_retirement = [f"if ({self.query_plan}) error stop 'unretired query schedule at source boundary'"]
+        if prework:
+            recoverable = [] if prework_status is None else [
+                f"if ({prework_status} /= FORT_SCOPE_OK .and. {prework_status} /= FORT_SCOPE_ARGUMENT .and. &",
+                f"{prework_status} /= FORT_SCOPE_BOUNDARY .and. {prework_status} /= FORT_SCOPE_UNINITIALIZED .and. &",
+                f"{prework_status} /= FORT_SCOPE_PLAN_MISMATCH) error stop 'invalid query prework recovery status'"]
+            query_retirement = [f"if ({self.query_plan}) then", *recoverable,
+                f"fort_close_status = fort_scope_plan_abandon_remaining_v1({self.context})",
+                "if (fort_close_status /= FORT_SCOPE_OK) error stop 'query suffix retirement failed'",
+                f"{self.query_plan} = .false.", "endif"]
+        else:
+            query_retirement = [f"if ({self.query_plan}) error stop 'unretired query schedule at source boundary'"]
         return query_retirement
 
     def close(self, *, disable=True, reason=None, span=None, prework=False, prework_status=None,
@@ -644,11 +542,7 @@ class LexicalOwner:
         boundary = source_id(self.builder, "boundary", span=span,
                              reason=reason or "owner cleanup or native fallback at the current source position")
         fallback = []
-        if disable and self.interval_placement:
-            from compiler.offload.selection_cost import fallback as record_fallback
-            fallback = [f"if ({self.enabled}) then", *record_fallback(self.owner), "endif"]
-        close_function = ("fort_scope_resident_close_v1" if self.builder.config.scope_execution == "graph"
-                          else "fort_scope_close")
+        close_function = ("fort_scope_resident_close_v1")
         lines = ["block", "use iso_c_binding, only: c_int, c_int32_t, c_null_char, c_null_ptr",
                  f"use fort_scoped_memory, only: {close_function}, FORT_SCOPE_OK, fort_scope_trace_set_v1, &",
                  "fort_scope_plan_abandon_remaining_v1, FORT_SCOPE_ARGUMENT, FORT_SCOPE_BOUNDARY, &",
@@ -659,8 +553,7 @@ class LexicalOwner:
                  f"fort_close_status = {close_function}({self.context})",
                  "if (fort_close_status /= FORT_SCOPE_OK) error stop 'lexical owner publication failed'",
                  f"{self.context} = 0", "endif"]
-        if self.builder.config.scope_execution == "graph":
-            lines += [f"{self.epoch_pristine} = .false.", f"{self.query_plan} = .false."]
+        lines += [f"{self.epoch_pristine} = .false.", f"{self.query_plan} = .false."]
         if disable:
             lines.append(f"{self.enabled} = .false.")
         if retire_retention and hasattr(self, "retention_allowed"):
@@ -670,8 +563,6 @@ class LexicalOwner:
 
     def rearm_epoch(self):
         """A later reached task may start after the prior original fallback."""
-        if self.builder.config.scope_execution != "graph":
-            return []
         from compiler.scopes.provider_lifetime import rearm_condition
         condition = ("fort_scope_serial_caller() /= 0" +
                      (f" .and. {self.retention_allowed}" if hasattr(self, "retention_allowed") else "") +
@@ -704,7 +595,7 @@ class LexicalOwner:
             with suppress(CompilationError):
                 empty_call = prove_empty_native_call(self, lifecycle)
         counted_entry = None
-        if (not force_unconditional and self.builder.config.scope_execution == "graph"
+        if (not force_unconditional
                 and lifecycle is not None and reached_guard is None
                 and len(originals) == 1 and _kind(originals[0]) == "Block_Nonlabel_Do_Construct"):
             from compiler.scopes.counted_loops import reached_retirement_entry
@@ -715,8 +606,7 @@ class LexicalOwner:
         self.boundaries.append({"first_line": first, "last_line": last, "reason": reason,
                                 "execution": "publish and close when reached; original continuation once",
                                 "conditional_close": reached_guard,
-                                "reopen": self.builder.config.scope_execution == "graph" and
-                                    (not hasattr(self, "retention_allowed") or lifecycle is not None),
+                                "reopen": (not hasattr(self, "retention_allowed") or lifecycle is not None),
                                 **({"lifecycle": "proved_lifecycle" if lifecycle is not None else
                                                    "unproved_lifetime_or_escape"}
                                    if hasattr(self, "retention_allowed") else {}),
@@ -749,12 +639,7 @@ class LexicalOwner:
 
     def prepare_source_inventory(self, nodes):
         """Legacy windows precollect closures; graph execution admits on demand."""
-        if self.builder.config.scope_execution == "graph":
-            return
-        if self is self.owner and self.interval_draft is None:
-            from compiler.scopes.interval_draft import prepare_interval_draft
-
-            prepare_interval_draft(self, self.builder.inline.original_selection(tuple(nodes)))
+        return
 
     def allow_child_continuation(self):
         """A conditional owner needs separate mapped child-plan authority."""
@@ -801,7 +686,7 @@ class LexicalOwner:
                 operation = native_call_fragment(self.builder, tuple(nodes))
                 scope = StructuredScope.from_native(self.builder, tuple(nodes), operation)
             if scope is None and not condition_only and not native_only:
-                if (len(nodes) > 1 and self.builder.config.scope_execution == "graph"
+                if (len(nodes) > 1
                         and self.builder.config.policy in {"sections", "auto"}):
                     from compiler.scopes.source_device_tasks import admit_source_device_task
                     try:
@@ -865,7 +750,7 @@ class LexicalOwner:
                                                 native_metadata=True, lexical_native=True, native_host_reads=True,
                                                 native_only=native_only, original_if=original_if)
                     except CompilationError as complete_error:
-                        if (self.builder.config.scope_execution == "graph" and original_if is None
+                        if (original_if is None
                                 and not condition_only and len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt"):
                             from compiler.scopes.segments import native_call_fragment
                             try:
@@ -885,8 +770,7 @@ class LexicalOwner:
                 # no managed payload to publish, register or plan, and no reason
                 # to associate an absent optional with a synthetic dummy.
                 self._retain_numerical_team_declines(nodes, joined_rejections, scope)
-                if self.builder.config.scope_execution == "graph":
-                    self.graph_native_tasks.append((tuple(nodes), scope))
+                self.graph_native_tasks.append((tuple(nodes), scope))
                 return
             arrays, scalars, written = self.builder.owner_inputs(scope.calls, reached_definitions=True)
             if defer_native_write:
@@ -928,9 +812,7 @@ class LexicalOwner:
             for binding in metadata.values():
                 self.declaration(binding)
             scope.prepare(arrays)
-            if ((getattr(self.builder, "_selection_activation_binding", None) is not None
-                    or self.builder.config.scope_execution == "graph")
-                    and not hasattr(scope, "source_reads")):
+            if (not hasattr(scope, "source_reads")):
                 from compiler.scopes.source_reads import prepare_source_reads
                 scope.source_reads = {call.procedure: prepare_source_reads(self.builder, call)
                                       for call in scope.calls if call.region is not None}
@@ -940,15 +822,14 @@ class LexicalOwner:
             from compiler.scopes.definitions import summarize
             definitions = summarize(scope)
             leaves = {leaf for call in scope.calls for leaf in self.builder.closure(call.procedure)[0]}
-            descriptor_only = (self.builder.config.scope_execution == "graph" and not leaves
+            descriptor_only = (not leaves
                                and source_guard is None and native_source is None and not condition_only
                                and original_descriptor_scalar_operation(scope, definitions))
             if (descriptor_only or (not arrays and not leaves and not metadata
                     and not any(operation.native_environment or operation.clock_proofs or operation.constructor_proofs
                                 for operation in scope.native))):
                 self._retain_numerical_team_declines(nodes, joined_rejections, scope)
-                if self.builder.config.scope_execution == "graph":
-                    self.graph_native_tasks.append((tuple(nodes), scope))
+                self.graph_native_tasks.append((tuple(nodes), scope))
                 # Descriptor-only assignments retain their exact source and
                 # graph dependencies, just like ordinary scalar work. Their
                 # original descriptor is host metadata even when elements
@@ -995,32 +876,10 @@ class LexicalOwner:
             self.boundary(tuple(nodes), "bounded lexical control depth exhausted")
             return
         groups = tuple(self.builder.inline.grouped_nodes(nodes))
-        for index, group in enumerate(groups):
-            patch_start = len(self.patches)
+        for group in groups:
             self._scan_group(group, depth)
-            originals = self.builder.inline.original_selection(group if isinstance(group, tuple) else (group,))
-            closes = [patch for _first, _last, patch in self.patches[patch_start:]
-                      if isinstance(patch, LexicalBoundaryPatch) and patch.conditional_guard is None
-                      and patch.counted_entry is None and patch.empty_call is None and len(patch.originals) == len(originals)
-                      and all(left is right for left, right in zip(patch.originals, originals, strict=True))]
-            if not closes:
-                continue
-            if self.builder.config.scope_execution == "graph":
-                continue
-            if len(closes) != 1:
-                raise CompilationError("source sequence has duplicate unconditional closes")
-            # Only a close at this exact sequence position absorbs the tail.
-            # Nested branches and loop bodies own separate cursors; no path
-            # predicate is assumed true and no child return is propagated.
-            remaining = tuple(node for item in groups[index + 1:]
-                              for node in (item if isinstance(item, tuple) else (item,)))
-            if remaining:
-                suffix = self.builder.inline.original_selection(remaining)
-                sequence = self.builder.inline.original_selection(tuple(nodes))
-                record = LexicalClosedSuffix(sequence, suffix, closes[0], self.original(suffix))
-                record.validate(self)
-                self.closed_suffixes.append(record)
-            return
+            # Validate that the group maps onto authoritative original nodes.
+            self.builder.inline.original_selection(group if isinstance(group, tuple) else (group,))
 
     def _scan_call(self, node):
         try:
@@ -1067,7 +926,7 @@ class LexicalOwner:
             # the full native closure and then scans the same child again.
             self.admit((node,))
         except CompilationError as error:
-            if self.builder.config.scope_execution == "graph" and not hasattr(node, "fort_inline_region"):
+            if not hasattr(node, "fort_inline_region"):
                 # A failed companion/formal mapping does not rule out retaining
                 # the unchanged CALL with a complete native access inventory.
                 # The failed child transaction has already rolled back. Native
@@ -1097,8 +956,6 @@ class LexicalOwner:
                             self.return_conditions.append((header, proof))
                 guarded = any(_kind(header) == "Else_If_Stmt" and proof.effects for header, proof in conditions)
                 if guarded:
-                    if self.builder.config.scope_execution != "graph":
-                        raise CompilationError("ELSEIF payload publication requires nested original guards")
                     from compiler.scopes.guarded_conditions import geometry
                     original, = self.builder.inline.original_selection((group,))
                     headers, closing = geometry(self, original)
@@ -1228,8 +1085,7 @@ class LexicalOwner:
         from compiler.scopes.joined_team import JoinedTeam
 
         config = self.builder.config
-        return (config.scope_execution == "graph" and config.policy in {"sections", "auto"}
-                and config.scope_measurement is None and self.owner.exact_window is None
+        return (config.policy in {"sections", "auto"}
                 and getattr(self.builder, "provider_only_lifetime", None) is None
                 and getattr(self.owner.builder, "provider_only_lifetime", None) is None
                 and not isinstance(unit.scope, JoinedTeam))
@@ -1243,13 +1099,12 @@ class LexicalOwner:
     def _prepare_unit(self, unit, index, *, owned=False):
         if isinstance(unit.scope, StructuredScope):
             unit.scope.validate_opaque_control(unit)
-        if self.builder.config.scope_execution == "graph":
-            from compiler.scopes.graph import validate_scheduled_unit
+        from compiler.scopes.graph import validate_scheduled_unit
 
-            validate_scheduled_unit(self, unit)
-            from compiler.scopes.storage_admission import admit_emitted_storage
-            epoch = self.owner.execution_plan.storage_epoch()
-            admit_emitted_storage(epoch, self.owner.execution_plan, self, unit.arrays.values())
+        validate_scheduled_unit(self, unit)
+        from compiler.scopes.storage_admission import admit_emitted_storage
+        epoch = self.owner.execution_plan.storage_epoch()
+        admit_emitted_storage(epoch, self.owner.execution_plan, self, unit.arrays.values())
         self.refresh()
         result = self.unit_emission(unit)
         builder, arrays = self.builder, unit.arrays
@@ -1263,9 +1118,8 @@ class LexicalOwner:
             # only after every original participant has voted eligibility.
             close_owner = copy(self)
             close_owner.context, close_owner.enabled = "fort_team_context", "fort_team_enabled"
-            if builder.config.scope_execution == "graph":
-                close_owner.epoch_pristine = "fort_team_epoch_pristine"
-                close_owner.query_plan = "fort_team_query_plan"
+            close_owner.epoch_pristine = "fort_team_epoch_pristine"
+            close_owner.query_plan = "fort_team_query_plan"
             close_owner.control_guard = None
         def close(**keywords):
             return close_owner.close(prework=True, prework_status="fort_status", **keywords)
@@ -1288,13 +1142,10 @@ class LexicalOwner:
                 "type(c_ptr) :: fort_pointer", "type(fort_scope_layout) :: fort_layout",
                 "type(fort_scope_access) :: fort_access", "type(fort_scope_plan_decision) :: fort_decision",
                 f"type(fort_scope_plan_binding), target :: fort_bindings({max(1,len(arrays))})",
-                f"integer(c_int), parameter :: fort_mode = {1 if builder.config.policy == 'sections' or self.owner.exact_window is not None else 2}"]
-        if builder.config.scope_execution == "graph":
-            spec += ["integer(c_int) :: fort_handle_valid"]
+                f"integer(c_int), parameter :: fort_mode = {1 if builder.config.policy == 'sections' else 2}"]
+        spec += ["integer(c_int) :: fort_handle_valid"]
 
         def refresh_epoch_handle(handle):
-            if builder.config.scope_execution != "graph":
-                return []
             return ["fort_handle_valid = 0", "if (fort_status == FORT_SCOPE_OK) &",
                     f"fort_status = fort_scope_buffer_valid_v1(fort_context, {handle}, fort_handle_valid)",
                     f"if (fort_status == FORT_SCOPE_OK .and. fort_handle_valid == 0) {handle} = 0"]
@@ -1411,23 +1262,21 @@ class LexicalOwner:
                     imports += list(preflight.imports)
                     prepare += ["if (fort_context == 0) then", "if (" + preflight.expression + ") then",
                                 metadata_native + " = .true.", "exit " + block, "endif", "endif"]
-        if builder.config.scope_execution == "graph":
-            from compiler.scopes.registration import fresh_undefined_read_guard
+        from compiler.scopes.registration import fresh_undefined_read_guard
 
-            # validate_scheduled_unit authenticates this member and unit in
-            # the original owning GraphOwner. Internal children share its
-            # slots; module companions forward the same context and canonical
-            # slots together through their retained original CALL patches.
-            # Closing that owner retires every slot, even while cached numeric
-            # handle values remain nonzero. Externally required registrations
-            # are explicitly excluded by the registration policy helper.
-            required = unit.definition_summary.required_whole
-            guard = fresh_undefined_read_guard(capture_facts, required, parameters,
-                context="fort_context", query_plan=close_owner.query_plan,
-                entry_guard=close_owner.epoch_pristine, on_error=failure)
-            prepare += guard
-        create_function = ("fort_scope_resident_create_v1" if builder.config.scope_execution == "graph"
-                           else "fort_scope_create")
+        # validate_scheduled_unit authenticates this member and unit in
+        # the original owning GraphOwner. Internal children share its
+        # slots; module companions forward the same context and canonical
+        # slots together through their retained original CALL patches.
+        # Closing that owner retires every slot, even while cached numeric
+        # handle values remain nonzero. Externally required registrations
+        # are explicitly excluded by the registration policy helper.
+        required = unit.definition_summary.required_whole
+        guard = fresh_undefined_read_guard(capture_facts, required, parameters,
+            context="fort_context", query_plan=close_owner.query_plan,
+            entry_guard=close_owner.epoch_pristine, on_error=failure)
+        prepare += guard
+        create_function = ("fort_scope_resident_create_v1")
         creation_position = (["if (fort_context /= 0) then",
                               *position(builder, owner=self.creation_trace_owner()), "endif"]
                              if self.trace_owner is None else [])
@@ -1465,7 +1314,7 @@ class LexicalOwner:
                                           for item in source.dependencies if item.kind == "scalar_read"})
             code = build_registration(fact, binding.rank, handles[root], f"fort_defined_{number}",
                 self.registration_identity(number), "fort_layout", on_error=tuple(failure), parameters=scalar_parameters,
-                generation=generation, entry_guard=close_owner.epoch_pristine if builder.config.scope_execution == "graph" else None,
+                generation=generation, entry_guard=close_owner.epoch_pristine,
                 logical_lower_bounds={root: tuple(f"lbound({name},{axis},kind=c_int64_t)"
                                                    for axis in range(1, binding.rank+1))})
             spec += code.specification
@@ -1511,8 +1360,7 @@ class LexicalOwner:
             # without publishing host data or using original capture freshness.
             # This runs before any operation in this unit: failure can close
             # and execute its original source once, never replay a GPU prefix.
-            prepare += ([f"if (.not. {close_owner.query_plan}) then"]
-                        if builder.config.scope_execution == "graph" else [])
+            prepare += ([f"if (.not. {close_owner.query_plan}) then"])
             prepare += ["fort_status = fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"]
             for index, root in enumerate(required, 1):
                 prepare += [f"fort_bindings({index}) = fort_scope_plan_binding()",
@@ -1525,8 +1373,7 @@ class LexicalOwner:
                         "if (fort_status == FORT_SCOPE_OK) &",
                         "fort_status = fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)",
                         "if (fort_status /= FORT_SCOPE_OK) then", *failure, "endif"]
-            if builder.config.scope_execution == "graph":
-                prepare += ["endif"]
+            prepare += ["endif"]
 
         def actuals(call, *, shared=True):
             from compiler.scopes.segments import renamed
@@ -1552,21 +1399,12 @@ class LexicalOwner:
             extra, joined_patches, joined_prepare, joined_copyback = unit.scope.emit_original(
                 self, unit, handles, values, imports, spec, price_units=self.price_units)
             spec += extra
-            execution = (joined_prepare, [] if builder.config.scope_execution == "graph" else [
-                "fort_status = fort_scope_wait(fort_context)",
-                "if (fort_status /= FORT_SCOPE_OK) error stop 'original team completion failed'"])
+            execution = (joined_prepare, [])
         else:
-            if self.interval_placement and unit.leaves:
-                from compiler.offload.selection_cost import choice
-                spec += ["logical :: fort_interval_selected"]
-                prepare += ["fort_interval_selected = .true.",
-                            *choice(self, unit, handles, values, context=self.context,
-                                    enabled=self.enabled, rejected="fort_interval_selected"),
-                            "if (.not. fort_interval_selected) exit " + block]
             execution = unit.scope.emit(handles, values, actuals, imports, selector=selector,
                                     terminal_owner=False, preflight_failure=failure,
                                     provenance_segment=trace_segment,
-                                    inherited_query=self.query_plan if builder.config.scope_execution == "graph" else None,
+                                    inherited_query=self.query_plan,
                                     surround_native=preserve_original,
                                     logical_lower_bounds={root: tuple(
                                         f"lbound({parameters[root]}, {axis}, kind=c_int64_t)"
@@ -1626,13 +1464,12 @@ class LexicalOwner:
         if self.control_guard:
             lines = [f"if ({self.control_guard}) then", *lines,
                      *([] if unit.publication_only else ["else", *self.original(unit.nodes).splitlines()]), "endif"]
-        if builder.config.scope_execution == "graph":
-            from compiler.scopes.native_prefix import fresh_native_prefix
+        from compiler.scopes.native_prefix import fresh_native_prefix
 
-            result.fresh_native_prefix = fresh_native_prefix(self, unit)
-            if result.fresh_native_prefix is not None:
-                lines = [f"if ({self.context} == 0 .and. .not. {self.query_plan}) then",
-                         *self.original(unit.nodes).splitlines(), "else", *lines, "endif"]
+        result.fresh_native_prefix = fresh_native_prefix(self, unit)
+        if result.fresh_native_prefix is not None:
+            lines = [f"if ({self.context} == 0 .and. .not. {self.query_plan}) then",
+                     *self.original(unit.nodes).splitlines(), "else", *lines, "endif"]
         if owned:
             return self._prepared_unit_text(result, ((first, first-1 if unit.publication_only else last, lines),))
         return [(first, first-1 if unit.publication_only else last, "\n".join(fortran_lines(lines)) + "\n")]
@@ -1678,15 +1515,11 @@ class LexicalOwner:
         if hasattr(self, "retention_allowed"):
             declarations += [f"logical :: {self.retention_allowed}"]
         declarations += [*hint_specification, *external_spec]
-        if builder.config.scope_execution == "graph":
-            declarations += [f"logical :: {self.epoch_pristine}", f"logical :: {self.query_plan}"]
-        from compiler.offload.exact_window import control as exact_window_control
-        exact_spec, exact_code = exact_window_control(self) if self.exact_window is not None else ([], [])
+        declarations += [f"logical :: {self.epoch_pristine}", f"logical :: {self.query_plan}"]
         initialize = [f"{self.context} = 0", *[f"fort_buffer_{number} = 0" for _binding,number in self.resources.values()],
-                      "block", "use fort_scoped_memory, only: fort_scope_serial_caller", *exact_spec,
-                      f"{self.enabled} = fort_scope_serial_caller() /= 0", *exact_code, "end block"]
-        if builder.config.scope_execution == "graph":
-            initialize[:0] = [f"{self.epoch_pristine} = .true.", f"{self.query_plan} = .false."]
+                      "block", "use fort_scoped_memory, only: fort_scope_serial_caller",
+                      f"{self.enabled} = fort_scope_serial_caller() /= 0", "end block"]
+        initialize[:0] = [f"{self.epoch_pristine} = .true.", f"{self.query_plan} = .false."]
         if hasattr(self, "retention_allowed"):
             initialize[:0] = [f"{self.retention_allowed} = .true."]
         if native is not None:
@@ -1698,43 +1531,10 @@ class LexicalOwner:
                          "\n".join(fortran_lines([*(root_imports if start == first else []),
                                                    *declarations,*initialize]))+"\n", prepend=True)
         ending = self.close(disable=False, reason="original owning invocation end", span=(last, last))
-        if self.interval_placement:
-            from compiler.offload.selection_cost import finish
-            ending += finish(self)
         ending += hint_ending
         builder.add_edit(self.routine.scope.path, last+1,last,"\n".join(fortran_lines(ending))+"\n")
 
-    def emit_native_capture(self, nodes, checkpoint, interval_applicability, *, cleanup=True):
-        """Measure the original interval, retaining its original declarations."""
-        from compiler.offload.selection_cost import native_control
-
-        builder, plan = self.builder, self.execution_plan.validate()
-        specification, entry, ending = native_control(self)
-        observer_outputs = {name: text for name, text in builder.outputs.items() if name.startswith("exact/")}
-        public = self.exact_window.public()
-        if cleanup:
-            builder.restore_scope_checkpoint(checkpoint)
-            builder.outputs.update(observer_outputs)
-        plan.validate()
-        first, last = self.interval_draft.selection_context["first_line"], self.interval_draft.selection_context["last_line"]
-        builder.add_edit(self.routine.scope.path, first, first-1,
-                         "\n".join(fortran_lines(["block", *specification, *entry])) + "\n", prepend=True)
-        builder.add_edit(self.routine.scope.path, last+1, last,
-                         "\n".join(fortran_lines([*ending, "end block"])) + "\n")
-        builder.scopes.append({
-            "owner": self.context, "owner_variant": None, "path": str(self.routine.scope.path),
-            "first_line": first, "last_line": last, "gpu_leaves": [], "mode": builder.config.policy,
-            "estimate_available": False, "planning_reason": public["reason"], "exact_window": public,
-            "source_authority": {"version": 1, "structured_summary_identity": self.graph.identity},
-            "checked_execution_plan": plan.public(), "interval_applicability": interval_applicability,
-            "boundaries": [], "execution": "original source interval once; independent native capture",
-        })
-        return True
-
-
     def run(self, nodes):
-        if getattr(self.builder, "_reached_window_binding", None) is not None:
-            return self._run_lexical(nodes)
         from compiler.scopes.ordinary_consumption import _OrdinaryPairConsumption
 
         with _OrdinaryPairConsumption(self.builder):
@@ -1756,9 +1556,6 @@ class LexicalOwner:
             self.scan(nodes)
         finally:
             self.active.pop()
-        for member in self.members.values():
-            for suffix in member.closed_suffixes:
-                suffix.validate(member)
         from compiler.scopes.conditional_return import seal as seal_return
         seal_return(self)
         self.validate_plan(nodes)
@@ -1920,18 +1717,7 @@ class LexicalOwner:
         from compiler.scopes.source_task_bindings import lexical_namespace
 
         builder = self.builder
-        from compiler.offload.scope_measurement import emit_native
-        from compiler.offload.scope_measurement import prepare as prepare_measurement
-        measurement = prepare_measurement(self)
-        if measurement is not None and builder.config.scope_measurement == "native":
-            return emit_native(self, nodes, checkpoint, measurement)
-        from compiler.offload.exact_window import prepare as prepare_exact_window
-        prepare_exact_window(self)
-        placement = plan.exact_window_placement()
         interval_applicability = plan.interval_applicability().public()
-        if (self.interval_placement and placement is not None
-                and placement.public().get("capture_variant") == "native"):
-            return self.emit_native_capture(nodes, checkpoint, interval_applicability, cleanup=native_cleanup)
         native_reason = plan.automatic_native_reason()
         if native_reason:
             # Missing estimates or a measured native advantage settle placement
@@ -1939,7 +1725,6 @@ class LexicalOwner:
             # Preserve the lexical owner, including declarations and internal
             # procedures, instead of adding TARGET and coordination guards.
             plan.validate()
-            exact_public = placement.public() if placement is not None else None
             transfer_configuration = builder.numerical(sorted(self.leaves)[0]).scoped["transfer_configuration"]
             builder.restore_scope_checkpoint(checkpoint)
             first, last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
@@ -1948,16 +1733,14 @@ class LexicalOwner:
                 "owner": self.context, "owner_variant": None,
                 "path": str(self.routine.scope.path), "first_line": first, "last_line": last,
                 "gpu_leaves": sorted(self.leaves), "mode": "auto",
-                "estimate_available": exact_public["available"] if exact_public is not None else False,
-                **({"exact_window": exact_public} if exact_public is not None else {}),
+                "estimate_available": False,
                 "planning_reason": native_reason,
                 "source_authority": {"version": 1, "structured_summary_identity": self.graph.identity},
                 "checked_execution_plan": plan.public(),
                 "interval_applicability": interval_applicability,
                 "automatic_preflight": {
                     "selection": "native", "successful": True, "reason": native_reason,
-                    "authority": ("compiler-issued complete-window placement" if exact_public is not None else
-                                  "compiler-produced offline estimate availability for every numerical alternative"),
+                    "authority": ("compiler-produced offline estimate availability for every numerical alternative"),
                     "position": "before source instrumentation and runtime evaluation",
                     "runtime_decision_inputs": [], "contexts_created": 0,
                     "registrations": 0, "queries_constructed": 0,
@@ -2145,18 +1928,11 @@ class LexicalOwner:
                                    "operations": plan.operations(self, index)} for index,unit in enumerate(plan.units(self))],
             "boundaries": self.boundaries, "native_continuation": "original lexical scope; no replay and no synthetic argument association",
             "registration": "first reached use after original allocation and descriptor guards",
-            "reopen_after_boundary": builder.config.scope_execution == "graph"})
-        if self.exact_window is not None:
-            exact_public = self.exact_window.public()
-            builder.scopes[-1]["exact_window"] = exact_public
-            builder.scopes[-1]["estimate_available"] = exact_public["available"]
-            builder.scopes[-1]["planning_reason"] = exact_public["reason"]
+            "reopen_after_boundary": True})
         builder.scopes[-1]["transfer_configuration"] = (builder.numerical(sorted(self.leaves)[0]).scoped["transfer_configuration"]
             if self.leaves else {"mode": "direct", "available": False, "reason": "external provider transport is unpriced"})
         if any(self.unit_emission(unit).fresh_native_prefix is not None for unit in plan.units(self)):
             builder.scopes[-1]["estimate_available"] = False
             builder.scopes[-1]["planning_reason"] = "original native prefix before context creation is unpriced"
         builder.boundaries.extend(boundary for member in self.members.values() for boundary in member.boundaries)
-        from compiler.offload.scope_measurement import emit as emit_measurement
-        emit_measurement(self, measurement)
         return True

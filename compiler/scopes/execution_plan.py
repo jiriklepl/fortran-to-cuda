@@ -745,7 +745,7 @@ class CheckedExecutionPlan:
         epoch = getattr(self._owner, "position_epoch", None)
         if epoch is not None:
             epoch.validate_plan(self)
-        self.exact_window_placement()
+        None
         configurations, fact_identities, analyses = {}, {}, {}
         for builder, analysis, routine, configuration, facts in self._contexts:
             key = (id(builder.options), id(builder.config), builder._numerical_environment_root,
@@ -803,20 +803,6 @@ class CheckedExecutionPlan:
                 return json.loads(item.record)["units"][ordinal]["operations"]
         raise CompilationError("execution plan does not own this procedure")
 
-    def exact_window_placement(self):
-        """Return only the exact issuer-registered attachment for this plan."""
-        self._require_owner()
-        from compiler.offload.exact_window import ExactWindowPlacement
-
-        placement = self._owner.emission.exact_window
-        if placement is None:
-            if self.identity in getattr(self._owner.builder, "_exact_window_placements", {}):
-                raise CompilationError("checked execution plan lost its issued placement attachment")
-            return None
-        if type(placement) is not ExactWindowPlacement:
-            raise CompilationError("checked execution plan requires an issued exact-window placement")
-        return placement.validate(self)
-
     def resource_demand(self):
         """Share the sealed whole-interval inventory with native consumers.
 
@@ -834,16 +820,9 @@ class CheckedExecutionPlan:
         return resource_demand_from_plan(self)
 
     def automatic_native_reason(self):
-        placement = self.exact_window_placement()
         if self._owner.builder.config.policy != "auto":
             return None
-        if placement is not None:
-            return placement.native_reason
-        reasons = self.public()["cost_requirements"]
-        # Graph AUTO reports unpriced preparation as heuristic uncertainty.
-        # Storage and execution authority remain independently checked.
-        if reasons and self._owner.builder.config.scope_execution != "graph":
-            return reasons[-1]["reason"]
+        self._require_owner()
         return self._owner.builder.automatic_native_preflight(self.leaves)
 
     def interval_applicability(self):
@@ -963,19 +942,15 @@ def build_execution_plan(owner):
         "numerical_invocations": invocations,
         "gpu_leaves": sorted(leaves),
         "policy": {
-            "order": ("dependency-verified task schedule within original control regions; source/effect provenance retained"
-                      if owner.builder.config.scope_execution == "graph" else
-                      "original source order within each procedure; original call sites and guards retained"),
+            "order": ("dependency-verified task schedule within original control regions; source/effect provenance retained"),
             "lifetime": ("supported original source path; persistent eligibility veto; close at original sequence exit" if
                          getattr(owner, "supported_path_mode", False) else
                          "owner-local original call group; close at original sequence exit" if
                          getattr(owner, "local_exit", None) is not None else
                          "original reached selection; fresh context per execution" if hasattr(owner, "interval_site") else
                          "closed original numerical selection" if hasattr(owner, "closed_selection") else
-                         "one-shot reached interval" if hasattr(owner, "window_proof") else "original invocation"),
-            "guards": ("original control regions; motion preserves proved data, descriptor and observable dependencies"
-                       if owner.builder.config.scope_execution == "graph" else
-                       "original reached evaluation points; no hoisting across native effects"),
+                         "original invocation"),
+            "guards": ("original control regions; motion preserves proved data, descriptor and observable dependencies"),
             "fallback": "publish and continue the unexecuted suffix once; execution failure never authorizes replay",
             "authority": "existing source, numerical, definition, native-effect and completion proofs",
             "public_record": "diagnostics only; cannot be imported as execution authority",
