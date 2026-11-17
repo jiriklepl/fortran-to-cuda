@@ -4,14 +4,15 @@ import math
 
 import pytest
 
-from compiler.tests.test_scoped_planning_runtime import (
+from compiler.tests.test_scoped_planning_runtime import (  # noqa: F401 - pytest fixtures
     TOKEN,
     Binding,
     Scope,
     costs,
+    planning,
+    runtime,
     select,
 )
-from compiler.tests.test_scoped_planning_runtime import planning, runtime  # noqa: F401 - pytest fixtures
 
 
 @pytest.mark.parametrize("cpu,gpu,expected", [(10., .01, 1), (.01, 10., 0)])

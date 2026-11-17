@@ -12,7 +12,6 @@ import subprocess
 from hashlib import sha256
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 SOURCE = """module operators

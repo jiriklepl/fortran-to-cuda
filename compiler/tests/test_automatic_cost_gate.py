@@ -2,7 +2,6 @@
 
 from hashlib import sha256
 
-
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
