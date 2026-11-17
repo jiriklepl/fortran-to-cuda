@@ -25,8 +25,8 @@ from compiler.numerical_contract import require_numerical_build_contract
 from compiler.offload.config import OffloadConfig
 from compiler.scopes import query_regions
 from compiler.scopes.source import ScopeBuilder
+from compiler.tests.scoped_batch_sources_cuda_support import actual_profile
 from compiler.tests.test_graph_source_owner import FACT
-from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import run
 
 SOURCE = """module query_tiles

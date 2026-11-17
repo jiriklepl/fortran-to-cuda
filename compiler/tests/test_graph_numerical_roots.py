@@ -7,7 +7,7 @@ import pytest
 
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.numerical_roots import admit_numerical_roots
-from compiler.tests.test_closed_selection import SOURCE, builder
+from compiler.tests.closed_selection_support import SOURCE, builder
 
 
 @pytest.mark.native

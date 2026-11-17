@@ -15,8 +15,8 @@ import shutil
 import pytest
 
 from compiler.numerical_contract import require_numerical_build_contract
+from compiler.tests.scoped_batch_sources_cuda_support import actual_profile
 from compiler.tests.test_graph_native_choice import emit, source_case
-from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import run
 
 DRIVER = """program verify

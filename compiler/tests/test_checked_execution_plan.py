@@ -13,7 +13,7 @@ from compiler.scopes.execution_plan import build_execution_plan
 from compiler.scopes.lexical import LexicalOwner
 from compiler.scopes.ordinary_consumption import _OrdinaryPairConsumption
 from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_lexical_source_owner import SOURCE
+from compiler.tests.lexical_source_owner_support import SOURCE
 from compiler.tests.test_source_scopes import FACT
 
 

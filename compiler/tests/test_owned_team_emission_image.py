@@ -15,6 +15,7 @@ from compiler.scopes.combined_team import CombinedNumericalTeam
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.lexical import LexicalOwner
 from compiler.scopes.source import ScopeBuilder
+from compiler.tests.ordinary_numerical_regions_support import ORDINARY_CHILD_SOURCE
 from compiler.tests.support.numerical_regions import (
     CHILD,
     CHILD_SOURCE,
@@ -25,7 +26,6 @@ from compiler.tests.support.numerical_regions import (
     environment_source,
     team_text,
 )
-from compiler.tests.test_ordinary_numerical_regions import ORDINARY_CHILD_SOURCE
 from compiler.tests.test_owned_emission_image import emit_branch, emit_member_branch, member_fixture
 
 
@@ -303,7 +303,7 @@ def test_team_preparation_or_publication_failure_adopts_nothing(tmp_path, monkey
 @pytest.mark.parametrize("count", [1, 7])
 def test_global_admission_checks_are_constant_for_original_teams(tmp_path, monkeypatch, count, record_property):
     from compiler.scopes.storage_admission import StorageAdmission
-    from compiler.tests.test_separate_numerical_team import BODY, SOURCE
+    from compiler.tests.separate_numerical_team_support import BODY, SOURCE
 
     path = tmp_path / "separate.f90"
     path.write_text(SOURCE.replace(BODY, BODY * count))

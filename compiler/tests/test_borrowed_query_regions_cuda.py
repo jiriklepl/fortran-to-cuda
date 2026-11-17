@@ -8,9 +8,9 @@ import subprocess
 import pytest
 
 from compiler.offload.config import OffloadConfig
+from compiler.tests.scoped_batch_sources_cuda_support import actual_profile
 from compiler.tests.test_borrowed_query_regions import NESTED
 from compiler.tests.test_native_ancestor_runtime import build_native_ancestor
-from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 
 DRIVER = """program exercise
 use ancestor_fixture

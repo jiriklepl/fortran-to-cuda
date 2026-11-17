@@ -143,10 +143,10 @@ def collective_configured_binary(tmp_path_factory):
     from compiler.frontend import lower_file
     from compiler.offload.config import OffloadConfig
     from compiler.offload.physical_copy_fit import physical_copies_from_measurements
-    from compiler.tests.test_module_allocatable_scopes_runtime import _run
+    from compiler.tests.module_allocatable_scopes_runtime_support import _run
+    from compiler.tests.scoped_batch_sources_cuda_support import actual_profile
     from compiler.tests.test_physical_copy_profile import observations
     from compiler.tests.test_scoped_batch_sources import FLAT
-    from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 
     nvcc, host = shutil.which("nvcc"), shutil.which("g++-14")
     if not nvcc or not host:

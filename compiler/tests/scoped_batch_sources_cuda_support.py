@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from compiler.tests.test_module_allocatable_scopes_runtime import _run
+from compiler.tests.module_allocatable_scopes_runtime_support import _run
 from compiler.tests.test_scoped_batch_sources import transfer_profile
 
 PROBE = r'''#include <cuda_runtime.h>

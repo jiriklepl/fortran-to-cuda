@@ -11,8 +11,8 @@ import pytest
 from compiler.emission.cuda.tile_task_provider import emit_tile_task_provider
 from compiler.frontend.source_device_tasks import source_device_task
 from compiler.tests.test_tile_private import SOURCE_3D
-from compiler.tests.test_tile_private_cuda import RUNTIME, checked
 from compiler.tests.test_tile_private_team import team_fixture
+from compiler.tests.tile_private_cuda_support import RUNTIME, checked
 
 
 @pytest.fixture(scope="module")

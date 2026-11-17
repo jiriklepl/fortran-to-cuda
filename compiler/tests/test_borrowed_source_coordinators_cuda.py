@@ -11,9 +11,9 @@ import pytest
 from compiler.numerical_contract import require_numerical_build_contract
 from compiler.offload.collective_calibration import normalize_fortran_options
 from compiler.offload.numerical_calibration import profile_from_compute_measurements
-from compiler.tests.test_borrowed_source_coordinators import source
+from compiler.tests.borrowed_source_coordinators_support import source
+from compiler.tests.scoped_batch_sources_cuda_support import actual_profile
 from compiler.tests.test_numerical_calibration_v2 import observations_v2
-from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import FACT, ROOT, generate, run
 
 DRIVER = """program verify

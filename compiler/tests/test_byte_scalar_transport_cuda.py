@@ -7,8 +7,8 @@ import pytest
 
 from compiler.emission.cuda.tile_task_provider import emit_tile_task_provider
 from compiler.tests.test_byte_scalar_transport import byte_fixture, issue
-from compiler.tests.test_tile_private_cuda import RUNTIME, checked
 from compiler.tests.test_tile_task_provider_cuda import source_runtime_object  # noqa: F401
+from compiler.tests.tile_private_cuda_support import RUNTIME, checked
 
 
 @pytest.mark.cuda

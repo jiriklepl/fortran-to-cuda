@@ -11,10 +11,10 @@ import pytest
 
 from compiler.numerical_contract import require_numerical_build_contract
 from compiler.scopes import registration
+from compiler.tests.scoped_batch_sources_cuda_support import actual_profile
 from compiler.tests.test_fresh_definition_preflight import SOURCE_READ
 from compiler.tests.test_graph_source_owner import FACT, emit
 from compiler.tests.test_graph_source_owner_cuda import OPAQUE_SOURCE
-from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import run
 
 DRIVER = """program verify

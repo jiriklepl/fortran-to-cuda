@@ -10,8 +10,8 @@ from compiler.emission.common.resources import read_scoped_runtime
 from compiler.emission.cuda.scoped import generate_scoped
 from compiler.frontend import lower_file
 from compiler.offload.config import OffloadConfig
+from compiler.tests.structured_offload_support import SOURCE
 from compiler.tests.test_scoped_planning_entries import calibration
-from compiler.tests.test_structured_offload import SOURCE
 
 
 def emit(tmp_path, transfers, *, profile=None, collective=False):

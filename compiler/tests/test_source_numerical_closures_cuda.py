@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from compiler.numerical_contract import require_numerical_build_contract
-from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
+from compiler.tests.scoped_batch_sources_cuda_support import actual_profile
 from compiler.tests.test_source_numerical_closures import SOURCE
 from compiler.tests.test_source_scopes import FACT, generate
 

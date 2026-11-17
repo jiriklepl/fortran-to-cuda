@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from compiler.numerical_contract import require_numerical_build_contract
-from compiler.tests.test_collective_source_runtime import DRIVER, NATIVE_COUNTERS, ROOT, SOURCE, _facts, _run
+from compiler.tests.collective_source_runtime_support import DRIVER, NATIVE_COUNTERS, ROOT, SOURCE, _facts, _run
 
 SOURCE_WITH_SHARED_READ = SOURCE.replace(
     "subroutine native_permute(b,permutation,n)\nreal(8),intent(inout)::b(:)",

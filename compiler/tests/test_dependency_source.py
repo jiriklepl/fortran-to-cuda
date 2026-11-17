@@ -26,12 +26,12 @@ from compiler.offload.config import OffloadConfig
 from compiler.offload.cpu_dependency_calibration import _hash_json, profile_from_dependency_measurements
 from compiler.offload.cpu_protocol_calibration import profile_from_cpu_protocol_measurements
 from compiler.offload.numerical_calibration import profile_from_compute_measurements
+from compiler.tests.source_compute_memory_support import function_text
 from compiler.tests.test_cpu_dependency_calibration import observations
 from compiler.tests.test_cpu_protocol_calibration import evidence
 from compiler.tests.test_offload_profile import scoped_observations
 from compiler.tests.test_scoped_compute_costs import Compute
 from compiler.tests.test_scoped_runtime import TOKEN, Layout, Scope, Stats
-from compiler.tests.test_source_compute_memory import function_text
 
 BODY = "x=a(i)\ny=b(i)\nout(i)=(x*y+x)/3d0+y"
 

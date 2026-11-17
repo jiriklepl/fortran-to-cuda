@@ -9,8 +9,8 @@ from compiler.emission.cuda.scoped import generate_scoped
 from compiler.frontend import lower_file
 from compiler.offload.config import OffloadConfig
 from compiler.offload.profile import SCOPED_COST_NAMES
+from compiler.tests.structured_offload_support import SOURCE
 from compiler.tests.test_offload_profile import profile
-from compiler.tests.test_structured_offload import SOURCE
 
 
 def emit(tmp_path, source=SOURCE, calibration=None):

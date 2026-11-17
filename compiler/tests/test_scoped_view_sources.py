@@ -20,7 +20,7 @@ from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.numerical import load_numerical_sources
-from compiler.tests.test_module_allocatable_scopes_runtime import ROOT, _run
+from compiler.tests.module_allocatable_scopes_runtime_support import ROOT, _run
 from compiler.tests.test_scoped_planning_runtime import Costs, Decision, costs
 from compiler.tests.test_scoped_runtime import SIZE, TOKEN, Access, Layout, Scope, Stats, access
 from compiler.tests.test_scoped_views import View, ViewLayout, view

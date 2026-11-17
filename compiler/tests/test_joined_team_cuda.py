@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 from compiler.numerical_contract import cuda_compile_options
+from compiler.tests.scoped_batch_sources_cuda_support import actual_profile
 from compiler.tests.test_joined_team_source import teams
-from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import FACT, ROOT, generate, run
 
 TEAM = '''!$omp parallel private(i,j) shared(a,b,out,n,m,flag) default(none)

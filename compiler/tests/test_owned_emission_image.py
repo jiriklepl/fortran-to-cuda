@@ -14,7 +14,7 @@ from compiler.offload.config import OffloadConfig
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.lexical import LexicalOwner
 from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_lexical_source_owner import SOURCE
+from compiler.tests.lexical_source_owner_support import SOURCE
 from compiler.tests.test_source_scopes import FACT
 
 
@@ -491,9 +491,9 @@ def test_owned_batch_global_admission_checks_do_not_scale_with_units(tmp_path, m
 
 
 def member_fixture(directory, kind):
+    from compiler.tests.lexical_source_owner_support import MODULE_SOURCE
     from compiler.tests.test_hierarchical_child_regions import fixture
     from compiler.tests.test_inherited_lexical_namespace import source_fixture
-    from compiler.tests.test_lexical_source_owner import MODULE_SOURCE
 
     if kind == "module":
         return source_builder(directory, source=MODULE_SOURCE)
@@ -540,7 +540,7 @@ def check_member_package(directory, owner, outputs, report):
 def test_zero_unit_companion_rejoins_restored_output_channels(tmp_path, monkeypatch, kind):
     from compiler.frontend import source_effects
     from compiler.frontend.summary_cache import SummaryCache
-    from compiler.tests.test_lexical_source_owner import INTERNAL_SOURCE
+    from compiler.tests.lexical_source_owner_support import INTERNAL_SOURCE
 
     monkeypatch.setattr(source_effects, "_DEFAULT_SUMMARY_CACHE", SummaryCache())
     if kind == "lexical":
