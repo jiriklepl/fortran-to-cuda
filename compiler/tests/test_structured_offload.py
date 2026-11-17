@@ -1,20 +1,6 @@
 """Generic host preparation, guarded arguments, and shared GPU intervals."""
 
-import json
-import os
-import re
-import shutil
 import subprocess
-from pathlib import Path
-
-import pytest
-
-from compiler.driver.options import CompilerOptions
-from compiler.driver.pipeline import prepare_function
-from compiler.emission import read_common_header
-from compiler.frontend import lower_file
-from compiler.offload.config import OffloadConfig
-from compiler.offload.profile import load_profile
 
 SOURCE = """module prepared_case
 contains

@@ -1,12 +1,11 @@
 """Original source control continues once after a reached resident escape."""
 
-import re
 from hashlib import sha256
 
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_source_scopes import FACT, assert_uncalibrated_native
+from compiler.tests.test_source_scopes import FACT
 
 SOURCE = """module local_owner
 implicit none

@@ -2,15 +2,14 @@
 
 from dataclasses import replace
 
+import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
-import pytest
 
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 from compiler.scopes.regions import extract_region
 from compiler.tests.test_native_completion_tokens import PROCEDURE, fixture
-
 
 UNIT = '!$omp do\ndo i=1,n\na(-2,i)=b(1,i)\nenddo\n!$omp end do\n'
 

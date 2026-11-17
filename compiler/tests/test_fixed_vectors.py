@@ -1,14 +1,9 @@
 """Bounded vectors disappear into ordered scalar numerical IR."""
 
-import math
-import os
-import shutil
-import subprocess
 
 import pytest
 
 from compiler.analysis import build_execution_plan
-from compiler.emission import read_common_header
 from compiler.frontend import lower_file
 from compiler.ir import (
     ArrayAccess,

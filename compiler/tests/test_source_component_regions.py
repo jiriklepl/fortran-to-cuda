@@ -11,7 +11,6 @@ from compiler.frontend.source_effects import SourceEffects
 from compiler.scopes.array_operations import extract_array_operation
 from compiler.scopes.regions import extract_region
 
-
 SOURCE = """module renamed_fields
 type settings
 real(8)::dt

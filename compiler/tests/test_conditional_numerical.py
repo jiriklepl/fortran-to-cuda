@@ -1,6 +1,6 @@
 """Source-bound legality data cannot escape into unconditional execution."""
-from dataclasses import replace
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -105,6 +105,7 @@ def test_rhs_source_read_semantics_are_not_broadened(tmp_path, expression):
 ])
 def test_resealed_record_cannot_change_source_or_guard_authority(tmp_path, key, value):
     from hashlib import sha256
+
     from compiler.frontend.conditional_numerical import _encoded
 
     analysis, _, _, _, provider, context, _, _ = prepared(tmp_path)
@@ -162,6 +163,7 @@ def test_shared_symbolic_budget_is_not_source_effect_statement_limit(tmp_path, m
 
 def test_normal_builder_seals_source_context_and_emits_guarded_sections(tmp_path):
     from hashlib import sha256
+
     from compiler.scopes.source import ScopeBuilder
     from compiler.tests.test_source_scopes import FACT
 

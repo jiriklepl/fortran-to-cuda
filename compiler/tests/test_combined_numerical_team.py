@@ -1,28 +1,11 @@
 """Combined numerical groups use the original participants and whole join."""
 
-from copy import copy
-from dataclasses import replace
 
 import pytest
 
-from compiler.ir import CompilationError
 from compiler.scopes.combined_team import (
-    CombinedNumericalTeam,
-    _check_generated_names,
     _narrow_runtime_imports,
-    _source_partition,
-    is_combined_group,
 )
-from compiler.scopes.segments import grouped_nodes
-from compiler.tests.support.numerical_regions import (
-    CHILD,
-    CHILD_SOURCE,
-    ENVIRONMENT_TEAM,
-    MATH_SOURCE,
-    EmittedNumericalText,
-    combined_units,
-    emitted_child,
-    team_text)
 
 
 def test_combined_runtime_imports_introduce_only_required_exact_exports():

@@ -1,19 +1,10 @@
 """Runtime partition and section-copy checks against independent Fortran."""
 
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
-
-from compiler.driver.options import CompilerOptions
-from compiler.driver.pipeline import prepare_function
-from compiler.emission.common.resources import read_common_header
-from compiler.frontend import lower_file
-from compiler.offload.config import OffloadConfig
-from compiler.offload.profile import load_profile
-from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 
 
 def run(command, path, environment=None):

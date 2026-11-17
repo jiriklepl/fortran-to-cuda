@@ -7,9 +7,7 @@ from dataclasses import replace
 import pytest
 
 from compiler.frontend.descriptor_windows import prove_descriptor_window
-from compiler.frontend.native_definitions import (
-    invalidate_rectangles,
-    prove_native_definitions)
+from compiler.frontend.native_definitions import prove_native_definitions
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 

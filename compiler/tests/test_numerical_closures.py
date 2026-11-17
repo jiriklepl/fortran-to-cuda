@@ -1,15 +1,11 @@
 """Bounded numerical helper closures lower into the existing scalar IR."""
 
-import os
-import shutil
-import subprocess
 
 import pytest
 
 from compiler.analysis import build_execution_plan
 from compiler.frontend import discover_file, lower_file
-from compiler.ir import Assignment, Binary, CompilationError, If, Literal, Loop, Reference, walk_expr
-from compiler.emission import read_common_header
+from compiler.ir import CompilationError, If, Literal, Loop, Reference, walk_expr
 from compiler.tests.test_native import cuda_device as cuda_device
 
 

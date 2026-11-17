@@ -6,15 +6,15 @@ an emitter must provide the matching recipe, backend and generator identities.
 """
 from __future__ import annotations
 
-from copy import deepcopy
-from dataclasses import replace
-from hashlib import sha256
 import json
 import math
 import os
-from pathlib import Path
 import re
 import statistics
+from copy import deepcopy
+from dataclasses import replace
+from hashlib import sha256
+from pathlib import Path
 
 from compiler.numerical_contract import (
     cuda_compile_options,

@@ -9,12 +9,12 @@ from fparser.two.parser import ParserFactory
 from fparser.two.utils import walk
 
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.frontend import numerical_preparation
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.numerical_preparation import NumericalPreparationProvider, NumericalPreparationUnsupported
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
+from compiler.offload.config import OffloadConfig
 
 ENTRY = "environment_route::evolve"
 OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")

@@ -16,7 +16,8 @@ from compiler.offload.source_submit_model import (
     LAUNCHES,
     fit_model,
     fit_relative,
-    validate_model)
+    validate_model,
+)
 from compiler.offload.source_task_pricing import source_task_pricing
 from compiler.offload.tile_protocol_calibration import source_scratch_benchmark
 from compiler.tests.test_scoped_runtime import RUNTIME

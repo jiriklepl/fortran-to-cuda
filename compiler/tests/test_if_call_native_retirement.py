@@ -6,7 +6,6 @@ import pytest
 from compiler.frontend.native_completion import native_call_storage_structures, prove_native_call_retirement
 from compiler.frontend.resource_reachability import prove_native_effect_graph
 from compiler.frontend.source_effects import SourceEffects
-from compiler.frontend.storage_mutation_effects import prove_storage_mutation_effects
 from compiler.ir import CompilationError
 from compiler.tests.test_native_call_retirement import SOURCE, prove, setup
 
@@ -122,7 +121,9 @@ end module''')
 
 def test_hierarchy_retires_only_under_original_metadata_guard_and_preserves_reader(tmp_path):
     import json
+
     from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+
     from compiler.tests.test_joined_boundary_lifecycle import GROUP, JOINED, emit
 
     worker = '''subroutine saved_worker(values,n)

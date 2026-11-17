@@ -5,15 +5,9 @@ strings and serialized emission snapshots may be shared by read-only tests.
 """
 
 import json
-from copy import deepcopy
 from dataclasses import dataclass
-from hashlib import sha256
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
-from compiler.frontend.numerical_preparation import NumericalPreparationProvider
 from compiler.scopes.combined_team import CombinedNumericalTeam
-from compiler.scopes.source import ScopeBuilder
 
 FACT = {"storage": "stable", "initialized": "whole", "escapes": False, "allocation_changes": False}
 

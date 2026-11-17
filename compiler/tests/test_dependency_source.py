@@ -15,7 +15,6 @@ from copy import deepcopy
 
 import pytest
 
-from compiler.offload.config import OffloadConfig
 from compiler.analysis import build_execution_plan
 from compiler.driver.options import CompilerOptions
 from compiler.emission.common.resources import read_scoped_runtime
@@ -23,14 +22,10 @@ from compiler.emission.cuda.scoped import generate_scoped
 from compiler.frontend import lower_source
 from compiler.offload import analyze_offload
 from compiler.offload.calibrate import profile_with_scoped_measurements
-from compiler.offload.cpu_dependency_calibration import (
-    ACCESS_CLASS,
-    DOMAINS,
-    _hash_json,
-    profile_from_dependency_measurements)
+from compiler.offload.config import OffloadConfig
+from compiler.offload.cpu_dependency_calibration import _hash_json, profile_from_dependency_measurements
 from compiler.offload.cpu_protocol_calibration import profile_from_cpu_protocol_measurements
 from compiler.offload.numerical_calibration import memory_compute_seconds, profile_from_compute_measurements
-from compiler.offload.source_compute import apply_source_compute_costs
 from compiler.tests.test_cpu_dependency_calibration import observations
 from compiler.tests.test_cpu_protocol_calibration import evidence
 from compiler.tests.test_offload_profile import scoped_observations

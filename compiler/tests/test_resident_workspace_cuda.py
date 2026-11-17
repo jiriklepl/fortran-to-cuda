@@ -1,9 +1,9 @@
 """Integrated lifetime milestone: queued private work survives source returns."""
-from pathlib import Path
 import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 

@@ -7,7 +7,6 @@ from compiler.frontend import resource_reachability
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 
-
 SOURCE = """module work
 implicit none
 integer,parameter::lo=2,hi=4

@@ -2,18 +2,16 @@
 
 import os
 import re
-import shutil
 from pathlib import Path
 
 import pytest
 
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
-from compiler.numerical_contract import cuda_compile_options
 from compiler.scopes.native_atomic import summarize
 from compiler.scopes.regions import extract_region
 from compiler.scopes.segments import grouped_nodes
-from compiler.tests.test_source_scopes import FACT, PROGRAM, generate, run
+from compiler.tests.test_source_scopes import FACT, PROGRAM, generate
 
 
 def source_text():

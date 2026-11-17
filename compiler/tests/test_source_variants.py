@@ -4,12 +4,12 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.offload.config import OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.ir import CompilationError
+from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.scopes.variants import VariantRegistry
-from compiler.tests.test_source_scopes import FACT, PROGRAM, WRAPPER_PROGRAM
+from compiler.tests.test_source_scopes import FACT, PROGRAM
 
 
 def register(registry, procedure="library::apply", *, interface="root_handles_v1"):

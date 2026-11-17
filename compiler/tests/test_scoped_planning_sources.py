@@ -8,15 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from compiler.offload.config import OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.emission.common.resources import read_scoped_runtime
+from compiler.offload.config import OffloadConfig
 from compiler.offload.numerical_calibration import profile_from_compute_measurements
 from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_numerical_calibration_v2 import observations_v2
 from compiler.tests.test_numerical_sources import NORMALIZED, ORIGINAL, package
 from compiler.tests.test_offload_profile import scoped_profile
-from compiler.tests.test_source_scopes import ALLOCATABLE_PROGRAM, FACT, PROGRAM, WRAPPER_PROGRAM
+from compiler.tests.test_source_scopes import FACT, PROGRAM
 
 
 def generate(tmp_path, monkeypatch, source=PROGRAM, *, captures=None, numerical_sources=None):

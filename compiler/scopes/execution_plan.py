@@ -736,7 +736,6 @@ class CheckedExecutionPlan:
         epoch = getattr(self._owner, "position_epoch", None)
         if epoch is not None:
             epoch.validate_plan(self)
-        None
         configurations, fact_identities, analyses = {}, {}, {}
         for builder, analysis, routine, configuration, facts in self._contexts:
             key = (id(builder.options), id(builder.config), builder._numerical_environment_root,

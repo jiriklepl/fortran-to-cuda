@@ -1,7 +1,6 @@
 """Compiled metadata/legality guard precedes read credit and transaction."""
 import ctypes as c
 import shutil
-from pathlib import Path
 
 import pytest
 

@@ -1,8 +1,8 @@
 """Reached diagnostics never expand a whole call closure just to print it."""
 
+import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
-import pytest
 
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError

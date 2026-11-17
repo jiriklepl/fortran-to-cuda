@@ -5,12 +5,11 @@ from dataclasses import replace
 
 import pytest
 
-from compiler.frontend.call_bindings import SourceDependency
 from compiler.frontend.native_definitions import (
     NativeCallCoordinatesUnsupported,
-    invalidate_rectangles,
     prove_native_call_coordinates,
-    prove_native_definitions)
+    prove_native_definitions,
+)
 from compiler.frontend.native_sections import NativeAxis, NativeBound, NativeIteration, NativeRectangle
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError

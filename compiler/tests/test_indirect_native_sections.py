@@ -88,6 +88,7 @@ def test_inspector_cannot_authorize_foreign_or_stale_source(tmp_path):
 
 def test_native_worksharing_inspection_requires_its_exact_original_team_token(tmp_path):
     from dataclasses import replace
+
     from fparser.two import Fortran2003 as F
     from fparser.two.utils import walk
 

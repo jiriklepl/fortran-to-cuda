@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
 import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError

@@ -1,20 +1,15 @@
 """Source-backed private closures retain logical coordinates and native guards."""
 
-import re
-from hashlib import sha256
 
 import pytest
 
-from compiler.offload.config import OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.frontend import lower_source
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
 from compiler.scopes.regions import extract_region
-from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_inline_source_regions import original_joined_group
-from compiler.tests.test_source_scopes import FACT
 
 SOURCE = """module renamed_numerics
 implicit none

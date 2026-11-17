@@ -1,10 +1,8 @@
 """Intrinsic typing and execution compared with native Fortran on each backend."""
 
-import os
 import re
 import shutil
 import subprocess
-from dataclasses import replace
 
 import pytest
 
@@ -14,10 +12,9 @@ from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission import read_common_header
 from compiler.frontend import lower_file
-from compiler.ir import CompilationError, IntrinsicCall, Literal, ScalarType, SourceLocation, referenced_symbols
+from compiler.ir import CompilationError, IntrinsicCall, Literal, ScalarType, SourceLocation
 from compiler.ir.intrinsics import INTRINSIC_ARGUMENTS
 from compiler.tests.test_language import lower
-from compiler.tests.test_language_cuda import CUDA_RUNTIME
 from compiler.tests.test_native import cuda_device as cuda_device
 
 REQUESTED = {

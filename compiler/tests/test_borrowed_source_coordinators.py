@@ -1,12 +1,8 @@
 """Reached source children share ownership without cloning persistent state."""
 
-import json
-import re
 
-import pytest
 
-from compiler.tests.test_source_compute_costs import profile_v2
-from compiler.tests.test_source_scopes import FACT, PROGRAM, generate
+from compiler.tests.test_source_scopes import PROGRAM
 
 
 def variants(manifest):

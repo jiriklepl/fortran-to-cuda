@@ -1,7 +1,7 @@
 """Execute generated code against Fortran; missing native capabilities alone may skip."""
 
-import math
 import json
+import math
 import os
 import re
 import shutil

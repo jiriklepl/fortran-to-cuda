@@ -1,19 +1,10 @@
 """Reachable original IEEE state restricts numerical work before outlining."""
 
-from hashlib import sha256
 from types import SimpleNamespace
 
-import pytest
-
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.lexical import immutable_numerical_unit
 from compiler.scopes.segments import Segment
-from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_lexical_source_owner import MODULE_SOURCE, SOURCE, emit
-from compiler.tests.test_reached_counted_loops import builder_for
-from compiler.tests.test_reached_stage_prerequisites_cuda import sources
-from compiler.tests.test_source_scopes import FACT
+from compiler.tests.test_lexical_source_owner import SOURCE
 
 
 def numerical_regions(report):

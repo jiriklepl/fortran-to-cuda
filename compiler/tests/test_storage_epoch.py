@@ -1,11 +1,6 @@
 """Lifetime attachments cannot widen the checked source/storage authority."""
-from copy import copy
-from dataclasses import replace
 
-import pytest
 
-from compiler.ir import CompilationError
-from compiler.tests.test_checked_execution_plan import scanned
 from compiler.tests.test_graph_source_owner import EPOCH_SOURCE, emit
 
 

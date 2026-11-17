@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from compiler.analysis.semantics import expression_type
-from compiler.emission.cuda.tile_task_provider import _Ranges, _SUPPORT
+from compiler.emission.cuda.tile_task_provider import _SUPPORT, _Ranges
 from compiler.frontend.conditional_numerical import ConditionalNumericalContext
 from compiler.ir import Binary, CompilationError, IntrinsicCall, ScalarType, SourceLocation, Unary
 

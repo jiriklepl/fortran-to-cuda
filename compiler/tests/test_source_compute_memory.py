@@ -13,16 +13,16 @@ from copy import deepcopy
 
 import pytest
 
-from compiler.offload.config import OffloadConfig
 from compiler.analysis import build_execution_plan
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.emission.cuda.scoped import generate_scoped
 from compiler.frontend import lower_source
+from compiler.offload.config import OffloadConfig
 from compiler.tests.test_schedule_calibration import schedule_profile
 from compiler.tests.test_scoped_compute_costs import Compute
-from compiler.tests.test_scoped_planning_runtime import Costs, Decision, costs
-from compiler.tests.test_scoped_rank_reduced_views import View, view
-from compiler.tests.test_scoped_runtime import RUNTIME, TOKEN, Access, Layout, Scope, Section, Stats, access
+from compiler.tests.test_scoped_planning_runtime import Costs, Decision
+from compiler.tests.test_scoped_rank_reduced_views import View
+from compiler.tests.test_scoped_runtime import RUNTIME, TOKEN, Access, Layout, Section, Stats
 from compiler.tests.test_source_compute_costs import SOURCE, profile_v2
 
 ALIASES = """module distinct_inputs

@@ -11,9 +11,9 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
+from compiler.driver.cli import _offload_config, _parse_args
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
-from compiler.driver.cli import _offload_config, _parse_args
 from compiler.scopes.source import ScopeBuilder
 
 

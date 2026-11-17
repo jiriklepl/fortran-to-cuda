@@ -1,7 +1,8 @@
 """Fixed source fields retain their original object and lexical alias owner."""
 
-import pytest
 from copy import copy
+
+import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 

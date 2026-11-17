@@ -10,7 +10,6 @@ from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
 
-
 ENTRY = 'section_fixture::step'
 SOURCE = '''module section_fixture
 contains

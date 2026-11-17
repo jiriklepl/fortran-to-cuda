@@ -1,18 +1,13 @@
 """The default INTEGER ABI has checked constants and unchanged runtime arithmetic."""
 
-import os
-import re
 import shutil
 import subprocess
-from dataclasses import replace
 
 import pytest
 
 from compiler.analysis import build_execution_plan
 from compiler.analysis.semantics import constant_integer as stage_constant_integer
 from compiler.driver.options import CompilerOptions
-from compiler.driver.pipeline import prepare_function
-from compiler.emission import read_common_header
 from compiler.emission.common.c_family import render_expression
 from compiler.frontend import lower_file
 from compiler.ir import (
@@ -31,7 +26,6 @@ from compiler.ir import (
     Unary,
 )
 from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, constant_integer
-from compiler.tests.test_language_cuda import CUDA_RUNTIME
 
 INTEGER = ScalarType.INTEGER
 LOCATION = SourceLocation("integer_case.f90", 17)

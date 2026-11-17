@@ -22,7 +22,6 @@ from compiler.scopes.lexical import LexicalOwner
 from compiler.scopes.segments import fortran_lines, statement_span
 from compiler.scopes.source import _name
 
-
 # Search bounds for contiguous original interval candidates.
 MAX_ADJACENT_UNITS = 4
 MAX_ATTEMPTS = 16

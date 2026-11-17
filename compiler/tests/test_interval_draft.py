@@ -1,17 +1,9 @@
 """One source inventory precedes cross-procedure ownership and placement."""
 
-import shutil
-import subprocess
-from copy import copy
-from dataclasses import FrozenInstanceError, replace
 from hashlib import sha256
-
-import pytest
 
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
-from compiler.ir import CompilationError
-from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.interval_draft import prepare_interval_draft
 from compiler.scopes.lexical import LexicalOwner
 from compiler.scopes.source import ScopeBuilder

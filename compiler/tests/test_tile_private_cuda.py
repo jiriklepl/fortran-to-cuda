@@ -1,18 +1,10 @@
 """Actual original-Fortran equivalence and runtime-leased indexed tile scratch."""
 
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
-from compiler.emission.cuda.tile_private import (
-    generate_cooperative_kernel,
-    generate_kernel)
-from compiler.frontend.lowering import lower_tile_private
-from compiler.frontend.tile_private import prove_cooperative_tile_private, prove_tile_private
-from compiler.tests.test_tile_private import fixture
-from compiler.tests.test_tile_private_emission import original_arguments, original_source
 
 RUNTIME = Path(__file__).resolve().parents[1] / "runtime"
 

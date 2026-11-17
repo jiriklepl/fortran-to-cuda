@@ -8,11 +8,8 @@ import pytest
 
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.frontend import lower_file
 from compiler.ir import CompilationError
-from compiler.scheduling import schedule_plan
 from compiler.tests.test_language import lower
-from compiler.transforms import optimize_function
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUTS = ("generated_code.cu", "generated_cpp_impl.cpp", "generated_interface.f90", "common_functions.cuh")

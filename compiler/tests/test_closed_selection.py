@@ -1,14 +1,9 @@
 """Complete original numerical groups use one checked reached owner path."""
 
-from copy import copy
 from hashlib import sha256
-
-import pytest
 
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
-from compiler.ir import CompilationError
-from compiler.scopes.closed_selection import ClosedNumericalOwner, candidates
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
 

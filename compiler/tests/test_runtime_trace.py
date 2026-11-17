@@ -1,9 +1,9 @@
 """Concurrent runtime and placement diagnostics retain whole line records."""
 
-from collections import Counter
 import os
 import shutil
 import subprocess
+from collections import Counter
 
 import pytest
 

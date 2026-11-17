@@ -1,14 +1,25 @@
 """Numerical costs retain independent evidence and never guess applicability."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
 
 from compiler.offload.numerical_calibration import (
-    BACKEND_ID, INTRINSIC_BACKEND_ID, FAMILIES, FIT_SIZES, HOLDOUT_SIZES, MIX_FAMILIES, NumericalCalibrationError,
-    _fit, calibrate_numerical, generator_identity, numerical_costs,
-    numerical_intrinsic_costs, parse_measurements, profile_from_measurements,
+    BACKEND_ID,
+    FAMILIES,
+    FIT_SIZES,
+    HOLDOUT_SIZES,
+    INTRINSIC_BACKEND_ID,
+    MIX_FAMILIES,
+    NumericalCalibrationError,
+    _fit,
+    calibrate_numerical,
+    generator_identity,
+    numerical_costs,
+    numerical_intrinsic_costs,
+    parse_measurements,
+    profile_from_measurements,
 )
 from compiler.offload.profile import ProfileError, validate_profile
 from compiler.tests.test_offload_profile import profile

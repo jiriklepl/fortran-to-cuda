@@ -1,17 +1,12 @@
 """Original serial loops retain one owner and their reached escape semantics."""
 
-from copy import copy
 from hashlib import sha256
 
-import pytest
-
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.frontend.source_effects import _children, _kind
-from compiler.ir import CompilationError
-from compiler.scopes.counted_loops import reached_counted_body
+from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_lexical_source_owner import SOURCE, emit
+from compiler.tests.test_lexical_source_owner import SOURCE
 from compiler.tests.test_source_scopes import FACT
 
 COUNTED_SOURCE = (SOURCE.replace("integer::i", "integer::i,stage")

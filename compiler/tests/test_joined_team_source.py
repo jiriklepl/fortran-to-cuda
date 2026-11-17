@@ -1,9 +1,5 @@
 """Reached mixed teams preserve original synchronization and native entries."""
 
-import os
-import re
-import shutil
-import subprocess
 from hashlib import sha256
 
 import pytest
@@ -11,7 +7,7 @@ import pytest
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_source_scopes import FACT, assert_uncalibrated_native
+from compiler.tests.test_source_scopes import FACT
 
 PRODUCER = '''!$omp do
 do i=-2,n-3

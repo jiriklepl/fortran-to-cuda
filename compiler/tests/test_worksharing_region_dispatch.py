@@ -10,8 +10,8 @@ from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.ir import CompilationError
+from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
 

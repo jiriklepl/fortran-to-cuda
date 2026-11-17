@@ -7,11 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.driver.pipeline import prepare_function
-from compiler.frontend import lower_file
-from compiler.offload.config import OffloadConfig
-
 
 @pytest.mark.native
 def test_device_scope_restores_each_executor_and_empty_units_stay_native(tmp_path):

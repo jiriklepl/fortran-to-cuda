@@ -1,12 +1,7 @@
 """Exercise CUDA host-branch coherence with synchronous simulated device work."""
 
-import re
-from dataclasses import replace
 
-import pytest
 
-from compiler.analysis import build_execution_plan
-from compiler.tests import test_language as language
 
 CUDA_RUNTIME = r"""
 #pragma once

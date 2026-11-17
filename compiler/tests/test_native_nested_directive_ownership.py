@@ -10,7 +10,6 @@ from compiler.frontend.native_group_structure import NativeGroupCandidate, group
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 
-
 ENTRY = "nested_work::step"
 
 

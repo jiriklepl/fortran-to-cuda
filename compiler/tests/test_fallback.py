@@ -1,7 +1,6 @@
 """Host fallback is restricted to semantically valid, unproved parallel regions."""
 
 import re
-from dataclasses import replace
 
 import pytest
 

@@ -86,7 +86,7 @@ enddo
     assert report["reason"] is None
     assert report["parallel_regions"] == 2
     assert report["kernel"] == "advance"
-    assert OUTPUTS <= set(report["outputs"])
+    assert set(report["outputs"]) >= OUTPUTS
     assert {path.name for path in output.iterdir()} == set(report["outputs"])
     assert report["artifact_schema_version"] == 2 and report["memory_model"] == "scoped"
     assert "generated_cpp_impl.cpp" not in report["outputs"]

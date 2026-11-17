@@ -2,7 +2,6 @@
 
 from compiler.frontend.source_effects import SourceEffects
 
-
 LIBRARY = """module storage_owner
 implicit none
 private

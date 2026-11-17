@@ -1,16 +1,11 @@
 """Ordinary lexical owners consume source-issued numerical pairs, without a plan."""
 
-from copy import copy, deepcopy
-from dataclasses import replace
+from copy import deepcopy
 from hashlib import sha256
 
-import pytest
-
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
-from compiler.ir import CompilationError
-from compiler.scopes.generation_transaction import GenerationTransaction
+from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.support.numerical_regions import CHILD, FACT, MATH_SOURCE, OWNER_SOURCE, ROOTS
 

@@ -5,12 +5,10 @@ from hashlib import sha256
 import pytest
 
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.numerical_effects import prove_numerical_effects
 from compiler.frontend.numerical_preparation import NumericalPreparationProvider
-from compiler.ir import CompilationError
-from compiler.scopes.combined_team import _source_partition, is_combined_group
+from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.support.numerical_regions import EmittedNumericalText
 from compiler.tests.test_ordinary_numerical_regions import emit_ordinary_numerical_fixture

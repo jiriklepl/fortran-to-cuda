@@ -1,9 +1,9 @@
 """Exact bounded rectangle normalization preserves holes and physical cells."""
 from __future__ import annotations
 
+import ctypes
 import itertools
 import json
-import ctypes
 import shutil
 import subprocess
 from pathlib import Path

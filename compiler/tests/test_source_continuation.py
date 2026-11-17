@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-
 import pytest
 
 from compiler.tests.test_source_scopes import FACT, PROGRAM, assert_uncalibrated_native, generate

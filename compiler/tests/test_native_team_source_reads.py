@@ -1,17 +1,14 @@
 """Exact entry reads for unchanged native scatter work after a GPU prefix."""
 
-from copy import copy
-from dataclasses import replace
 
 import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
 from compiler.frontend.indirect_sections import analyze_indirect_sections
-from compiler.frontend.reached_read_requirements import native_read_sections, prove_native_read_requirements
+from compiler.frontend.reached_read_requirements import prove_native_read_requirements
 from compiler.ir import CompilationError
 from compiler.scopes.closed_selection import ClosedIntervalOwner
-from compiler.scopes.source_reads import validate_native_source_reads
 from compiler.tests.test_indirect_native_sections import fixture
 from compiler.tests.test_interval_draft import SOURCE
 from compiler.tests.test_original_interval_owner import builder, call_pair

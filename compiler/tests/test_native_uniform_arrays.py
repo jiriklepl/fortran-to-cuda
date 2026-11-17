@@ -3,17 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 from compiler.scopes.segments import grouped_nodes
-from compiler.scopes.source import form_source_scopes
-from compiler.tests.test_source_scopes import FACT
 
 ENTRY = "switch_owner::advance"
 

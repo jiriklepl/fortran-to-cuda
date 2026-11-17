@@ -161,9 +161,9 @@ def test_uncovered_physical_rate_executes_exact_direct_without_new_definition_cr
 
 def test_compact_pool_race_invalidates_only_cost_authority(tmp_path):
     """A changed physical lease must not leave a stale accepted owner price."""
-    from pathlib import Path
     import shutil
     import subprocess
+    from pathlib import Path
 
     compiler = shutil.which("g++")
     assert compiler is not None

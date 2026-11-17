@@ -11,7 +11,8 @@ from compiler.ir import CompilationError
 from compiler.scopes.storage_epoch import (
     _worksharing_rows,
     require_original_worksharing_coverage,
-    worksharing_descriptor_windows)
+    worksharing_descriptor_windows,
+)
 from compiler.tests.test_descriptor_worksharing import SOURCE
 
 PARENT = "worksharing::parent"

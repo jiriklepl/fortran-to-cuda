@@ -1,33 +1,20 @@
 """Whole joined native definitions seed exact sections in one resident chain."""
 
 import re
-from copy import copy, deepcopy
+from copy import copy
 from dataclasses import replace
-from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
-from compiler.frontend.call_bindings import SourceDependency
-from compiler.frontend.native_definitions import (
-    NativeDefinitionUnsupported,
-    _covers,
-    invalidate_rectangles,
-    prove_native_definitions)
+from compiler.frontend.native_definitions import NativeDefinitionUnsupported, _covers, prove_native_definitions
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.native_sections import (
     NativeAxis,
     NativeBound,
-    NativeIteration,
     NativeRectangle,
-    NativeResourceSections,
 )
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
-from compiler.scopes.module_owner import ModuleOwner
-from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_source_scopes import FACT
 
 ENTRY = "coast_owner::advance"
 ROOTS = ("argument::a", "argument::seed", "argument::delta", "argument::out")

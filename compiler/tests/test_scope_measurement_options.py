@@ -2,14 +2,9 @@
 
 import subprocess
 import sys
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
-
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
-from compiler.frontend.numerical_preparation import _Budget, _configuration
 
 
 @pytest.mark.parametrize("extra", [[], ["--form-scopes"],

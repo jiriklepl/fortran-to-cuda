@@ -1,17 +1,12 @@
 """Whole native groups retain bounded source proofs without granting cuts."""
 
 from dataclasses import replace
-from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 from compiler.scopes.native_atomic import summarize
-from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_source_scopes import FACT
 
 ENTRY = "renamed_boundary_owner::step"
 

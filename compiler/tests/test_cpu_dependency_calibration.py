@@ -12,7 +12,8 @@ from compiler.offload.cpu_dependency_calibration import (
     _hash_json,
     dependency_generator_identity,
     profile_from_dependency_measurements,
-    validate_dependency_profile)
+    validate_dependency_profile,
+)
 from compiler.offload.cpu_dependency_model import COEFFICIENT_FAMILIES, Coefficient, evaluate_work_span
 from compiler.offload.cpu_dependency_workloads import dependency_recipes
 from compiler.offload.cpu_protocol_calibration import CPU_BACKENDS, cpu_protocol_costs

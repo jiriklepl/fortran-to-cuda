@@ -7,8 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from compiler.emission.common.resources import read_common_header
-
 RUNTIME = Path(__file__).resolve().parents[1] / "runtime"
 
 MOCK = r'''

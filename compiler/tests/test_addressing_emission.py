@@ -6,9 +6,9 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
 from compiler.emission.common.c_family import render_assignment, render_expression, wide_iterator_name
-from compiler.emission.common.loops import iteration_value, mapped_coordinates, mapped_snapshots, sequential_block
-from compiler.emission.cuda.kernels import _point_body as cuda_point_body
+from compiler.emission.common.loops import sequential_block
 from compiler.ir import (
     ArrayAccess,
     Assignment,

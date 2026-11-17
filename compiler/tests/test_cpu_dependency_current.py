@@ -20,7 +20,8 @@ from compiler.offload.cpu_dependency_calibration import (
     calibrate_dependency,
     dependency_generator_identity,
     profile_from_dependency_measurements,
-    validate_dependency_profile)
+    validate_dependency_profile,
+)
 from compiler.offload.cpu_dependency_model import COEFFICIENT_FAMILIES, Coefficient, evaluate_work_span
 from compiler.offload.cpu_dependency_workloads import (
     BASIS_FAMILIES,

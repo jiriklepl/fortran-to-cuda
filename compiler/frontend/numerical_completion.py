@@ -1,8 +1,8 @@
 """Synchronous source-helper completion, separate from native effect hooks."""
 
+import json
 from dataclasses import dataclass, field
 from hashlib import sha256
-import json
 
 from fparser.two.utils import walk
 

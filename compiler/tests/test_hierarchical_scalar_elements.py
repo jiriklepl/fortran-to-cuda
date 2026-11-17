@@ -7,7 +7,6 @@ import pytest
 from compiler.ir import CompilationError
 from compiler.tests.test_hierarchical_child_regions import SOURCE, fixture
 
-
 SOURCE_ELEMENTS = (SOURCE.replace('real(8)::observed',
     'real(8)::observed\nreal(8)::ratios(0:1)=[2.0_8,3.0_8]\ninteger::selector=0')
     .replace('subroutine consumer(a,b,n)', 'subroutine consumer(a,b,n,scale)')

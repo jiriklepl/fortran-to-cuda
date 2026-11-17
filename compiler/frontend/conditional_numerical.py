@@ -14,9 +14,18 @@ from hashlib import sha256
 
 from compiler.analysis.conditional_affine import collect_conditional_affine
 from compiler.analysis.effects import mapped_prefix
-from compiler.frontend.atomic_worksharing_team import AtomicWorksharingAlternative, AtomicWorksharingTeamProof, atomic_worksharing_alternatives
+from compiler.frontend.atomic_worksharing_team import (
+    AtomicWorksharingAlternative,
+    AtomicWorksharingTeamProof,
+    atomic_worksharing_alternatives,
+)
 from compiler.frontend.numerical_preparation import (
-    NumericalPreparationUnsupported, _Budget, _SCAN_LIMIT, _digest, _extraction_identity, _source_authority,
+    _SCAN_LIMIT,
+    NumericalPreparationUnsupported,
+    _Budget,
+    _digest,
+    _extraction_identity,
+    _source_authority,
 )
 from compiler.ir import ExecutionPlan, ScalarType, SourceLocation
 
@@ -243,7 +252,7 @@ def prove_conditional_numerical_context(provider, team):
     budget = _Budget()
     _routine, graph, identities, source = _source_authority(analysis, routine.qualified, team._nodes,
                                                           extraction.numerical_helpers, budget)
-    parameters = _parameter_record(extraction, function)
+    _parameter_record(extraction, function)  # validates the lowered parameter inventory
     bank = collect_conditional_affine(function, operation_budget=_SCAN_LIMIT)
     paths = team.public()["alternatives"]
     domains = tuple(bank.project(tuple(path)) if path else None for path in paths)

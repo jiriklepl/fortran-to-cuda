@@ -1,18 +1,9 @@
 """One conditional owner: close before a native replacement, never replay."""
 
-import re
-from copy import copy, deepcopy
-from hashlib import sha256
 
-import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.frontend.descriptor_windows import DescriptorWindowUnsupported
 from compiler.ir import CompilationError
-from compiler.scopes.generation_transaction import GenerationTransaction
-from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_source_scopes import FACT
 
 ENTRY = "renamed_stage::step"
 ROOTS = ("argument::a", "argument::b")

@@ -31,6 +31,7 @@ def generate_sources(
 ) -> GeneratedSources:
     """Emit the shared graph backend; callers own storage and publication."""
     import json
+
     from compiler.emission.common.resources import read_scoped_runtime
     from compiler.emission.cuda.scoped import generate_scoped
     from compiler.offload.config import OffloadConfig

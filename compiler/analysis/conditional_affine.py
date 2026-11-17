@@ -7,16 +7,26 @@ Ordinary planning never consumes this module's unaccepted regions.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from hashlib import sha256
-import json
 
 import islpy as isl
 
 from compiler.analysis.dependence import Affine, _region_model
 from compiler.analysis.effects import mapped_prefix
 from compiler.analysis.semantics import validate_function
-from compiler.ir import ArrayAccess, Assignment, Binary, Block, CompilationError, IntrinsicCall, Loop, ScalarType, walk_expr
+from compiler.ir import (
+    ArrayAccess,
+    Assignment,
+    Binary,
+    Block,
+    CompilationError,
+    IntrinsicCall,
+    Loop,
+    ScalarType,
+    walk_expr,
+)
 
 
 class ConditionalAffineUnsupported(CompilationError):

@@ -7,7 +7,6 @@ state, allocation budget and stream/lifetime admission are still required.
 
 from __future__ import annotations
 
-
 from compiler.analysis.semantics import expression_type
 from compiler.emission.cuda.tile_task_provider import _Ranges
 from compiler.ir import ArrayAccess, Binary, CompilationError, IntrinsicCall, ScalarType, Size, SourceLocation, Unary

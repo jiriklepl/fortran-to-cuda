@@ -8,7 +8,7 @@ from fparser.two.utils import walk
 
 from compiler.frontend.source_effects import SourceEffects
 from compiler.frontend.tile_private import prove_tile_private
-from compiler.ir import CompilationError, ScalarType, Symbol
+from compiler.ir import CompilationError
 
 SOURCE = """module stencil
 contains

@@ -42,9 +42,10 @@ def source():
 
 
 def sealed_emission(directory):
-    from compiler.scopes.lexical import LexicalBoundaryPatch
     from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
     from elmm_pipeline.local_adapter import _scope_package_build
+
+    from compiler.scopes.lexical import LexicalBoundaryPatch
 
     original, builder = fixture(directory, source())
     outputs, report = builder.run()

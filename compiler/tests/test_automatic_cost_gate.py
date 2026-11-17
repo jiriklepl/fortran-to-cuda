@@ -6,11 +6,8 @@ import pytest
 
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
-from compiler.ir import CompilationError
 from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_collective_source_scopes import generate as collective
 from compiler.tests.test_numerical_sources import package
-from compiler.tests.test_source_compute_costs import profile_v2
 from compiler.tests.test_source_scopes import FACT, PROGRAM
 
 

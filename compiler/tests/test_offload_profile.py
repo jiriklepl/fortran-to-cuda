@@ -7,7 +7,6 @@ from types import SimpleNamespace
 import pytest
 
 from compiler.numerical_contract import numerical_build_contract
-
 from compiler.offload.calibrate import (
     CalibrationError,
     fit_transfer,

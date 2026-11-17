@@ -1,21 +1,8 @@
 """Exact original-read admission after an unchanged native prefix."""
 
-from collections.abc import Mapping
-from copy import copy
-from dataclasses import replace
-from functools import partial
 
-import pytest
 
-from compiler.offload.config import OffloadConfig
-from compiler.frontend.selection_activation import (
-    SelectionActivationProof,
-    prove_selection_activation,
-    selection_activation_demands,
-)
-from compiler.ir import CompilationError
 from compiler.scopes.closed_selection import ClosedIntervalOwner
-from compiler.tests.test_interval_draft import SOURCE
 from compiler.tests.test_original_interval_owner import builder, call_pair
 
 PREFIX = """integer::i

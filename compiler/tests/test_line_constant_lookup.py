@@ -6,7 +6,7 @@ import pytest
 
 from compiler.frontend.line_snapshot import prove_line_snapshot
 from compiler.frontend.lowering import lower_file, lower_line_snapshot_consumer
-from compiler.ir import Assignment, Binary, CompilationError, If, IntrinsicCall, Literal, Loop, Reference, ScalarType, walk_expr
+from compiler.ir import Assignment, Binary, CompilationError, If, IntrinsicCall, Literal, Loop, ScalarType, walk_expr
 from compiler.tests.test_line_snapshot import fixture, source
 
 

@@ -9,16 +9,9 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 from collections import Counter
 from hashlib import sha256
-from pathlib import Path
 
-import pytest
-
-from compiler.numerical_contract import require_explicit_cuda_environment, require_numerical_build_contract
-from compiler.tests.support.numerical_regions import ROOTS
-from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import run
 
 

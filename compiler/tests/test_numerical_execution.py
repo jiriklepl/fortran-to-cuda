@@ -1,6 +1,5 @@
 """Strict reconstruction and independent failures of the CPU-only protocol."""
 
-import json
 import math
 from copy import deepcopy
 

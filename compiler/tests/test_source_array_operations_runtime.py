@@ -1,16 +1,14 @@
 """Public source artifacts preserve complete fields, holes and native snapshots."""
 
-from hashlib import sha256
 import ctypes
 import os
-from pathlib import Path
 import shutil
 import struct
+from hashlib import sha256
 
 import pytest
 
 from compiler.tests.test_source_scopes import FACT, ROOT, assert_uncalibrated_native, generate, run
-
 
 SOURCE = """module renamed_boundaries
 contains

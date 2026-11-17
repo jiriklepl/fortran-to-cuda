@@ -1,9 +1,7 @@
 """Production compilation cannot enter retired per-call memory/placement engines."""
 import pytest
+
 from compiler.driver.options import CompilerOptions
-from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources
-from compiler.frontend import lower_source
 from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
 

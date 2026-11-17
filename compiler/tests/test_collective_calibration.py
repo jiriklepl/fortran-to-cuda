@@ -6,7 +6,6 @@ import pytest
 
 from compiler.offload.calibrate import profile_with_scoped_measurements
 from compiler.offload.collective_calibration import (
-    AUTO_OWNER_CALLS,
     AUTO_WORK_CALLS,
     COMPUTE_STEPS,
     MEASURED_SAMPLES,

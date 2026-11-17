@@ -4,9 +4,6 @@ import math
 
 import pytest
 
-from compiler.tests.test_scoped_planning_runtime import (
-    Binding, Scope, TOKEN, costs, planning, runtime, select,
-)
 from compiler.analysis import build_execution_plan
 from compiler.emission import generate_sources
 from compiler.emission.common.resources import read_scoped_runtime
@@ -15,6 +12,14 @@ from compiler.offload.config import OffloadConfig
 from compiler.offload.numerical_calibration import MIX_FAMILIES, profile_from_measurements
 from compiler.tests.test_numerical_calibration import observations
 from compiler.tests.test_offload_profile import scoped_profile
+from compiler.tests.test_scoped_planning_runtime import (
+    TOKEN,
+    Binding,
+    Scope,
+    costs,
+    select,
+)
+from compiler.tests.test_scoped_planning_runtime import planning, runtime  # noqa: F401 - pytest fixtures
 
 
 @pytest.mark.parametrize("cpu,gpu,expected", [(10., .01, 1), (.01, 10., 0)])

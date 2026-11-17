@@ -14,9 +14,8 @@ from pathlib import Path
 import pytest
 
 from compiler.driver.options import CompilerOptions
-from compiler.emission.common.abi import abi_arguments
 from compiler.emission.common.resources import read_common_header
-from compiler.emission.cuda.kernels import generate_kernel, generate_launch, kernel_name
+from compiler.emission.cuda.kernels import generate_kernel, generate_launch
 from compiler.ir import (
     ArrayAccess,
     Assignment,

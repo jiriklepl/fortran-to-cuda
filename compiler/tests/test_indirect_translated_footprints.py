@@ -1,8 +1,8 @@
 """Invocation-local exact translated footprints preserve reached source checks."""
 
-from pathlib import Path
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -206,6 +206,7 @@ def test_different_loop_domains_do_not_share_a_reached_footprint(tmp_path):
 
 def test_original_minval_maxval_names_do_not_capture_generated_extrema(tmp_path, monkeypatch):
     from dataclasses import replace
+
     from compiler.tests import test_indirect_native_sections as helper
     original = helper.build_indirect_accesses
 

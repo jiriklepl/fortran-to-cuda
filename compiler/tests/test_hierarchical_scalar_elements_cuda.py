@@ -4,12 +4,11 @@ import os
 import re
 
 import pytest
-
-from compiler.tests import test_graph_storage_epochs_cuda as base
-from compiler.tests.test_hierarchical_child_regions_cuda import events_in, procedure, copy_bytes
-from compiler.tests.test_hierarchical_scalar_elements import SOURCE_ELEMENTS, emit
 from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
 
+from compiler.tests import test_graph_storage_epochs_cuda as base
+from compiler.tests.test_hierarchical_child_regions_cuda import copy_bytes, events_in, procedure
+from compiler.tests.test_hierarchical_scalar_elements import SOURCE_ELEMENTS, emit
 
 CALL = 'call consumer(left,right,n,ratios(selector))'
 SOURCE = (SOURCE_ELEMENTS

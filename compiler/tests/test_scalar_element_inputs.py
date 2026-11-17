@@ -1,18 +1,13 @@
 """An original fixed-table element stays one scalar association through calls."""
 
-from copy import copy, deepcopy
-from hashlib import sha256
+from copy import copy
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.native_call_coordinates import prove_native_call_coordinates
 from compiler.frontend.source_effects import SourceEffects, _children
 from compiler.ir import CompilationError
-from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_source_scopes import FACT
 
 ENTRY = "tide_owner::advance"
 ROOTS = ("argument::a", "argument::b")
