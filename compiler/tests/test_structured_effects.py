@@ -134,7 +134,8 @@ end subroutine
     summary = analysis.segment_summary(routine.qualified, (call,))
     assert summary["complete"], summary["reasons"]
     events = [effect for effect in summary["ordered_effects"] if effect["kind"] == "definition_change"]
-    assert len(events) == 1 and events[0]["resource"] == "argument::a"
+    assert len(events) == 1
+    assert events[0]["resource"] == "argument::a"
     operation, = [op for op in summary["operations"] if op["kind"] == "call"]
     assert operation["definition_events"][0]["position"] == "callee entry after original actual evaluation"
     assert operation["resource_mappings"][0]["formal_resource"] == "argument::x"
@@ -189,7 +190,8 @@ def test_capture_locals_and_entry_effects_are_explicit(tmp_path):
     _path, analysis = source(tmp_path, "local(1)=a(1)\nb(1)=local(1)", specification="real(8)::local(3)")
     ordinary = analysis.segment_summary("varied::advance", assignments(analysis))
     captured = analysis.segment_summary("varied::advance", assignments(analysis), capture_locals=True)
-    assert ordinary["complete"] and captured["complete"]
+    assert ordinary["complete"]
+    assert captured["complete"]
     assert "varied::advance::local" not in {effect["resource"] for effect in ordinary["ordered_effects"]}
     assert "varied::advance::local" in {effect["resource"] for effect in captured["ordered_effects"]}
     assert ordinary["demand_identity"] != captured["demand_identity"]
@@ -252,7 +254,8 @@ def test_reached_native_read_does_not_repeat_original_out_entry_event(tmp_path):
     summary = analysis.segment_summary("varied::advance", selection)
     assert summary["definition_changes"] == []
     with_entry = analysis.native_sections_for_nodes("varied::advance", selection, include_entry=True)
-    assert not with_entry.available and "INTENT(OUT) reads" in with_entry.reason
+    assert not with_entry.available
+    assert "INTENT(OUT) reads" in with_entry.reason
 
 
 def test_reached_dynamic_dummy_uses_original_descriptor_after_bound_scalar_changed(tmp_path):
@@ -342,7 +345,8 @@ end subroutine
 def test_bounded_graph_exhaustion_is_not_a_complete_empty_proof(tmp_path):
     _path, analysis = source(tmp_path, "\n".join("a(1)=b(1)" for _ in range(8)), operations=3)
     graph = analysis.structure("varied::advance")
-    assert not graph.available and graph.reasons
+    assert not graph.available
+    assert graph.reasons
     assert graph.nodes[graph.root_id].kind == "boundary"
     with pytest.raises(CompilationError, match="skeleton unavailable"):
         analysis.segment_summary("varied::advance", assignments(analysis)[:1])

@@ -31,7 +31,8 @@ def lowered(tmp_path, text=None):
     proof=prove_line_snapshot(analysis,routine,nodes)
     before=path.read_bytes()
     result=lower_line_snapshot_consumer(proof)
-    assert path.read_bytes()==before and proof.validate() is proof
+    assert path.read_bytes()==before
+    assert proof.validate() is proof
     return result
 
 
@@ -55,13 +56,18 @@ def test_original_inner_loop_and_typed_selected_values_remain_ordered(tmp_path,a
     threshold,=[x for x in all_expressions if isinstance(x,Literal) and x.value=='0.74']
     assert threshold.dtype is ScalarType.REAL32
     values=[s for s in result.symbols if s.name=='fort_line_constant_value']
-    assert len(values)==2 and all(s.dtype is (ScalarType.REAL if kind==8 else ScalarType.REAL32) for s in values)
+    assert len(values)==2
+    assert all(s.dtype is (ScalarType.REAL if kind==8 else ScalarType.REAL32) for s in values)
     updates=[s for s in blocks(result.consumer) if isinstance(s,Assignment) and s.target.symbol.name in {'s','q'}]
     assert [s.target.symbol.name for s in updates]==['s','q','s','q']
-    assert isinstance(updates[2].value,Binary) and updates[2].value.operator=='+'
-    assert isinstance(updates[2].value.right,Binary) and updates[2].value.right.operator=='*'
-    assert isinstance(updates[3].value,Binary) and updates[3].value.operator=='+'
-    assert result.scratch.rank==1 and result.scratch not in result.parameters
+    assert isinstance(updates[2].value,Binary)
+    assert updates[2].value.operator=='+'
+    assert isinstance(updates[2].value.right,Binary)
+    assert updates[2].value.right.operator=='*'
+    assert isinstance(updates[3].value,Binary)
+    assert updates[3].value.operator=='+'
+    assert result.scratch.rank==1
+    assert result.scratch not in result.parameters
     assert len({s.id for s in result.symbols})==len(result.symbols)
 
 
@@ -126,6 +132,8 @@ def test_lookup_needs_registered_exact_original_line_proof(tmp_path):
     path,analysis,routine,nodes=fixture(tmp_path)
     proof=prove_line_snapshot(analysis,routine,nodes)
     for forged in [object(),copy(proof),replace(proof)]:
-        with pytest.raises(CompilationError):lower_line_snapshot_consumer(forged)
+        with pytest.raises(CompilationError):
+            lower_line_snapshot_consumer(forged)
     path.write_text(path.read_text()+'! changed\n')
-    with pytest.raises(CompilationError):lower_line_snapshot_consumer(proof)
+    with pytest.raises(CompilationError):
+        lower_line_snapshot_consumer(proof)

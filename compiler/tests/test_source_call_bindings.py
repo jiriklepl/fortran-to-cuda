@@ -204,13 +204,16 @@ def test_rank_reduced_actual_retains_physical_axes_and_scalar_dependencies(tmp_p
     text = source("field=a(:,n,:),value=n", declarations="real(8)::a(-3:8,-2:9,11:17)\ninteger::n")
     call = resolve(SourceEffects([write(tmp_path, "plane.f90", text)]))
     mapping = call.mappings[0]
-    assert mapping.binding.rank == 3 and mapping.formal_binding.rank == 2
+    assert mapping.binding.rank == 3
+    assert mapping.formal_binding.rank == 2
     assert mapping.section.logical_rank == 2
     assert [axis.scalar for axis in mapping.section.axes] == [False, True, False]
     assert mapping.section.axes[1].lower is mapping.section.axes[1].upper
     assert mapping.section.axes[1].lower.resource == "clients::step::n"
     record = mapping.section.public()
-    assert record["rank"] == 3 and record["logical_rank"] == 2 and record["retained_axes"] == [0, 2]
+    assert record["rank"] == 3
+    assert record["logical_rank"] == 2
+    assert record["retained_axes"] == [0, 2]
     assert record["axes"][1]["kind"] == "scalar_coordinate"
     assert call.resource_mapping["argument::field"] == "clients::step::a"
 

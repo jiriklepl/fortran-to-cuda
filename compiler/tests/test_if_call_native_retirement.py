@@ -32,7 +32,8 @@ def test_whole_if_predicate_and_callees_share_exact_registered_retirement(tmp_pa
     _original_graph, identities = analysis._selected_source('work::owner', selected)
     assert completion.selected_node_ids == identities
     assert storage.public()['original_selection']['selected_node_ids'] == list(identities)
-    assert storage.public()['complete'] and not storage.public()['escapes']
+    assert storage.public()['complete']
+    assert not storage.public()['escapes']
     assert completion.public()['completion_scope'] == 'normal return only'
     assert not completion.public()['payload_access_authorized']
     assert not completion.public()['stable_storage_authorized']

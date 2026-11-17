@@ -44,13 +44,15 @@ def test_plane_maps_retained_axes_and_original_pitches_without_allocating(runtim
     spec = view(handle, [1, 2, 3], [3, 4], [0, 2], lower=[-11, 4], generation=17)
     status, layout = get(scope, spec)
     scope.check(status)
-    assert layout.rank == 2 and layout.root.rank == 3
+    assert layout.rank == 2
+    assert layout.root.rank == 3
     assert list(layout.extents[:2]) == [3, 4]
     assert list(layout.axes[:2]) == [0, 2]
     assert list(layout.strides[:3]) == [8, 40, 280]
     assert list(layout.root.lower[:3]) == [-3, 11, -9]
     assert list(layout.lower[:2]) == [-11, 4]
-    assert layout.offset == 928 and layout.elements == 12
+    assert layout.offset == 928
+    assert layout.elements == 12
     assert layout.root.host == c.addressof(data)
     assert scope.stats().allocations == 0
     scope.close()

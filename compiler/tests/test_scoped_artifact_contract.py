@@ -48,7 +48,7 @@ def test_default_generation_is_the_shared_graph_backend(tmp_path):
     assert not set(ORDINARY) & set(report["outputs"])
 
 
-@pytest.mark.parametrize("option,value", [("--scope-transfers", "pipelined"),
+@pytest.mark.parametrize(("option", "value"), [("--scope-transfers", "pipelined"),
     ("--gpu-policy", "always"), ("--gpu-policy", "chunked"), ("--gpu-policy", "hybrid")])
 def test_retired_execution_paths_fail_before_publication(tmp_path, option, value):
     sentinel = tmp_path / "preserved"

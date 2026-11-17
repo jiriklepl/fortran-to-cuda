@@ -138,7 +138,7 @@ end subroutine
     assert len(build_execution_plan(function).regions) == 1
 
 
-@pytest.mark.parametrize("change,message", [
+@pytest.mark.parametrize(("change", "message"), [
     (lambda text: text.replace("g(2,2)=4.0_8", ""), "complete ordered definitions"),
     (lambda text: text.replace("g(2,2)=4.0_8", "g(2,2)=g(2,2)+1.0_8"), "read before"),
     (lambda text: text.replace("g(0,1)=a(k)+shift", "a(k)=1.0_8"), "cannot write INTENT"),

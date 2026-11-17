@@ -67,7 +67,7 @@ RANK1 = "real, intent(inout) :: a(:)\nreal, intent(in) :: b(:)\ninteger :: i,j,t
 RANK2 = "real, intent(inout) :: a(:,:)\nreal, intent(in) :: b(:,:)\ninteger :: i,j,k,t"
 
 
-@pytest.mark.parametrize("body,incoming", [
+@pytest.mark.parametrize(("body", "incoming"), [
     ("a(i)=b(i)\na(i)=a(i)*2", False),
     ("a(i)=a(i)+b(i)\na(i)=a(i)*2", True),
     ("if (b(i)>0) then\na(i)=b(i)\nendif\na(i)=a(i)*2", True),

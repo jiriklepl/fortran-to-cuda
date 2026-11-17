@@ -80,14 +80,15 @@ def compact_events(capfd):
             if '"event":"compact_transfer"' in line]
 
 
-@pytest.mark.parametrize("mode,calibrated,budget,expected", [(3, True, None, 1), (0, True, None, 2),
+@pytest.mark.parametrize(("mode", "calibrated", "budget", "expected"), [(3, True, None, 1), (0, True, None, 2),
                                                           (3, False, None, 2), (3, True, 512, 2)])
 def test_exact_replica_updates_and_pure_direct_missing_cost_budget_controls(pinned, monkeypatch, capfd,
                                                                           mode, calibrated, budget, expected):
     monkeypatch.setenv("FORT_RUNTIME_TRACE", "1")
     scope = configured(pinned, mode=mode, budget=budget, calibrated=calibrated)
     values, handle = prepare(scope)
-    scope.cpu_begin(handle, access(flags=1)); scope.cpu_end(handle)
+    scope.cpu_begin(handle, access(flags=1))
+    scope.cpu_end(handle)
     assert list(values) == [1000 + i if i < 8 or i >= 56 else -42 for i in range(64)]
     assert (scope.stats().downloads, scope.stats().download_bytes) == (expected, 128)
     events = compact_events(capfd)
@@ -97,11 +98,14 @@ def test_exact_replica_updates_and_pure_direct_missing_cost_budget_controls(pinn
         assert (event["logical_rectangles"], event["physical_operations"], event["dma_calls"],
                 event["copy_kernel_launches"], event["word_bytes"]) == (2, 2, 1, 1, 8)
         assert event["workspace_bytes"] == 512 * 1024
-    scope.gpu(handle, access(flags=1)); scope.gpu_end(handle)
+    scope.gpu(handle, access(flags=1))
+    scope.gpu_end(handle)
     before = bytes(scope.stats())
     for _ in range(3):
-        scope.cpu_begin(handle, access(flags=1)); scope.cpu_end(handle)
-        scope.gpu(handle, access(flags=1)); scope.gpu_end(handle)
+        scope.cpu_begin(handle, access(flags=1))
+        scope.cpu_end(handle)
+        scope.gpu(handle, access(flags=1))
+        scope.gpu_end(handle)
     assert bytes(scope.stats()) == before
     edges = [([0], [3]), ([61], [64])]
     scope.cpu_begin(handle, access(write=edges, overwrite=edges))
@@ -109,7 +113,8 @@ def test_exact_replica_updates_and_pure_direct_missing_cost_budget_controls(pinn
         values[i] = -i
     scope.cpu_end(handle)
     uploads = scope.stats().uploads
-    pointer = scope.gpu(handle, access(flags=1)); scope.gpu_end(handle)
+    pointer = scope.gpu(handle, access(flags=1))
+    scope.gpu_end(handle)
     assert scope.stats().uploads - uploads == expected
     assert [pointer[i] for i in range(64)] == list(values)
     scope.close()
@@ -119,8 +124,10 @@ def test_pre_submission_allocation_miss_uses_direct_once(pinned, monkeypatch):
     scope = configured(pinned)
     values, handle = prepare(scope)
     monkeypatch.setenv("FORT_SCOPE_TEST_FAIL_COMPACT_ALLOC", "1")
-    scope.cpu_begin(handle, access(flags=1)); scope.cpu_end(handle)
-    assert scope.stats().downloads == 2 and stats(scope).fallback_reason == 4
+    scope.cpu_begin(handle, access(flags=1))
+    scope.cpu_end(handle)
+    assert scope.stats().downloads == 2
+    assert stats(scope).fallback_reason == 4
     assert list(values) == [1000 + i if i < 8 or i >= 56 else -42 for i in range(64)]
     scope.close()
 
@@ -147,14 +154,18 @@ def test_uncovered_physical_rate_executes_exact_direct_without_new_definition_cr
     copy.direct[1].minimum_payload_bytes = 256
     scope.check(pinned.fort_scope_set_copy_costs_v3(scope.handle, c.byref(copy), c.byref(base), 1))
     values, handle = prepare(scope)
-    scope.cpu_begin(handle, access(flags=1)); scope.cpu_end(handle)
+    scope.cpu_begin(handle, access(flags=1))
+    scope.cpu_end(handle)
     assert list(values) == [1000 + i if i < 8 or i >= 56 else -42 for i in range(64)]
     assert (scope.stats().downloads, scope.stats().download_bytes) == (2, 128)
     assert not compact_events(capfd)
-    scope.gpu(handle, access(flags=1)); scope.gpu_end(handle)
+    scope.gpu(handle, access(flags=1))
+    scope.gpu_end(handle)
     before = bytes(scope.stats())
-    scope.cpu_begin(handle, access(flags=1)); scope.cpu_end(handle)
-    scope.gpu(handle, access(flags=1)); scope.gpu_end(handle)
+    scope.cpu_begin(handle, access(flags=1))
+    scope.cpu_end(handle)
+    scope.gpu(handle, access(flags=1))
+    scope.gpu_end(handle)
     assert bytes(scope.stats()) == before
     scope.close()
 

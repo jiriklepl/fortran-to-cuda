@@ -78,13 +78,13 @@ def test_unrelated_type_and_contains_do_not_reject_a_supported_candidate(tmp_pat
     assert region.numerical_helpers
 
 
-@pytest.mark.parametrize("replacement,reason", [
+@pytest.mark.parametrize(("replacement", "reason"), [
     ("a(i)=s+real(block,8)", "tile coordinates are observed"),
     ("g(2)=g(2)+real(i,8)", "per-iteration definition|before definition"),
 ])
 def test_observed_tile_coordinates_or_undefined_private_elements_are_not_offloaded(tmp_path, replacement, reason):
     source = SOURCE.replace("a(i)=s+real(i,8)", replacement) if replacement.startswith("a(") else SOURCE.replace("g(2)=real(i,8)", replacement)
-    with pytest.raises(CompilationError, match=reason):
+    with pytest.raises(CompilationError, match=reason):  # noqa: PT012 - extraction or preparation rejects it
         _, _, region = extraction(tmp_path, source)
         prepare_function(lower_source(region.source, region.entry, source_name="borrowed.f90"), options=CompilerOptions())
 
@@ -223,7 +223,7 @@ end module
     assert first.numerical_helpers == second.numerical_helpers == ("numerical_library::twice",)
 
 
-@pytest.mark.parametrize("change,reason", [
+@pytest.mark.parametrize(("change", "reason"), [
     (lambda source: source.replace("pure subroutine derivative", "subroutine derivative"), "explicit PURE"),
     (lambda source: source.replace("g(1)=a(i)", "call derivative(g,i)\ng(1)=a(i)"), "recursive"),
     (lambda source: source.replace("real(8)::g(2),s", "real(8),save::g(2)\nreal(8)::s"), "original owner|PRIVATE|live|whole-array"),

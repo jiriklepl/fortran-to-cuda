@@ -55,7 +55,8 @@ def test_lazy_report_authenticates_local_source_without_materializing_any_call(t
     assert any(node.get("procedure") == "diagnostics::distant" for node in nodes)
     assert any(node["kind"] == "boundary" and "unavailable" in str(node) for node in nodes)
     assert analysis._summary_cache.stats == before
-    assert not analysis._closures and not analysis.summaries
+    assert not analysis._closures
+    assert not analysis.summaries
 
 
 def test_lazy_report_retains_previously_proved_leaves_and_reached_segments_only(tmp_path, monkeypatch):
@@ -63,7 +64,8 @@ def test_lazy_report_retains_previously_proved_leaves_and_reached_segments_only(
     leaf = analysis.summarize("diagnostics::leaf")
     calls = walk(analysis.routines["diagnostics::root"].execution, F.Call_Stmt)
     segment = analysis.segment_summary("diagnostics::root", (calls[-1],))
-    assert leaf["complete"] and segment["complete"]
+    assert leaf["complete"]
+    assert segment["complete"]
     assert "diagnostics::root" not in analysis._closures
     def forbid(*_args, **_kwargs):
         raise AssertionError("report must only publish existing proofs")

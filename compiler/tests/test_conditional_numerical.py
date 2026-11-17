@@ -98,7 +98,7 @@ def test_rhs_source_read_semantics_are_not_broadened(tmp_path, expression):
         prepared(tmp_path, SOURCE.replace('a(i)=a(i-n)', 'a(i)='+expression))
 
 
-@pytest.mark.parametrize('key,value', [
+@pytest.mark.parametrize(('key', 'value'), [
     ('execution_authorized', True), ('source_read_admission_authorized', True),
     ('source_graph', '1'*64), ('source_work_budget', 65537),
     ('isl_operation_budget', 1000001), ('payload_identity', '2'*64),
@@ -138,7 +138,8 @@ def test_all_sixteen_original_paths_share_four_exact_unit_models(tmp_path, monke
         config=OffloadConfig(policy='sections', host_threads=4), environment_root=ENTRY)
     context = prove_conditional_numerical_context(provider, team)
     assert len(context.public()['paths']) == 16
-    assert len(context._bank._unit_cache) == 4 and len(context._bank._pair_cache) == 6
+    assert len(context._bank._unit_cache) == 4
+    assert len(context._bank._pair_cache) == 6
     assert calls == [0, 1, 2, 3]
     for alternative in atomic_worksharing_alternatives(team):
         if alternative.loops:

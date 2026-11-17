@@ -256,7 +256,7 @@ def test_whole_native_uses_original_rates_without_generated_protocols(team_model
     assert result["startup_shortcut"] == scenario.startswith("startup")
 
 
-@pytest.mark.parametrize("scenario,expected_gpu", [("below_margin", 1), ("above_margin", 0)])
+@pytest.mark.parametrize(("scenario", "expected_gpu"), [("below_margin", 1), ("above_margin", 0)])
 def test_twenty_percent_gate_uses_original_native_rate(team_model, scenario, expected_gpu):
     result = team_model(scenario)
     assert result["available"] == 1
@@ -266,7 +266,7 @@ def test_twenty_percent_gate_uses_original_native_rate(team_model, scenario, exp
         assert result["reason"] == "native_20_percent_margin_not_met"
 
 
-@pytest.mark.parametrize("scenario,expected_gpu", [("whole_owner_15_percent", 0), ("whole_owner_21_percent", 2)])
+@pytest.mark.parametrize(("scenario", "expected_gpu"), [("whole_owner_15_percent", 0), ("whole_owner_21_percent", 2)])
 def test_multiple_entry_intervals_need_twenty_percent_whole_original_native_saving(team_model, scenario, expected_gpu):
     result = team_model(scenario)
     assert result["available"] == 1
@@ -302,7 +302,7 @@ def test_original_native_roofline_uses_the_slower_memory_bound(team_model):
     assert result["gpu_units"] == 0
 
 
-@pytest.mark.parametrize("scenario,expected_gpu", [("preparation_only", 1), ("native_protocol", 0)])
+@pytest.mark.parametrize(("scenario", "expected_gpu"), [("preparation_only", 1), ("native_protocol", 0)])
 def test_native_call_protocol_changes_placement_only_at_original_calls(team_model, scenario, expected_gpu):
     result = team_model(scenario)
     assert result["available"] == 1

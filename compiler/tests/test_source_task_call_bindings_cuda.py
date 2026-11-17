@@ -88,7 +88,9 @@ def checked_multi_field_ledger(rows, registrations, shapes):
         (i, row) for i, row in enumerate(rows) if row.startswith(("FORT_SCOPED upload ", "FORT_SCOPED download "))
     ]
     if not all(shapes[0]):
-        assert not commits and not launches and not copies
+        assert not commits
+        assert not launches
+        assert not copies
         return {"zero_trip": True}
     sequence = [(field, axis) for field in (0, 0, 1, 2) for axis in directions(shapes[field])]
     # multi_field_builder(repeat=True) emits a,a,b,c in original source order.

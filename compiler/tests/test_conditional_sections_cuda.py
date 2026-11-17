@@ -152,7 +152,8 @@ def compiled_sections_chain(tmp_path_factory):
             (build/f'compile-{index}.stdout').write_text(process.stdout)
             (build/f'compile-{index}.stderr').write_text(process.stderr)
             objects.append(str(target))
-    driver = build/'driver.f90';driver.write_text(DRIVER)
+    driver = build/'driver.f90'
+    driver.write_text(DRIVER)
     candidate, native = build/'candidate', build/'native'
     run([fc, '-fopenmp', '-fcheck=all', '-ffp-contract=off', '-I', str(build), str(driver), *objects,
          '-L/usr/local/cuda/lib64', '-Wl,-rpath,/usr/local/cuda/lib64', '-lcudart', '-lstdc++', '-o', str(candidate)], cwd=build)

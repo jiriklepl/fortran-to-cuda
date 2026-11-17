@@ -89,8 +89,11 @@ def test_original_worksharing_regions_share_a_team_dispatcher_and_computation(tm
     assert "public :: run, query, run_team" in source
     serial_body = source.split("function run(", 1)[1].split("end function run", 1)[0]
     team_body = source.split("function run_team(", 1)[1].split("end function run_team", 1)[0]
-    assert "case (1)" in serial_body and "case (2)" not in serial_body
-    assert "case (1)" not in team_body and "case (2)" in team_body and "case (3)" in team_body
+    assert "case (1)" in serial_body
+    assert "case (2)" not in serial_body
+    assert "case (1)" not in team_body
+    assert "case (2)" in team_body
+    assert "case (3)" in team_body
     assert "fort_entry_run_team_2 => run_team" in source
     assert inline.public()["team_dispatcher"].endswith("::run_team")
     assert [item["execution_participation"] for item in inline.public()["regions"]] == [

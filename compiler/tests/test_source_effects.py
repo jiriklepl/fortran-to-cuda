@@ -656,7 +656,8 @@ def test_authorization_of_one_root_does_not_waive_other_hidden_or_formal_storage
     summary = analysis.summarize("allocations::inspect")
     assert summary["complete"]
     descriptor = analysis.descriptor_stability("allocations::inspect")["resources"][0]
-    assert descriptor["resource"] == "argument::a" and descriptor["stable"]
+    assert descriptor["resource"] == "argument::a"
+    assert descriptor["stable"]
     assert descriptor["execution_requires_runtime_guard"]
 
 

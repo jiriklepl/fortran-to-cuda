@@ -95,7 +95,8 @@ def issued(directory):
     assert resource['managed_payload'] is resource['definition_authority'] is False
     assert all(call.scalar_element_coordinates.public()['scalar_element_closure']['version'] == 2 for call in calls)
     generated = outputs[manifest['sources'][str(original)]['replacement']]
-    assert 'ratios(selector)' in generated and 'selector=1-selector' in generated
+    assert 'ratios(selector)' in generated
+    assert 'selector=1-selector' in generated
     assert 'fort_element_extents_' in generated
     assert 'fort_scope_buffer_valid_v1' in generated
     return original, outputs, manifest
@@ -158,7 +159,8 @@ def test_original_hierarchical_scalar_elements_execute_without_payload_copies(el
         ledger.append(row)
         (build / (mode + '-ledger.json')).write_text(json.dumps(ledger, indent=2) + '\n')
         if mode != 'traced':
-            assert not launches and not copied
+            assert not launches
+            assert not copied
             continue
         expected = (['hierarchical::producer'] + ['hierarchical::consumer'] * (3 if changed == '1' else 2)) * 2
         assert row['launches'] == expected, text

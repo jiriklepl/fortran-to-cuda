@@ -50,7 +50,8 @@ def issue(tmp_path, text=SOURCE):
 def test_exact_section_inventory_grants_no_independent_worksharing_completion(tmp_path):
     analysis, routine, nodes, team = issue(tmp_path)
     record = team.public()
-    assert record['version'] == 3 and record['conditional_affine_context_required'] is True
+    assert record['version'] == 3
+    assert record['conditional_affine_context_required'] is True
     assert record['alternatives'] == [[0, 1], []]
     assert record['parent_completion']['native_only'] is True
     assert record['parent_completion']['section_independence_established'] is False

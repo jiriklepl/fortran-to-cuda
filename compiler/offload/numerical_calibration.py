@@ -14,6 +14,7 @@ import statistics
 from copy import deepcopy
 from dataclasses import replace
 from hashlib import sha256
+from itertools import pairwise
 from pathlib import Path
 
 from compiler.numerical_contract import (
@@ -363,7 +364,7 @@ COMPUTE_MIN_BATCH_SECONDS = 0.2
 COMPUTE_PRIMITIVES = (*PRIMITIVES, "divide")
 MEMORY_FIT_SIZES = tuple(65536 * 3**k // 2**k for k in range(8))
 MEMORY_HOLDOUT_SIZES = tuple(sorted({131072, 524288, *(round(math.sqrt(a * b))
-    for a, b in zip(MEMORY_FIT_SIZES, MEMORY_FIT_SIZES[1:]))}))
+    for a, b in pairwise(MEMORY_FIT_SIZES))}))
 MEMORY_SIZES = tuple(sorted(MEMORY_FIT_SIZES + MEMORY_HOLDOUT_SIZES))
 MEMORY_MODEL_KIND = "piecewise_bandwidth_v1"
 # Counts describe the fixture's ordinary scalar operations, independently of
@@ -598,7 +599,7 @@ def memory_compute_seconds(model, traffic_bytes, working_set_bytes):
         if not coordinates[0] <= working_set_bytes <= coordinates[-1]:
             raise NumericalCalibrationError("memory working set outside calibrated range")
         rate = None
-        for index, (lower, upper) in enumerate(zip(coordinates, coordinates[1:])):
+        for index, (lower, upper) in enumerate(pairwise(coordinates)):
             if working_set_bytes <= upper:
                 if working_set_bytes == lower:
                     rate = rates[index]

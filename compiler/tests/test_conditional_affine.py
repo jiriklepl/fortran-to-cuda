@@ -191,7 +191,8 @@ def test_alternative_projection_reuses_exact_unit_models_and_one_budget(monkeypa
     for indices in ((0,), (1,), (0, 1), (0,)):
         assert models.project(indices).accepts(values(models.project(indices), n=4))
     assert calls == [0, 1]
-    assert len(models._unit_cache) == 2 and len(models._pair_cache) == 1
+    assert len(models._unit_cache) == 2
+    assert len(models._pair_cache) == 1
     for indices in ((), (1, 0), (0, 0), (True,), (2,), [0]):
         with pytest.raises(ConditionalAffineUnsupported):
             models.project(indices)
@@ -220,11 +221,12 @@ def test_twenty_rebased_units_all_paths_fit_one_unchanged_symbolic_budget():
              for mask in product((True, False), repeat=4)]
     domains = {path:models.project(path) for path in paths if path}
     assert len(domains) == 15
-    assert len(models._unit_cache) == 20 and len(models._pair_cache) == 190
+    assert len(models._unit_cache) == 20
+    assert len(models._pair_cache) == 190
     assert len(models._path_cache) == 15
     for path, domain in domains.items():
         for dims in ((128,64,64),(3,3,3),(2,3,3),(0,0,0)):
-            names=dict(zip(('nx','ny','nz'),dims))
+            names=dict(zip(('nx','ny','nz'),dims,strict=True))
             units=[]
             for index in path:
                 sign=signs[index]
@@ -237,6 +239,6 @@ def test_twenty_rebased_units_all_paths_fit_one_unchanged_symbolic_budget():
                 units.append([({tuple(value-side*n for value,side,n in zip(point,sign,dims,strict=True))},{point})
                               for point in product(*ranges)])
             for lowers in ((-2,-2,-2),(-19,7,0)):
-                parameters={**names,**dict(zip(('lb1','lb2','lb3'),lowers))}
+                parameters={**names,**dict(zip(('lb1','lb2','lb3'),lowers,strict=True))}
                 actual=domain.accepts({name:parameters[symbol.name] for name,symbol in domain.parameters})
                 assert actual is (True if dims[0] == 128 else independent(units))

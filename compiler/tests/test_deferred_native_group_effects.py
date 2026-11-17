@@ -126,7 +126,8 @@ def test_later_native_unit_retains_authenticated_predicate_requirements(tmp_path
 
     result = summarize(analysis, ENTRY, group.original_nodes, completion)
     requirement, = result["native_predicate_requirements"]
-    assert result["complete"] and not result["cloneable"]
+    assert result["complete"]
+    assert not result["cloneable"]
     assert requirement["source_expression"].lower() == "ieee_is_nan(0.d0)"
     assert requirement["guard_frames"] == [{"procedure": ENTRY, "condition": "flag"},
                                             {"procedure": ENTRY, "condition": "DO j = 0, 2"}]
@@ -151,7 +152,8 @@ def test_read_and_write_rectangles_have_separate_bounded_unions(tmp_path):
     assert sections.available, sections.reason
     resource, = sections.resources
     assert resource.resource == "argument::b"
-    assert resource.rank == 2 and resource.lower_bounds == (-2, -1)
+    assert resource.rank == 2
+    assert resource.lower_bounds == (-2, -1)
     assert len(resource.reads) == len(resource.writes) == 17
     assert resource.overwrites == ()
     for boxes, indices in ((resource.reads, range(17)), (resource.writes, range(100, 117))):

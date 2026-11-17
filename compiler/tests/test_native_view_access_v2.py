@@ -53,7 +53,7 @@ def test_explicit_v1_view_access_remains_available(tmp_path):
     assert not any("physical_axes" in line for line in code.prepare)
 
 
-@pytest.mark.parametrize("axes,body,extents,expected", [
+@pytest.mark.parametrize(("axes", "body", "extents", "expected"), [
     ([2, 0], "a(-2:-1,2:4)=7", [3, 4], [2, 5, 2, 3, 3, 5]),
     ([0, 2], "a(-2:-1,2:4)=7", [3, 4], [1, 3, 2, 3, 4, 7]),
     ([2, 0], "a(:,:)=7", [0, 4], []),

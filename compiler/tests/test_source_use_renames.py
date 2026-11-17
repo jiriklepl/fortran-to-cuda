@@ -126,5 +126,6 @@ end module
     first = analysis(tmp_path, client).summarize('client::step')
     second = analysis(tmp_path, client.replace('payload=>field', 'renamed=>field').replace(
         'a=payload', 'a=renamed')).summarize('client::step')
-    assert first['complete'] and second['complete']
+    assert first['complete']
+    assert second['complete']
     assert first['summary_identity'] != second['summary_identity']

@@ -48,7 +48,7 @@ def test_unit_loop_faces_remain_separate_with_original_zero_trip_guard(tmp_path)
     assert body.index("if (.not. fort_exact_empty) then", guard) < coordinate
 
 
-@pytest.mark.parametrize("body,points", [
+@pytest.mark.parametrize(("body", "points"), [
     ("a(-2:2:2,:)=7", [-2, 0, 2]),
     ("a(2:-2:-2,:)=7", [2, 0, -2]),
     ("do i=-2,2,2\na(i,:)=7\nenddo", [-2, 0, 2]),
@@ -65,7 +65,7 @@ def test_constant_strides_are_bounded_unions_never_bounding_overwrites(tmp_path,
                    for box in resource.overwrites)
 
 
-@pytest.mark.parametrize("body,reason", [
+@pytest.mark.parametrize(("body", "reason"), [
     ("a(-2:64:2,:)=7", "rectangle budget"),
     ("n=n-1\na(n,:)=7", "bound changes"),
     ("do i=1,n\na(i,i)=7\nenddo", "rectangular iterator"),
@@ -106,7 +106,7 @@ def test_empty_literal_stride_union_has_no_written_or_defined_holes(tmp_path):
     assert resource.writes == resource.overwrites == ()
 
 
-@pytest.mark.parametrize("body,n,expected,status", [
+@pytest.mark.parametrize(("body", "n", "expected", "status"), [
     ("a(1:n-1,:)=7", 3, [(3, 5, 0, 3)], 0),
     ("do i=1,n\na(-100,i)=7\nenddo", 0, [], 0),
     ("do i=1,n\na(-2,i)=7\nenddo", 3, [(0, 1, 0, 3)], 0),

@@ -80,7 +80,7 @@ end subroutine
 
 
 @pytest.mark.parametrize(
-    "keyword,repeat,separate_sizes",
+    ("keyword", "repeat", "separate_sizes"),
     [(False, False, False), (True, False, False), (False, True, False), (False, True, True)],
 )
 def test_original_three_field_call_dag_has_all_direction_and_root_bindings(tmp_path, keyword, repeat, separate_sizes):

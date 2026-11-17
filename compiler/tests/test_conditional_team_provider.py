@@ -59,16 +59,19 @@ extern "C" int fort_scope_source_execute_v1(fort_scope_t,const fort_scope_extern
     checked([nvcc,'-std=c++17','-ccbin',host,'-arch=sm_86','--fmad=false','--ftz=false',
              '-shared','-Xcompiler=-fPIC','-I',str(RUNTIME),'-I',str(TEMPLATES),
              str(out/'provider.cu'),str(out/'host.cpp'),'-o',str(out/'provider.so')],out,'nvcc')
-    lib=c.CDLL(str(out/'provider.so'));entry=getattr(lib,emitted.entry)
+    lib=c.CDLL(str(out/'provider.so'))
+    entry=getattr(lib,emitted.entry)
     entry.argtypes=[c.c_int64,c.c_int64,*[c.POINTER(c.c_int) for _ in emitted.parameters],c.POINTER(Report)]
     entry.restype=c.c_int
     return emitted,lib,entry
 
 
 def invoke(compiled,n,mode=0):
-    emitted,lib,entry=compiled;lib.reset(mode)
+    emitted,lib,entry=compiled
+    lib.reset(mode)
     values=[c.c_int(-2 if parameter.axis is not None else n) for parameter in emitted.parameters]
-    report=Report();status=entry(1,11,*[c.byref(value) for value in values],c.byref(report))
+    report=Report()
+    status=entry(1,11,*[c.byref(value) for value in values],c.byref(report))
     return status,report,lib.admission_count(),lib.transaction_count()
 
 

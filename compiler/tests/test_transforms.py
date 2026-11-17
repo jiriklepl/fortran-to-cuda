@@ -390,7 +390,8 @@ def test_reused_definite_private_temporary_can_fuse(tmp_path, guarded):
     function = _private_scalar_function(tmp_path, first, second)
     _, original = optimize_function(function, options=CompilerOptions(opt_level=0))
     _, fused = optimize_function(function)
-    assert len(original.regions) == 2 and len(fused.regions) == 1
+    assert len(original.regions) == 2
+    assert len(fused.regions) == 1
 
 
 def test_private_temporary_does_not_hide_array_dependence(tmp_path):

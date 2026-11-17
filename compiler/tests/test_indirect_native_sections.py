@@ -211,10 +211,13 @@ def test_generated_inspector_has_no_per_point_runtime_calls_or_derived_type_layo
                                     resource_names={"argument::markers": "markers"})
     source = "\n".join(code.prepare)
     assert source.count("fort_scope_layout_get(") == 1
-    assert "markers(" in source and ")%row" in source
-    assert "c_sizeof" not in source and "c_loc(markers" not in source
+    assert "markers(" in source
+    assert ")%row" in source
+    assert "c_sizeof" not in source
+    assert "c_loc(markers" not in source
     assert "%overwrite_count" not in source
-    assert "%read_count" in source and "%write_count" in source
+    assert "%read_count" in source
+    assert "%write_count" in source
     assert all(len(line) <= 132 for line in (*code.specification, *code.prepare))
 
 
@@ -314,7 +317,8 @@ def test_runtime_inspection_retains_holes_in_a_nonrectangular_union(tmp_path):
 def test_runtime_invalid_or_overbudget_inspection_closes_before_native_work(tmp_path, points, shape):
     status, boxes, counts = compile_inspector(tmp_path, points, shape=shape)
     assert status == 5
-    assert not boxes and not counts
+    assert not boxes
+    assert not counts
 
 
 def test_empty_metadata_preserves_no_payload_reads_and_zero_sections(tmp_path):
@@ -331,7 +335,8 @@ def test_scan_budget_closes_repeated_points_before_unbounded_metadata_work(tmp_p
     # rectangle cap. The fourth metadata iteration closes before its fields.
     status, boxes, counts = compile_inspector(tmp_path, [(-2, 0)] * 4)
     assert status == 5
-    assert not boxes and not counts
+    assert not boxes
+    assert not counts
 
 
 def test_scan_budget_also_counts_outer_iterations_with_an_empty_inner_loop(tmp_path, monkeypatch):
@@ -342,7 +347,8 @@ def test_scan_budget_also_counts_outer_iterations_with_an_empty_inner_loop(tmp_p
             "enddo\nenddo")
     status, boxes, counts = compile_inspector(tmp_path, [], body=body, extra="integer::r")
     assert status == 5
-    assert not boxes and not counts
+    assert not boxes
+    assert not counts
 
 
 def test_original_negative_metadata_bounds_are_checked_and_preserved(tmp_path):

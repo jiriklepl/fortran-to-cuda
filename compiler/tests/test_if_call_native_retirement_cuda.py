@@ -175,7 +175,8 @@ def test_false_guard_keeps_domain_and_true_guard_retires_once(binaries, mode):
         ledger.append({'changed':changed,'n':n,'events':events,
                        'upload_bytes':copy_bytes(events,'upload'),'download_bytes':copy_bytes(events,'download')})
         if mode == 'hidden':
-            assert not launches and copy_bytes(events,'upload') == copy_bytes(events,'download') == 0
+            assert not launches
+            assert copy_bytes(events,'upload') == copy_bytes(events,'download') == 0
             continue
         assert [procedure(events[i],provenance) for i in launches] == [
             'hierarchical::producer','hierarchical::consumer']

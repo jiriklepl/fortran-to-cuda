@@ -143,9 +143,9 @@ def prove_numerical_completion(analysis, procedure, selected):
                     raise CompilationError("numerical helper completion operation budget exceeded")
                 if kind not in _STATEMENTS and not (kind == "Return_Stmt" and owner is not routine):
                     raise CompilationError("numerical completion helper has unsupported I/O, exit or lifetime effects: " + kind)
-            if kind == "Assignment_Stmt" and owner is not routine:
-                if not writable(owner, storage(owner, node.items[0])):
-                    raise CompilationError("numerical completion helper writes nonlocal or unstable original storage")
+            if (kind == "Assignment_Stmt" and owner is not routine
+                    and not writable(owner, storage(owner, node.items[0]))):
+                raise CompilationError("numerical completion helper writes nonlocal or unstable original storage")
             if kind == "Call_Stmt":
                 helper_call(owner, node)
             elif kind == "Intrinsic_Function_Reference":

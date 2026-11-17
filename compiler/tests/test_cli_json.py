@@ -88,7 +88,8 @@ enddo
     assert report["kernel"] == "advance"
     assert set(report["outputs"]) >= OUTPUTS
     assert {path.name for path in output.iterdir()} == set(report["outputs"])
-    assert report["artifact_schema_version"] == 2 and report["memory_model"] == "scoped"
+    assert report["artifact_schema_version"] == 2
+    assert report["memory_model"] == "scoped"
     assert "generated_cpp_impl.cpp" not in report["outputs"]
     assert "offload" not in report
     assert report["execution_plan"].count("parallel legality PROVEN") == 2

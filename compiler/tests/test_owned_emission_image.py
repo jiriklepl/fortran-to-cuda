@@ -471,7 +471,8 @@ def test_owned_batch_global_admission_checks_do_not_scale_with_units(tmp_path, m
             assert sum(len(member.units) for member in old_owner.execution_plan.members) == count
     old_checks = len(checks)
     # The unowned path repeats global checks for every unit; one unit is its minimum.
-    assert old_checks >= 5 and (count == 1 or old_checks > 5)
+    assert old_checks >= 5
+    assert (count == 1 or old_checks > 5)
     assert all(token is None for token in preparations)
     checks.clear()
     admissions.clear()

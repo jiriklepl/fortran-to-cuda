@@ -22,7 +22,8 @@ def emit(tmp_path, source=SOURCE_ELEMENTS):
     owner = builder._conditional_return_draft.validate().owner
     middle = owner.members['hierarchical::middle']
     calls = [call for call in middle.return_calls if call.callee.routine.qualified == 'hierarchical::consumer']
-    assert calls and all(call.scalar_element_coordinates is not None for call in calls)
+    assert calls
+    assert all(call.scalar_element_coordinates is not None for call in calls)
     return path, builder, middle, calls, outputs, report
 
 
@@ -71,7 +72,7 @@ def test_coordinates_keep_exact_original_registered_ownership(tmp_path, bad):
         altered.validate(middle)
 
 
-@pytest.mark.parametrize('old,new', [('ratios(selector)', 'ratios(1)'), ('[2.0_8,3.0_8]', '[2.0_8,4.0_8]'),
+@pytest.mark.parametrize(('old', 'new'), [('ratios(selector)', 'ratios(1)'), ('[2.0_8,3.0_8]', '[2.0_8,4.0_8]'),
                                    ('ratios(0:1)', 'ratios(-1:0)')])
 def test_changed_original_association_or_declaration_cannot_publish(tmp_path, old, new):
     path, builder, _middle, _calls, _outputs, _report = emit(tmp_path)

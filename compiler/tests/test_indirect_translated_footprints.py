@@ -47,28 +47,33 @@ def test_adjacent_translations_reuse_one_scan_and_preserve_exact_holes(tmp_path,
 def test_reused_final_coordinate_keeps_every_original_intermediate(tmp_path, second):
     point = (-2, 0) if "row-" in second else (1, 0)
     status, boxes, counts = compile_inspector(tmp_path, [point], body=body(second))
-    assert status == 5 and not boxes and not counts
+    assert status == 5
+    assert not boxes
+    assert not counts
 
 
-@pytest.mark.parametrize("points,shape", [([(2, 0)], (5, 5)),
+@pytest.mark.parametrize(("points", "shape"), [([(2, 0)], (5, 5)),
                                           ([(2**63 - 1, 0)], (5, 5)),
                                           ([(-2 + 2 * i, 2 * i) for i in range(33)], (70, 70))])
 def test_translated_bounds_source_integer_and_capacity_fail_before_execution(tmp_path, points, shape):
     status, boxes, counts = compile_inspector(tmp_path, points, shape=shape, body=body())
-    assert status == 5 and not boxes and not counts
+    assert status == 5
+    assert not boxes
+    assert not counts
 
 
-@pytest.mark.parametrize("limit,expected", [(7, 5), (8, 0)])
+@pytest.mark.parametrize(("limit", "expected"), [(7, 5), (8, 0)])
 def test_reused_nested_empty_traversals_charge_all_directions(tmp_path, monkeypatch, limit, expected):
     import compiler.scopes.indirect_access as lowering
     monkeypatch.setattr(lowering, "INSPECTION_STEP_LIMIT", limit)
     nested = body(loop="do q=1,2\ndo r=1,0") + "\nenddo"
     status, boxes, counts = compile_inspector(tmp_path, [], body=nested, extra="integer::r")
-    assert status == expected and not boxes
+    assert status == expected
+    assert not boxes
     assert counts == ({} if expected else {"READS": 0, "WRITES": 0})
 
 
-@pytest.mark.parametrize("limit,expected", [(3, 5), (4, 0)])
+@pytest.mark.parametrize(("limit", "expected"), [(3, 5), (4, 0)])
 def test_reused_unlooped_references_keep_full_step_charge(tmp_path, monkeypatch, limit, expected):
     import compiler.scopes.indirect_access as lowering
     monkeypatch.setattr(lowering, "INSPECTION_STEP_LIMIT", limit)
@@ -93,9 +98,11 @@ def test_unsupported_coordinate_recipe_keeps_original_scans(tmp_path):
                                    resource_names={"argument::markers": "markers"})
     source = "\n".join(code.prepare)
     assert "_cache_lows" not in source
-    assert "do fort_inspect_0_r_i0_0" in source and "do fort_inspect_0_r_i1_0" in source
+    assert "do fort_inspect_0_r_i0_0" in source
+    assert "do fort_inspect_0_r_i1_0" in source
     status, boxes, _ = compile_inspector(tmp_path, [(1, 0)], body=body("markers(q)%row*2"))
-    assert status == 0 and covered(boxes) == {(1, 0), (2, 0)}
+    assert status == 0
+    assert covered(boxes) == {(1, 0), (2, 0)}
 
 
 @pytest.mark.parametrize("widened", [True, False])
@@ -112,10 +119,12 @@ def test_changed_conservative_admission_never_changes_exact_coverage(tmp_path, m
     # no longer a required policy for the bounded representation's admission.
     groups = lowering._translated_groups
     monkeypatch.setattr(lowering, "_translated_groups", lambda refs: [[x] for g in groups(refs) for x in g])
-    old = tmp_path / "original"; old.mkdir()
+    old = tmp_path / "original"
+    old.mkdir()
     old_status, old_boxes, _ = compile_inspector(old, points, body=selected)
     monkeypatch.setattr(lowering, "_translated_groups", groups)
-    new = tmp_path / "translated"; new.mkdir()
+    new = tmp_path / "translated"
+    new.mkdir()
     status, boxes, _ = compile_inspector(new, points, body=selected)
     assert (old_status, status) == ((5, 0) if widened else (0, 5))
     expected = set(points) | ({(x + 1, y) for x, y in points} if widened
@@ -147,7 +156,8 @@ enddo
 end subroutine
 end module
 """)
-    analysis = SourceEffects([original]); routine = analysis.routines["original::adjust"]
+    analysis = SourceEffects([original])
+    routine = analysis.routines["original::adjust"]
     sections = analyze_indirect_sections(analysis, routine.qualified, routine.execution.content)
     assert sections.available, sections.reason
     codes = build_indirect_accesses(sections, {"argument::a": "1_c_int64_t", "argument::b": "2_c_int64_t"},
@@ -182,7 +192,8 @@ end module
               "if(result/=0)error stop 'changed metadata rejected'",
               "if(any(a/=ea).or.any(b/=eb))error stop 'native work missing or replayed'",
               "print *,'FIELDS_AND_ORIGINS_OK'", "end program"]
-    source = tmp_path / "checked.f90"; source.write_text("\n".join(lines))
+    source = tmp_path / "checked.f90"
+    source.write_text("\n".join(lines))
     binary = tmp_path / "checked"
     compiled = subprocess.run([fortran, "-std=f2018", "-fcheck=all", "-ffunction-sections", "-Wl,--gc-sections",
                                str(interface), str(original), str(source), "-o", str(binary)],
@@ -201,7 +212,8 @@ def test_different_loop_domains_do_not_share_a_reached_footprint(tmp_path):
                                    resource_names={"argument::markers": "markers"})
     assert "_cache_lows" not in "\n".join(code.prepare)
     status, boxes, _ = compile_inspector(tmp_path, [(-2, 0), (0, 3)], body=selected)
-    assert status == 0 and covered(boxes) == {(-2, 0), (1, 3)}
+    assert status == 0
+    assert covered(boxes) == {(-2, 0), (1, 3)}
 
 
 def test_original_minval_maxval_names_do_not_capture_generated_extrema(tmp_path, monkeypatch):
@@ -220,4 +232,5 @@ def test_original_minval_maxval_names_do_not_capture_generated_extrema(tmp_path,
     # resolve as external and fail this actual Fortran compile/link.
     monkeypatch.setattr(helper, "build_indirect_accesses", emit)
     status, boxes, _ = helper.compile_inspector(tmp_path, [(-2, 0), (0, 3)], body=body())
-    assert status == 0 and covered(boxes) == {(-2, 0), (-1, 0), (0, 3), (1, 3)}
+    assert status == 0
+    assert covered(boxes) == {(-2, 0), (-1, 0), (0, 3), (1, 3)}

@@ -146,7 +146,8 @@ def test_runtime_schedule_helper_has_separate_identity_and_rechecks_each_call(tm
     before = deepcopy(value.edits)
     value.generated["producer_unit::produce"] = artifact(runtime_schedule={"kind": "static", "chunk": 0})
     runtime = compute_identity_guard(value, ["producer_unit::produce"])
-    assert runtime.available and runtime.required
+    assert runtime.available
+    assert runtime.required
     assert runtime.requirements[0].helper != static.requirements[0].helper
     assert runtime.requirements[0].runtime_schedule == {"kind": "static", "chunk": 0}
     code = next(text for text in helpers(value, "producer_unit") if "call fort_get_schedule" in text)

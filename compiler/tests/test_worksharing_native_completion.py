@@ -94,7 +94,7 @@ def test_token_does_not_authorize_a_sibling_or_skipped_unit(tmp_path):
         analysis.worksharing_native_completion(PROCEDURE, nodes, tuple(reversed(loops)))
 
 
-@pytest.mark.parametrize('body,reason', [
+@pytest.mark.parametrize(('body', 'reason'), [
     (UNIT.replace('end do', 'end do nowait'), 'NOWAIT'),
     ('if(i>0) then\n' + UNIT + 'endif', 'condition is private'),
     (UNIT.replace('a(-2,i)=b(1,i)', 'call opaque(a)'), 'source-call proof'),
@@ -147,7 +147,8 @@ def test_indirect_native_work_retains_conservative_effects_without_gpu_authority
     assert summary['complete'], summary['reasons']
     writes = [operation for operation in summary['operations']
               if operation.get('resource') == 'argument::a' and operation['kind'] == 'write']
-    assert writes and all(operation['section'] == 'whole' for operation in writes)
+    assert writes
+    assert all(operation['section'] == 'whole' for operation in writes)
     assert not proof.public()['gpu_legality_established']
 
 

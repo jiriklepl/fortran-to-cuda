@@ -31,7 +31,8 @@ def test_registered_whole_group_token_refines_faces_and_retains_join(tmp_path):
     _path, analysis, nodes = fixture(tmp_path)
     proof = analysis.joined_completion(PROCEDURE, nodes)
     public = proof.public()
-    assert public["available"] and public["retains_original_team_and_directives"]
+    assert public["available"]
+    assert public["retains_original_team_and_directives"]
     assert public["caller_contract"] == "serial_source_scope"
     assert "grouped::step::i" in public["private_resources"]
     sections = analysis.native_sections_for_nodes(PROCEDURE, nodes, completion=proof, capture_locals=True)
@@ -113,7 +114,7 @@ def test_private_fixed_array_is_original_native_storage_not_a_shared_capture(tmp
     assert {item.resource for item in sections.resources} == {"argument::a", "argument::b"}
 
 
-@pytest.mark.parametrize("body,opening,ending,reason", [
+@pytest.mark.parametrize(("body", "opening", "ending", "reason"), [
     ("do i=1,n\na(-2,i)=1\nenddo", "parallel do private(i)", "end parallel", "combined PARALLEL DO"),
     ("!$omp task\na(-2,1)=1\n!$omp end task", "parallel", "end parallel", "unsupported joined"),
     ("!$omp do\ndo i=1,n\ncall unknown(a)\nenddo\n!$omp end do", "parallel private(i)", "end parallel", "source-call proof"),

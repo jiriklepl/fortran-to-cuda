@@ -100,7 +100,7 @@ def test_case_graph_retains_source_registry_and_policy_authentication(tmp_path, 
         path.write_text(path.read_text().replace("later(2)=value(3)", "later(2)=value(4)"))
     else:
         monkeypatch.setattr(resource_reachability, "VERSION", resource_reachability.VERSION + 1)
-    with pytest.raises(CompilationError):
+    with pytest.raises(CompilationError):  # noqa: PT012 - either check may reject the mutation
         if mutation == "source":
             analysis.verify_publication()
         candidate.validate(analysis, "work::owner", originals, demands)

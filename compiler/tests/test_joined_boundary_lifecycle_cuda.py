@@ -46,7 +46,8 @@ def sealed_emission(directory, fatal=False):
     group = (GROUP.replace('right(lbound(right,1)+i-1)', 'right(lbound(right,1)+i+1)')
              .replace('call native_step(right(i+1))', 'call native_step(right(i+3))'))
     assert group in transformed
-    assert 'write(error_unit' in transformed.lower() and '\nstop\n' in transformed.lower()
+    assert 'write(error_unit' in transformed.lower()
+    assert '\nstop\n' in transformed.lower()
     package = directory / 'source-package'
     package.mkdir()
     for name, text in outputs.items():
@@ -170,7 +171,8 @@ def test_original_joined_native_return_rearms_consumer_and_preserves_halos(joine
                        'download_bytes': copy_bytes(events, 'download')})
         (build / (mode + '-ledger.json')).write_text(json.dumps(ledger, indent=2) + '\n')
         if mode == 'hidden':
-            assert not launches and copy_bytes(events, 'upload') == copy_bytes(events, 'download') == 0
+            assert not launches
+            assert copy_bytes(events, 'upload') == copy_bytes(events, 'download') == 0
             continue
         assert [procedure(events[i], provenance) for i in launches] == [
             'hierarchical::producer', 'hierarchical::consumer'] * 2
@@ -192,7 +194,8 @@ def test_original_guarded_stop_after_producer_never_runs_consumer_or_replays(joi
     reference = base.checked([str(native), 'fatal'], build, 'fatal-native', env)
     result = base.checked([str(candidate), 'fatal'], build, 'fatal-candidate', env)
     # Original STOP has no code and returns zero on this Fortran runtime.
-    assert not result.stdout and result.stdout == reference.stdout
+    assert not result.stdout
+    assert result.stdout == reference.stdout
     for stderr in (reference.stderr, result.stderr):
         assert stderr.count('JOINED_FATAL_BEGIN') == 1
         assert stderr.count('negative input') == 1
