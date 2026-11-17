@@ -54,6 +54,16 @@ end module
     return source
 
 
+def _require_accepted_source_model():
+    """Calibration records a rejected fit as unavailable; the runtime then declines every quote."""
+    profile_path = os.environ.get("FORT_TEST_SOURCE_PROFILE")
+    if not profile_path:
+        pytest.skip("independently calibrated source-task profile required")
+    profile = json.loads(Path(profile_path).read_text())
+    if profile.get("source_tasks", {}).get("available") is not True:
+        pytest.skip("the supplied profile's source-task model was not accepted by its calibration")
+
+
 def _compile_priced_source(directory, child, *, transfers="direct"):
     profile_path = os.environ.get("FORT_TEST_SOURCE_PROFILE")
     if not profile_path:
@@ -189,6 +199,8 @@ def compiled_auto_transfer_source(request, tmp_path_factory):
 @pytest.mark.cuda
 @pytest.mark.parametrize("hidden", [False, True], ids=["gpu", "hidden"])
 def test_mixed_auto_transfer_graph_executes_original_team_once(compiled_auto_transfer_source, hidden):
+    if not hidden:
+        _require_accepted_source_model()
     build, executable = compiled_auto_transfer_source
     pricing = json.loads((build / "profile-input.json").read_text())["pricing"]
     schedule = pricing["native_protocol"]["c_schedule"]
@@ -223,6 +235,8 @@ def test_mixed_auto_transfer_graph_executes_original_team_once(compiled_auto_tra
 @pytest.mark.cuda
 @pytest.mark.parametrize("mode", ["enabled", "hidden", "limited"])
 def test_measured_auto_source_choices_preserve_original_fields_and_prework_fallback(compiled_priced_source, mode):
+    if mode != "limited":
+        _require_accepted_source_model()
     build, executable = compiled_priced_source
     environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_SCHEDULE": "static",
                    "OMP_THREAD_LIMIT": "4", "OMP_MAX_ACTIVE_LEVELS": "1", "FORT_RUNTIME_TRACE": "1", "FORT_OFFLOAD_TRACE": "1"}
@@ -263,6 +277,7 @@ def test_measured_auto_source_choices_preserve_original_fields_and_prework_fallb
 
 @pytest.mark.cuda
 def test_measured_auto_uses_real_resident_replicas_and_process_warmth(priced_source_builds):
+    _require_accepted_source_model()
     build, _ = priced_source_builds(False)
     manifest = json.loads((build / "scope-manifest.json").read_text())
     task, = manifest["scopes"][0]["source_device_tasks"]
@@ -272,8 +287,13 @@ def test_measured_auto_uses_real_resident_replicas_and_process_warmth(priced_sou
               ("external_lower", "a"): "&lower", ("external_lower", "b"): "&lower",
               ("scratch_lower", "tmp"): "&scratch_lower", ("scratch_upper", "tmp"): "&scratch_upper"}
     arguments = ",".join(values[p["role"], p["binding"]["name"]] for p in parameters)
+    # Graph providers report the chosen backend through an extra output argument.
+    selected = "selected_backend" in provider["metadata"]
     prototype = ",".join(["fort_scope_t", "fort_buffer_t", "fort_buffer_t",
-                           *["const int*" for _ in parameters], "fort_scope_external_report_v1*"])
+                           *["const int*" for _ in parameters], *(["int*"] if selected else []),
+                           "fort_scope_external_report_v1*"])
+    if selected:
+        arguments += ",&backend"
     source = build / "warm.cu"
     source.write_text(r'''
 #include "scoped_runtime.h"
@@ -298,7 +318,7 @@ int submit(void*,const fort_scope_external_view_v1* views,std::size_t count,void
 }
 static fort_scope_stats stats(fort_scope_t c){fort_scope_stats s{};check(fort_scope_stats_get(c,&s));return s;}
 int main(){
- int n=262144,t=128,lower=-3,scratch_lower=-1,scratch_upper=t+2;
+ int n=262144,t=128,lower=-3,scratch_lower=-1,scratch_upper=t+2,backend=-1;(void)backend;
  const std::size_t extent=n+8;const std::int64_t lb=lower;
  std::vector<double>a(extent),b(extent),expected(extent);
  for(std::size_t i=0;i<extent;++i){a[i]=double(int(i%31)-15)/64;b[i]=double(int(i%17)-8)/32;expected[i]=b[i]+1.0/32;}
