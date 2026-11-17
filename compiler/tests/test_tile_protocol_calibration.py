@@ -88,7 +88,7 @@ def test_actual_source_and_scratch_abi_probe_compiles_without_executing_cuda(tmp
     source = tmp_path / "source_protocol.cu"
     source.write_text(source_scratch_benchmark(precision=precision))
     result = subprocess.run([nvcc, "-std=c++17", "-ccbin", host, "-arch=sm_86", "-Xcompiler=-fopenmp",
-        "-I", str(Path("compiler/runtime").resolve()), "-c", str(source), "-o", str(tmp_path / "protocol.o")],
+        "-I", str(Path(__file__).resolve().parents[1] / "runtime"), "-c", str(source), "-o", str(tmp_path / "protocol.o")],
         capture_output=True, text=True, timeout=120)
     (tmp_path / "compile.stdout").write_text(result.stdout)
     (tmp_path / "compile.stderr").write_text(result.stderr)

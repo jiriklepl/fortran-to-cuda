@@ -95,7 +95,7 @@ int main(){{
  std::puts("BYTE_SCALAR_FORTRAN_FIELDS_HALOS_LEDGER_AND_UNREACHED_READS_OK");
 }}
 ''')
-    includes = ["-I", str(RUNTIME), "-I", str(Path("compiler/emission/common/templates").resolve())]
+    includes = ["-I", str(RUNTIME), "-I", str(Path(__file__).resolve().parents[1] / "emission/common/templates")]
     checked([nvcc, "-std=c++17", "-ccbin", host, "-arch=sm_86", "--fmad=false", "--ftz=false",
              "--prec-div=true", "--prec-sqrt=true", *includes, "-c", str(tmp_path / "provider.cu"),
              "-o", str(tmp_path / "provider.o")], tmp_path, "provider")

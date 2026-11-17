@@ -2852,11 +2852,23 @@ original application, archived compiler and current graph compiler separately.
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade "pip>=25.1"
-python -m pip install --group ./compiler/pyproject.toml:dev
+python -m pip install -r requirements.txt --group ./compiler/pyproject.toml:dev
 
-python -m pytest compiler/tests
+python -m pytest compiler/tests -n auto
 python -m ruff check compiler
-python -m ruff format --check compiler
+```
+
+`compiler/tests/conftest.py` puts the repository and the `elmm-pipeline`
+submodule on the import path, so the suite runs from any directory without
+`PYTHONPATH`. Consumer-contract tests that need the submodule are skipped when
+it is not checked out. The complete suite builds and runs CUDA programs; with
+`-n auto` (pytest-xdist) it takes roughly an hour on a workstation, and the
+parser/analysis subset below a few minutes. The pipeline, container and
+benchmark suites run the same way:
+
+```bash
+python -m pytest elmm-pipeline/tests -n auto
+python -m pytest containers/tests benchmarks/tests
 ```
 
 Tests cover lowering, source ordering, inline aliases, scalar lifetimes, ISL
@@ -2888,8 +2900,8 @@ those capabilities are available, build or runtime failures fail the tests. All 
 python -m pytest compiler/tests -m "not native and not cuda"
 
 # Numerical source integration:
-python -m pytest compiler/tests/test_reached_numerical_effects.py \
-  compiler/tests/test_combined_numerical_team.py
+python -m pytest compiler/tests/test_combined_numerical_team.py \
+  compiler/tests/test_graph_source_owner.py
 ```
 
 Shared numerical fixtures live in `tests/support/`. Read-only generated-source

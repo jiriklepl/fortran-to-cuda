@@ -59,8 +59,8 @@ def compiled(request, tmp_path_factory):
     function = "\n".join(generate_tile_function(region, addressing=lowered.addressing, device=False))
     arguments = ",".join(original_arguments(lowered, lower=lower))
     element = "float" if kind == 4 else "double"
-    header = Path("compiler/emission/common/templates/common_functions.cuh").resolve()
-    numeric = Path("compiler/runtime/numeric.hpp").resolve()
+    header = (Path(__file__).resolve().parents[1] / "emission/common/templates/common_functions.cuh")
+    numeric = (Path(__file__).resolve().parents[1] / "runtime/numeric.hpp")
     cpp = tmp_path / "probe.cpp"
     cpp.write_text(f'''#include "{header}"
 #include "{numeric}"
@@ -180,8 +180,8 @@ def compiled_three_dimensional(request, tmp_path_factory):
     element = "float" if kind == 4 else "double"
     function = "\n".join(generate_tile_function(lowered.region, addressing=lowered.addressing, device=False))
     code = directory / "probe.cpp"
-    code.write_text(f'''#include "{Path('compiler/emission/common/templates/common_functions.cuh').resolve()}"
-#include "{Path('compiler/runtime/numeric.hpp').resolve()}"
+    code.write_text(f'''#include "{(Path(__file__).resolve().parents[1] / 'emission/common/templates/common_functions.cuh')}"
+#include "{(Path(__file__).resolve().parents[1] / 'runtime/numeric.hpp')}"
 #include <fstream>
 using generated_kernels::indexing::F_IDX;
 {function}

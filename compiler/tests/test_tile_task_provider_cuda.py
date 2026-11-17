@@ -123,7 +123,7 @@ int main(int argc,char**argv){{
  std::puts("SOURCE_TEAM_FULL_FIELDS_HALOS_AND_TRANSACTION_OK");
 }}
 ''')
-    includes = ["-I", str(RUNTIME), "-I", str(Path("compiler/emission/common/templates").resolve())]
+    includes = ["-I", str(RUNTIME), "-I", str(Path(__file__).resolve().parents[1] / "emission/common/templates")]
     checked([nvcc, "-std=c++17", "-ccbin", host, "-arch=sm_86", "--fmad=false", "--ftz=false",
              "--prec-div=true", "--prec-sqrt=true", *includes, "-c", str(directory / "provider.cu"),
              "-o", str(directory / "provider.o")], directory, "provider")
