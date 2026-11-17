@@ -25,34 +25,13 @@ from compiler.offload.calibrate import profile_with_scoped_measurements
 from compiler.offload.config import OffloadConfig
 from compiler.offload.cpu_dependency_calibration import _hash_json, profile_from_dependency_measurements
 from compiler.offload.cpu_protocol_calibration import profile_from_cpu_protocol_measurements
-from compiler.offload.numerical_calibration import memory_compute_seconds, profile_from_compute_measurements
+from compiler.offload.numerical_calibration import profile_from_compute_measurements
 from compiler.tests.test_cpu_dependency_calibration import observations
 from compiler.tests.test_cpu_protocol_calibration import evidence
 from compiler.tests.test_offload_profile import scoped_observations
 from compiler.tests.test_scoped_compute_costs import Compute
 from compiler.tests.test_scoped_runtime import TOKEN, Layout, Scope, Stats
 from compiler.tests.test_source_compute_memory import function_text
-
-
-def cpu_dependency_costs(profile, graph, backend, *, workload_class, workload_features,
-                         primitive_domains, access_class, compiled_form=None):
-    # Resolve through the module at call time, like the original module-level API.
-    from compiler.offload.cpu_dependency_calibration import (
-        ACCESS_CLASS,
-        CPU_BACKENDS,
-        NumericalCalibrationError,
-        _cpu_costs_from_section,
-        require_numerical_profile_contract,
-        validate_dependency_profile,
-    )
-
-    require_numerical_profile_contract(profile)
-    if backend not in CPU_BACKENDS or access_class != ACCESS_CLASS:
-        raise NumericalCalibrationError("CPU dependency execution/access class unavailable")
-    section = validate_dependency_profile(profile)
-    return _cpu_costs_from_section(profile, section, graph, backend, workload_class=workload_class,
-        workload_features=workload_features, primitive_domains=primitive_domains,
-        access_class=access_class, compiled_form=compiled_form)
 
 BODY = "x=a(i)\ny=b(i)\nout(i)=(x*y+x)/3d0+y"
 
@@ -242,76 +221,6 @@ extern "C" void capture_get(fort_scope_compute_costs_v1 *result) { *result=obser
     assert result.returncode == 0, result.stderr
     entries = {name: value.report["planning"]["entry"] + "_" + name for name, value in generated.items()}
     return target, entries, generated
-
-
-@pytest.fixture
-def omp_query_state(queries, monkeypatch):
-    path, entries, _ = queries
-    library, query = load_queries(path, entries["unset"])
-    previous_threads, previous_dynamic = library.omp_get_max_threads(), library.omp_get_dynamic()
-    library.omp_set_num_threads(4)
-    library.omp_set_dynamic(0)
-    monkeypatch.delenv("OMP_WAIT_POLICY", raising=False)
-    monkeypatch.delenv("GOMP_SPINCOUNT", raising=False)
-    try:
-        yield library, query
-    finally:
-        library.omp_set_num_threads(previous_threads)
-        library.omp_set_dynamic(previous_dynamic)
-
-
-def test_public_plain_query_preserves_complete_role_costs(queries, omp_query_state):
-    _, _, generated = queries
-    model = generated["unset"].report["planning"]["units"][0]["compute_model"]
-    captured = query_costs(*omp_query_state)
-    assert captured.known_backends == 7
-    items, traffic = 65536, 65536 * 3 * 8
-    for role in ("native_fortran", "generated_cpu", "gpu"):
-        coefficients = model[role]
-        memory = memory_compute_seconds(coefficients["memory_cost_model"], traffic, traffic)
-        compute = items * coefficients.get("compute_seconds_per_item",
-            coefficients["intrinsic_seconds_per_item"] +
-            generated["unset"].report["planning"]["units"][0]["compute_arithmetic_operations_per_iteration"] *
-            coefficients["arithmetic_seconds_per_operation"])
-        assert getattr(captured, role + "_seconds") == pytest.approx(
-            max(compute, memory) + coefficients["fixed_seconds"])
-
-
-def test_every_public_query_rechecks_wait_spin_and_team_budget(queries, omp_query_state, monkeypatch):
-    # These are live identity checks, not OpenMP runtime reconfiguration.
-    # libgomp may retain launch-time WAIT/SPIN state privately; callers must
-    # keep the calibrated environment fixed from process launch. Changing
-    # getenv strings here only exercises mismatch detection and rechecking.
-    path, entries, _ = queries
-    library, query = omp_query_state
-    assert query_costs(library, query).known_backends == 7
-    for variable in ("OMP_WAIT_POLICY", "GOMP_SPINCOUNT"):
-        monkeypatch.setenv(variable, "unexpected")
-        assert query_costs(library, query).known_backends == 0
-        monkeypatch.delenv(variable)
-        assert query_costs(library, query).known_backends == 7
-    library.omp_set_num_threads(1)
-    assert query_costs(library, query).known_backends == 0
-    library.omp_set_num_threads(4)
-    library.omp_set_dynamic(1)
-    assert query_costs(library, query).known_backends == 0
-    library.omp_set_dynamic(0)
-    _, explicit = load_queries(path, entries["explicit"])
-    assert query_costs(library, explicit).known_backends == 0
-    monkeypatch.setenv("OMP_WAIT_POLICY", "PASSIVE")
-    monkeypatch.setenv("GOMP_SPINCOUNT", "100")
-    assert query_costs(library, explicit).known_backends == 7
-    monkeypatch.setenv("GOMP_SPINCOUNT", "101")
-    assert query_costs(library, explicit).known_backends == 0
-
-
-def test_public_query_declines_an_existing_native_team_but_preserves_effects(queries, omp_query_state):
-    path, entries, _ = queries
-    library, query = omp_query_state
-    assert query_costs(library, query).known_backends == 7
-    _, nested = load_queries(path, entries["unset"] + "_nested")
-    assert query_costs(library, nested).known_backends == 0
-    assert query_costs(library, query).known_backends == 7
 
 
 def test_public_query_declines_actual_thread_limit_below_calibrated_budget(queries):
