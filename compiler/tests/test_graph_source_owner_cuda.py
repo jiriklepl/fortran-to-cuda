@@ -141,8 +141,10 @@ end module
 """
 
 
+# A loop-carried recurrence cannot be proved independent: this epoch stays native
+# while the second loop still runs on the device.
 FAILED_EPOCH_SOURCE = EPOCH_SOURCE.replace("b(i)=2.0_8*a(i)",
-    "b(i)=2.0_8*a(i)\na(i)=b(i)+1.0_8\nb(i)=a(i)+1.0_8")
+    "b(i)=2.0_8*a(i)\nif(i>1) b(i)=b(i)+b(i-1)")
 HELPER_DESCRIPTOR_SOURCE = EPOCH_SOURCE.replace("call opaque(b,n)", "call helper(x,n)").replace(
     "contains\n", """contains
 subroutine helper(x,n)

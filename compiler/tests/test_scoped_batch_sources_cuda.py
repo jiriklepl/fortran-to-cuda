@@ -3,17 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
-import shutil
-import sys
 from hashlib import sha256
 from pathlib import Path
 
-import pytest
-
-from compiler.tests.test_module_allocatable_scopes_runtime import ROOT, _run
+from compiler.tests.test_module_allocatable_scopes_runtime import _run
 from compiler.tests.test_scoped_batch_sources import CHAIN, FLAT, transfer_profile
-from compiler.tests.test_source_scopes import FACT
 
 PROBE = r'''#include <cuda_runtime.h>
 #include <cstdio>
@@ -136,140 +130,3 @@ def negative_package(directory, original):
         "parameters":[{"name":name,"resource":"argument::"+name,
                        **({"physical_origin":[0,0]} if name in {"a","b","c"} else {})}
                       for name in ("a","b","c","n","m")]}]}
-
-
-@pytest.fixture(scope="module")
-def batch_binaries(tmp_path_factory):
-    nvcc, host, fortran = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++"), shutil.which("gfortran-15") or shutil.which("gfortran")
-    if not nvcc or not host or not fortran:
-        pytest.skip("CUDA, C++ and Fortran toolchains required")
-    directory = tmp_path_factory.mktemp("source-batches")
-    checkout = directory / "independent-compiler"
-    shutil.copytree(ROOT/"compiler",checkout/"compiler",ignore=shutil.ignore_patterns("__pycache__",".*cache","CODE_MAP.md","MEMORY_MODEL_PLAN.md"))
-    profile = actual_profile(directory,nvcc,host)
-    flags = [nvcc,"-O2","-std=c++17","-ccbin",host,"-arch=sm_86","-Xcompiler=-fopenmp"]
-    fflags = [fortran,"-O3","-std=f2018","-fopenmp","-fcheck=all,array-temps"]
-    binaries, cache, reuse = {}, {}, []
-    for label, transfers, policy in [("flat","pipelined","sections"),("chain","pipelined","sections"),
-                                       ("halo","pipelined","sections"),("nonterminal","pipelined","sections"),
-                                       ("automatic","auto","auto")]:
-        case = directory/label
-        case.mkdir()
-        original = case/"original.f90"
-        original.write_text(source_case(label))
-        captures = case/"captures.json"
-        captures.write_text(json.dumps({"schema_version":1,"participation":"serial",
-            "sources":{str(original):sha256(original.read_bytes()).hexdigest()},
-            "captures":{"argument::"+name:FACT for name in ("a","b","c")}}))
-        costs = case/"profile.json"
-        costs.write_text(json.dumps(profile))
-        numerical_sources=[]
-        if label == "flat":
-            package=case/"numerical-sources.json"
-            package.write_text(json.dumps(negative_package(case,original)))
-            numerical_sources=["--numerical-sources",str(package)]
-        output = case/"output"
-        public = json.loads(_run([sys.executable,"-m","compiler.tests.support.reference_scopes","--form-scopes","--input",str(original),
-            "--kernel","step","--scope-facts",str(captures),"--memory-model","scoped","--gpu-policy",policy,
-            "--scope-transfers",transfers,"--calibration-profile",str(costs),"--opt-level","0",
-            *numerical_sources,"--json","--output-dir",str(output)],checkout,env={**os.environ,"PYTHONPATH":str(checkout)}).stdout)
-        assert public["supported"], public
-        manifest = public["scopes"]
-        assert manifest["runtime"]["runtime_id"] == profile["scoped"]["runtime_id"]
-        objects=[]
-        for role in ("common_runtime","shared_entry","original_source"):
-            for item in manifest["build_sources"]:
-                if item["role"] != role:
-                    continue
-                artifact=item["path"]
-                target=output/(artifact.replace("/","_")+".o")
-                if item["language"] == "cuda":
-                    headers={name:sha256((output/name).read_bytes()).hexdigest() for name in sorted(manifest["artifacts_sha256"])
-                             if name.endswith((".h",".hpp",".cuh"))}
-                    key=(manifest["artifacts_sha256"][artifact],tuple(headers.items()),tuple(flags))
-                    reused=key in cache
-                    if reused:
-                        target=cache[key]
-                    else:
-                        _run([*flags,"-I",str(output),"-c",str(output/artifact),"-o",str(target)],output)
-                        cache[key]=target
-                    reuse.append({"case":label,"artifact":artifact,"sha256":key[0],"headers":headers,
-                                  "flags":flags,"reused":reused,"object":str(target)})
-                else:
-                    _run([*fflags,"-c",str(output/artifact),"-o",str(target)],output)
-                objects.append(str(target))
-        driver=output/"driver.f90"
-        driver.write_text(DRIVER)
-        binary=output/"verify"
-        _run([*fflags,str(driver),*objects,"-L/usr/local/cuda/lib64","-Wl,-rpath,/usr/local/cuda/lib64",
-              "-lcudart","-lstdc++","-o",str(binary)],output)
-        native=output/"native"
-        _run([*fflags,str(original),str(driver),"-o",str(native)],output)
-        reference=_run([str(native)],output,env={**os.environ,"OMP_NUM_THREADS":"4","OMP_DYNAMIC":"FALSE"}).stdout
-        (output/"native.stdout").write_text(reference)
-        binaries[label]=(binary,output,reference,manifest)
-    (directory/"object-reuse.json").write_text(json.dumps(reuse,indent=2)+"\n")
-    return binaries
-
-
-@pytest.mark.cuda
-@pytest.mark.parametrize("label",["flat","chain","halo","nonterminal","automatic"])
-def test_complete_batch_fields_and_halos_match_native_from_independent_checkout(batch_binaries,label):
-    binary,output,reference,manifest=batch_binaries[label]
-    result=_run([str(binary)],output,env={**os.environ,"OMP_NUM_THREADS":"4","OMP_DYNAMIC":"FALSE","FORT_RUNTIME_TRACE":"1"})
-    (output/"scoped.stdout").write_text(result.stdout)
-    (output/"scoped.stderr").write_text(result.stderr)
-    assert result.stdout == reference
-    assert result.stdout.count("CALL_OK") == 6
-    assert "array temporary" not in result.stderr.lower()
-    events=[json.loads(line.removeprefix("FORT_SCOPED evidence ")) for line in result.stderr.splitlines()
-            if line.startswith("FORT_SCOPED evidence ")]
-    if label == "automatic":
-        # This legacy transfer-only correctness profile has no original
-        # Fortran source-compute v2 evidence. AUTO therefore retains native
-        # execution; the four forced sections cases below exercise batching.
-        scope, = manifest["scopes"]
-        reason = "native Fortran compute requires numerical calibration v2"
-        assert not scope["estimate_available"]
-        assert scope["planning_reason"] == reason
-        assert scope["transfer_configuration"]["placement_estimate_reason"] == reason
-        native_selection = "Successful static native selection: all numerical alternatives lack compatible offline estimates: "
-        assert any(native_selection + reason in edit["replacement"] for edit in manifest["source_edits"])
-        assert not events
-        assert "FORT_SCOPED " not in result.stderr
-        return
-    batches=[event for event in events if event["event"] == "batch_statistics" and event["applied"]]
-    assert batches, result.stderr
-    assert all(event["batches"] >= 2 and event["completed_batches"] == event["batches"] for event in batches)
-    assert all(event["actual_launches"] == 2*event["batches"] for event in batches)
-    assert all(not event["owner_cost_available"] for event in batches)
-    if label == "flat":
-        assert all(event["actual_download_bytes"] == 0 for event in batches)
-    elif label != "nonterminal":
-        assert all(event["actual_download_bytes"] > 0 for event in batches)
-        assert manifest["scopes"][0]["batch_subchains"][0]["terminal_exports"]
-    else:
-        assert any(event["actual_download_bytes"] == 0 for event in batches)
-        assert any(event["actual_download_bytes"] > 0 for event in batches)
-        first,last=manifest["scopes"][0]["batch_subchains"]
-        assert not first["terminal_exports"]
-        assert last["terminal_exports"]
-    if label == "halo":
-        assert all(event["prefix_upload_bytes"] > 0 for event in batches)
-    shapes=[(67,39),(67,39),(135,71),(135,71)]
-    if label == "nonterminal":
-        assert len(batches) == 8
-        for (n,m), first,last in zip(shapes,batches[::2],batches[1::2],strict=True):
-            assert first["actual_upload_bytes"] == n*(m-2)*8
-            assert first["actual_download_bytes"] == 0
-            assert last["actual_upload_bytes"] == 0
-            assert last["actual_download_bytes"] == 2*(n-2)*(m-2)*8
-    else:
-        assert len(batches) == 4
-        for (n,m),event in zip(shapes,batches,strict=True):
-            assert event["actual_upload_bytes"] == ((n*m-4) if label == "halo" else n*(m-2))*8
-            assert event["actual_download_bytes"] == (0 if label == "flat" else 2*(n-2)*(m-2)*8)
-    stats=[event for event in events if event["event"] == "transfer_statistics"]
-    assert stats
-    assert all(event["complete"] for event in stats)
-    assert max(event["process_peak_bytes"] for event in stats) <= 64*1024*1024

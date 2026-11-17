@@ -54,7 +54,7 @@ int main(int argc,char** argv){
  fort_scope_domain_t domain=0;fort_scope_t ctx=0;
  if(borrowed){check(fort_scope_domain_create_v1(0,&domain));check(fort_scope_create_in_domain_v1(domain,&ctx));}
  else check(fort_scope_create(0,&ctx));
- if(compact||limited)configure(ctx,false);
+ if(compact||limited)configure(ctx,false,false);
  if(limited)check(fort_scope_set_device_budget(ctx,n*8));
  const std::size_t shape[]={nx,ny,nz};const int64_t lower[]={-17,2,-9};
  fort_scope_layout layout{3,FORT_SCOPE_REAL64,8,host.data(),shape,lower,1};fort_buffer_t buffer=0;
@@ -179,7 +179,7 @@ def collective_configured_binary(tmp_path_factory):
     (directory / "entry-report.json").write_text(json.dumps(emitted.report, indent=2))
     entry = emitted.report["transfer_configuration"]["entry"]
     client = CLIENT.replace(CONFIGURE, f'extern "C" int {entry}(fort_scope_t);\n')
-    client = client.replace("if(compact||limited)configure(ctx,false);", f"check({entry}(ctx));")
+    client = client.replace("if(compact||limited)configure(ctx,false,false);", f"check({entry}(ctx));")
     assert "fort_scope_set_copy_costs" not in client
     (directory / "client.cu").write_text(client)
     executable = directory / "run"

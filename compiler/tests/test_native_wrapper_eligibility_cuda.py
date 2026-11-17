@@ -366,7 +366,13 @@ def test_original_wrapper_call_publishes_then_rearms_real_children(binaries, mod
         ]
         first, last = launches
         between = events[first + 1 : last]
-        # Whole CALL is the first slice: even an empty native loop retires.
+        if int(record_mode) < 1:
+            # The wrapper's native loop is source-proved empty: replicas stay resident.
+            assert events[first]["domain"] == events[last]["domain"]
+            assert not any(e["kind"] == "domain_retire" for e in between)
+            assert copy_bytes(between, "download") == copy_bytes(between, "upload") == 0
+            continue
+        # Real native work publishes, retires the domain and re-arms the children.
         assert events[first]["domain"] != events[last]["domain"]
         assert sum(e["kind"] == "domain_retire" for e in between) == 1
         assert copy_bytes(between, "download") == 8 * n
