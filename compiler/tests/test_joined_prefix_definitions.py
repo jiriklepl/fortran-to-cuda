@@ -1,6 +1,5 @@
 """Whole joined native definitions seed exact sections in one resident chain."""
 
-import re
 from copy import copy
 from dataclasses import replace
 
@@ -151,36 +150,6 @@ def test_omitted_original_middle_unit_cannot_form_definition_authority(tmp_path)
     with pytest.raises(CompilationError):
         prove_native_definitions(analysis, entry, partial, completion=analysis.joined_completion(entry, partial))
     assert not getattr(analysis, "_native_definition_proofs", {})
-
-
-def joined_child_source():
-    body = "do j=-1,m-2\ndo i=-2,n-3\ndelta(i,j)=2.0_8*seed(i,j)+real(i-2*j,8)\nenddo\nenddo"
-    original_group = ("!$omp parallel private(i,j)\n!$omp do\ndo j=-1,m-2\ndo i=-2,n-3\n"
-                      "delta(i,j)=seed(i,j)\ndelta(i,j)=delta(i,j)+1.0_8\n"
-                      "enddo\nenddo\n!$omp end do\n!$omp end parallel")
-    return CHILD_SOURCE.replace(body, "if(m==13)then\n" + original_group + "\nelse\n" + body + "\nendif")
-
-
-def joined_consumer_source():
-    body = "do j=-1,m-2\ndo i=-2,n-3\nout(i,j)=delta(i,j)+0.5_8*seed(i,j)\nenddo\nenddo"
-    original_group = ("!$omp parallel private(i,j)\n!$omp do\ndo j=-1,m-2\ndo i=-2,n-3\n"
-                      "out(i,j)=delta(i,j)\nout(i,j)=out(i,j)+0.5_8*seed(i,j)\n"
-                      "enddo\nenddo\n!$omp end do\n!$omp end parallel")
-    return CHILD_SOURCE.replace(body, "if(m==13)then\n" + original_group + "\nelse\n" + body + "\nendif")
-
-
-def shifted_child_source(source=CHILD_SOURCE):
-    producer, consumer = source.split("subroutine apply_delta", 1)
-    names = {"seed": "field", "delta": "increment", "n": "nx", "m": "ny"}
-    producer = re.sub(r"\b(seed|delta|n|m)\b", lambda match: names[match[0]], producer)
-    producer = producer.replace("(-3:,-2:)", "(-7:,5:)")
-    producer = producer.replace("j=-1,ny-2", "j=6,ny+5").replace("i=-2,nx-3", "i=-6,nx-7")
-    consumer = "subroutine apply_delta" + consumer
-    names["seed"] = "history"
-    consumer = re.sub(r"\b(seed|delta|n|m)\b", lambda match: names[match[0]], consumer)
-    consumer = consumer.replace("(-3:,-2:)", "(-11:,9:)")
-    consumer = consumer.replace("j=-1,ny-2", "j=10,ny+9").replace("i=-2,nx-3", "i=-10,nx-11")
-    return producer + consumer
 
 
 def test_translation_comparison_never_swallows_shared_budget_failure():

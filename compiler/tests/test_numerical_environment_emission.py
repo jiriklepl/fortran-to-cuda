@@ -1,9 +1,6 @@
 """Erased real reductions retain preconditions at every public GPU entry."""
 
-import shutil
-import subprocess
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
@@ -129,20 +126,3 @@ def test_graph_flagged_heuristic_retains_unpriced_provenance_and_prework_guards(
         vote_done = team.index("#pragma omp barrier", team.index("shared->environment_supported = false;"))
         check = team.index("if (!shared->environment_supported)")
         assert vote_done < team.index("#pragma omp master", vote_done) < check
-
-
-def compile_probe(tmp_path, source):
-    compiler = shutil.which("g++")
-    if compiler is None:
-        pytest.skip("requires a native C++ compiler")
-    path = tmp_path / "probe.cpp"
-    path.write_text(source)
-    binary = tmp_path / "probe"
-    runtime = Path(__file__).resolve().parents[1] / "runtime"
-    compiled = subprocess.run([compiler, "-std=c++17", "-O2", "-fopenmp", "-I", str(runtime), str(path), "-o", str(binary)],
-                              cwd=tmp_path, text=True, capture_output=True, timeout=30)
-    assert compiled.returncode == 0, compiled.stdout + compiled.stderr
-    completed = subprocess.run([str(binary)], cwd=tmp_path, text=True, capture_output=True, timeout=30)
-    if completed.returncode == 77:
-        pytest.skip("runtime trap-mask inquiry requires glibc")
-    assert completed.returncode == 0, completed.stdout + completed.stderr

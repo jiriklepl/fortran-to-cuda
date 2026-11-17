@@ -85,7 +85,7 @@ def run(command, *, cwd, env=None, timeout=120):
 
 
 def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=None, checkout=None, profile=None,
-             scope_execution="bounded"):
+             scope_execution="graph"):
     directory.mkdir(parents=True,exist_ok=True)
     if isinstance(profile, dict):
         profile_path = directory / "synthetic-profile.json"
@@ -101,12 +101,9 @@ def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=
     document={"sources":{str(original):sha256(original.read_bytes()).hexdigest()},**document}
     facts_file.write_text(json.dumps(document))
     output = directory/"output"
-    module = ("compiler.tests.support.reference_scopes"
-              if scope_execution != "graph" and (Path(checkout or ROOT) / "compiler" / "_legacy" / "config.py").is_file()
-              else "compiler")
-    response = run([sys.executable,"-m",module,"--form-scopes","--scope-facts",str(facts_file),
+    response = run([sys.executable,"-m","compiler","--form-scopes","--scope-facts",str(facts_file),
                     "--input",str(original),"--kernel",entry,"--memory-model","scoped","--gpu-policy",mode,
-                    *(["--scope-execution", scope_execution] if scope_execution != "bounded" else []),
+                    "--scope-execution", scope_execution,
                     *( ["--calibration-profile", str(profile)] if profile else []),
                     "--json","--output-dir",str(output)],cwd=checkout or ROOT,
                    env={**os.environ,"PYTHONPATH":str(checkout or ROOT)})
@@ -485,100 +482,3 @@ ALLOCATABLE_TEAM_DRIVER = TEAM_DRIVER.replace("real(8)::a(16),b(16),output(16)",
                                              "real(8),allocatable::a(:),b(:),output(:)").replace(
     "a=4\ncall step", "allocate(a(-2:13),b(-2:13),output(-2:13))\na=4\ncall step").replace(
     "!$omp end parallel", "deallocate(a,b,output)\n!$omp end parallel")
-
-
-@pytest.fixture(scope="module")
-def compiled(tmp_path_factory):
-    nvcc=shutil.which("nvcc")
-    host=shutil.which("g++-14") or shutil.which("g++")
-    fortran=shutil.which("gfortran-15") or shutil.which("gfortran")
-    if not nvcc or not host or not fortran:
-        pytest.skip("CUDA/Fortran toolchain unavailable")
-    directory=tmp_path_factory.mktemp("automatic_source_scope")
-    checkout=directory/"independent-compiler"
-    shutil.copytree(ROOT/"compiler",checkout/"compiler",ignore=shutil.ignore_patterns("__pycache__",".*cache"))
-    targets={}
-    runtime_objects = {}
-    partial_facts={"schema_version":1,"participation":"serial","captures":{
-        "argument::a":{**FACT,"initialized":"sections","sections":[{"lower":[2],"upper":[6]}]},
-        "argument::b":{**FACT,"initialized":"none"},"argument::out":{**FACT,"initialized":"none"}}}
-    budget_facts={"schema_version":1,"participation":"serial","device_budget_bytes":400,
-                  "captures":{"argument::a":FACT,"argument::b":{**FACT,"initialized":"none"},
-                              "argument::out":{**FACT,"initialized":"none"}}}
-    contiguous = PROGRAM.replace("real(8),intent", "real(8),contiguous,intent")
-    element_facts={"schema_version":1,"participation":"serial","captures":{
-        "argument::a":FACT,"original::field":FACT,"argument::out":{**FACT,"initialized":"none"}}}
-    cases=[("sections","sections",PROGRAM,DRIVER,None), ("auto","auto",PROGRAM,DRIVER,None),
-           ("allocated_sections","sections",ALLOCATABLE_PROGRAM,ALLOCATABLE_DRIVER,None),
-           ("allocated_auto","auto",ALLOCATABLE_PROGRAM,ALLOCATABLE_DRIVER,None),
-           ("contiguous","sections",contiguous,DRIVER,None),
-           ("budget","sections",PROGRAM,DRIVER,budget_facts),
-           ("mirror","sections",MIRROR_PROGRAM,MIRROR_DRIVER,None),
-           ("wrapper","sections",WRAPPER_PROGRAM,DRIVER,None),
-           ("partial","sections",PARTIAL_PROGRAM,PARTIAL_DRIVER,partial_facts),
-           ("indexed","sections",ELEMENT_PROGRAM,ELEMENT_DRIVER,element_facts)]
-    for label,mode,program,driver_source,facts in cases:
-        case=directory/label
-        checks = "-fcheck=all,array-temps" if label.startswith("allocated") else "-fcheck=all"
-        profile = os.environ.get("FORT_TEST_SCOPED_PROFILE") if label == "allocated_auto" else None
-        original,output,manifest=generate(case,program,mode=mode,facts=facts,checkout=checkout,profile=profile)
-        if mode == "auto" and profile is None:
-            assert_uncalibrated_native(manifest)
-            driver = output / "caller.f90"
-            driver.write_text(driver_source)
-            target = output / "caller"
-            run([fortran,"-std=f2018","-fopenmp",checks,str(original),str(driver),"-o",str(target)],cwd=output)
-            targets[label] = target, output
-            continue
-        assert manifest["scope_count"] == (2 if label == "indexed" else 1)
-        objects=[]
-        # Build common interface first, then generated interfaces, then the
-        # original modules with approved replacements. No IR/CUDA introspection.
-        sources=manifest["build_sources"]
-        for item in [s for s in sources if s["role"]=="common_runtime"]:
-            target=output/Path(item["path"]).with_suffix(".o").name
-            runtime_key = (manifest["runtime"]["runtime_id"], item["path"])
-            if item["language"] == "cuda" and runtime_key in runtime_objects:
-                # Runtime identity binds all published headers and sources;
-                # this suite uses identical CUDA compiler flags for every case.
-                assert sha256((output/item["path"]).read_bytes()).hexdigest() == manifest["artifacts_sha256"][item["path"]]
-                objects.append(runtime_objects[runtime_key])
-                continue
-            command=([nvcc,"-std=c++17","-ccbin",host,"-arch=sm_86","-Xcompiler=-fopenmp","-c"]
-                     if item["language"]=="cuda" else [fortran,"-std=f2018","-c"])
-            run([*command,str(output/item["path"]),"-o",str(target)],cwd=output)
-            objects.append(str(target))
-            if item["language"] == "cuda":
-                runtime_objects[runtime_key] = str(target)
-        for item in [s for s in sources if s["role"]=="shared_entry"]:
-            target=(output/item["path"]).with_suffix(".o")
-            if item["language"]=="cuda":
-                command=[nvcc,"-std=c++17","-ccbin",host,"-arch=sm_86","-Xcompiler=-fopenmp","-I",str(output),"-c"]
-            else:
-                command=[fortran,"-std=f2018","-c"]
-            run([*command,str(output/item["path"]),"-o",str(target)],cwd=output)
-            objects.append(str(target))
-        for item in [s for s in sources if s["role"]=="original_source"]:
-            target=(output/item["path"]).with_suffix(".o")
-            run([fortran,"-std=f2018","-fopenmp",checks,"-c",str(output/item["path"]),
-                 "-o",str(target)],cwd=output)
-            objects.append(str(target))
-        driver=output/"caller.f90"
-        driver.write_text(driver_source)
-        target=output/"caller"
-        run([fortran,"-std=f2018","-fopenmp",checks,str(driver),*objects,
-             "-L/usr/local/cuda/lib64","-Wl,-rpath,/usr/local/cuda/lib64","-lcudart","-lstdc++",
-             "-o",str(target)],cwd=output)
-        # Check the original native program too, with all shape/call variations.
-        native=output/"native"
-        run([fortran,"-std=f2018","-fopenmp",checks,str(original),str(driver),"-o",str(native)],cwd=output)
-        run([str(native)],cwd=output,env={**os.environ,"OMP_NUM_THREADS":"4"})
-        targets[label]=(target,output)
-        if label in {"sections", "allocated_sections"}:
-            driver.write_text(ALLOCATABLE_TEAM_DRIVER if label == "allocated_sections" else TEAM_DRIVER)
-            team=output/"team-caller"
-            run([fortran,"-std=f2018","-fopenmp",checks,str(driver),*objects,
-                 "-L/usr/local/cuda/lib64","-Wl,-rpath,/usr/local/cuda/lib64","-lcudart","-lstdc++",
-                 "-o",str(team)],cwd=output)
-            targets["allocated_team" if label == "allocated_sections" else "team"]=(team,output)
-    return targets

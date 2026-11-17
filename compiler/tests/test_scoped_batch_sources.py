@@ -1,6 +1,5 @@
 """Source-backed batching reuses numerical kernels and complete data-flow proofs."""
 
-from hashlib import sha256
 
 import pytest
 
@@ -11,9 +10,7 @@ from compiler.emission.cuda.scoped import generate_scoped
 from compiler.frontend import lower_file
 from compiler.offload.config import OffloadConfig
 from compiler.offload.profile import SCOPED_BATCH_PAYLOADS, SCOPED_TRANSFER_COST_NAMES
-from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_scoped_planning_entries import calibration
-from compiler.tests.test_source_scopes import FACT
 
 FLAT = """module numerical
 contains
@@ -90,21 +87,6 @@ def numerical(tmp_path, source=FLAT, mode="pipelined", profile=None):
     function, plan = prepare_function(lower_file(path, "advance"), options=options)
     config = OffloadConfig("sections", transfer_profile() if profile is None else profile, 4, scope_transfers=mode)
     return generate_scoped(function, plan, config, "common_functions.cuh", runtime_id=read_scoped_runtime()[1]["runtime_id"])
-
-
-def scope(tmp_path, source=CHAIN, mode="pipelined", *, negative=False):
-    path = tmp_path / "original.f90"
-    path.write_text(source)
-    facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
-             "captures": {"argument::"+name: FACT for name in ("a", "b", "c")}}
-    options = CompilerOptions(opt_level=0, gpu_policy="sections", memory_model="scoped", scope_transfers=mode)
-    numerical_sources=None
-    if negative:
-        from compiler.tests.test_scoped_batch_sources_cuda import negative_package
-        numerical_sources=negative_package(tmp_path,path)
-    outputs, report = form_source_scopes([path], "step", facts=facts, options=options,
-        config=OffloadConfig("sections", transfer_profile(), 4, scope_transfers=mode), numerical_sources=numerical_sources)
-    return path, outputs, report
 
 
 @pytest.mark.parametrize("mode", ["direct", "pinned"])

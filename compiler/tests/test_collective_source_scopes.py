@@ -1,11 +1,8 @@
 """Only proved full-team callers acquire additive coherent source workers."""
 
-from hashlib import sha256
 
 from compiler.driver.options import CompilerOptions
-from compiler.frontend.source_effects import SourceEffects
 from compiler.offload.config import OffloadConfig
-from compiler.scopes.source import form_source_scopes
 
 SOURCE = """module operators
 implicit none
@@ -60,38 +57,6 @@ call renamed_step(a,b,c,n)
 end subroutine
 end module
 """
-
-
-def generate(tmp_path, *, source=SOURCE, mode="sections", threads=4, facts_change=None, hardware_profile=None,
-             scope_execution="bounded"):
-    original = tmp_path / "source.f90"
-    original.write_text(source)
-    analysis = SourceEffects([original])
-    lines = source.splitlines(keepends=True)
-    first = next(i for i, line in enumerate(lines, 1) if line.startswith("call renamed_step"))
-    stable = {"storage": "stable", "initialized": "whole", "allocation_changes": False, "escapes": False}
-    facts = {"schema_version": 2, "sources": analysis.sources,
-             "captures": {**{"argument::" + name: {**stable, "association": "shared_whole_storage",
-                                                    "descriptor_uniform": True} for name in ("a", "b", "c")},
-                          "argument::n": {**stable, "association": "shared_immutable_control"}},
-             "participation": {"kind": "omp_full_team", "dispatch": "qualified_companion",
-                               "entry": "operators::step", "host_threads": 4, "expected_omp_level": 1,
-                               "call_sites": [{"source": str(original), "caller": "callers::qualified",
-                                               "first_line": first, "last_line": first,
-                                               "span_sha256": sha256(lines[first-1].encode()).hexdigest(),
-                                               "team_first_line": first-1,
-                                               "team_last_line": next(i for i,line in enumerate(lines,1)
-                                                                      if i>first and line.startswith("!$omp end parallel")),
-                                               "uniform_guard": "unconditional"}]}}
-    if facts_change:
-        facts_change(facts)
-    outputs, report = form_source_scopes([original], "operators::step", facts=facts,
-                                        options=CompilerOptions(gpu_policy=mode, memory_model="scoped"),
-                                        config=OffloadConfig(mode, hardware_profile, threads, True,
-                                                             scope_execution=scope_execution))
-    replacement = outputs[report["sources"][str(original)]["replacement"]] if report["sources"] else source
-    assert original.read_text() == source
-    return original, outputs, report, replacement
 
 
 def test_collective_entry_preparation_uses_effect_records_without_native_call_markers(tmp_path):

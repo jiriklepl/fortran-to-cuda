@@ -1,11 +1,6 @@
 """Original source control continues once after a reached resident escape."""
 
-from hashlib import sha256
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
-from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_source_scopes import FACT
 
 SOURCE = """module local_owner
 implicit none
@@ -171,17 +166,3 @@ end module
 ''' + MODULE_SOURCE.replace('module stage_child\nimplicit none',
     'module stage_child\nuse deep_child,only:leaf\nimplicit none').replace(
         'call opaque(x,n)', 'call leaf(x,n,escape)')
-
-
-def emit(directory, source=SOURCE, *, captures=None, policy='sections', profile=None):
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory/'owner.f90'
-    path.write_text(source)
-    facts = {'schema_version':1, 'participation':'serial',
-             'sources':{str(path):sha256(path.read_bytes()).hexdigest()},
-             'captures':{'argument::'+name:FACT for name in ('a','b','out')}}
-    facts['captures'].update(captures or {})
-    builder = ScopeBuilder([path], 'local_owner::step', facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy=policy,profile=profile,scope_execution='reached'))
-    outputs, report = builder.run()
-    return path, outputs, report

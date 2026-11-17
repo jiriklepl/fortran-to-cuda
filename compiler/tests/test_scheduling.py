@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import ctypes
-import itertools
-import math
 import os
 import shutil
 import subprocess
@@ -175,15 +173,6 @@ def _compile_shared(tmp_path: Path, source: str, *, openmp: bool = False) -> cty
     assert result.returncode == 0, result.stderr
     os.environ.setdefault("OMP_NUM_THREADS", "2")
     return ctypes.CDLL(str(library))
-
-
-def _expected(shape: tuple[int, ...], bounds: tuple[tuple[int, int, int], ...]) -> list[int]:
-    result = [-1] * math.prod(shape)
-    ranges = [range(lower, upper + (1 if stride > 0 else -1), stride) for lower, upper, stride in bounds]
-    for coordinates in itertools.product(*ranges):
-        offset = sum((index - 1) * math.prod(shape[:axis]) for axis, index in enumerate(coordinates))
-        result[offset] = sum(10**axis * index for axis, index in enumerate(coordinates))
-    return result
 
 
 def test_constant_integer_division_stride_receives_locality_credit() -> None:

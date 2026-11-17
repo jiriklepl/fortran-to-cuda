@@ -5,11 +5,6 @@
 from compiler.tests.test_source_scopes import PROGRAM
 
 
-def variants(manifest):
-    return [variant for procedure in manifest["implementation_variants"]["procedures"]
-            for variant in procedure["variants"]]
-
-
 def source():
     return PROGRAM.replace("subroutine step(a,b,out,n)", """subroutine child(a,b,out,n)
 real(8),intent(in)::a(:)

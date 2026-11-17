@@ -248,15 +248,6 @@ def generated(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathF
     return Generated(case, output, _driver(case, directory / "driver.f90"), opt_level, report)
 
 
-def _values(executable: Path, case: Case, *, threads: int = 2) -> list[float | int]:
-    result = _run([executable], executable.parent, threads=threads)
-    convert = int if case.integer_output else float
-    values = [convert(token) for token in result.stdout.split()]
-    assert len(values) == case.count, result.stdout
-    assert all(math.isfinite(value) for value in values), result.stdout
-    return values
-
-
 def test_generation_is_deterministic(generated: Generated, tmp_path: Path) -> None:
     for verbose in (False, True):
         output = tmp_path / ("verbose" if verbose else "normal")
@@ -305,15 +296,6 @@ def test_rejected_program_preserves_outputs(tmp_path: Path, kernel: str, *, exis
 
 
 @pytest.fixture(scope="module")
-def shared_runtime_object(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    directory = tmp_path_factory.mktemp("shared_native_runtime")
-    target = directory / "runtime.o"
-    _run([_tool("nvcc"), "-std=c++17", "-O0", "-Xcompiler=-fopenmp",
-          "-c", ROOT / "compiler/runtime/scoped_runtime.cu", "-o", target], directory)
-    return target
-
-
-@pytest.fixture(scope="module")
 def cuda_object(generated: Generated) -> Path:
     compiler = _tool("nvcc")
     directory = generated.directory.parent / "cuda"
@@ -341,36 +323,3 @@ def cuda_object(generated: Generated) -> Path:
 @pytest.mark.cuda
 def test_cuda_compiles(cuda_object: Path) -> None:
     assert cuda_object.stat().st_size > 0
-
-
-@pytest.fixture(scope="session")
-def cuda_device(tmp_path_factory: pytest.TempPathFactory) -> None:
-    compiler = _tool("nvcc")
-    directory = tmp_path_factory.mktemp("cuda_capability")
-    source = directory / "probe.cu"
-    source.write_text(
-        """#include <cuda_runtime.h>
-#include <cstdio>
-int main() {
-    int count = 0;
-    cudaError_t status = cudaGetDeviceCount(&count);
-    if (status != cudaSuccess || count == 0) {
-        std::fprintf(stderr, "CUDA device unavailable: %s; count=%d\\n", cudaGetErrorString(status), count);
-        return 77;
-    }
-    status = cudaSetDevice(0);
-    if (status == cudaSuccess) status = cudaFree(nullptr);
-    if (status != cudaSuccess) {
-        std::fprintf(stderr, "CUDA context unavailable: %s\\n", cudaGetErrorString(status));
-        return 77;
-    }
-    return 0;
-}
-"""
-    )
-    executable = directory / "probe"
-    _run([compiler, source, "-o", executable], directory)
-    result = subprocess.run([str(executable)], cwd=directory, capture_output=True, text=True, check=False, timeout=30)
-    if result.returncode == 77:
-        pytest.skip(result.stderr.strip())
-    assert result.returncode == 0, result.stdout + result.stderr

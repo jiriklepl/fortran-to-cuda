@@ -67,4 +67,4 @@ def builder(path, source=SOURCE, *, config=None, options=None, captures=None):
     facts["captures"].update(captures or {})
     return ScopeBuilder([path], "selected_groups::advance", facts=facts,
                         options=options or CompilerOptions(gpu_policy="sections"),
-                        config=config or OffloadConfig(policy="sections", scope_execution="bounded"))
+                        config=config or OffloadConfig(policy="sections"))

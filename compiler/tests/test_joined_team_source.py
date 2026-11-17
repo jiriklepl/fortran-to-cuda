@@ -47,7 +47,7 @@ end module
 
 
 def emit(directory, source=SOURCE, *, configured_include=None, include_marker=False, policy='sections',
-         scope_execution='reached'):
+         scope_execution='graph'):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory/'owner.f90'
     path.write_text(source)
@@ -166,30 +166,3 @@ def write_fortran(outputs, report, build):
     # The manifest is an inventory, not a Fortran module compile order.
     order = {'common_runtime': 0, 'shared_entry': 1, 'original_source': 2}
     return [build/source['path'] for source in sorted(sources, key=lambda source: order[source['role']])]
-
-
-def module_source():
-    child = SOURCE.replace('module joined_owner', 'module joined_child').replace(
-        'subroutine step(', 'subroutine child_step(').replace('integer::visits=0\n', '').replace(
-            'visits=visits+1\n', '').replace('visits=visits+11\n', '')
-    caller = '''module joined_owner
-use joined_child,only:child_step
-implicit none
-contains
-subroutine step(a,b,out,n,flag)
-real(8),intent(in)::a(-2:)
-real(8),intent(inout)::b(-2:),out(-2:)
-integer,intent(in)::n
-logical,intent(in)::flag
-integer::i
-do i=-2,n-3
-b(i)=a(i)+7
-enddo
-call child_step(a,b,out,n,flag)
-do i=-2,n-3
-out(i)=out(i)+5
-enddo
-end subroutine
-end module
-'''
-    return child+caller

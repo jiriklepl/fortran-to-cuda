@@ -7,7 +7,6 @@ from compiler.analysis import ParallelizationError, build_execution_plan
 from compiler.driver.options import CompilerOptions
 from compiler.frontend import lower_file
 from compiler.ir import CompilationError, ConditionalRegion, If, IntrinsicCall, ScalarType, walk_expr
-from compiler.tests.test_native import cuda_device as cuda_device
 
 
 def lower(tmp_path, body, declarations="", arguments="a,n"):
@@ -106,31 +105,6 @@ def test_recursive_host_plan_retains_parallel_regions(tmp_path):
     assert isinstance(plan.steps[0], ConditionalRegion)
     assert len(plan.regions) == 1
     assert plan.regions[0] == plan.steps[0].then_plan.regions[0]
-
-
-def structured_case(tmp_path):
-    function = lower(
-        tmp_path,
-        "iv=max(abs(-3),min(5,2))\nrv=sqrt(abs(-4.0))\n"
-        "flag=(.not.(.not.enabled) .and. n>0) .eqv. .true.\nif(flag)then\ndo i=1,n\n"
-        "pick=(a(i)<0) .eqv. .true.\nif(pick)then\nt=abs(a(i))\n"
-        "elseif((a(i)>2) .neqv. .false.)then\nt=min(a(i),4.d0,3.d0)\n"
-        "else\nt=max(a(i),2.d0)\nendif\na(i)=sqrt(t*t)+rv+iv\nenddo\n"
-        "else\ndo i=1,n\na(i)=-1\nenddo\nendif\nif(.not.enabled) a(1)=a(1)+2",
-        "logical,intent(in)::enabled\nlogical::flag,pick\nreal(knd)::t\nreal::rv\ninteger::iv",
-        "a,n,enabled",
-    )
-    driver = """program main
-use language_case
-real(knd)::a(4)
-a=[-4.d0,1.d0,3.d0,9.d0]
-call entry(a,4,.true.)
-print *,a
-call entry(a,4,.false.)
-print *,a
-end program
-"""
-    return function, driver
 
 
 def test_host_branch_snapshots_have_distinct_symbolic_parameters(tmp_path):

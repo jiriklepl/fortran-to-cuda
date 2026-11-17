@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from hashlib import sha256
 
 import pytest
 
@@ -12,11 +11,7 @@ from compiler.emission.common.resources import read_scoped_runtime
 from compiler.emission.cuda.scoped import generate_scoped
 from compiler.frontend import lower_file
 from compiler.offload.config import OffloadConfig
-from compiler.scopes.source import form_source_scopes
-from compiler.tests.test_collective_source_scopes import SOURCE as TEAM_SOURCE
 from compiler.tests.test_scoped_planning_entries import calibration
-from compiler.tests.test_source_continuation import TREE
-from compiler.tests.test_source_scopes import FACT, PROGRAM
 from compiler.tests.test_structured_offload import SOURCE
 
 
@@ -98,34 +93,3 @@ def test_coalesced_uploads_keep_calibrated_exact_direct_placement(tmp_path):
     assert limits["fallback_reason"] == "coalesced_upload_ineligible"
     assert "costs.valid = 1" in emitted.cuda
     assert not emitted.report["batch_execution"]["enabled"]
-
-
-def source_scope(tmp_path, transfers, *, collective=False, structured=False, policy="sections", profile=None):
-    source = tmp_path / "original.f90"
-    text = TEAM_SOURCE if collective else TREE if structured else PROGRAM
-    source.write_text(text)
-    facts = {"schema_version": 1, "participation": "serial",
-             "sources": {str(source): sha256(source.read_bytes()).hexdigest()},
-             "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}}
-    if collective:
-        lines = text.splitlines(keepends=True)
-        first = next(index for index, line in enumerate(lines, 1) if line.startswith("call renamed_step"))
-        facts.update(schema_version=2,
-                     captures={**{"argument::" + name: {**FACT, "association": "shared_whole_storage",
-                                                         "descriptor_uniform": True} for name in ("a", "b", "c")},
-                               "argument::n": {**FACT, "association": "shared_immutable_control"}},
-                     participation={"kind": "omp_full_team", "dispatch": "qualified_companion",
-                                    "entry": "operators::step", "host_threads": 4, "expected_omp_level": 1,
-                                    "call_sites": [{"source": str(source), "caller": "callers::qualified",
-                                                    "first_line": first, "last_line": first,
-                                                    "span_sha256": sha256(lines[first-1].encode()).hexdigest(),
-                                                    "team_first_line": first-1, "team_last_line": first+1,
-                                                    "uniform_guard": "unconditional"}]})
-    outputs, report = form_source_scopes([source], "operators::step" if collective else "step", facts=facts,
-                                        options=CompilerOptions(gpu_policy=policy, memory_model="scoped", scope_transfers=transfers),
-                                        config=OffloadConfig(policy, profile, 4, collective, scope_transfers=transfers))
-    assert report["scope_count"] == 1, report["boundaries"]
-    scope, = report["scopes"]
-    replacement = outputs[report["sources"][str(source)]["replacement"]]
-    owner = replacement.split("subroutine " + scope["owner"], 1)[1].split("end subroutine " + scope["owner"], 1)[0]
-    return outputs, report, owner

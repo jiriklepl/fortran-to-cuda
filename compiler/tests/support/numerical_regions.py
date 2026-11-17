@@ -4,10 +4,7 @@ Every fixture call creates new analysis, builder and proof objects. Only source
 strings and serialized emission snapshots may be shared by read-only tests.
 """
 
-import json
-from dataclasses import dataclass
 
-from compiler.scopes.combined_team import CombinedNumericalTeam
 
 FACT = {"storage": "stable", "initialized": "whole", "escapes": False, "allocation_changes": False}
 
@@ -96,14 +93,6 @@ call ieee_set_halting_mode(ieee_invalid,.false.)
 """
 
 
-def combined_units(owner):
-    return tuple(unit for unit in owner.members[CHILD].units if isinstance(unit.scope, CombinedNumericalTeam))
-
-
-def emitted_child(paths, outputs, report):
-    return outputs[report["sources"][str(paths[1])]["replacement"]]
-
-
 def team_text(text):
     """The original setter has no generated environment-vote marker."""
     body = text.index("call cell_formula(g,s,a(i),i)")
@@ -119,32 +108,3 @@ def environment_source(source=CHILD_SOURCE):
     """Retain the original native setter before the numerical groups."""
     return source.replace("implicit none\n", ENVIRONMENT_USE + "implicit none\n", 1).replace(
         "i=0\n", "i=0\n" + ENVIRONMENT_TEAM, 1)
-
-
-@dataclass(frozen=True)
-class EmittedNumericalText:
-    """Read-only emission data, without analysis, builder or proof authority."""
-
-    original_sources: tuple[tuple[str, str], ...]
-    artifacts: tuple[tuple[str, str], ...]
-    manifest_json: str
-    observations_json: str
-
-    @classmethod
-    def capture(cls, paths, outputs, report, *, observations=None):
-        return cls(tuple((str(path), path.read_text()) for path in paths),
-                   tuple(sorted(outputs.items())),
-                   json.dumps(report, sort_keys=True, separators=(",", ":")),
-                   json.dumps(observations or {}, sort_keys=True, separators=(",", ":")))
-
-    def manifest(self):
-        """Each caller owns its mutable public JSON copy."""
-        return json.loads(self.manifest_json)
-
-    def observations(self):
-        return json.loads(self.observations_json)
-
-    def child_text(self):
-        path, _source = self.original_sources[1]
-        replacement = self.manifest()["sources"][path]["replacement"]
-        return dict(self.artifacts)[replacement]

@@ -104,17 +104,6 @@ def scale(row, factor):
         sample["wall_seconds"] *= factor
 
 
-def scalar_features():
-    return {"schema_version": 2, "classification_complete": True, "private_array_elements": 0}
-
-
-def cpu_model(profile, backend="native_fork_join", counts=None, **kwargs):
-    return execution.execution_cpu_costs(profile, backend, {} if counts is None else counts,
-        workload_class=kwargs.pop("workload_class", "scalar_expression_v2"),
-        workload_features=kwargs.pop("workload_features", scalar_features()),
-        access_class=kwargs.pop("access_class", execution.ACCESS_CLASS), **kwargs)
-
-
 @pytest.mark.parametrize("precision", [32, 64])
 def test_fixed_source_registry_and_complete_global_protocol(monkeypatch, precision):
     data = observations(precision)

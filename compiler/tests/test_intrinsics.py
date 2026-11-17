@@ -1,6 +1,5 @@
 """Intrinsic typing and execution compared with native Fortran on each backend."""
 
-import re
 import shutil
 import subprocess
 
@@ -11,11 +10,9 @@ from compiler.analysis.semantics import expression_type
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission import read_common_header
-from compiler.frontend import lower_file
 from compiler.ir import CompilationError, IntrinsicCall, Literal, ScalarType, SourceLocation
 from compiler.ir.intrinsics import INTRINSIC_ARGUMENTS
 from compiler.tests.test_language import lower
-from compiler.tests.test_native import cuda_device as cuda_device
 
 REQUESTED = {
     "abs",
@@ -143,117 +140,6 @@ def test_merge_sources_still_participate_in_dependence_and_definition_checks(tmp
     function = lower(tmp_path, "a(1)=merge(t,1.d0,n>0)", "real(8)::t")
     with pytest.raises(CompilationError, match="read before definition"):
         build_execution_plan(function)
-
-
-def intrinsic_case(tmp_path):
-    """Use runtime inputs, including both signs, ties, signed zero, and INT_MIN."""
-    real_calls = [f"{name}(abs(x))" for name in REAL_FUNCTIONS]
-    real_calls += [
-        "min(x,y,0.25_KIND)",
-        "max(x,y,0.25_KIND)",
-        "atan2(x,y)",
-        "mod(x,y)",
-        "modulo(x,y)",
-        "sign(x,y)",
-        "dim(x,y)",
-        "merge(x,y,x>y)",
-        "real(x)",
-        "real(x,kind=8)",
-        "int(x)",
-        "nint(x)",
-        "floor(x)",
-        "ceiling(x)",
-        "dble(x)",
-        "kind(x)",
-        "epsilon(x)",
-        "tiny(x)",
-        "huge(x)",
-        "sign(1._KIND,mod(x,y))",
-        "sign(1._KIND,modulo(x,y))",
-        "sign(1._KIND,sign(x,y))",
-    ]
-    integer_calls = [
-        "min(j,k,2)",
-        "max(j,k,2)",
-        "mod(j,k)",
-        "modulo(j,k)",
-        "sign(j,-1)",
-        "dim(-huge(j),huge(k))",
-        "merge(j,k,j>k)",
-        "int(j)",
-        "kind(j)",
-        "huge(j)",
-    ]
-    body = ["do i=1,size(x4)", "x=x4(i)", "y=y4(i)", "u=x8(i)", "v=y8(i)", "j=ints(i)", "k=divs(i)"]
-    expressions = []
-    for kind, x, y in [(4, "x", "y"), (8, "u", "v")]:
-        expressions.extend(
-            re.sub(r"\by\b", y, re.sub(r"\bx\b", x, call.replace("KIND", str(kind)))) for call in real_calls
-        )
-    expressions += integer_calls + [
-        "real(j)",
-        "real(j,kind=8)",
-        "dble(j)",
-        "merge(.true.,.false.,j>k) .eqv. (j>k)",
-        "size(grid)",
-        "size(grid,dim=1,kind=4)",
-        "size(array=grid,dim=2)",
-        "size(grid,3)",
-        "lbound(grid,1)",
-        "ubound(grid,2)",
-        "ubound(grid,3)",
-        "size(grid,dim=1+mod(i-1,3))",
-        "lbound(grid,dim=1+mod(i-1,3))",
-        "ubound(grid,dim=1+mod(i-1,3))",
-        "ubound(empty,1)",
-        "lbound(empty,1)",
-        "size(empty)",
-        "real(j,kind=kind(u))",
-        "real(j,kind=wp)",
-    ]
-    logical_column = len(real_calls) * 2 + len(integer_calls) + 4
-    for column, expression in enumerate(expressions, 1):
-        if column == logical_column:
-            expression = f"merge(1,0,{expression})"
-        body.append(f"out(i,{column})={expression}")
-    body += ["enddo"]
-    path = tmp_path / "intrinsics.f90"
-    path.write_text(
-        "! kernels\nmodule intrinsic_case\ninteger,parameter::wp=kind(0.d0),ik=kind(0)\ncontains\n! kernel\n"
-        "subroutine entry(out,x4,y4,x8,y8,ints,divs,grid,empty)\n"
-        "real(8),intent(out)::out(:,:)\nreal,intent(in)::x4(:),y4(:)\n"
-        "real(8),intent(in)::x8(:),y8(:),grid(:,:,:),empty(:)\n"
-        "integer,intent(in)::ints(:),divs(:)\ninteger::i,j,k\nreal::x,y\nreal(8)::u,v\n"
-        + "\n".join(body)
-        + "\nend subroutine\nend module\n"
-    )
-    count = len(expressions)
-    driver = f"""program main
-use intrinsic_case
-real::x(8),y(8)
-real(8)::out(8,{count}),grid(-1:0,3:5,0:3),empty(0)
-integer::j(8),k(8)
-x=[-0.75,-0.5,-0.25,0.25,0.5,0.75,0.5,-0.5]
-y=[0.5,0.25,-0.5,0.5,-0.25,-0.5,0.25,-0.25]
-j=[-7,7,-7,7,0,(-2147483647-1),(-2147483647-1),2147483647]
-k=[3,-3,-3,3,-1,-2,2147483647,(-2147483647-1)]
-call entry(out,x,y,dble(x),dble(y),j,k,grid,empty)
-print '(ES26.17E3)',out
-end program
-"""
-    return lower_file(path, "entry"), driver, len(real_calls)
-
-
-def check_results(actual, expected, real_count):
-    assert len(actual) == len(expected)
-    for index, (value, reference) in enumerate(zip(actual, expected, strict=True)):
-        column = index // 8
-        # Small relative-only tolerances also check TINY and EPSILON correctly.
-        tolerance = 3e-7 if column < real_count else 3e-14
-        if column >= real_count * 2:
-            assert value == reference, (column + 1, index % 8 + 1)
-        else:
-            assert value == pytest.approx(reference, rel=tolerance, abs=0), (column + 1, index % 8 + 1)
 
 
 @pytest.mark.native

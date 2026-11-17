@@ -4,29 +4,6 @@ from types import SimpleNamespace
 
 from compiler.scopes.lexical import immutable_numerical_unit
 from compiler.scopes.segments import Segment
-from compiler.tests.test_lexical_source_owner import SOURCE
-
-
-def numerical_regions(report):
-    registries = [report["inline_numerical_regions"], *report["child_numerical_regions"]]
-    return [region for registry in registries for region in registry["regions"] if region["used"]]
-
-
-def numerical_segments(owner):
-    members = [owner, *owner["module_coordinators"], *owner["internal_coordinators"]]
-    return [segment for member in members for unit in member["planning_segments"]
-            for segment in unit["operations"]["planning_segments"]]
-
-
-def trap_source():
-    # With a=+Inf, the producer writes -Inf while traps are disabled. The
-    # original consumer must retain the restored invalid-operation trap.
-    return (SOURCE.replace("subroutine step(a,b,out,n,escape)",
-                           "subroutine step(a,b,out,n,escape)\nuse ieee_exceptions")
-            .replace("visits=visits+1", "visits=visits+1\ncall ieee_set_halting_mode(ieee_invalid,.false.)")
-            .replace("b(i)=2*a(i)+real(i,8)", "b(i)=-a(i)")
-            .replace("if(escape) then\ncall opaque(b,n)\nendif",
-                     "call ieee_set_halting_mode(ieee_invalid,.true.)"))
 
 
 def test_immutable_unit_accepts_only_identical_registered_fallback():

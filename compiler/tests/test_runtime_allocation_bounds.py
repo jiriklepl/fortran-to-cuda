@@ -4,14 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.numerical import load_numerical_sources
-from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_numerical_sources import NORMALIZED, ORIGINAL, package
-from compiler.tests.test_source_scopes import FACT
 
 
 def _package(directory, *, rank=1, descriptor_only=False, shadowed=None):
@@ -45,18 +41,6 @@ def _analysis(source):
     analysis = SourceEffects([source])
     analysis.authorize_stable_module_allocatables({"settings::weights"})
     return analysis
-
-
-def _generate(directory, *, rank=1, descriptor_only=False, shadowed=None):
-    source, _, document = _package(directory, rank=rank, descriptor_only=descriptor_only, shadowed=shadowed)
-    facts = {"schema_version": 1, "participation": "serial", "sources": document["source_inputs"],
-             "captures": {root: dict(FACT) for root in
-                          ("argument::a", "argument::b", "argument::out", "settings::weights")}}
-    outputs, report = form_source_scopes([source], "original::step", facts=facts,
-                                         options=CompilerOptions(opt_level=1),
-                                         config=OffloadConfig(policy="sections"), numerical_sources=document)
-    assert report["scope_count"] == 1, report["boundaries"]
-    return outputs[report["sources"][str(source)]["replacement"]], report
 
 
 @pytest.mark.parametrize("rank", [1, 2])

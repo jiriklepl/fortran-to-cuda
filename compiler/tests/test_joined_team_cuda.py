@@ -240,11 +240,6 @@ write(unit) a,b,out''')
 
 
 @pytest.fixture(scope='module')
-def joined_binaries(tmp_path_factory):
-    return build_joined_binaries(tmp_path_factory, CASES)
-
-
-@pytest.fixture(scope='module')
 def wide_joined_binaries(tmp_path_factory):
     return build_joined_binaries(tmp_path_factory, ('many_numerical',))
 

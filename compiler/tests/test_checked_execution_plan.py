@@ -25,7 +25,7 @@ def scanned(directory, before_plan=None, *, config=None, source=SOURCE):
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::" + name: deepcopy(FACT) for name in ("a", "b", "out")}}
     builder = ScopeBuilder([path], "local_owner::step", facts=facts, options=CompilerOptions(),
-                           config=config or OffloadConfig(policy="sections", scope_execution="reached"))
+                           config=config or OffloadConfig(policy="sections"))
     nodes = builder.inline.prepare(builder.entry.execution.content)
     builder.generated.update(builder.inline.generated)
     builder.numerical_ir.update(builder.inline.ir)

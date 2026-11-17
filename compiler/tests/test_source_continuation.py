@@ -29,12 +29,6 @@ def generate_tree(directory, source=TREE, *, mode="sections", profile=None):
     return original, output, manifest, text
 
 
-def owner_text(manifest, text):
-    owner, = manifest["scopes"]
-    name = owner["owner"]
-    return owner, text[text.index("subroutine " + name):text.index("end subroutine " + name)]
-
-
 def test_missing_calibration_selects_original_before_creating_context(tmp_path):
     _, _, manifest, text = generate_tree(tmp_path, mode="auto")
     assert_uncalibrated_native(manifest)

@@ -8,11 +8,7 @@ from fparser.two.utils import walk
 from compiler.frontend.indirect_sections import analyze_indirect_sections
 from compiler.frontend.reached_read_requirements import prove_native_read_requirements
 from compiler.ir import CompilationError
-from compiler.scopes.closed_selection import ClosedIntervalOwner
 from compiler.tests.test_indirect_native_sections import fixture
-from compiler.tests.test_interval_draft import SOURCE
-from compiler.tests.test_original_interval_owner import builder, call_pair
-from compiler.tests.test_selection_activation import PREFIX
 
 CORRECTION = "s(sites(q)%index)=s(sites(q)%index)+a(sites(q)%index)"
 TEAM = """integer::i,q
@@ -37,33 +33,6 @@ enddo
 !$omp end do
 !$omp end parallel
 """
-
-
-def emit_native_team_fixture(path, *, read_modify_write=True):
-    source = SOURCE.replace("integer::visits=0", """integer::visits=0
-type site_t
-integer::index
-end type
-type(site_t),target::sites(2)""")
-    start = source.index("integer::i", source.index("subroutine momentum"))
-    stop = source.index("end subroutine", start)
-    source = source[:start] + TEAM + source[stop:]
-    if not read_modify_write:
-        source = source.replace(CORRECTION, "s(sites(q)%index)=a(sites(q)%index)")
-    selected = builder(path, source=source, prefix=PREFIX + "sites(1)%index=0\nsites(2)%index=-1\n")
-    selected.facts["captures"]["interval_fields::out"]["initialized"] = "none"
-    site = call_pair(selected)
-    owner = ClosedIntervalOwner(selected, site.originals, site.prefix, site.controls)
-    assert owner.run(site.originals)
-    outputs, report = owner.builder.finish()
-    return selected, owner, outputs, report
-
-
-def native_correction(owner):
-    return next((member, operation) for member in owner.execution_plan.members for unit in member.units
-                for operation in unit.scope.native
-                if getattr(operation, "indirect_sections", None) is not None
-                and operation.indirect_sections.available)
 
 
 @pytest.mark.parametrize("body", [

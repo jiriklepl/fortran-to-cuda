@@ -1,6 +1,5 @@
 """Generic host preparation, guarded arguments, and shared GPU intervals."""
 
-import subprocess
 
 SOURCE = """module prepared_case
 contains
@@ -28,9 +27,3 @@ end if
 end subroutine
 end module
 """
-
-
-def run(argv, directory, environment=None):
-    result = subprocess.run(argv, cwd=directory, env=environment, capture_output=True, text=True, timeout=180)
-    assert result.returncode == 0, result.stdout + result.stderr
-    return result.stdout + result.stderr

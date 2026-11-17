@@ -3,10 +3,6 @@
 from __future__ import annotations
 
 import copy
-import json
-import os
-import shutil
-import sys
 from hashlib import sha256
 
 import pytest
@@ -14,7 +10,6 @@ import pytest
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 from compiler.scopes.numerical import load_numerical_sources
-from compiler.tests.test_source_scopes import FACT, ROOT, run
 
 ORIGINAL = """module settings
 implicit none
@@ -130,23 +125,6 @@ def package(directory, *, original=ORIGINAL, normalized=NORMALIZED):
     return source,numerical,document
 
 
-def generate(directory, *, original=ORIGINAL, normalized=NORMALIZED):
-    source,_numerical,document=package(directory,original=original,normalized=normalized)
-    package_path=directory/"numerical.json"
-    package_path.write_text(json.dumps(document))
-    facts={"schema_version":1,"participation":"serial","sources":document["source_inputs"],
-           "captures":{root:FACT for root in ("argument::a","argument::b","argument::out","settings::weights")}}
-    facts_path=directory/"facts.json"
-    facts_path.write_text(json.dumps(facts))
-    output=directory/"output"
-    response=run([sys.executable,"-m","compiler.tests.support.reference_scopes","--input",str(source),"--kernel","original::step",
-                  "--form-scopes","--scope-facts",str(facts_path),"--numerical-sources",str(package_path),
-                  "--memory-model","scoped","--gpu-policy","sections","--json","--output-dir",str(output)],cwd=ROOT)
-    manifest=json.loads(response.stdout)["scopes"]
-    assert manifest["scope_count"]==1,manifest["boundaries"]
-    return source,output,manifest
-
-
 @pytest.mark.parametrize(("field","value","reason"),[
     ("sha256","stale","hash differs"), ("normalization","compact","coordinate facts"),
     ("capture_safe",False,"capture/coordinate facts"),
@@ -178,32 +156,3 @@ def test_effects_keep_do_header_after_leading_openmp_comment(tmp_path):
     assert not summary["cloneable"]
     assert any(operation.get("resource")=="settings::weights" and operation["guard"]
                for operation in summary["operations"])
-
-
-@pytest.fixture(scope="module")
-def compiled_package(tmp_path_factory):
-    nvcc=shutil.which("nvcc")
-    host=shutil.which("g++-14") or shutil.which("g++")
-    fortran=shutil.which("gfortran-15") or shutil.which("gfortran")
-    if not nvcc or not host or not fortran:
-        pytest.skip("CUDA/Fortran toolchain unavailable")
-    source,output,manifest=generate(tmp_path_factory.mktemp("numerical_source_scope"))
-    objects=[]
-    for role in ("common_runtime","shared_entry","original_source"):
-        for unit in manifest["build_sources"]:
-            if unit["role"]!=role:
-                continue
-            target=(output/unit["path"]).with_suffix(".o")
-            command=([nvcc,"-std=c++17","-ccbin",host,"-arch=sm_86","-Xcompiler=-fopenmp","-I",str(output)]
-                     if unit["language"]=="cuda" else [fortran,"-std=f2018","-fopenmp","-fcheck=all"])
-            run([*command,"-c",str(output/unit["path"]),"-o",str(target)],cwd=output)
-            objects.append(str(target))
-    driver=output/"driver.f90"
-    driver.write_text(DRIVER)
-    native=output/"native"
-    run([fortran,"-fopenmp","-fcheck=all",str(source),str(driver),"-o",str(native)],cwd=output)
-    run([str(native)],cwd=output,env={**os.environ,"OMP_NUM_THREADS":"4"})
-    target=output/"caller"
-    run([fortran,"-fopenmp","-fcheck=all",str(driver),*objects,"-L/usr/local/cuda/lib64",
-         "-Wl,-rpath,/usr/local/cuda/lib64","-lcudart","-lstdc++","-o",str(target)],cwd=output)
-    return target,output

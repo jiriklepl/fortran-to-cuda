@@ -6,7 +6,6 @@ import pytest
 from compiler.analysis import build_execution_plan
 from compiler.frontend import discover_file, lower_file
 from compiler.ir import CompilationError, If, Literal, Loop, Reference, walk_expr
-from compiler.tests.test_native import cuda_device as cuda_device
 
 
 def source(tmp_path, routines, module="renamed_math"):

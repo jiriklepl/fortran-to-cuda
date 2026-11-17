@@ -11,7 +11,7 @@ from compiler.ir import CompilationError
 from compiler.scopes.native_atomic import summarize
 from compiler.scopes.regions import extract_region
 from compiler.scopes.segments import grouped_nodes
-from compiler.tests.test_source_scopes import FACT, PROGRAM, generate
+from compiler.tests.test_source_scopes import PROGRAM
 
 
 def source_text():
@@ -26,12 +26,6 @@ b(i)=b(i)+sum(scratch)+real(lbound(scratch,1)+ubound(scratch,1),8)
 enddo
 !$omp end parallel do
 call consumer""")
-
-
-def generated(tmp_path, *, scope_execution="reached"):
-    return generate(tmp_path, source_text(), facts={"schema_version": 1, "participation": "serial",
-        "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}},
-        scope_execution=scope_execution)
 
 
 @pytest.mark.parametrize("declaration", ["real(8),save::scratch(3)", "real(8),allocatable::scratch(:)",

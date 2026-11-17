@@ -19,7 +19,6 @@ from compiler.ir import (
     IntrinsicCall,
     Literal,
     Loop,
-    ParallelRegion,
     Reference,
     RegionAddressing,
     RegionReport,
@@ -50,11 +49,6 @@ def address_plan(*wide, source=(), iterators=(ITERATOR,)):
     decisions = tuple(SubscriptDecision(expr, "wide", interval, "proved fixture") for expr in wide)
     decisions += tuple(SubscriptDecision(expr, "source", None, "uncertain fixture") for expr in source)
     return RegionAddressing(decisions, tuple((symbol, interval) for symbol in iterators), iterators)
-
-
-def region(body, addressing=None):
-    loop = Loop(ITERATOR, integer(2), integer(8), body, LOCATION)
-    return ParallelRegion(0, (loop,), (), (J,), (A, INDICES, N), REPORT, body, addressing=addressing)
 
 
 def test_selected_subscript_preserves_identical_scalar_expression():

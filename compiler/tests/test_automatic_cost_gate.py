@@ -2,7 +2,6 @@
 
 from hashlib import sha256
 
-import pytest
 
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
@@ -28,10 +27,6 @@ def builder(tmp_path, *, execution="bounded", config=None, normalized=False, ent
                          config=config or OffloadConfig("auto", scope_execution=execution),
                          numerical_sources=document)
     return path, lowered, value
-
-
-def forbid(*args, **kwargs):
-    pytest.fail("missing-cost native selection must not discover, lower, or summarize a closure")
 
 
 def assert_native_only(outputs, report):

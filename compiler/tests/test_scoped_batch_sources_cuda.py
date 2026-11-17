@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
-from hashlib import sha256
 from pathlib import Path
 
 from compiler.tests.test_module_allocatable_scopes_runtime import _run
-from compiler.tests.test_scoped_batch_sources import CHAIN, FLAT, transfer_profile
+from compiler.tests.test_scoped_batch_sources import transfer_profile
 
 PROBE = r'''#include <cuda_runtime.h>
 #include <cstdio>
@@ -84,49 +83,3 @@ def actual_profile(directory, nvcc, host):
     # makes repeated ordinary access setup costlier than the extra batch launch.
     value["scoped"]["costs"]["device_access_seconds"]=1e-4
     return value
-
-
-def source_case(label):
-    if label == "flat":
-        source = (FLAT.replace("module numerical", "module original")
-                  .replace("a(:,:)", "a(-2:,3:)").replace("b(:,:),c(:,:)", "b(-2:,3:),c(-2:,3:)")
-                  .replace("do j=2,m-1", "do j=4,m+1").replace("do i=2,n-1", "do i=-1,n-4")
-                  .replace("end module", """subroutine inspect(c)
-real(8),intent(inout)::c(:,:)
-if(size(c,1)>0.and.size(c,2)>0) c(1,1)=sum(c)
-end subroutine
-subroutine step(a,b,c,n,m)
-real(8),intent(in)::a(:,:)
-real(8),intent(inout)::b(:,:),c(:,:)
-integer,intent(in)::n,m
-call advance(a,b,c,n,m)
-call inspect(c)
-end subroutine
-end module"""))
-    else:
-        source = CHAIN.replace("intent(out)::b", "intent(inout)::b").replace("intent(out)::c", "intent(inout)::c")
-        if label == "halo":
-            source = source.replace("a(i+1,j)+real(i,8)", "a(i+1,j)+a(i,j-1)+a(i,j+1)+real(i,8)")
-        if label == "nonterminal":
-            source = source.replace("call second(b,c,n,m)\nend subroutine", "call second(b,c,n,m)\n"
-                "call observe(b,c)\ncall first(a,b,n,m)\ncall second(b,c,n,m)\nend subroutine")
-            source = source.replace("end module", "subroutine observe(b,c)\nreal(8),intent(in)::b(:,:)\n"
-                "real(8),intent(inout)::c(:,:)\nif(size(c,1)>0.and.size(c,2)>0) c(1,1)=sum(b)+sum(c)\nend subroutine\nend module")
-    return source
-
-
-def negative_package(directory, original):
-    """Public extraction keeps original coordinates with whole-storage indices."""
-    normalized=directory/"normalized.f90"
-    text=(FLAT.replace("do j=2,m-1","do j=4,m+1").replace("do i=2,n-1","do i=-1,n-4")
-          .replace("(i-1,j)","(i+2,j-2)").replace("(i+1,j)","(i+4,j-2)").replace("(i,j)","(i+3,j-2)"))
-    normalized.write_text(text)
-    digest=sha256(original.read_bytes()).hexdigest()
-    return {"schema_version":1,"source_inputs":{str(original):digest},"entries":[{
-        "procedure":"original::advance","source_sha256":digest,"path":str(normalized),
-        "entry":"numerical::advance","sha256":sha256(normalized.read_bytes()).hexdigest(),
-        "normalization":"whole_storage_rebased_v1","participation":"serial_coordinator",
-        "capture_safe":True,"preserves_source_order":True,
-        "parameters":[{"name":name,"resource":"argument::"+name,
-                       **({"physical_origin":[0,0]} if name in {"a","b","c"} else {})}
-                      for name in ("a","b","c","n","m")]}]}

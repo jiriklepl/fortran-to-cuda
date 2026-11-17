@@ -15,7 +15,6 @@ from compiler.ir import (
     ScalarType,
     walk_expr,
 )
-from compiler.tests.test_native import cuda_device as cuda_device
 
 
 def source(tmp_path, declarations, body, *, helpers="", precision=8):

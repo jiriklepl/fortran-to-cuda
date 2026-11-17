@@ -3,20 +3,15 @@
 import copy
 import re
 from dataclasses import replace
-from hashlib import sha256
 
 import pytest
 from fparser.two.utils import walk
 
-from compiler.driver.options import CompilerOptions
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.immutable_inputs import immutable_call_inputs
 from compiler.scopes.regions import extract_region
-from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_source_scopes import FACT
 
 
 def source_fixture(tmp_path, *, precision=8, index="stage", coefficient="weights",
@@ -76,14 +71,6 @@ def region_fixture(tmp_path, **options):
     loop = next(node for node in walk(routine.execution) if _kind(node) == "Block_Nonlabel_Do_Construct")
     region = extract_region(analysis, routine, loop, immutable_inputs=associations)
     return analysis, routine, associations, region, paths
-
-
-def emit(paths, *, policy="sections", profile=None):
-    facts = {"schema_version": 1, "participation": "serial",
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest() for path in paths},
-             "captures": {"argument::" + name: FACT for name in ("a", "out")}}
-    return ScopeBuilder(paths, "owner_lib::advance", facts=facts, options=CompilerOptions(),
-                        config=OffloadConfig(policy=policy, profile=profile, scope_execution="reached")).run()
 
 
 @pytest.mark.parametrize("precision", [4, 8])

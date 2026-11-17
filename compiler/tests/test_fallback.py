@@ -8,7 +8,6 @@ from compiler.analysis import ParallelizationError, build_execution_plan
 from compiler.driver.options import CompilerOptions
 from compiler.ir import CompilationError, ParallelRegion, SequentialRegion
 from compiler.tests.test_language import lower
-from compiler.tests.test_native import cuda_device as cuda_device
 
 HOST = CompilerOptions(fallback="host")
 
