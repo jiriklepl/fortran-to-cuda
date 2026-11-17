@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fresh native ELMM / committed compiler / reworked compiler comparison.
+"""Fresh native ELMM / current compiler comparison.
 
 Every mode is built from the pinned approved common application sources. Compiler snapshots,
 build receipts, binaries, configuration, logs and validation outputs are hashed.
@@ -11,7 +11,6 @@ import argparse
 import csv
 import datetime
 import hashlib
-import io
 import json
 import math
 import os
@@ -21,7 +20,6 @@ import sqlite3
 import statistics
 import subprocess
 import sys
-import tarfile
 from collections import Counter
 from pathlib import Path
 
@@ -46,7 +44,7 @@ from sgs_experiment import (
     write,
 )
 
-MODES = ("native", "committed", "reworked")
+MODES = ("native", "reworked")
 REQUIRED_FIELDS = ("U", "V", "W", "Pr", "Viscosity", "U2", "V2", "W2", "Ustar", "Vstar", "Wstar")
 OPTIONAL_FIELDS = ("Temperature", "Moisture", "Scalar", "TDiff", "U_avg", "V_avg", "W_avg", "Pr_avg", "Scalar_avg")
 FIELD_POLICY = {"dtype": "float64", "atol": 1e-6, "rtol": 1e-5,
@@ -72,32 +70,26 @@ def compiler_code_equivalence(root):
             "files_sha256": hashes}
 
 
-def snapshot_compiler(root, destination, *, revision=None):
-    """Archive the requested commit exactly; freeze candidate files separately."""
+def snapshot_compiler(root, destination):
+    """Freeze the candidate compiler's working files for this comparison."""
     from elmm_pipeline.common import digest_tree
     root, destination = Path(root).resolve(strict=True), Path(destination)
     if destination.exists():
         raise ValueError("compiler snapshot already exists: " + str(destination))
-    if revision is not None:
-        commit = subprocess.check_output(["git", "-C", str(root), "rev-parse", "--verify", revision + "^{commit}"], text=True).strip()
-        archive = subprocess.check_output(["git", "-C", str(root), "archive", commit, "compiler"])
-        destination.mkdir(parents=True)
-        with tarfile.open(fileobj=io.BytesIO(archive)) as stream:
-            stream.extractall(destination, filter="data")
-    else:
-        commit = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False).stdout.strip() or None
-        destination.mkdir(parents=True)
-        def ignore(directory, names):
-            excluded = {name for name in names if name in {"__pycache__", ".pytest_cache", ".ruff_cache"}
-                        or name.endswith(".pyc")}
-            if Path(directory) == root / "compiler" and "_local" in names:
-                excluded.add("_local")
-            return excluded
-        shutil.copytree(root / "compiler", destination / "compiler", ignore=ignore)
+    commit = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False).stdout.strip() or None
+    destination.mkdir(parents=True)
+
+    def ignore(directory, names):
+        excluded = {name for name in names if name in {"__pycache__", ".pytest_cache", ".ruff_cache"}
+                    or name.endswith(".pyc")}
+        if Path(directory) == root / "compiler" and "_local" in names:
+            excluded.add("_local")
+        return excluded
+
+    shutil.copytree(root / "compiler", destination / "compiler", ignore=ignore)
     if not (destination / "compiler/__main__.py").is_file():
         raise ValueError("snapshot contains no compiler CLI")
     return {"root": str(destination.resolve()), "source_root": str(root), "base_commit": commit,
-            "exact_committed_snapshot": revision is not None,
             "compiler_tree_sha256": digest_tree(destination / "compiler"),
             "code_equivalence": compiler_code_equivalence(destination / "compiler")}
 
@@ -470,7 +462,6 @@ def summarize(runs):
         row["ratio_to_native"] = row["median_seconds"] / result["native"]["median_seconds"]
         row["speedup_over_native"] = 1 / row["ratio_to_native"]
         row["wall_reduction_percent"] = 100 * (1 - row["ratio_to_native"])
-        row["speedup_over_committed"] = result["committed"]["median_seconds"] / row["median_seconds"]
     return result
 
 
@@ -553,11 +544,11 @@ def relink_diagnostic(binary, source, directory):
             "original_build_receipt_sha256": digest(receipt_path), "production_binary_modified": False}
 
 
-def selection_request(contract, custom=None, *, scope_execution="bounded"):
+def selection_request(contract, custom=None):
     request = {"source": contract["source"], "entry": contract["entry"],
                "source_files": [name for name in contract["source_sha256"] if name != contract["source"]],
                "capture_facts": contract["capture_facts"],
-               "options": {"gpu_policy": "sections", "scope_transfers": "direct", "scope_execution": scope_execution}}
+               "options": {"gpu_policy": "sections", "scope_transfers": "direct", "scope_execution": "graph"}}
     if custom is not None:
         if not isinstance(custom, dict) or custom.get("schema_version") != 1 or not all(name in custom for name in ("source", "entry", "capture_facts")):
             raise ValueError("candidate request requires schema_version 1, source, entry and capture_facts")
@@ -566,12 +557,12 @@ def selection_request(contract, custom=None, *, scope_execution="bounded"):
     return request
 
 
-def selection_requests(contract, custom=None, *, scope_execution="bounded"):
+def selection_requests(contract, custom=None):
     """Normalize one root or several independently reviewed pristine roots."""
     candidates = custom if isinstance(custom, list) else [custom]
     if not candidates:
         raise ValueError("candidate request array cannot be empty")
-    requests = [selection_request(contract, item, scope_execution=scope_execution) for item in candidates]
+    requests = [selection_request(contract, item) for item in candidates]
     identities = [(item["source"], item["entry"]) for item in requests]
     if len(set(identities)) != len(identities):
         raise ValueError("candidate request roots cannot repeat")
@@ -798,11 +789,10 @@ def validate_prepared_builds(prepared, expected, *, threads, build_args):
                 or runtime["numerical_contract"] != identity["numerical_contract"]):
             raise ValueError("prepared candidate calibration/runtime binding changed")
     identities = {}
-    for mode in ("committed", "reworked"):
+    for mode in ("reworked",):
         compiler = prepared["compilers"][mode]
         wanted = expected["compilers"][mode]
         if (compiler["compiler_tree_sha256"] != wanted["compiler_tree_sha256"]
-                or compiler.get("exact_committed_snapshot") != wanted.get("exact_committed_snapshot")
                 or compiler.get("base_commit") != wanted.get("base_commit")
                 or digest_tree(Path(compiler["root"]) / "compiler") != compiler["compiler_tree_sha256"]):
             raise ValueError("prepared compiler snapshot differs: " + mode)
@@ -887,7 +877,7 @@ def validate_control_evidence(evidence, expected, *, case, configuration, config
     vtk_reference = read_outputs(primary / "output", read_vtk)
     completed_steps = original_case["runs"]["native"]["timing"]["completed_steps"]
     imported = []
-    for mode in ("native", "native-repeat", "committed"):
+    for mode in ("native", "native-repeat"):
         control = selected["runs"][mode]
         directory, row = Path(control["directory"]), control["run"]
         if row != original_case["runs"][mode] or read(directory / "run.json") != row:
@@ -945,14 +935,14 @@ def markdown_report(receipt):
         lines += ["Prepared executables were authenticated against compiler snapshots and executed build receipts; every production timing sample was collected afresh.", ""]
     if receipt.get("control_evidence"):
         evidence = receipt["control_evidence"]
-        lines += [f"Natural native/committed control evidence was reused from `{evidence['source_report']['path']}` after authenticating all fields, bounds, VTK bytes, logs, binaries and recorded inputs.",
+        lines += [f"Natural native control evidence was reused from `{evidence['source_report']['path']}` after authenticating all fields, bounds, VTK bytes, logs, binaries and recorded inputs.",
                   "Original strict failures remain unchanged. The candidate's natural-duration correctness run is fresh; no timing sample was imported.", ""]
     if "summary" in receipt:
-        lines += ["| Mode | Median wall (s) | Range (s) | Speedup vs native | Wall reduction | Speedup vs committed |",
-                  "|---|---:|---:|---:|---:|---:|"]
+        lines += ["| Mode | Median wall (s) | Range (s) | Speedup vs native | Wall reduction |",
+                  "|---|---:|---:|---:|---:|"]
         for mode in MODES:
             row = receipt["summary"][mode]
-            lines.append(f"| {mode} | {row['median_seconds']:.6f} | {row['minimum_seconds']:.6f}–{row['maximum_seconds']:.6f} | {row['speedup_over_native']:.3f}× | {row['wall_reduction_percent']:.2f}% | {row['speedup_over_committed']:.3f}× |")
+            lines.append(f"| {mode} | {row['median_seconds']:.6f} | {row['minimum_seconds']:.6f}–{row['maximum_seconds']:.6f} | {row['speedup_over_native']:.3f}× | {row['wall_reduction_percent']:.2f}% |")
         lines += ["", f"Correctness qualified: **{receipt.get('correctness_qualified', False)}**.",
                   f"Repeated performance protocol: **{receipt.get('performance_eligible', False)}**.", ""]
     lines += ["| Mode | Direct kernel launches | CUDA graph submissions | Upload bytes | Download bytes | Allocations | Waits |", "|---|---:|---:|---:|---:|---:|---:|"]
@@ -984,9 +974,9 @@ def markdown_report(receipt):
             lines.append(f"| {mode} | {metrics['kernel_count']} | {metrics['kernel_seconds']:.6f} | {metrics['h2d_bytes']} | {metrics['d2h_bytes']} | {metrics['transfer_seconds']} |")
         lines += ["", "CUPTI counts and activity sums come from additional Nsight Systems runs. Overlapping device/API durations are not added to process wall time. CUDA API calls and CPU durations remain separate in `report.json`.", ""]
     if receipt.get("compilers"):
-        lines += ["| Compiler | Base commit | Exact committed bytes | Compiler tree SHA-256 |", "|---|---|---|---|"]
+        lines += ["| Compiler | Base commit | Compiler tree SHA-256 |", "|---|---|---|"]
         for mode, compiler in receipt["compilers"].items():
-            lines.append(f"| {mode} | `{compiler['base_commit']}` | {compiler['exact_committed_snapshot']} | `{compiler['compiler_tree_sha256']}` |")
+            lines.append(f"| {mode} | `{compiler['base_commit']}` | `{compiler['compiler_tree_sha256']}` |")
         lines += [""]
     if "error" in receipt:
         lines += ["Failure: " + receipt["error"]["reason"], ""]
@@ -999,7 +989,6 @@ def run_comparison(args):
     os.environ.setdefault("FC", shutil.which("gfortran-15") or "gfortran")
     sys.path.insert(0, str(args.pipeline_root.resolve(strict=True)))
     import elmm_pipeline.local_adapter as scope_adapter
-    from elmm_pipeline._legacy_scopes import transform_scopes as transform_legacy_scopes
     from elmm_pipeline.build import build, preprocessing_defines
     from elmm_pipeline.campaigns.halos import compare_fields, fields
     from elmm_pipeline.common import clean_environment, command
@@ -1070,7 +1059,6 @@ def run_comparison(args):
         if profile_transport:
             receipt["profiling_transport"] = profile_transport
         receipt["cpu_affinity"] = sorted(os.sched_getaffinity(0))
-        receipt["compilers"]["committed"] = snapshot_compiler(args.committed_root, work / "compilers/committed", revision=args.committed_ref)
         receipt["compilers"]["reworked"] = snapshot_compiler(args.candidate_root, work / "compilers/reworked")
         selected, advection = select_configuration(originals, args.case, args.config)
         configuration, timing_configuration, timing_config_dir = prepare_workloads(
@@ -1080,9 +1068,7 @@ def run_comparison(args):
         receipt["timing_configuration"] = timing_configuration
         receipt["timing_configuration_sha256"] = {str(path.relative_to(timing_config_dir)): digest(path)
                                                  for path in timing_config_dir.rglob("*") if path.is_file()}
-        requests = {"committed": selection_requests(contract),
-                    "reworked": selection_requests(contract, read(args.candidate_request) if args.candidate_request else None,
-                                                    scope_execution="graph")}
+        requests = {"reworked": selection_requests(contract, read(args.candidate_request) if args.candidate_request else None)}
         requests["reworked"], calibration = candidate_calibration(requests["reworked"], args.calibration_profile, threads=args.threads)
         if calibration:
             receipt["calibration_profile"] = calibration
@@ -1115,8 +1101,7 @@ def run_comparison(args):
                         suffix = str(number) if len(requests[mode]) > 1 else ""
                         analysis = export_analysis_sources(Project(app, ["DPREC"]), work / mode / "analysis" / suffix, source_files=sources)
                         gpu_options = {**toolchain, **request["options"], "host_threads": args.threads}
-                        scope_transform = transform_legacy_scopes if mode == "committed" else transform_scopes
-                        component = scope_transform(source, Path(receipt["compilers"][mode]["root"]), args.python,
+                        component = transform_scopes(source, Path(receipt["compilers"][mode]["root"]), args.python,
                             work / mode / "generated" / suffix, entry=request["entry"], source_files=sources[1:],
                             capture_facts=request["capture_facts"], analysis_sources=analysis, gpu_options=gpu_options)
                         if component["scope_manifest"]["scope_count"] < 1 or not component["gpu_sources"]:
@@ -1309,10 +1294,9 @@ def run_comparison(args):
         correctness_sequence = (
             ("native", "reference", False, False), ("native", "repeatability", False, False),
             ("native", "float64-reference", False, True), ("native", "float64-repeatability", False, True),
-            ("committed", "gpu-validation", True, False), ("reworked", "gpu-validation", True, False),
-            ("committed", "float64-validation", False, True), ("reworked", "float64-validation", False, True))
+            ("reworked", "gpu-validation", True, False), ("reworked", "float64-validation", False, True))
         for mode, label, traced, full_storage in correctness_sequence:
-            if args.control_evidence and (mode == "native" or mode == "committed" and full_storage):
+            if args.control_evidence and mode == "native":
                 continue
             if traced and args.timing_steps is not None and references["timing"]["vtk"] is None:
                 receipt["correctness"].append(execute("native", "timing-reference", phase="timing"))
@@ -1324,7 +1308,7 @@ def run_comparison(args):
         if failures and not args.allow_validation_failure:
             raise RuntimeError("correctness/repeatability failed; see retained per-run field comparisons")
         if not args.skip_cuda_profile:
-            for mode in ("committed", "reworked"):
+            for mode in ("reworked",):
                 check_inputs()
                 print("PROFILE", mode, flush=True)
                 directory = run_directory(timing_config_dir, output / "runs" / mode / "cuda-profile")
@@ -1381,16 +1365,13 @@ def main(argv=None):
     parser.add_argument("--app-root", type=Path,
                         help="Explicit clean approved ELMM/PoisFFT siblings; default reconstructs the common basis from the pipeline cache")
     parser.add_argument("--pipeline-root", type=Path, default=PIPELINE)
-    parser.add_argument("--committed-root", type=Path, default=COMPILER)
-    parser.add_argument("--committed-ref", default="be58ab809296b97ea39d701828a2621adfc6b3dc",
-                        help="Historical SGS/direct compiler revision; an explicit value overrides the pinned default")
     parser.add_argument("--candidate-root", type=Path, default=COMPILER)
     parser.add_argument("--prepared-builds", type=Path, help="Reuse an authenticated prepared build set across cases; collect every run afresh")
-    parser.add_argument("--control-evidence", type=Path, help="Reuse authenticated natural native/committed fields from this session; candidate correctness and every timing run stay fresh")
+    parser.add_argument("--control-evidence", type=Path, help="Reuse authenticated natural native fields from this session; candidate correctness and every timing run stay fresh")
     parser.add_argument("--candidate-request", type=Path,
                         help="schema-1 source/entry/source_files/capture_facts/options object or array of roots; SGS-only control if omitted")
     parser.add_argument("--calibration-profile", type=Path,
-                        help="Candidate-only offline hardware/scoped-runtime calibration; committed control is unchanged")
+                        help="Offline hardware/scoped-runtime calibration for the candidate compiler")
     parser.add_argument("--python", type=Path, default=Path(sys.executable).absolute())
     parser.add_argument("--scons-python", type=Path, default=PIPELINE / ".cache/envs/build/bin/python")
     parser.add_argument("--native-library-dir", type=Path, default=PIPELINE / ".cache/native/lib")

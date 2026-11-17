@@ -21,7 +21,7 @@ def test_probe_environment_drops_inherited_application_and_routing_overrides(mon
 
 def test_explicit_single_sample_diagnostic_cannot_claim_an_iqr():
     rows = [{"mode": mode, "warmup": False, "traced": False, "full_storage": False,
-             "wall_seconds": seconds} for mode, seconds in zip(probe.runner.MODES, (12., 10., 20.))]
+             "wall_seconds": seconds} for mode, seconds in zip(probe.runner.MODES, (12., 20.))]
     summary = probe.timing_summary(rows)
     assert summary["reworked"]["repetitions"] == 1
     assert summary["reworked"]["median_seconds"] == 20.

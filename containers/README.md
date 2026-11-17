@@ -454,16 +454,12 @@ it does not measure the ELMM application or its 20% target. `entrypoint.sh test`
 runs the container workflow tests. Arbitrary commands such as `bash` remain
 available through either container launcher.
 
-## Fresh three-way compiler comparison (`e2e`)
+## Fresh native/compiler comparison (`e2e`)
 
-`reproduce_e2e.py` builds native ELMM on that common approved basis, the committed compiler's
-SGS/direct control, and a selected reworked compiler graph. It never executes
-historical binaries or reuses historical timings. The committed compiler comes
-from `git archive` of the selected revision, irrespective of dirty/staged files;
-the candidate compiler is frozen in a separate snapshot before compilation.
-The default committed revision is `be58ab809296b97ea39d701828a2621adfc6b3dc`, the historical
-SGS/direct control. `--committed-ref` can explicitly select another compatible
-historical compiler revision.
+`reproduce_e2e.py` builds native ELMM on that common approved basis and a
+selected compiler graph (mode `reworked`). It never executes earlier binaries or
+reuses earlier timings. The compiler's working files are frozen in a snapshot
+before compilation.
 When `--app-root` is omitted, the same shared utility reconstructs the basis from
 the pipeline's upstream cache into a sibling of the new output directory named
 `OUTPUT-application-basis`. Existing explicit prepared roots remain supported.
@@ -472,15 +468,13 @@ the pipeline's upstream cache into a sibling of the new output directory named
 # Fresh full-duration comparison, one warmup and seven rotated samples per mode.
 # Use the prepared parser environment; --python can select it independently.
 .venv/bin/python containers/reproduce_e2e.py \
-    --committed-ref be58ab809296b97ea39d701828a2621adfc6b3dc \
     --candidate-request path/to/graph-request.json \
     --output-dir out/comparison-01
 
-# Bind the checkout (including Git history and the prepared pipeline cache)
-# read-only to let the container archive exact committed compiler bytes.
+# Bind the checkout (including the prepared pipeline cache) read-only.
 WORKSPACE_ROOT="$PWD" OUTPUT_DIR="$PWD/out" ./containers/run-docker.sh e2e \
     --candidate-request /workspace/containers/requests/elmm-sgs-convection-graph.json \
-    --committed-root /workspace --committed-ref be58ab809296b97ea39d701828a2621adfc6b3dc --output-dir /output/comparison-01
+    --output-dir /output/comparison-01
 
 # Primary fourth-order channel: preserve natural-duration correctness, while
 # profiling and timing use the same explicit 100-step duration in all modes.
@@ -504,9 +498,8 @@ facts; the runner transports those facts without inferring source semantics:
 ```
 
 Supply the actual checked entry and capture facts for the workload. Omitting
-`--candidate-request` selects the same SGS numerical coverage as the committed
-control through the candidate's graph execution; it does not claim broad graph
-coverage. The committed archive retains its original bounded/direct strategy.
+`--candidate-request` selects the SGS numerical coverage of the portable
+contract; it does not claim broad graph coverage.
 The primary workloads are `channel-simple` and the
 original fourth-order `channel`, including its filter and wall model. Legacy
 `second-order`/`fourth-order` presets remain available for component diagnostics;
@@ -535,8 +528,8 @@ counts remain available when the application submits CUDA graphs. Graph API
 submissions, logical kernels, direct launches and device activity stay separate.
 
 `--control-evidence PATH` additionally accepts an explicit
-`fresh-session-natural-controls` manifest for separately executed native and
-committed natural controls from the same session. It requires prepared builds
+`fresh-session-natural-controls` manifest for separately executed native
+natural controls from the same session. It requires prepared builds
 and revalidates complete float64 fields, original shapes/bounds, VTK bytes,
 logs, numerical input files, executable/build identities and the recorded
 thread/environment contract. Original strict comparison results and native
@@ -565,7 +558,7 @@ Pass the external profile with `--calibration-profile /absolute/path/to/hardware
 it is applied only to candidate roots. Its bytes, GPU UUID, CPU identity, thread
 count, float64 contract and scoped runtime identity are recorded and checked.
 Conflicting per-root profiles are rejected, and prepared builds reject changed
-profile bytes. The committed control retains its original policy. An all-native
+profile bytes. An all-native
 AUTO result requires explicit runtime decision or pre-execution decline evidence
 and retains every numerical gate. It reports unavailable CUDA activity when none
 occurred; it is not an offloading performance achievement.
@@ -583,10 +576,8 @@ allocations and waits from runtime events, without inferring counts from call
 names or source structure. Additional Nsight Systems runs collect actual CUPTI
 kernel/copy counts, bytes, device activity durations, and separate CUDA API
 counts and CPU durations. Use `--require-cuda-profile` when those diagnostics
-must be available for GPU execution; a historical control that executes an
-untransformed native branch retains its zero observed runtime activity and
-unavailable device profile. The candidate must demonstrate CUDA execution or
-an explicit generic AUTO decision to retain native execution.
+must be available for GPU execution. The candidate must demonstrate CUDA
+execution or an explicit generic AUTO decision to retain native execution.
 `--skip-cuda-profile` explicitly skips profiling. Neither traced
 runtime nor Nsight durations enter the timing samples.
 Complete parsed runtime evidence is written once per trace to a SHA-256-bound
@@ -596,7 +587,7 @@ restore complete records with `load_runtime_activity`. Generic policy labels
 are accepted only from literal trace calls in authenticated generated CUDA;
 versioned source positions provide attribution.
 `report.json` retains every sample, field comparison,
-manifest and input hash; `report.md` presents native/committed/reworked ratios.
+manifest and input hash; `report.md` presents the native/reworked ratios.
 
 For a shorter development comparison of already built artifacts, run
 `python containers/probe_prepared_e2e.py --prepared-builds PREPARED.json --output NEW_DIR`.
@@ -611,7 +602,6 @@ comparison above with seven samples and natural-duration correctness.
 
 New candidate snapshots omit `compiler/_local` reports and cache directories.
 A separate `code_equivalence` digest records the included source files.
-Historical snapshot hashes and the files they authenticate remain unchanged.
 `--allow-validation-failure` explicitly permits collecting unqualified timings
 while preserving all mismatches. An all-phase smoke run or failed correctness check cannot
 qualify a performance claim. Keep the work directory with the report because

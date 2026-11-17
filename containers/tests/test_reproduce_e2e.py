@@ -14,15 +14,6 @@ runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
 
-def test_cli_defaults_to_pinned_sgs_control_and_preserves_explicit_override(tmp_path, monkeypatch):
-    calls = []
-    monkeypatch.setattr(runner, "run_comparison", calls.append)
-    runner.main(["--output-dir", str(tmp_path / "default")])
-    assert calls[-1].committed_ref == "be58ab809296b97ea39d701828a2621adfc6b3dc"
-    runner.main(["--committed-ref", "explicit-compatible-revision", "--output-dir", str(tmp_path / "override")])
-    assert calls[-1].committed_ref == "explicit-compatible-revision"
-
-
 def test_application_root_preparation_reaches_the_same_strict_source_guard(tmp_path, monkeypatch):
     compare = runner.run_comparison
     arguments, preparations, guarded_roots = [], [], []
@@ -91,13 +82,12 @@ def test_diagnostic_compile_and_relink_keep_the_public_240_second_cap(tmp_path, 
 
 def test_diagnostic_and_warmup_cannot_improve_timing_summary():
     rows = [{"mode": mode, "warmup": False, "traced": False, "full_storage": False,
-             "wall_seconds": seconds} for mode, seconds in zip(runner.MODES, (10., 8., 5.))]
+             "wall_seconds": seconds} for mode, seconds in zip(runner.MODES, (10., 5.))]
     rows += [{"mode": mode, "warmup": True, "traced": True, "full_storage": True,
               "wall_seconds": .001} for mode in runner.MODES]
     summary = runner.summarize(rows)
     assert summary["reworked"]["speedup_over_native"] == 2.
     assert summary["reworked"]["wall_reduction_percent"] == 50.
-    assert summary["reworked"]["speedup_over_committed"] == 1.6
     rows[0]["full_storage"] = True
     with pytest.raises(ValueError, match="production"):
         runner.summarize(rows)
@@ -107,7 +97,7 @@ def test_diagnostic_and_warmup_cannot_improve_timing_summary():
         runner.summarize(rows)
 
 
-def test_exact_committed_snapshot_ignores_modified_worktree(tmp_path, monkeypatch):
+def test_candidate_snapshot_freezes_the_modified_worktree(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(HERE.parent / "elmm-pipeline"))
     repository = tmp_path / "repository"
     repository.mkdir()
@@ -120,13 +110,9 @@ def test_exact_committed_snapshot_ignores_modified_worktree(tmp_path, monkeypatc
                     "user.email=benchmark@example.invalid", "commit", "-qm", "baseline"], check=True)
     (compiler / "__main__.py").write_text("dirty = True\n")
     (compiler / "untracked.py").write_text("also_dirty = True\n")
-    committed = tmp_path / "committed"
-    receipt = runner.snapshot_compiler(repository, committed, revision="HEAD")
-    assert (committed / "compiler/__main__.py").read_text() == "committed = True\n"
-    assert not (committed / "compiler/untracked.py").exists()
-    assert receipt["exact_committed_snapshot"]
     candidate = tmp_path / "candidate"
-    runner.snapshot_compiler(repository, candidate)
+    receipt = runner.snapshot_compiler(repository, candidate)
+    assert receipt["base_commit"]
     assert (candidate / "compiler/untracked.py").is_file()
     assert (candidate / "compiler/__main__.py").read_text() == "dirty = True\n"
 
@@ -167,7 +153,7 @@ def test_generic_candidate_request_keeps_host_source_and_graph_options():
     assert selected["source"] == custom["source"]
     assert selected["capture_facts"] == custom["capture_facts"]
     assert selected["options"]["scope_execution"] == "graph"
-    assert runner.selection_request(control)["options"]["scope_execution"] == "bounded"
+    assert runner.selection_request(control)["options"]["scope_execution"] == "graph"
     with pytest.raises(ValueError, match="schema_version"):
         runner.selection_request(control, {"source": "elmm/src/unreviewed.f90"})
 
@@ -182,7 +168,7 @@ def test_multiple_candidate_roots_preserve_each_checked_request():
     assert requests[0]["capture_facts"] == {"checked": "sgs"}
     assert requests[1]["capture_facts"] == {"checked": "convection"}
     assert runner.selection_requests(contract, graph) == [runner.selection_request(contract, graph)]
-    assert runner.selection_requests(contract, scope_execution="graph")[0]["options"]["scope_execution"] == "graph"
+    assert runner.selection_requests(contract)[0]["options"]["scope_execution"] == "graph"
     with pytest.raises(ValueError, match="empty"):
         runner.selection_requests(contract, [])
     with pytest.raises(ValueError, match="repeat"):
@@ -344,7 +330,7 @@ def test_prepared_builds_authenticate_sources_and_never_import_timings(tmp_path,
         (directory / 'compiler').mkdir()
         (directory / 'compiler/__main__.py').write_text('checked compiler\n')
         expected['compilers'][mode] = {'root':str(directory), 'compiler_tree_sha256':digest_tree(directory / 'compiler'),
-                                       'base_commit':'commit', 'exact_committed_snapshot':mode == 'committed'}
+                                       'base_commit':'commit'}
         kernel = directory / 'kernel.cu'
         kernel.write_text('checked CUDA source\n')
         manifest = {'artifacts_sha256':{'kernel.cu':runner.digest(kernel)}}
@@ -381,7 +367,7 @@ def test_natural_evidence_preserves_repeatability_failures_and_checks_vtk_bytes(
     configuration = {'expected_max_steps':None, 'runtime_arguments':["output_dir='output/'"]}
     expected = {'original_application':{'pins':'pristine'}, 'contract_sha256':'contract',
                 'builds':{}, 'diagnostic_builds':{}}
-    for mode in ('native', 'committed'):
+    for mode in ('native',):
         expected['builds'][mode] = {'sha256':'production', 'build_receipt_sha256':'receipt'}
         expected['diagnostic_builds'][mode] = {'binary':'/fresh/' + mode + '/ELMM', 'sha256':'diagnostic'}
     source_report = tmp_path / 'natural-report.json'
@@ -389,7 +375,7 @@ def test_natural_evidence_preserves_repeatability_failures_and_checks_vtk_bytes(
     selected = {'config_dir':str(config_dir), 'config_sha256':report['cases']['channel']['config_sha256'], 'runs':{}}
     reference_fields = None
     reference_vtk = None
-    for mode, value in (('native', 1.), ('native-repeat', 1.001), ('committed', 1.002)):
+    for mode, value in (('native', 1.), ('native-repeat', 1.001)):
         directory = tmp_path / mode
         (directory / 'output').mkdir(parents=True)
         (directory / 'output/out.vtk').write_bytes(b'original VTK bytes')
@@ -426,11 +412,11 @@ def test_natural_evidence_preserves_repeatability_failures_and_checks_vtk_bytes(
                 'cases':{'channel':selected}}
     reference, _fields, rows, identities = runner.validate_control_evidence(
         evidence, expected, case='channel', configuration=configuration, configuration_dir=config_dir, threads=4)
-    assert reference['steps'] == 1 and [row['passed'] for row in rows] == [True, False, False]
+    assert reference['steps'] == 1 and [row['passed'] for row in rows] == [True, False]
     assert all('diagnostic_wall_seconds' not in row for row in rows)
     assert rows[1]['float64_storage_validation']['fields'] == report['cases']['channel']['runs']['native-repeat']['fields']
-    assert str(tmp_path / 'committed/output/out.vtk') in identities
-    (tmp_path / 'committed/output/out.vtk').write_bytes(b'changed VTK bytes')
+    assert str(tmp_path / 'native-repeat/output/out.vtk') in identities
+    (tmp_path / 'native-repeat/output/out.vtk').write_bytes(b'changed VTK bytes')
     with pytest.raises(ValueError, match='natural control artifact changed'):
         runner.validate_control_evidence(evidence, expected, case='channel', configuration=configuration,
                                          configuration_dir=config_dir, threads=4)
@@ -451,7 +437,7 @@ def test_complete_fields_are_dumped_before_their_original_retirement():
 
 def test_report_never_fabricates_counts_for_absent_trace():
     markdown = runner.markdown_report({"status": "failed", "gpu_evidence": {}})
-    assert "committed | 0" not in markdown
+    assert "reworked | 0" not in markdown
     assert "inferred" in markdown
 
 

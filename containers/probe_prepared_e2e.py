@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Short development timing probe of three authenticated ELMM builds.
+"""Short development timing probe of authenticated native and compiler ELMM builds.
 
 This checks matched output and completed steps, but never grants full-duration
 float64 correctness or final performance qualification. Use reproduce_e2e.py
@@ -80,7 +80,7 @@ def run_probe(args):
     protocol = {"threads": args.threads, "warmups": args.warmups, "repetitions": args.repeats,
                 "rotate": True, "timeout_seconds": args.timeout,
                 "cases": {"channel-simple": "natural109steps", "channel": "matched100-step timing cap"}}
-    report = {"schema_version": 1, "kind": "prepared-threeway-development-timing-probe",
+    report = {"schema_version": 1, "kind": "prepared-development-timing-probe",
               "status": "prepared", "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "protocol": protocol, "timings_reused": False,
               "full_natural_correctness_qualified": False, "final_performance_qualified": False,

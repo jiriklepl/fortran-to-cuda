@@ -127,7 +127,7 @@
       "scope_transfers": "direct"
     },
     "request_provenance": {
-      "purpose": "retain the same SGS numerical coverage as the exact committed control while composing additional generic graph roots",
+      "purpose": "retain the SGS numerical coverage of the portable contract while composing additional generic graph roots",
       "primary_cases": [
         "channel-simple",
         "channel"
