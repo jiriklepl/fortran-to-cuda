@@ -8,8 +8,7 @@ from pathlib import Path
 import pytest
 from compiler.emission.cuda.tile_private import (
     generate_cooperative_kernel,
-    generate_kernel,
-    generate_launch)
+    generate_kernel)
 from compiler.frontend.lowering import lower_tile_private
 from compiler.frontend.tile_private import prove_cooperative_tile_private, prove_tile_private
 from compiler.tests.test_tile_private import fixture

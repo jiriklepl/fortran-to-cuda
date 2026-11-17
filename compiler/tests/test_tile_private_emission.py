@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from compiler.emission.common.abi import abi_arguments
-from compiler.emission.cuda.tile_private import generate_tile_function, scratch_batch_helper
+from compiler.emission.cuda.tile_private import generate_tile_function
 from compiler.frontend.lowering import lower_tile_private
 from compiler.frontend.tile_private import prove_tile_private
 from compiler.tests.test_tile_private import SOURCE, fixture
@@ -149,38 +149,6 @@ def test_emitted_original_phases_match_complete_fortran_fields_and_untouched_hal
         )
         paths.append(out.read_bytes())
     assert paths[0] == paths[1]
-
-
-def test_lease_batches_preserve_prework_failure_and_never_replay_accepted_prefix(tmp_path):
-    cxx = shutil.which("g++")
-    if cxx is None:
-        pytest.skip("g++ required for actual lease-adapter compile")
-    header = Path("compiler/runtime/scoped_runtime.h").resolve()
-    p = tmp_path / "lease.cpp"
-    p.write_text(f'''#include "{header}"
-#include <cstddef>
-#include <cstdlib>
-#include <cassert>
-static int acquired=0,released=0,submits=0,resource=0;
-int fort_scope_scratch_acquire_v1(fort_scope_t,std::size_t bytes,fort_scope_scratch_lease_v1* p){{
- ++acquired;if(resource)return FORT_SCOPE_RESOURCE;p->device=std::malloc(bytes);p->token=1;return FORT_SCOPE_OK;}}
-int fort_scope_scratch_release_v1(fort_scope_t,uint64_t){{++released;return FORT_SCOPE_OK;}}
-{chr(10).join(scratch_batch_helper())}
-int main(){{
- auto submit=[](std::size_t,std::size_t,void*){{++submits;return FORT_SCOPE_OK;}};
- assert(fort_tile_submit_batches(1,0,0,0,submit)==FORT_SCOPE_OK&&acquired==0);
- assert(fort_tile_submit_batches(1,5,3,16,submit)==FORT_SCOPE_OK&&acquired==1&&released==1&&submits==2);
- acquired=released=submits=0;resource=1;
- assert(fort_tile_submit_batches(1,5,3,16,submit)==FORT_SCOPE_RESOURCE&&acquired==1&&released==0&&submits==0);
- acquired=released=submits=0;resource=0;
- auto fail=[](std::size_t,std::size_t,void*){{++submits;return FORT_SCOPE_RESOURCE;}};
- assert(fort_tile_submit_batches(1,5,3,16,fail)==FORT_SCOPE_EXECUTION&&acquired==1&&released==1&&submits==1);
-}}
-''')
-    subprocess.run(
-        [cxx, "-std=c++17", "-O2", str(p), "-o", str(tmp_path / "lease")], check=True, capture_output=True, timeout=120
-    )
-    subprocess.run([str(tmp_path / "lease")], check=True, capture_output=True, timeout=30)
 
 
 @pytest.fixture(scope="module", params=[4, 8])

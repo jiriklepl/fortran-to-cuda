@@ -1717,7 +1717,6 @@ class LexicalOwner:
         from compiler.scopes.source_task_bindings import lexical_namespace
 
         builder = self.builder
-        interval_applicability = plan.interval_applicability().public()
         native_reason = plan.automatic_native_reason()
         if native_reason:
             # Missing estimates or a measured native advantage settle placement
@@ -1737,7 +1736,6 @@ class LexicalOwner:
                 "planning_reason": native_reason,
                 "source_authority": {"version": 1, "structured_summary_identity": self.graph.identity},
                 "checked_execution_plan": plan.public(),
-                "interval_applicability": interval_applicability,
                 "automatic_preflight": {
                     "selection": "native", "successful": True, "reason": native_reason,
                     "authority": ("compiler-produced offline estimate availability for every numerical alternative"),
@@ -1903,7 +1901,6 @@ class LexicalOwner:
             **({"source_device_tasks": [task.public(member) for member in self.members.values()
                                          for task in member.source_device_tasks]} if has_source_tasks else {}),
             "checked_execution_plan": plan.public(),
-            "interval_applicability": interval_applicability,
             "internal_coordinators": [{"procedure": member.routine.qualified,
                 "structured_summary_identity": member.graph.identity,
                 "control": "host association; original declarations and body",

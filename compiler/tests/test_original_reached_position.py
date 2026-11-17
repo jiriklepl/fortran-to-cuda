@@ -175,16 +175,12 @@ def test_private_allocation_stays_a_conservative_preservation_frontier_without_s
     assert preserved(parts) is None
 
 
-@pytest.mark.parametrize("factory", ["projection", "native_prefix", "segment"])
+@pytest.mark.parametrize("factory", ["projection", "segment"])
 def test_private_analyses_cannot_borrow_the_position_registry(tmp_path, factory):
     parts = prepared(tmp_path)
     anchor = position(parts)
     if factory == "projection":
         other = parts[1].private_projection()
-    elif factory == "native_prefix":
-        from compiler.frontend.native_prefix import _fork
-
-        other = _fork(parts[1], ())
     else:
         from compiler.scopes.segments import _native_analysis
 

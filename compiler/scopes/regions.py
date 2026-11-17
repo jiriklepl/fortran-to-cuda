@@ -171,10 +171,6 @@ def _variable_names(node):
         yield from _variable_names(child)
 
 
-def _names(analysis, routine, node):
-    return {binding.root for binding, _ in references(analysis, routine.scope, node)}
-
-
 def _scalar_reads(analysis, routine, node):
     result = {binding.root for binding, _ in references(analysis, routine.scope, node) if not binding.rank}
     # Passing a lexical procedure to a native call may expose its captures even
@@ -386,17 +382,6 @@ def _validate_real_varargs(analysis, routine, node):
                           for value in _children(item.items[1]))
         if len(arguments) > 2 and any(dtype(value) != "integer" for value in arguments) and not all(finite_literal(value) for value in arguments):
             raise CompilationError("inline real MIN/MAX with more than two operands needs proven finite values or a supported native ordering contract")
-
-
-def _binding(analysis, routine, root):
-    if "%" in root:
-        from compiler.scopes.numerical import resource_binding
-        return resource_binding(analysis, routine, root)
-    for name in walk(routine.scope.node, F.Name):
-        candidate = analysis._binding(routine.scope, name)
-        if candidate and candidate.root == root:
-            return candidate
-    raise CompilationError("inline resource is unavailable: " + root)
 
 
 def _intrinsic_shadowed(analysis, routine, name):

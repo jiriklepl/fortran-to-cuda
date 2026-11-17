@@ -4,7 +4,6 @@ from copy import copy
 import pytest
 
 from compiler.frontend.descriptor_windows import _Check
-from compiler.frontend.native_prefix import prove_native_prefix
 from compiler.ir import CompilationError
 from compiler.tests.test_descriptor_joined_closures import fixture as joined_fixture
 from compiler.tests.test_descriptor_joined_closures import prove as joined_prove
@@ -63,18 +62,6 @@ def test_return_lexically_exiting_an_original_openmp_region_stays_closed(tmp_pat
     _path, analysis, _graph, selection = fixture(tmp_path, child=body,
         child_decl="real(8),intent(inout)::a(:)\ninteger::i")
     with pytest.raises(CompilationError):
-        prove(analysis, selection)
-    assert not getattr(analysis, "_descriptor_window_proofs", {})
-
-
-def test_native_prefix_directive_authority_cannot_bypass_original_team_return_restriction(tmp_path):
-    _path, analysis, _graph, selection = fixture(tmp_path,
-        child_decl="real(8),intent(inout)::a(:)\ninteger::i\nreal(8)::total",
-        child="total=0\n!$omp parallel do private(i) reduction(+:total)\ndo i=1,3\n"
-              "if(i==2) return\ntotal=total+a(i)\nend do\n!$omp end parallel do")
-    prefix = prove_native_prefix(analysis, "intervals::read_modify")
-    assert prefix.public()["synchronous_return"]
-    with pytest.raises(CompilationError, match="outside original OpenMP"):
         prove(analysis, selection)
     assert not getattr(analysis, "_descriptor_window_proofs", {})
 

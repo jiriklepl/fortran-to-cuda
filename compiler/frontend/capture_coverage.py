@@ -8,10 +8,6 @@ neither allocation presence nor that contract establishes payload definitions.
 
 from compiler.frontend.native_sections import (
     RECTANGLE_LIMIT,
-    NativeAxis,
-    NativeBound,
-    NativeRectangle,
-    NativeResourceSections,
 )
 from compiler.ir import CompilationError
 
@@ -48,31 +44,3 @@ def physical_sections(fact, rank):
                 or any(lo > hi for lo, hi in zip(lower, upper, strict=True))):
             raise CompilationError("invalid initialized physical capture section")
     return boxes
-
-
-def reached_sections(binding, fact):
-    """Translate asserted entry coverage; retain the original descriptor guard.
-
-    Absolute logical coordinates avoid inventing bound-expression reads before
-    original allocation guards. The assertion is never expanded to a bounding
-    hull or credited as a source overwrite. Empty rectangles define no values.
-    """
-    boxes = physical_sections(fact, binding.rank)
-    expected = expected_descriptor(fact, binding.rank)
-    if expected is None:
-        raise CompilationError("reached physical entry sections require an expected original descriptor")
-    rectangles = []
-    for box in boxes:
-        if any(upper > extent for upper, extent in zip(box["upper"], expected["extents"], strict=True)):
-            raise CompilationError("initialized physical capture section exceeds its expected descriptor")
-        if any(lo == hi for lo, hi in zip(box["lower"], box["upper"], strict=True)):
-            continue
-        axes = []
-        for origin, lower, upper in zip(expected["lower_bounds"], box["lower"], box["upper"], strict=True):
-            lower, upper = origin + lower, origin + upper - 1
-            if not -(2**31) <= lower <= upper < 2**31:
-                raise CompilationError("reached physical definition exceeds the source INTEGER ABI")
-            axes.append(NativeAxis(NativeBound("literal", lower), NativeBound("literal", upper)))
-        rectangles.append(NativeRectangle(tuple(axes), binding.name))
-    return NativeResourceSections(binding.root, binding.rank, tuple(expected["lower_bounds"]),
-                                  (), (), tuple(rectangles))

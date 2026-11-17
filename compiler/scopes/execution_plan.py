@@ -196,22 +196,18 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.native_call_coordinates import NativeCallCoordinatesProof
     from compiler.frontend.native_call_effects import NativeHostEffects
     from compiler.frontend.native_completion import NativeCompletionProof, NativeGraphCompletionProof
-    from compiler.frontend.native_definitions import NativeDefinitionProof, NativeDefinitionStateProof
+    from compiler.frontend.native_definitions import NativeDefinitionProof
     from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
     from compiler.frontend.native_environment import NativeEnvironmentProof, NativeLocalStateProof
     from compiler.frontend.native_intrinsics import NativePredicateProof
     from compiler.frontend.native_opaque_writes import NativeOnlyArrayWrite
-    from compiler.frontend.native_prefix import NativePrefixProof
     from compiler.frontend.native_preservation import NativePreservationProof
     from compiler.frontend.numerical_completion import NumericalCompletionProof
     from compiler.frontend.numerical_effects import NumericalEffectProof
     from compiler.frontend.numerical_preparation import NumericalPreparationProvider, PreparedOriginalRegion
-    from compiler.frontend.omp_reductions import OpenMPReductionProof
     from compiler.frontend.opaque_library_state import OriginalOpaqueStateProof
     from compiler.frontend.reached_read_requirements import ReachedReadRequirementsProof
-    from compiler.frontend.reached_windows import ReachedWindowProof
     from compiler.frontend.readonly_allocatable_input import ReadonlyAllocatableInputProof
-    from compiler.frontend.reductions import ReductionProof
     from compiler.frontend.scalar_clock import OriginalScalarClockProof
     from compiler.frontend.selection_activation import SelectionActivationProof
     from compiler.frontend.source_device_tasks import SourceDeviceTaskProof
@@ -277,21 +273,16 @@ def _registered_authorities(owner, owned_types):
         NativeCompletionProof: "_joined_completions",
         NativeGraphCompletionProof: "_native_graph_completions",
         NativeDefinitionProof: "_native_definition_proofs",
-        NativeDefinitionStateProof: "_native_definition_state_proofs",
         SourceBoundNativeDemandEffects: "_native_demand_effects",
         NativeEnvironmentProof: "_native_environments",
         NativeLocalStateProof: "_native_environment_states",
         NativePredicateProof: "_native_predicates",
-        NativePrefixProof: "_native_prefix_proofs",
         NativePreservationProof: "_native_preservation_proofs",
         NumericalCompletionProof: "_numerical_completions",
         NumericalEffectProof: "_numerical_effect_proofs",
         NumericalPreparationProvider: "_numerical_preparation_providers",
         PreparedOriginalRegion: "_numerical_preparations",
-        OpenMPReductionProof: "_omp_reduction_proofs",
-        ReachedWindowProof: "_reached_window_proofs",
         ReachedReadRequirementsProof: "_reached_read_requirements_proofs",
-        ReductionProof: "_reduction_proofs",
         SelectionActivationProof: "_selection_activation_proofs",
         NativeSourceFunctionProof: "_native_functions",
         WorksharingCompletionProof: "_worksharing_completions",
@@ -824,16 +815,6 @@ class CheckedExecutionPlan:
             return None
         self._require_owner()
         return self._owner.builder.automatic_native_preflight(self.leaves)
-
-    def interval_applicability(self):
-        """Explain workload evidence for this same checked interval.
-
-        The detached result identifies key candidates and unresolved coverage;
-        it cannot replace an issued placement or change native fallback.
-        """
-        from compiler.offload.interval_applicability import analyze_interval_applicability
-
-        return analyze_interval_applicability(self)
 
     def public(self):
         self._require_owner()

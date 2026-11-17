@@ -113,7 +113,7 @@ def walk_schedule(schedule):
 
 
 def test_graph_owner_keeps_device_state_across_known_native_only_recurrence(tmp_path, monkeypatch):
-    from compiler.scopes import interval_draft, window_discovery
+    from compiler.scopes import interval_draft
 
     def forbidden(*_args, **_kwargs):
         pytest.fail("graph execution used window enumeration or eager interval closure collection")

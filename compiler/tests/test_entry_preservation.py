@@ -240,16 +240,12 @@ end function
     assert proof is None or not any(binding.root == "argument::a" for binding in proof.preserved)
 
 
-@pytest.mark.parametrize("factory", ["projection", "native_prefix", "segment"])
+@pytest.mark.parametrize("factory", ["projection", "segment"])
 def test_private_forks_must_reissue_both_exit_and_entry_definition_tokens(tmp_path, factory):
     _path, analysis, originals, bindings, facts = prepared(tmp_path)
     first = prove_preserved_entry_definitions(analysis, "local_groups::run", originals, bindings, facts)
     if factory == "projection":
         other = analysis.private_projection()
-    elif factory == "native_prefix":
-        from compiler.frontend.native_prefix import _fork
-
-        other = _fork(analysis, ())
     else:
         from compiler.scopes.segments import _native_analysis
 

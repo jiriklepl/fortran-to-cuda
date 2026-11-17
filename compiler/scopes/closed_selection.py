@@ -23,6 +23,10 @@ from compiler.scopes.segments import fortran_lines, statement_span
 from compiler.scopes.source import _name
 
 
+# Search bounds for contiguous original interval candidates.
+MAX_ADJACENT_UNITS = 4
+MAX_ATTEMPTS = 16
+
 def _require_original_empty_body(analysis, routine):
     """Only a captured original absent execution part has no edit interval."""
     session = getattr(analysis, "_source_session", None)
@@ -246,7 +250,6 @@ def interval_candidates(builder):
     independently before publication.
     """
     from compiler.scopes.native_guard import descriptor_loop_body
-    from compiler.scopes.window_discovery import MAX_ADJACENT_UNITS, MAX_ATTEMPTS
 
     visits = 0
     contexts = []

@@ -242,63 +242,6 @@ def generate_kernel(region: TilePrivateRegion, *, addressing=None, scalar_bytes=
     return lines + ["    }", "}", ""]
 
 
-def generate_launch(region, arguments, *, context, stream, first="fort_tile_first", count="fort_tile_count"):
-    """A direct same-stream submit body for scratch_batch_helper's callback.
-
-    ``arguments`` are the ordered values of kernel_parameters(), with ordinary
-    registered arrays already replaced by their admitted device pointers.
-    Acquiring fields, source guards and draining any earlier deferred queue
-    remain the owning entry's responsibility. No callback RESOURCE is recoverable
-    after this body is invoked.
-    """
-    if len(arguments) != len(kernel_parameters(region)):
-        raise ValueError("tile-private kernel argument inventory differs")
-    return [
-        f"if ({count} == 0) return FORT_SCOPE_OK;",
-        f"const std::size_t fort_tile_needed_blocks = ({count} - 1) / 128 + 1;",
-        "const unsigned fort_tile_blocks = static_cast<unsigned>(fort_tile_needed_blocks > 65535 ? 65535 : fort_tile_needed_blocks);",
-        f"kernel_tile_private_{region.id}<<<fort_tile_blocks, 128, 0, {stream}>>>("
-        + ", ".join([*arguments, first, count]) + ");",
-        "if (cudaGetLastError() != cudaSuccess) return FORT_SCOPE_EXECUTION;",
-        f"return fort_scope_note_launch({context}) == FORT_SCOPE_OK ? FORT_SCOPE_OK : FORT_SCOPE_EXECUTION;",
-    ]
-
-
-def scratch_batch_helper():
-    """Runtime lease adapter; submit must order batches on one context stream.
-
-    A submit callback records accepted work by the ordinary runtime launch path.
-    Any failure after invoking it is terminal EXEC, even if the callback returns
-    RESOURCE: the caller cannot infer absence of an accepted device prefix. The
-    owner retains its existing abandon/poison policy; scratch has no CPU mirror.
-    """
-    return r"""
-template<class OrderedSubmit>
-static int fort_tile_submit_batches(fort_scope_t context, std::size_t total,
-    std::size_t per_batch, std::size_t stride, OrderedSubmit submit) {
-    if (total == 0) return FORT_SCOPE_OK;
-    if (per_batch == 0 || stride == 0 || per_batch > total ||
-        per_batch > static_cast<std::size_t>(-1) / stride) return FORT_SCOPE_RESOURCE;
-    fort_scope_scratch_lease_v1 lease{};
-    int status = fort_scope_scratch_acquire_v1(context, per_batch * stride, &lease);
-    if (status != FORT_SCOPE_OK) return status;
-    std::size_t first = 0;
-    while (first < total) {
-        const std::size_t count = total - first < per_batch ? total - first : per_batch;
-        status = submit(first, count, lease.device);
-        if (status != FORT_SCOPE_OK) {
-            // Even the first callback may have accepted work. Never replay.
-            (void)fort_scope_scratch_release_v1(context, lease.token);
-            return FORT_SCOPE_EXECUTION;
-        }
-        first += count;
-    }
-    status = fort_scope_scratch_release_v1(context, lease.token);
-    return status == FORT_SCOPE_OK ? FORT_SCOPE_OK : FORT_SCOPE_EXECUTION;
-}
-""".strip().splitlines()
-
-
 def _rectangular_point_phase(loops, body, phase_index, addressing, scalar_bytes=frozenset()):
     """Distribute independent points without forming a multidimensional size.
 

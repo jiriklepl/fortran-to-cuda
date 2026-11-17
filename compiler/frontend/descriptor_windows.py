@@ -26,7 +26,6 @@ from compiler.frontend.native_completion import NativeCompletionProof
 from compiler.frontend.native_environment import NativeEnvironmentProof, NativeLocalStateProof
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.native_intrinsics import NativePredicateProof
-from compiler.frontend.native_prefix import NativePrefixProof
 from compiler.frontend.numerical_completion import NumericalCompletionProof
 from compiler.frontend.source_functions import (
     _scope_roles,
@@ -261,7 +260,7 @@ class _PublicationAttachments:
         # Fields below are retained source and proof attachments, not the
         # charged scanner counters or mutable proof-builder caches.
         retained = ("scope_roles", "checked", "functions", "descriptor_functions", "storage_functions",
-                    "intrinsics", "intrinsic_tokens", "predicates", "prefixes", "joins", "environments",
+                    "intrinsics", "intrinsic_tokens", "predicates", "joins", "environments",
                     "environment_states", "objects", "object_mappings", "metadata_objects", "metadata_calls",
                     "metadata_schemas", "fixed_module_scopes", "fixed_module_bindings", "scalar_clocks",
                     "scalar_clock_tokens", "storage_groups", "storage_group_tokens", "library_states",
@@ -545,7 +544,6 @@ class _Check:
         self.intrinsic_tokens = {}
         self.intrinsic_authority = None
         self.predicates = {}
-        self.prefix_scopes, self.prefixes = {}, {}
         self.joined_directives, self.joins = {}, {}
         self.joined_returns, self.native_returns = set(), {}
         self.joined_loop_controls, self.loop_frames = set(), []
@@ -1243,9 +1241,9 @@ class _Check:
             if isinstance(proof, DescriptorTeamProof):
                 self.joins[proof.identity]["storage_structure"] = proof.public()
             return
-        if routine.qualified not in self.prefix_scopes and self.worksharing_directive(routine, original):
+        if self.worksharing_directive(routine, original):
             return
-        self.prefix_directive(routine)
+        raise DescriptorWindowUnsupported("descriptor window original OpenMP storage requires registered whole-closure authority")
 
     def worksharing_directive(self, routine, original):
         from compiler.frontend.descriptor_worksharing import (
@@ -1271,24 +1269,6 @@ class _Check:
         if self.worksharing_directives.get((routine.qualified, id(original))) is not proof:
             raise DescriptorWindowUnsupported("descriptor worksharing directive exceeds its exact original envelope")
         return True
-
-    def prefix_directive(self, routine):
-        proof = self.prefix_scopes.get(routine.qualified)
-        if proof is None:
-            raise DescriptorWindowUnsupported("descriptor window original OpenMP storage requires registered whole-closure authority")
-        proof.validate(self.analysis, proof.procedure)
-        public = proof.public()
-        self.prefixes[proof.identity] = {
-            "proof_identity": proof.identity, "procedure": proof.procedure,
-            "covered_original_procedures": [item["procedure"] for item in public["closure"]],
-            "descriptor_evidence_only": True,
-            "whole_original_closure_scanned": True,
-            "native_prefix_execution_requirements": {
-                "requires_original_native_execution": public["requires_original_native_execution"],
-                "requires_serial_caller": public["requires_serial_caller"],
-                "requires_no_active_context": public["requires_no_active_context"]},
-            "execution_authorized": False, "allocation_freshness_authority": False,
-            "entry_definition_authority": False, "gpu_legality_established": False}
 
     def tick(self):
         self.nodes += 1
@@ -1981,14 +1961,6 @@ class _Check:
         # declaration bound; USE/definition spellings and unrelated CONTAINS
         # bodies are not synthetic whole-procedure lookup units.
         self.scope_authority(routine.scope)
-        proofs = [proof for proof in getattr(self.analysis, "_native_prefix_proofs", {}).values()
-                  if isinstance(proof, NativePrefixProof) and proof.procedure == name]
-        if proofs:
-            if len(proofs) != 1:
-                raise CompilationError("descriptor window requires unique registered native-prefix authority")
-            proof = proofs[0].validate(self.analysis, name)
-            for item in proof.public()["closure"]:
-                self.prefix_scopes[item["procedure"]] = proof
         graph = self.analysis.structure(name)
         if not graph.available:
             raise CompilationError("descriptor window child bounded original graph is unavailable")
@@ -2289,7 +2261,7 @@ def _derive(analysis, procedure, identities, roots, module_roots=(), *, _defer_p
             "resources": states, "module_roots": list(module_roots), "source_call_closure": check.checked,
             "native_source_function_requirements": list(check.functions.values()),
             "native_predicate_requirements": list(check.predicates.values()),
-            "native_prefix_descriptor_requirements": list(check.prefixes.values()),
+            "native_prefix_descriptor_requirements": [],
             "native_joined_descriptor_requirements": list(check.joins.values()),
             "native_environment_descriptor_requirements": list(check.environments.values()),
             "native_environment_state_requirements": list(check.environment_states.values()),

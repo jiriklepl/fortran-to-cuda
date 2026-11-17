@@ -1487,49 +1487,6 @@ private scalar or fixed-array storage. This proof grants neither native memory
 hook authority nor GPU legality. Numerical lowering still proves definitions,
 aliases, supported computation and numerical semantics before generation.
 
-Reduction source proofs are separate from generated execution support. They
-retain the original intrinsic form, argument order, MASK/DIM, empty identity,
-exact input sections and a single scalar publication at the original statement.
-The first exact parallel subset is integer MINVAL/MAXVAL and default-logical
-ALL/ANY. An IEEE_IS_NAN predicate additionally requires the actual intrinsic
-module identity and a verified native classification/exception policy. Scalar
-MIN/MAX assignments are not mistaken for array reductions. Real extrema need
-their own NaN/signed-zero/native exception contract; a guarded implementation
-must publish the exact input and run the original reduction statement once on
-exceptional data, without replaying its owner. SUM remains native without an
-authorized original numerical reassociation contract. A source proof alone
-neither emits a GPU reduction nor supplies calibration for automatic placement.
-An authenticated original OpenMP `reduction(+:x)` is a separate source-backed
-contract: OpenMP leaves the combination order unspecified, so it can permit a
-parallel real sum without granting that permission to a serial recurrence or
-an intrinsic SUM statement. Its proof must retain the original value of `x`,
-private initialization, contribution computations and the original completion
-point. Numerical field tolerances and supported IEEE behavior still apply;
-task/inscan variants and unproved intermediate accumulator consumers remain
-boundaries. The lazy `SourceEffects.openmp_reduction(procedure, original_nodes)`
-API proves one explicitly requested complete original joined group with a
-single ordinary local REAL(4/8) `+` accumulator and a bounded rectangular loop
-nest. Per-item private scalar definitions, contribution math and complete source
-effects are checked; uncertain aliases, array writes, calls and exits reject
-the proof. INTEGER(4) sums additionally need a proof that every partial sum is
-representable. Public reports include only requested proof records and report
-`execution_supported: false`: generated OpenMP reduction execution and its
-calibration remain unavailable. Ordinary native completion tokens still reject
-reduction clauses; this separate source contract does not grant them authority.
-See [OpenMP reduction scoping](https://www.openmp.org/spec-html/5.2/openmpsu50.html)
-and [the reduction clause](https://www.openmp.org/spec-html/5.2/openmpsu52.html).
-`SourceEffects.reduction_candidates` lazily scans only an authenticated reached
-selection or one bounded local source skeleton, without expanding callees. Its
-public records distinguish `source_analysis_available` from
-`execution_supported`; generated reduction execution is currently unavailable.
-The existing numerical runtime supports INTEGER(4), while INTEGER(8) and
-default LOGICAL(4) require their own representation-preserving execution ABI.
-The runtime's one-byte logical buffers cannot stand in for original default
-Fortran logical storage. Integer extrema additionally retain a nonempty tag:
-the empty MAXVAL result is `-HUGE`, which is not a neutral accumulator for the
-minimum representable signed integer. A worker must initialize from the first
-selected value and apply the empty result only when no element was selected.
-
 Successfully completed source closures and local skeletons are reused through a bounded memory cache.
 `--summary-cache DIRECTORY` also enables immutable keyed disk records. Keys include
 source and include hashes, prepared source/configuration/line-map identity, explicit
@@ -1744,38 +1701,6 @@ the checker retains every original statement and keeps its proof registries
 private. Original IEEE environment calls require their own registered source
 proof. These descriptor checks grant no GPU execution or numerical semantics.
 
-The separate `prove_native_prefix` API can establish complete effects of an
-unchanged native call before any context exists. A detached, bounded analysis
-may resolve missing lifetime obligations for original read-only numeric module
-allocations. It neither grants device captures nor changes the ordinary source
-summary or its cache. A distinct completion contract admits complete original
-joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
-the native compiler executes every original reduction. No reduction lowering,
-reassociation or active-owner coherence is authorized.
-
-Plain numeric whole-name copies and single-object explicit-shape `ALLOCATE` or
-plain `DEALLOCATE` may precede activation only when their destination capture
-explicitly has `lifetime: "selected_window"` and `initialized: "none"`.
-The original statements execute once; fresh guards acquire the actual reached
-descriptor. A conforming copy can retain destination bounds, so RHS bounds are
-never substituted for them. Allocation alone defines no payload. Whole copies
-require current whole RHS coverage from invocation-entry assertions or earlier
-source definitions of a selected-window-none capture. A selected-window-whole
-assertion cannot authorize these earlier prefix reads. Supplied facts and their
-hashes remain unchanged; no activation assertion is unioned over a definition
-kill. Allocation options, pointer/target associations and unsupported shapes
-remain native. Prefix support declines disable eligibility before the complete
-original operation. A supported original single-line `IF` condition retains its
-evaluation once: a registered block rewrite disables eligibility inside its
-true branch before the original unsupported action executes once. The proof
-binds the original parent span, condition and action identities and hashes.
-Unsupported conditions, labels, preprocessor boundaries and potentially shared
-semicolon spans retain whole-conditional disabling. Disabled eligibility is
-absorbing for that invocation, including `CYCLE`, `EXIT`, `RETURN` and later loop traversals. Only
-eligible branches contribute activation coverage. Source/token and budget
-failures remain hard; incomplete generic native-prefix proofs are not converted
-into support declines.
-
 Before expanding a dormant native call's effects, a bounded original-source
 support check identifies native I/O and OpenMP team shapes outside the supported
 before-owner grammar. It resolves and authenticates the original call chain;
@@ -1801,18 +1726,6 @@ available only after the final join. May-write unions are never definitions.
 Original worksharing and synchronization remain unchanged. Invocation-entry
 facts and source-established selected-window-none coverage may justify these
 prefix reads; a selected-window-whole assertion cannot do so.
-
-`prove_native_definition_state` exposes a separate native-only logical transfer
-for exact requested output bindings. It shares the original access walker but
-does not require physical GPU layouts for native inputs such as explicit-shape
-coefficient arrays. It retains all array, scalar, index and descriptor reads;
-uncovered array reads withhold output-definition credit. An authenticated
-PARAMETER call association can establish coefficient value-definedness, while
-the validity of the original dynamic index remains a separate precondition.
-Joined units use the same entry snapshot, and branch joins retain only common
-definitions. This token grants no physical mapping, allocation lifetime,
-activation, or execution authority. Native coherence continues to require its
-existing physical-section proofs.
 
 `prove_native_preservation` filters existing definition coverage through an
 unchanged native prefix. Complete ordinary reads and payload writes preserve

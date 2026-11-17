@@ -453,8 +453,6 @@ class SourceEffects:
         self._numerical_completions = {}
         self._worksharing_completions = {}
         self._worksharing_native_completions = {}
-        self._reduction_proofs, self._reduction_candidates = {}, {}
-        self._omp_reduction_proofs = {}
         self._source_scopes, self._associate_scopes, self._block_scopes = {}, {}, {}
         self._block_scope_roles = {}
         self._analysis_started = False
@@ -3334,14 +3332,8 @@ class SourceEffects:
             if authority["role"] == "source":
                 local_structure = self.structure(matches[0])
                 structured = local_structure.public()
-                requested_reductions = [item for key, item in self._reduction_candidates.items()
-                                        if key[0] == local_structure.identity]
-                requested_omp_reductions = [proof.public() for proof in self._omp_reduction_proofs.values()
-                                           if proof.procedure == matches[0]
-                                           and proof.structured_identity == local_structure.identity]
             else:
                 structured = {"available": False, "reason": "private projection has no original structural authority"}
-                requested_reductions, requested_omp_reductions = [], []
             # Every row retains its own complete proof and source/configuration
             # authority. A local graph alone never grants complete effects.
             # Projection summaries are excluded; reached segment records have
@@ -3396,19 +3388,6 @@ class SourceEffects:
                                 "operations": self.operation_limit},
                     "summarized_operations": sum(len(item["operations"]) for item in records),
                     "summary_cache": cache_delta, "call_graph": graph, "structured_effects": structured,
-                    "source_reductions": {"analysis": "requested" if requested_reductions else "not_requested",
-                        "source_analysis_available": bool(requested_reductions) and
-                            all(item["source_analysis_available"] for item in requested_reductions),
-                        "execution_supported": False,
-                        "reason": "generated reduction execution is not implemented" if requested_reductions else
-                            "source analysis is lazy; request original reached reduction candidates",
-                        "requests": requested_reductions},
-                    "openmp_reductions": {"analysis": "requested" if requested_omp_reductions else "not_requested",
-                        "source_analysis_available": bool(requested_omp_reductions) and
-                            all(item["source_analysis_available"] for item in requested_omp_reductions),
-                        "execution_supported": False,
-                        "execution_reason": "original source contracts only; generated OpenMP reduction execution is not implemented",
-                        "records": requested_omp_reductions},
                     "automatic_scope_available": False,
                     "effect_coordinate_system": "logical source evidence; original reached native sections define physical transfers"})
         summary = self.summarize(matches[0])
@@ -3424,15 +3403,8 @@ class SourceEffects:
             authority = sha256(_canonical(self._summary_authority()).encode()).hexdigest()
             local_structure = build_structure(self, self._require_original(matches[0]), authority)
             structured = local_structure.public()
-            requested_reductions = [item for key, item in self._reduction_candidates.items()
-                                    if key[0] == local_structure.identity]
-            requested_omp_reductions = [proof.public() for proof in self._omp_reduction_proofs.values()
-                                       if proof.procedure == matches[0]
-                                       and proof.structured_identity == local_structure.identity]
         else:
             structured = {"available": False, "reason": "private projection has no original structural authority"}
-            requested_reductions = []
-            requested_omp_reductions = []
         self.verify_source()
         cache_stats = self._summary_cache.stats
         cache_delta = {name: cache_stats[name] - self._cache_started.get(name, 0) for name in cache_stats}
@@ -3456,19 +3428,6 @@ class SourceEffects:
                 "summary_cache": cache_delta,
                 "call_graph": graph,
                 "structured_effects": structured,
-                "source_reductions": {"analysis": "requested" if requested_reductions else "not_requested",
-                    "source_analysis_available": bool(requested_reductions) and
-                        all(item["source_analysis_available"] for item in requested_reductions),
-                    "execution_supported": False,
-                    "reason": "generated reduction execution is not implemented" if requested_reductions else
-                        "source analysis is lazy; request original reached reduction candidates",
-                    "requests": requested_reductions},
-                "openmp_reductions": {"analysis": "requested" if requested_omp_reductions else "not_requested",
-                    "source_analysis_available": bool(requested_omp_reductions) and
-                        all(item["source_analysis_available"] for item in requested_omp_reductions),
-                    "execution_supported": False,
-                    "execution_reason": "original source contracts only; generated OpenMP reduction execution is not implemented",
-                    "records": requested_omp_reductions},
                 "automatic_scope_available": False,
                 "effect_coordinate_system": "logical source evidence; bounded call rectangles and conservative leaf effects"})
 

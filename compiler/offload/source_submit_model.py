@@ -90,12 +90,6 @@ def _predict(model, bindings, launches):
                      (c["intercept_seconds"] + bindings*c["binding_seconds"] + launches*c["launch_seconds"]))
 
 
-def quote(model, bindings, launches):
-    if model.get("available") is not True:
-        raise ValueError("source submit model failed independent coverage and is unavailable")
-    return _predict(model, bindings, launches)
-
-
 def _observations(records):
     if not isinstance(records, list) or any(not isinstance(row, dict) for row in records):
         raise ValueError("source submit model requires typed observation rows")

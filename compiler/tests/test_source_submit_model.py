@@ -16,9 +16,7 @@ from compiler.offload.source_submit_model import (
     LAUNCHES,
     fit_model,
     fit_relative,
-    quote,
-    validate_model,
-)
+    validate_model)
 from compiler.offload.source_task_pricing import source_task_pricing
 from compiler.offload.tile_protocol_calibration import source_scratch_benchmark
 from compiler.tests.test_scoped_runtime import RUNTIME
@@ -79,25 +77,6 @@ def model_records(profile):
     return [identity, *[{"kind": "source_protocol_observation", "name": "source_submit_host_enqueue_included",
         "bytes": 0, "bindings": b, "launches": n, "rounds": 32,
         "seconds": [1e-6*(2+3*b+5*n)]*5} for b in BINDINGS for n in LAUNCHES]]
-
-
-def test_fresh_holdout_failure_never_refits_or_increases_the_predetermined_margin():
-    profile = live_profile()
-    runtime = read_scoped_runtime()[1]["runtime_id"]
-    rows = model_records(profile)
-    good = fit_model(rows, profile, runtime)
-    assert good["available"]
-    assert good["coverage_factor"] == 4
-    assert len(good["measurements"]) == 77
-    assert quote(good, 4, 18) == pytest.approx(4e-6*(2+12+90))
-    rows[next(i for i, row in enumerate(rows) if row.get("bindings") == 3 and row.get("launches") == 18)]["seconds"] = [1.0]*5
-    bad = fit_model(rows, profile, runtime)
-    assert bad["available"] is False
-    assert bad["failed_holdouts"] == [[3, 18]]
-    assert bad["coefficients"] == good["coefficients"]
-    assert bad["coverage_factor"] == good["coverage_factor"]
-    with pytest.raises(ValueError, match="unavailable"):
-        quote(bad, 4, 18)
 
 
 def test_ignored_large_fit_residual_disables_model_and_edited_availability_is_recomputed():

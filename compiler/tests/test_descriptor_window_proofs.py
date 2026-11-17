@@ -6,7 +6,6 @@ from dataclasses import replace
 import pytest
 
 from compiler.frontend.descriptor_windows import prove_descriptor_window
-from compiler.frontend.native_prefix import prove_native_prefix
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 
@@ -287,69 +286,6 @@ if(p/=p) bad=.true.
 end do
 !$omp end parallel do
 a(1)=total"""
-
-
-def test_joined_scalar_reduction_storage_does_not_require_native_prefix_execution(tmp_path):
-    _path, analysis, _graph, ids = fixture(tmp_path, child=TEAM_BODY, child_decl=TEAM_DECLARATION)
-    initial = prove(analysis, ids).public()
-    assert not getattr(analysis, "_native_prefix_proofs", {})
-    native = prove_native_prefix(analysis, "intervals::read_modify")
-    # Descriptor-only team structure is independently source-issued. A native
-    # execution token cannot replace it or grant payload/entry authority.
-    analysis.summarize = lambda *_args, **_kwargs: pytest.fail("payload summary requested")
-    public = prove(analysis, ids).public()
-    assert not initial["native_prefix_descriptor_requirements"]
-    assert not public["native_prefix_descriptor_requirements"]
-    assert analysis._native_prefix_proofs[native.identity] is native
-    requirement, = public["native_joined_descriptor_requirements"]
-    assert requirement["proof_role"] == "original_joined_storage_structure"
-    assert requirement["storage_structure"]["version"] == 2
-    assert requirement["whole_original_group_scanned"]
-    assert requirement["descriptor_evidence_only"]
-    assert not requirement["execution_authorized"]
-    assert not requirement["entry_definition_authority"]
-    assert not requirement["gpu_legality_established"]
-    assert not public["prefix_effects_proved"]
-    assert not public["entry_definition_authority"]
-    assert public["source_operations"] > 5
-
-
-def test_transitive_joined_storage_is_independent_of_unused_native_prefix(tmp_path):
-    extra = "subroutine team_reduce(a)\n" + TEAM_DECLARATION + "\n" + TEAM_BODY + "\nend subroutine"
-    _path, analysis, _graph, ids = fixture(tmp_path, child="call team_reduce(a)", extra=extra)
-    native = prove_native_prefix(analysis, "intervals::read_modify")
-    public = prove(analysis, ids).public()
-    assert not public["native_prefix_descriptor_requirements"]
-    requirement, = public["native_joined_descriptor_requirements"]
-    assert requirement["procedure"] == "intervals::team_reduce"
-    assert requirement["storage_structure"]["version"] == 2
-    assert requirement["whole_original_group_scanned"]
-    assert not requirement["execution_authorized"]
-    assert set(public["source_call_closure"]) == {"intervals::read_modify", "intervals::team_reduce"}
-    analysis._native_prefix_proofs.pop(native.identity)
-    independent = prove(analysis, ids).public()
-    assert not independent["native_prefix_descriptor_requirements"]
-    assert independent["native_joined_descriptor_requirements"]
-    assert not independent["execution_authorized"]
-
-
-def test_copied_native_prefix_cannot_supply_directive_authority(tmp_path):
-    _path, analysis, _graph, ids = fixture(tmp_path, child=TEAM_BODY, child_decl=TEAM_DECLARATION)
-    native = prove_native_prefix(analysis, "intervals::read_modify")
-    analysis._native_prefix_proofs["copy"] = copy(native)
-    with pytest.raises(CompilationError, match="unique registered"):
-        prove(analysis, ids)
-
-
-def test_native_prefix_does_not_suppress_descriptor_specific_replacement_checks(tmp_path):
-    declaration = TEAM_DECLARATION.replace("real(8),intent(inout)::a", "real(8),allocatable,intent(inout)::a")
-    _path, analysis, _graph, ids = fixture(tmp_path, child=TEAM_BODY + "\na=[3.0_8]", child_decl=declaration)
-    # SourceEffects already rejects this complete native proof. The interval
-    # provider independently rejects the allocatable whole assignment as well.
-    with pytest.raises(CompilationError):
-        prove_native_prefix(analysis, "intervals::read_modify")
-    with pytest.raises(CompilationError, match="whole allocatable assignment may replace storage"):
-        prove(analysis, ids)
 
 
 def object_fixture(tmp_path, *, kind=8, component=None, body=None, actual_attributes="",

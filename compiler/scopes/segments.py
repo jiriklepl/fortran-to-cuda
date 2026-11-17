@@ -107,8 +107,7 @@ def _native_analysis(analysis, *, complete_source=()):
     result._entry_preservations_owner = None
     for name in ("summaries", "_closures", "_native_sections", "_structures", "_segments",
                  "_descriptor_proofs", "_joined_completions", "_numerical_completions",
-                 "_reduction_proofs",
-                 "_reduction_candidates", "_omp_reduction_proofs", "_source_scopes", "_associate_scopes",
+                 "_source_scopes", "_associate_scopes",
                  "_source_provenance", "_allocation_authorizations"):
         if (getattr(analysis, "_source_session", None) is None
                 or name not in analysis._source_session.roots):
@@ -121,9 +120,9 @@ def _native_analysis(analysis, *, complete_source=()):
     # These tokens belong to one exact analysis object. A shallow copy must
     # reissue selected proofs; sharing their registries would either lend
     # foreign authority or mutate the original owner's proof state.
-    for name in ("_descriptor_window_proofs", "_native_prefix_proofs", "_reached_window_proofs",
+    for name in ("_descriptor_window_proofs",
                  "_local_allocation_proofs",
-                 "_native_definition_proofs", "_native_definition_state_proofs", "_numerical_preparations", "_numerical_preparation_providers",
+                 "_native_definition_proofs", "_numerical_preparations", "_numerical_preparation_providers",
                  "_native_preservation_proofs", "_selection_activation_proofs", "_reached_read_requirements_proofs",
                  "_numerical_effect_proofs", "_original_call_associations", "_native_effect_templates",
                  "_native_effect_graphs", "_resource_reachability_proofs", "_native_demand_effects", "_native_call_effects",
