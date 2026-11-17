@@ -1,8 +1,12 @@
 # Benchmark suite
 
-Three momentum-advection kernels (CDU, CDV and CDW), seven implementation
-variants, and a [native/local compiler comparison](docs/tool-comparison.md).
-Run all commands below from the repository root.
+Three momentum-advection kernels (CDU, CDV and CDW) in seven implementation
+variants. Run all commands below from the repository root.
+
+The `CPP`, `CPP-OMP` and `CUDA` sources under `generated/` are archived output of
+the compiler's retired ordinary-call backend. The current compiler emits shared
+graph entries instead, so these files are maintained as fixed benchmark inputs
+and are not regenerated.
 
 ## Scope preflight maps
 
@@ -31,18 +35,13 @@ benchmarks/
 │   ├── Fortran-ACC/           # handwritten OpenACC baseline
 │   ├── main.f90               # timing driver
 │   └── test_main.f90           # deterministic correctness driver
-├── generated/<case>/          # committed compiler output: CPP, CPP-OMP, CUDA
+├── generated/<case>/          # archived compiler output: CPP, CPP-OMP, CUDA
 ├── common/                    # shared build flags and C++/CUDA support header
-├── harness/                   # generation, builds, checking, timing and plotting
+├── harness/                   # builds, checking, timing and plotting
 ├── tests/                     # harness regression tests
-├── docs/                      # comparison method and interpretation
-├── results/                   # baseline.csv, comparison JSON and figures/
+├── results/                   # ignored: baseline.csv, reports and figures/
 └── bin/                       # ignored build output
 ```
-
-The shared harness owns generation, input validation, provenance, drivers and
-measurements. Comparison runs write generated local implementations, native
-builds and reports to their chosen output directory.
 
 ## Build and run
 
@@ -65,15 +64,12 @@ entire `bin/` tree.
 
 CPU builds need GNU Make and compatible Fortran/C++ compilers. OpenACC uses
 NVIDIA HPC SDK `nvfortran`; CUDA uses `nvcc` and a compatible GPU/host compiler.
-Install the repository's Python requirements for source generation and plotting.
-The committed generated sources can be built without running the Python compiler.
+Install the repository's Python requirements for plotting. The committed
+generated sources are built without running the Python compiler.
 
-## Generate, check and measure
+## Check and measure
 
 ```bash
-# Regenerate local compiler outputs (optionally select cases: CDU CDV).
-python -m benchmarks.harness.generate
-
 # Compare deterministic 16x16x16 output with the serial Fortran reference.
 python -m benchmarks.harness.check       # all cases
 python -m benchmarks.harness.check CDU   # one case
@@ -93,83 +89,7 @@ variants. Correctness builds append `_test_main` to the build directory name so
 they cannot replace timing executables. Figures report seconds per Gcell·iteration.
 
 Run the harness regression tests with `python -m pytest benchmarks/tests`.
-The [comparison guide](docs/tool-comparison.md) documents native/local CPU and
-GPU modes, caller data residency and archived measurements.
 
-Local comparisons build both the compiler's optimized default and an
-`--opt-level 0` baseline. Checked fusion produces one kernel per stencil instead
-of four. `--resident` also checks and times owned compiler sessions on both CPU
-and CUDA: the timed batch includes creation, repeated runs, final output retrieval
-and destruction. CUDA validation checks allocation, transfer and kernel counts
-with `FORT_RUNTIME_TRACE=1`; tracing is disabled during timing.
-
-```bash
-# Local-only CPU comparison, including persistent sessions.
-python -m benchmarks.harness.compare --output /tmp/local-cpu \
-  --gpu off --resident
-
-# Include CUDA resident batches where the GPU and OpenACC baseline are available.
-python -m benchmarks.harness.compare --output /tmp/local-gpu \
-  --gpu run --resident
-```
-
-Archived reports describe the compiler revision recorded in each report. Rerun
-the comparison to measure these optimizations; correctness tests impose no
-performance thresholds.
-
-The [2026-10-02 compiler capability comparison](results/compiler-capabilities-2026-10-02.json)
-records 60 passing CPU correctness checks and 30 timing configurations, including
-resident batches. For the `128x128x128` grid, mean ordinary-call times were:
-
-| Case | Original Fortran | C++ level 0 | C++ level 1 |
-| --- | ---: | ---: | ---: |
-| CDU | 10.982 ms | 14.754 ms | 9.897 ms |
-| CDV | 11.585 ms | 14.969 ms | 9.903 ms |
-| CDW | 11.585 ms | 17.235 ms | 10.312 ms |
-
-These are single-thread measurements on this host, with 3 warmups, 20 timed
-calls per round and 3 rounds. The report includes individual samples, variability,
-checksums, compiler source hashes and toolchain versions. CPU resident batches
-include owned-buffer copies and were slower than ordinary CPU calls. CUDA builds
-passed, but the installed driver could not execute them, so this report contains
-no CUDA performance measurements.
-
-An [archived CPU/GPU rerun](results/tool-comparison-rerun-20261002T155622Z/report.json)
-records 288 correctness checks and 144 timing configurations from an earlier
-compiler revision. It includes external-tool experiments removed from the
-maintained runner. Its [CSV samples](results/tool-comparison-rerun-20261002T155622Z/timings.csv)
-remain available for historical analysis; they do not measure current compiler
-performance.
-
-## Runtime scope and hybrid comparison
-
-The opt-in strategy comparison uses generic pointwise, opposite boundary face,
-immutable-halo stencil, and compute-heavy inputs. Decisions belong to the compiler;
-the harness calls its public CLI and records its JSON response.
-
-```bash
-python -m compiler.offload.calibrate --threads 4 --precision 64 \
-  --output benchmarks/results/gpu-strategies-20261006/calibration.json
-python -m benchmarks.harness.strategies \
-  --calibration-profile benchmarks/results/gpu-strategies-20261006/calibration.json \
-  --output benchmarks/results/gpu-strategies-20261006/generic
-```
-
-Modes are `native`, `current` (whole-array CUDA), `sections`, `auto` (runtime
-region selection), `chunked` (asynchronous GPU-only), and `hybrid`. All use the
-same host-thread budget. The reusable calibration must match the precision and
-thread budget; benchmark calls never tune compiler decisions.
-
-Defaults are one warmup and three measured process repetitions, with seven for
-comparisons near a promotion threshold. `--grids`, `--cases`, and `--modes` limit
-the sweep. `--compiler-root` selects an independent compiler checkout. The
-harness compares every source and destination element, including halos, after
-two calls with changed input, and saves separate unprofiled timing and Nsight
-activity evidence. Phase timers that synchronize the device are disabled.
-
-Reports retain complete process wall time as well as per-call time, transferred
-bytes, launches, decisions, and measured CPU/GPU/copy overlap. Packing and
-decision range durations come from separate trace executions. An automatic
-all-native result is valid; the requested `hybrid` mode alone does not prove that
-CPU and GPU computed concurrently. Promotion requires the documented application
-regression and end-to-end improvement gates, including separate ELMM results.
+`python -m benchmarks.harness.plot_strategies REPORT.json --output NEW_DIR`
+redraws the charts of a saved policy-comparison report. The runner that produced
+those reports was removed with the compiler policies it compared.

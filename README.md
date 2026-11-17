@@ -8,10 +8,10 @@ offloaded to a GPU — with the generated kernel running **~40–60× faster** t
 Fortran — and identifies host↔device data transfer as the dominant remaining
 bottleneck.
 
-The [2026-10-22 graph offloading checkpoint](benchmarks/reports/graph-redesign-snapshot-20261022/README.md)
-records the current compiler snapshot, test results, and ELMM channel-simple/channel
-performance comparisons. Application timings and their qualification limits are
-reported separately from the kernel measurements above.
+Dated evidence reports (compiler snapshots, test results, ELMM channel
+comparisons) are generated into `benchmarks/reports/`, which is not tracked in
+this repository. Application timings and their qualification limits are reported
+separately from the kernel measurements above.
 
 ---
 
@@ -62,49 +62,39 @@ Hardware requirements for the full benchmark suite:
 
 ## Quick Start
 
-### 1 — Compile a Fortran kernel to CUDA + C++
+### 1 — Compile a Fortran kernel to a shared CUDA entry
 
-The compiler reads an annotated Fortran module and generates three files: a CUDA
-kernel, a plain C++ kernel, and a Fortran `iso_c_binding` wrapper.
+The compiler reads a Fortran module and generates a CUDA entry for the selected
+procedure, its Fortran interface, and the versioned shared runtime.
 
 ```bash
-# Generate all output files for the CDU momentum kernel
 python -m compiler \
     --input  fortran-stencils/elmm_cdu.f90 \
     --kernel CDU \
     --output-dir out/
 
 # Output:
-#   out/generated_code.cu         ← CUDA __global__ kernels + host wrapper
-#   out/generated_cpp_impl.cpp    ← plain C++ (same algorithm, no GPU)
-#   out/generated_interface.f90   ← Fortran iso_c_binding wrapper module
+#   out/shared_entry.cu           ← queued CUDA tasks for the entry
+#   out/shared_interface.f90      ← Fortran iso_c_binding interface module
+#   out/scoped_runtime.cu, *.hpp  ← shared coherence/residency runtime
+#   out/fort_scoped_memory.f90    ← Fortran bindings of the runtime
+#   out/scoped-runtime.json       ← runtime identity and build manifest
 #   out/common_functions.cuh      ← shared indexing + timing header
 ```
 
-The Fortran kernel is preserved exactly: the entry subroutine keeps its name and
-signature.  No changes to the calling Fortran code are required.
+The entry borrows a caller-owned residency domain; whole applications are
+integrated through checked source scopes (`--form-scopes`) or the ELMM
+pipeline's `resident-build`. See [`compiler/README.md`](compiler/README.md) for
+the CLI reference and architecture, and [`containers/README.md`](containers/README.md)
+for the application comparison.
 
-See [`compiler/README.md`](compiler/README.md) for the full CLI reference, input
-file format, and architecture description.
+### 2 — Kernel benchmark sources
 
-### 2 — Regenerate all benchmark sources
-
-The `CPP`, `CPP-OMP`, and `CUDA` benchmark variants use files produced by the
-compiler. `CUDA-pinned` reuses the same generated CUDA sources and only changes
-the build by enabling pinned host memory support; it does not have a separate
-source directory. `Fortran-ACC` is maintained as a handwritten OpenACC variant.
-To regenerate the generated sources from the Fortran originals:
-
-```bash
-python -m benchmarks.harness.generate
-
-# Per-case output:
-#   benchmarks/generated/CDU/CUDA/generated_code.cu
-#   benchmarks/generated/CDU/CUDA/cdu.f90          ← Fortran interface
-#   benchmarks/generated/CDU/CPP-OMP/generated_cpp_impl.cpp
-#   benchmarks/generated/CDU/CPP/generated_cpp_impl.cpp   ← #pragma omp lines stripped
-#   ... (same for CDW, CDV)
-```
+The `CPP`, `CPP-OMP`, and `CUDA` benchmark variants are built from the archived
+sources in `benchmarks/generated/`. They were produced by the compiler's retired
+ordinary-call backend and are kept as fixed benchmark inputs. `CUDA-pinned`
+reuses the CUDA sources with pinned host memory enabled. `Fortran-ACC` is a
+handwritten OpenACC variant.
 
 ### 3 — Build and run a single benchmark
 
@@ -192,8 +182,6 @@ bandwidth from roughly **33/26 GB/s** (H→D/D→H) to about **76/57 GB/s**,
 improving observed end-to-end speedup to roughly **~4.6–6.3×** over serial
 Fortran.
 
-![Benchmark results — 512×512×512 grid](benchmarks/results/figures/grid_512x512x512_niter100.png)
-
 ---
 
 ## Components
@@ -201,17 +189,16 @@ Fortran.
 ### `compiler/` — Source-to-Source Compiler
 
 A Python package (`python -m compiler`) built on `fparser` and `islpy`. It lowers
-annotated Fortran into an immutable computation IR, proves each loop nest safe
-for parallel execution, and emits both backends from one ordered execution plan.
-Unsafe regions are rejected; this milestone performs no fusion or rescheduling.
+selected Fortran procedures into an immutable computation IR, proves each loop
+nest safe for parallel execution, applies checked fusion and scheduling, and
+emits shared CUDA entries over one residency runtime.
 
-- **CUDA** — each source loop nest becomes a `__global__` kernel; the host wrapper
-  handles memory allocation, H→D upload, kernel launch, D→H download.
-- **C++ (with/without OpenMP)** — all sub-kernels inlined into a single flat
-  function; the `#pragma omp` line is present in the OMP variant and stripped for
-  the plain CPP variant.
-- **Fortran interface** — `iso_c_binding` module that exposes the C function under
-  the original Fortran subroutine name, keeping every call site unchanged.
+- **Shared CUDA entries** — numerical regions become queued CUDA tasks that
+  borrow caller-owned residency domains; host/device replicas move only when a
+  consumer needs them.
+- **Source scopes** — `--form-scopes` analyses whole original procedures,
+  keeps unsupported work native, and emits the edits and runtime hooks around it.
+- **Fortran interface** — an `iso_c_binding` module for each generated entry.
 
 → Full documentation: [`compiler/README.md`](compiler/README.md)
 
@@ -220,8 +207,8 @@ Unsafe regions are rejected; this milestone performs no fusion or rescheduling.
 Seven implementation variants of three momentum-advection stencil kernels
 (`Fortran`, `Fortran-OMP`, `Fortran-ACC`, `CUDA`, `CUDA-pinned`, `CPP`,
 `CPP-OMP`) across CDU, CDW, and CDV, driven by a unified GNU Make build system.
-Maintained sources live in `cases/`, compiler output in `generated/`, shared
-measurement code in `harness/`.
+Maintained sources live in `cases/`, archived compiler output in `generated/`,
+shared measurement code in `harness/`.
 Includes:
 
 - Automated runner (`harness/run.py`) that sweeps grids, builds on demand, and
@@ -229,10 +216,6 @@ Includes:
 - Correctness test runner (`harness/check.py`) with deterministic inputs and
   element-wise comparison against the serial Fortran reference.
 - Figure generator (`harness/plot.py`).
-- `harness/generate.py` — regenerates all CUDA/C++ sources from the Fortran
-  originals via the compiler.
-- A [native/local compiler comparison](benchmarks/docs/tool-comparison.md) with
-  shared correctness/timing drivers, CPU/CUDA sessions and archived measurements.
 
 → Full documentation: [`benchmarks/README.md`](benchmarks/README.md)
 
