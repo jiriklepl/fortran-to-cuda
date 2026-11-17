@@ -34,7 +34,7 @@ def collective_graph_binary(tmp_path_factory):
     output = directory / "generated"
     response = _run([sys.executable, "-m", "compiler", "--form-scopes", "--gpu-collective",
                      "--input", str(original), "--kernel", "operators::step_native", "--scope-facts", str(facts),
-                     "--scope-execution", "graph", "--json", "--output-dir", str(output)], ROOT)
+                     "--json", "--output-dir", str(output)], ROOT)
     manifest = json.loads(response.stdout)["scopes"]
     assert manifest["scope_execution"] == "graph"
     assert manifest["scope_count"] == 1, manifest["boundaries"]

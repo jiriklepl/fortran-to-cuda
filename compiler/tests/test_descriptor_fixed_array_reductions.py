@@ -354,7 +354,7 @@ def generation_fixture(tmp_path):
     path.write_text(source())
     parent = ScopeBuilder([path], PROC, facts={'schema_version': 1, 'participation': 'serial',
         'sources': {str(path): sha256(path.read_bytes()).hexdigest()}, 'captures': {}},
-        options=CompilerOptions(), config=OffloadConfig(policy='sections', scope_execution='graph'))
+        options=CompilerOptions(), config=OffloadConfig(policy='sections'))
     routine = parent.analysis.routines[PROC]
     group, = [row for row in grouped_original_sequence(routine.execution.content, {})
               if isinstance(row, NativeGroupCandidate)]

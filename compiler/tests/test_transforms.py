@@ -61,9 +61,9 @@ def test_explicit_scoped_pipeline_honors_requested_optimization(tmp_path):
 
     function = _function(tmp_path, "a(i)=i", "b(i)=a(i)+factor")
     _, source = prepare_function(function, options=CompilerOptions(
-        memory_model="scoped", gpu_policy="sections", opt_level=0))
+        gpu_policy="sections", opt_level=0))
     _, optimized = prepare_function(function, options=CompilerOptions(
-        memory_model="scoped", gpu_policy="sections", opt_level=1))
+        gpu_policy="sections", opt_level=1))
     assert len(source.regions) == 2
     assert len(optimized.regions) == 1
 

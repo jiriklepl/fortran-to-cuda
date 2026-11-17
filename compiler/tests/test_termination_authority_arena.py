@@ -194,7 +194,7 @@ def test_completed_facts_survive_rollback_but_child_handles_do_not(tmp_path):
     path, _analysis, _routine, _call, _selected = fixture(tmp_path)
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()}, "captures": {}}
     builder = ScopeBuilder([path], "terminals::advance", facts=facts,
-                           options=CompilerOptions(), config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           options=CompilerOptions(), config=OffloadConfig(policy="sections"))
     analysis = builder.analysis
     routine = analysis.routines["terminals::work"]
     call, = [node for node in walk(routine.execution) if type(node).__name__ == "Call_Stmt"]

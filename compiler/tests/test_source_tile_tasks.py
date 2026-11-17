@@ -32,7 +32,7 @@ end module
     for fact in facts["captures"].values():
         fact["initialized"] = initialized
     builder = ScopeBuilder([path], "stencil::" + ("outer" if child else "advance"), facts=facts,
-        options=CompilerOptions(), config=OffloadConfig(policy=policy, scope_execution="graph"))
+        options=CompilerOptions(), config=OffloadConfig(policy=policy))
     outputs, report = builder.run()
     return path, outputs, report
 

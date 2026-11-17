@@ -113,7 +113,7 @@ end subroutine
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): digest(path)},
              "captures": {"argument::a": dict(FACT), "argument::b": dict(FACT)}}
     builder = ScopeBuilder([path], "external_fixture::" + ("outer" if child else "advance"), facts=facts,
-        options=CompilerOptions(), config=OffloadConfig(policy="sections", scope_execution="graph"),
+        options=CompilerOptions(), config=OffloadConfig(policy="sections"),
         contracts=analysis.contracts)
     outputs, report = builder.run()
     return path, outputs, report
@@ -154,7 +154,7 @@ end subroutine
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): digest(path)},
              "captures": {"argument::" + name: dict(FACT) for name in ("a", "b", "c", "d")}}
     builder = ScopeBuilder([path], "external_fixture::outer", facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"), contracts=analysis.contracts)
+        config=OffloadConfig(policy="sections"), contracts=analysis.contracts)
     _, report = builder.run()
     assert any("external provider member requires one canonical original association" in item["reason"]
                for item in report["boundaries"])
@@ -177,7 +177,7 @@ end subroutine
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): digest(path)},
              "captures": {"argument::a": dict(FACT), "argument::b": dict(FACT)}}
     builder = ScopeBuilder([path], "external_fixture::outer", facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"), contracts=analysis.contracts)
+        config=OffloadConfig(policy="sections"), contracts=analysis.contracts)
     outputs, report = builder.run()
     scope, = report["scopes"]
     child, = scope["module_coordinators"]

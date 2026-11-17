@@ -46,8 +46,7 @@ end module
 '''
 
 
-def emit(directory, source=SOURCE, *, configured_include=None, include_marker=False, policy='sections',
-         scope_execution='graph'):
+def emit(directory, source=SOURCE, *, configured_include=None, include_marker=False, policy='sections'):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory/'owner.f90'
     path.write_text(source)
@@ -78,7 +77,7 @@ def emit(directory, source=SOURCE, *, configured_include=None, include_marker=Fa
     facts = {'schema_version': 1, 'participation': 'serial', 'sources': hashes,
              'captures': {'argument::'+name: FACT for name in ('a', 'b', 'out')}}
     builder = ScopeBuilder([path], 'joined_owner::step', facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy=policy, scope_execution=scope_execution, host_threads=4),
+                           config=OffloadConfig(policy=policy, host_threads=4),
                            analysis_sources=configured)
     outputs, report = builder.run()
     replacement = report['sources'].get(str(path), {}).get('replacement')
@@ -104,7 +103,7 @@ def test_graph_team_keeps_all_numerical_units_across_native_work(tmp_path, count
     increment = '!$omp do\ndo i=-2,n-3\nb(i)=b(i)+a(i)\nenddo\n!$omp end do\n'
     source = SOURCE.replace(TEAM, OPENING + PRODUCER + increment * (count - 2)
                             + CORRECTION + CONSUMER + '!$omp end parallel\n')
-    path, _, report, text = emit(tmp_path, source, scope_execution='graph')
+    path, _, report, text = emit(tmp_path, source)
     assert path.read_text() == source
     (team, operations), = teams(report)
     assert len(team['numerical_units']) == count
@@ -132,7 +131,7 @@ def test_graph_team_count_does_not_spend_per_demand_effect_budget(tmp_path, monk
     middle = ((CORRECTION + increment) if interleaved_native else increment) * (count - 2)
     source = SOURCE.replace(TEAM, OPENING + PRODUCER + middle
                             + CORRECTION + CONSUMER + '!$omp end parallel\n')
-    path, _, report, text = emit(tmp_path, source, scope_execution='graph')
+    path, _, report, text = emit(tmp_path, source)
     (team, operations), = teams(report)
     assert path.read_text() == source
     assert len(team['numerical_units']) == count

@@ -13,7 +13,7 @@ ORDINARY = ("generated_code.cu", "generated_cpp_impl.cpp", "generated_interface.
 
 def command(directory):
     return [sys.executable, "-m", "compiler", "--input", str(SOURCE), "--kernel", "fill_array",
-            "--memory-model", "scoped", "--gpu-policy", "sections", "--json", "--output-dir", str(directory)]
+            "--gpu-policy", "sections", "--json", "--output-dir", str(directory)]
 
 
 def test_shared_manifest_cannot_select_stale_ordinary_artifacts(tmp_path):
@@ -37,9 +37,8 @@ def test_shared_manifest_cannot_select_stale_ordinary_artifacts(tmp_path):
 
 def test_default_generation_is_the_shared_graph_backend(tmp_path):
     args = command(tmp_path)
-    for option in ("--memory-model", "--gpu-policy"):
-        index = args.index(option)
-        del args[index:index + 2]
+    index = args.index("--gpu-policy")
+    del args[index:index + 2]
     result = subprocess.run(args, cwd=ROOT, text=True, capture_output=True, timeout=30)
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
@@ -49,8 +48,7 @@ def test_default_generation_is_the_shared_graph_backend(tmp_path):
     assert not set(ORDINARY) & set(report["outputs"])
 
 
-@pytest.mark.parametrize("option,value", [("--memory-model", "call"),
-    ("--scope-transfers", "pipelined"),
+@pytest.mark.parametrize("option,value", [("--scope-transfers", "pipelined"),
     ("--gpu-policy", "always"), ("--gpu-policy", "chunked"), ("--gpu-policy", "hybrid")])
 def test_retired_execution_paths_fail_before_publication(tmp_path, option, value):
     sentinel = tmp_path / "preserved"

@@ -195,7 +195,7 @@ def test_complete_facts_survive_generation_rollback_but_handles_do_not(tmp_path)
     path, *_rest = fixture(tmp_path)
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()}, "captures": {}}
     builder = ScopeBuilder([path], "regions::advance", facts=facts,
-                           options=CompilerOptions(), config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           options=CompilerOptions(), config=OffloadConfig(policy="sections"))
     analysis = builder.analysis
     caller = analysis.routines["regions::advance"]
     call, = caller.execution.content

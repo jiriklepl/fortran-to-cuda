@@ -76,7 +76,7 @@ def fixture(tmp_path, *, request=REQUEST, source=PARENT, entry="external_fixture
     if request is not None:
         facts["provider_only_lifetime"] = json.loads(json.dumps(request))
     builder = ScopeBuilder(paths, entry, facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"),
+        config=OffloadConfig(policy="sections"),
         contracts={"external_fixture::advance": {"device_tasks": [task]}})
     return paths, builder
 
@@ -366,7 +366,7 @@ def test_program_metadata_is_opt_in_and_never_an_executable_entry(tmp_path):
         ScopeBuilder(paths, "$program::main_owner", facts={"schema_version": 1, "participation": "serial",
             "captures": {}, "sources": {str(path): digest(path) for path in paths},
             "provider_only_lifetime": PROGRAM_REQUEST}, options=CompilerOptions(),
-            config=OffloadConfig(policy="sections", scope_execution="graph"))
+            config=OffloadConfig(policy="sections"))
 
 
 @pytest.mark.parametrize("change", ["stop", "goto", "semicolon", "unnamed"])
@@ -457,7 +457,7 @@ def test_call_path_request_cannot_retain_unqualified_provider_state(tmp_path):
     paths, builder = fixture(tmp_path, request=None)
     facts = {**builder.facts, "provider_only_lifetime": REQUEST}
     guarded = ScopeBuilder(paths, builder.entry.qualified, facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"), contracts=builder.analysis.contracts)
+        config=OffloadConfig(policy="sections"), contracts=builder.analysis.contracts)
     with pytest.raises(CompilationError, match="explicit retained-state provider qualification"):
         guarded.run()
 

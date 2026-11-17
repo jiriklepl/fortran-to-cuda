@@ -66,7 +66,7 @@ def emit(directory):
              "captures": {"face_fields::field": {"storage": "stable", "initialized": "none",
                  "escapes": False, "allocation_changes": False}}}
     builder = ScopeBuilder([path], "face_fields::advance", facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     outputs, report = builder.run()
     assert report["scope_count"] == 1, report.get("graph_owner_attempt")
     validate_checked_execution_plans(report)

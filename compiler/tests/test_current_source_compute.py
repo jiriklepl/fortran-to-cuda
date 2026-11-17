@@ -90,7 +90,7 @@ end module
     entry = "original_cost_form::evaluate"
     selection = tuple(analysis.routines[entry].execution.content)
     prepared = prepare_original_region(analysis, entry, selection,
-        options=CompilerOptions(gpu_policy="sections", memory_model="scoped"),
+        options=CompilerOptions(gpu_policy="sections"),
         config=OffloadConfig(policy="sections"), environment_root=entry)
     applicability = source_compute_applicability(analysis, prepared, native_participation=participation)
     return path, analysis, prepared, applicability

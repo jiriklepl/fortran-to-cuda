@@ -292,7 +292,7 @@ def test_discarded_generation_terminal_handle_cannot_be_rebound_into_parent(tmp_
     facts = {'schema_version': 1, 'participation': 'serial', 'captures': {},
              'sources': {str(path): sha256(path.read_bytes()).hexdigest()}}
     builder = ScopeBuilder([path], 'work::owner', facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy='sections', scope_execution='graph'))
+                           config=OffloadConfig(policy='sections'))
     analysis = builder.analysis
     selected = tuple(analysis.routines['work::owner'].execution.content)
     demanded = (analysis.modules['work'].bindings['a'],)

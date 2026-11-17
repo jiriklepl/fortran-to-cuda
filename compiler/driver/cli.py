@@ -140,12 +140,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--gpu-policy", metavar="POLICY",
                         help="Shared graph placement: sections or auto (default: sections).")
-    parser.add_argument("--memory-model", metavar="MODEL",
-                        help="Storage ownership: scoped (the only production memory model).")
     parser.add_argument("--scope-transfers", default="direct",
                         help="Scoped transfer mode, independent of GPU placement (default: direct).")
-    parser.add_argument("--scope-execution", choices=("graph",),
-                        help="Source execution strategy (graph is the default with --form-scopes).")
     parser.add_argument("--calibration-profile", metavar="FILE", help="Explicit offline hardware calibration JSON.")
     parser.add_argument("--host-threads", type=int, default=4, help="Total host-thread budget, including GPU coordination.")
     parser.add_argument("--gpu-collective", action="store_true",
@@ -153,23 +149,18 @@ def _parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.require_markers:
         parser.error("--require-markers was removed; omit it and select an entry with --kernel or --list-candidates")
-    args.memory_model = args.memory_model or "scoped"
     args.gpu_policy = args.gpu_policy or "sections"
-    if args.memory_model != "scoped":
-        parser.error("ordinary-call generation was removed; use caller-owned scoped memory")
     if args.gpu_policy not in {"sections", "auto"}:
         parser.error("ordinary GPU policies were removed; use sections or auto with shared graph execution")
     if args.scope_transfers == "pipelined":
         parser.error("pipelined slab batching was removed; use shared graph execution")
     if args.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
         parser.error("scope transfers must be direct, pinned, auto, or coalesced")
-    if args.memory_model == "scoped" and any((args.cuda_output, args.cpp_output, args.fortran_output)):
+    if any((args.cuda_output, args.cpp_output, args.fortran_output)):
         parser.error("scoped generation emits shared_entry.cu and shared_interface.f90; "
                      "ordinary --cuda-output/--cpp-output/--fortran-output options do not apply")
     if args.scope_preflight and not args.form_scopes:
         parser.error("--scope-preflight requires --form-scopes")
-    if args.scope_execution is not None and not args.form_scopes:
-        parser.error("--scope-execution requires --form-scopes")
     if args.analyze_effects and (args.list_candidates or args.emit_scoped_runtime or args.form_scopes):
         parser.error("--analyze-effects cannot be combined with candidate listing or runtime export")
     if (args.source_file or args.effect_contracts) and not (args.analyze_effects or args.form_scopes):
@@ -183,11 +174,10 @@ def _parse_args() -> argparse.Namespace:
     if args.analysis_sources and not (args.form_scopes or args.analyze_effects):
         parser.error("--analysis-sources requires --form-scopes or --analyze-effects")
     if args.form_scopes:
-        args.scope_execution = "graph"
         if args.list_candidates or args.emit_scoped_runtime:
             parser.error("--form-scopes cannot be combined with candidate listing or runtime export")
-        if not args.scope_facts or args.memory_model != "scoped" or args.gpu_policy not in {"sections", "auto"}:
-            parser.error("--form-scopes requires --scope-facts, scoped memory and sections or auto GPU policy")
+        if not args.scope_facts:
+            parser.error("--form-scopes requires --scope-facts")
     if args.emit_scoped_runtime:
         if args.input or args.kernel or args.list_candidates:
             parser.error("--emit-scoped-runtime cannot be combined with input, kernel, or candidate listing")
@@ -225,8 +215,7 @@ def _list_candidates(source_file: Path, args: argparse.Namespace, options: Compi
             try:
                 function = lower_file(source_file, candidate.qualified_name)
                 function, plan = prepare_function(function, options=options)
-                generate_sources(function, plan, common_header=args.common_header, offload_config=_offload_config(args),
-                                 memory_model=args.memory_model)
+                generate_sources(function, plan, common_header=args.common_header, offload_config=_offload_config(args))
             except CompilationError as error:
                 reason = str(error)
         records.append(
@@ -296,9 +285,8 @@ def main() -> None:
             fallback=args.fallback,
             indexing=args.indexing,
             gpu_policy=args.gpu_policy,
-            memory_model=args.memory_model,
             scope_transfers=args.scope_transfers,
-            scope_execution=args.scope_execution,
+            source_graph=args.form_scopes,
         )
         if args.form_scopes:
             from compiler.scopes.source import form_source_scopes
@@ -338,8 +326,7 @@ def main() -> None:
             return
         function = lower_file(source_file, args.kernel)
         function, plan = prepare_function(function, options=options)
-        sources = generate_sources(function, plan, common_header=args.common_header, offload_config=_offload_config(args),
-                                   memory_model=args.memory_model)
+        sources = generate_sources(function, plan, common_header=args.common_header, offload_config=_offload_config(args))
         if args.common_header in sources.artifacts:
             raise CompilationError("common header filename conflicts with a shared runtime/entry artifact")
         common_header = read_common_header()
@@ -375,7 +362,7 @@ def main() -> None:
                 {
                     "kernel": args.kernel,
                     "artifact_schema_version": 2,
-                    "memory_model": args.memory_model,
+                    "memory_model": "scoped",
                     "supported": True,
                     "reason": None,
                     "parallel_regions": len(plan.regions),

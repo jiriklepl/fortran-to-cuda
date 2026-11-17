@@ -23,7 +23,7 @@ def byte_fixture(tmp_path, kind=8, *, attribute="", initialized="none"):
              "captures": {"argument::" + name: dict(FACT) for name in ("a", "b", "scale")}}
     facts["captures"]["argument::scale"]["initialized"] = initialized
     builder = ScopeBuilder([path], routine.qualified, facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     nodes = tuple(builder.entry.execution.content)
     return builder, nodes
 

@@ -165,7 +165,7 @@ def test_transaction_rollback_drops_child_handles_and_keeps_parent_facts(tmp_pat
         str(path): sha256(path.read_bytes()).hexdigest()}, "captures": {}}
     parent = ScopeBuilder([path], "local_storage::advance", facts=facts,
                           options=CompilerOptions(),
-                          config=OffloadConfig(policy="sections", scope_execution="graph"))
+                          config=OffloadConfig(policy="sections"))
     analysis, routine = parent.analysis, parent.entry
     backing, scratch = (routine.scope.bindings[name] for name in ("backing", "scratch"))
     first = allocation.original_local_allocation(analysis, routine, backing)
@@ -295,7 +295,7 @@ def test_rollback_reuses_one_complete_fact_with_a_new_legal_handle(tmp_path):
         str(path): sha256(path.read_bytes()).hexdigest()}, "captures": {}}
     parent = ScopeBuilder([path], "local_storage::advance", facts=facts,
                           options=CompilerOptions(),
-                          config=OffloadConfig(policy="sections", scope_execution="graph"))
+                          config=OffloadConfig(policy="sections"))
     analysis, routine = parent.analysis, parent.entry
     binding = routine.scope.bindings["backing"]
     context = analysis.source_authority_context()

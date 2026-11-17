@@ -122,7 +122,7 @@ def calibrated_child_binary(tmp_path_factory, request):
     if request.param == 'graph_rollback':
         text = text.replace('call child(a,b,out,n)', 'if(n<0) then\ncall child(a,b,b,n)\nendif\ncall child(a,b,out,n)')
     original, output, manifest = generate(directory / "case", text, mode="auto", profile=profile,
-        checkout=checkout, scope_execution="graph", facts={"schema_version": 1, "participation": "serial",
+        checkout=checkout, facts={"schema_version": 1, "participation": "serial",
                                  "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}})
     assert manifest["scopes"][0]["estimate_available"]
     objects, commands = [], []

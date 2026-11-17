@@ -42,14 +42,14 @@ end subroutine
             "argument::a": {"storage": "stable", "initialized": "whole", "escapes": False, "allocation_changes": False}
         },
     }
-    options = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
+    options = CompilerOptions(gpu_policy="sections", source_graph=True)
     return [
         form_source_scopes(
             [path],
             "graph_roots::" + root,
             facts=facts,
             options=options,
-            config=OffloadConfig(policy="sections", scope_execution="graph"),
+            config=OffloadConfig(policy="sections"),
         )
         for root in ("first", "second")
     ]
@@ -156,9 +156,9 @@ end subroutine
                                           "escapes": False, "allocation_changes": False}}}
     if different_resource_order:
         facts["captures"]["argument::b"] = dict(facts["captures"]["argument::a"])
-    options = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
+    options = CompilerOptions(gpu_policy="sections", source_graph=True)
     components = [form_source_scopes([path], "shared_roots::" + entry, facts=facts, options=options,
-                  config=OffloadConfig(policy="sections", scope_execution="graph")) for entry in ("first", "second")]
+                  config=OffloadConfig(policy="sections")) for entry in ("first", "second")]
     helper_first = path.read_text().splitlines().index("subroutine adjust(x,n)") + 1
     helper_last = helper_first + helper.splitlines().index("end subroutine")
     helper_edits = []

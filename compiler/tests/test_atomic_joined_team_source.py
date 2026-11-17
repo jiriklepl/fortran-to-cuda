@@ -21,7 +21,7 @@ def emit(tmp_path, *, policy="sections", source=SOURCE, extra_captures=None):
     path = tmp_path / "owner.f90"
     path.write_text(source)
     builder = ScopeBuilder([path], "atomic_owner::step", options=CompilerOptions(opt_level=0),
-        config=OffloadConfig(policy=policy, scope_execution="graph", host_threads=4),
+        config=OffloadConfig(policy=policy, host_threads=4),
         facts={"schema_version": 1, "participation": "serial",
                "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
                "captures": {**{"argument::" + name: dict(FACT) for name in ("a", "b", "p")},
@@ -65,7 +65,7 @@ def test_every_speculative_child_publishes_its_atomic_providers_to_the_owner(tmp
     path = tmp_path / "owner.f90"
     path.write_text(source)
     builder = ScopeBuilder([path], "atomic_owner::run", options=CompilerOptions(opt_level=0),
-        config=OffloadConfig(policy="sections", scope_execution="graph", host_threads=4),
+        config=OffloadConfig(policy="sections", host_threads=4),
         facts={"schema_version": 1, "participation": "serial",
                "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
                "captures": {"argument::"+name: dict(FACT) for name in ("a", "b", "p")}})

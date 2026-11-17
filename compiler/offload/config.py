@@ -17,7 +17,6 @@ class OffloadConfig:
     collective: bool = False
     profile_reason: str | None = None
     scope_transfers: str = "direct"
-    scope_execution: str = "graph"
     # None prices generated workers only. Source-backed original Fortran
     # alternatives require a separately calibrated participation contract.
     native_participation: str | None = None
@@ -33,8 +32,6 @@ class OffloadConfig:
             raise ValueError("Pipelined slab batching was removed; use shared graph execution")
         if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
             raise ValueError("Unknown scope transfer mode")
-        if self.scope_execution != "graph":
-            raise ValueError("Source scopes use graph execution")
         if self.native_participation not in {None, "serial", "fork_join", "fork_join_runtime", "existing_team", "unknown"}:
             raise ValueError("Unknown native Fortran participation")
         if self.source_applicability is not None:

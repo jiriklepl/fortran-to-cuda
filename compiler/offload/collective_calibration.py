@@ -398,7 +398,7 @@ def calibrate_collective(profile, args, directory, nvcc, host, *, run, tool):
             [original],
             "team_operations::step",
             facts=facts,
-            options=CompilerOptions(gpu_policy="sections", memory_model="scoped"),
+            options=CompilerOptions(gpu_policy="sections"),
             config=OffloadConfig("sections", None, args.threads, True),
         )
         if manifest["scope_count"] != 1 or manifest["scopes"][0]["gpu_leaves"] != ["team_operations::work"]:
@@ -626,7 +626,7 @@ def _validate_auto_holdout(profile, args, root, nvcc, host, fortran, flags, envi
         [original],
         "team_operations::step",
         facts=fixture_facts(original, args.threads),
-        options=CompilerOptions(gpu_policy="auto", memory_model="scoped"),
+        options=CompilerOptions(gpu_policy="auto"),
         config=OffloadConfig("auto", profile, args.threads, True),
     )
     if manifest["scope_count"] != 1 or not manifest["automatic_estimate_available"]:

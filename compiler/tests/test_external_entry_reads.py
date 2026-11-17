@@ -136,7 +136,7 @@ def emitted(tmp_path, *, conditional=False):
              "captures": {"argument::" + name: {"storage": "stable", "escapes": False,
                  "allocation_changes": False, "initialized": "none"} for name in ("a", "b")}}
     builder = ScopeBuilder([path], "external_fixture::advance", facts=facts,
-        options=CompilerOptions(), config=OffloadConfig(policy="sections", scope_execution="graph"),
+        options=CompilerOptions(), config=OffloadConfig(policy="sections"),
         contracts={"external_fixture::advance": {"device_tasks": [task]}})
     outputs, report = builder.run()
     for relative, content in outputs.items():

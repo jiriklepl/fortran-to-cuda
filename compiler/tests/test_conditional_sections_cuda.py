@@ -105,7 +105,7 @@ def emit_chain(tmp_path):
     path = tmp_path/'original.f90'
     path.write_text(SOURCE)
     builder = ScopeBuilder([path], 'conditional_chain::step', options=CompilerOptions(opt_level=0),
-        config=OffloadConfig(policy='sections', scope_execution='graph', host_threads=4),
+        config=OffloadConfig(policy='sections', host_threads=4),
         facts={'schema_version': 1, 'participation': 'serial',
                'sources': {str(path): sha256(path.read_bytes()).hexdigest()},
                'captures': {'argument::'+name: dict(FACT) for name in ('a', 'p', 'out')}})

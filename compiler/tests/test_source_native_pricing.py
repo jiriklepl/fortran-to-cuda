@@ -67,8 +67,7 @@ end module
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::" + name: deepcopy(FACT) for name in names}}
     return path, ScopeBuilder([path], "stencil::" + ("outer" if child else "advance"), facts=facts,
-        options=CompilerOptions(), config=OffloadConfig(policy="auto", scope_execution="graph",
-                                                        profile=live_profile(), scope_transfers=transfers)).run()
+        options=CompilerOptions(), config=OffloadConfig(policy="auto", profile=live_profile(), scope_transfers=transfers)).run()
 
 
 def test_live_pricing_requires_separate_measured_management_and_retains_historical_endpoint(tmp_path):

@@ -13,9 +13,10 @@ class CompilerOptions:
     fallback: str = "error"
     indexing: str | None = None
     gpu_policy: str = "sections"
-    memory_model: str = "scoped"
     scope_transfers: str = "direct"
-    scope_execution: str | None = None
+    # The function is one leaf of a checked source graph: its tasks are ordered
+    # along the dependency schedule, and automatic placement keeps fusion.
+    source_graph: bool = False
 
     def __post_init__(self) -> None:
         if self.opt_level not in (0, 1):
@@ -28,16 +29,14 @@ class CompilerOptions:
             raise CompilationError("fallback must be error or host")
         if self.indexing not in (None, "source", "auto"):
             raise CompilationError("indexing must be source or auto")
-        if self.memory_model != "scoped":
-            raise CompilationError("ordinary-call generation was removed; use caller-owned scoped memory")
         if self.gpu_policy not in {"sections", "auto"}:
             raise CompilationError("ordinary GPU policies were removed; use sections or auto")
         if self.scope_transfers == "pipelined":
             raise CompilationError("pipelined slab batching was removed; use shared graph execution")
         if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
             raise CompilationError("scope transfers must be direct, pinned, auto, or coalesced")
-        if self.scope_execution not in {None, "graph"}:
-            raise CompilationError("source scopes use graph execution")
+        if type(self.source_graph) is not bool:
+            raise CompilationError("source_graph must be a boolean")
 
     @property
     def resolved_schedule(self) -> str:

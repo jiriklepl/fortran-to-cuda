@@ -54,7 +54,7 @@ def swap_binaries(tmp_path_factory):
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(source): sha256(source.read_bytes()).hexdigest()},
              "captures": {"argument::a": dict(FACT), "argument::b": dict(FACT)}}
     outputs, manifest = ScopeBuilder([source], "fields::advance", facts=facts, options=CompilerOptions(),
-                                    config=OffloadConfig(policy="sections", scope_execution="graph")).run()
+                                    config=OffloadConfig(policy="sections")).run()
     assert not manifest["scopes"][0]["boundaries"]
     build = directory / "build"
     build.mkdir()

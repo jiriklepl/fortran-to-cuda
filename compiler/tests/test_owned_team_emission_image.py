@@ -45,7 +45,7 @@ def team_fixture(directory, kind="combined", *, companion=False, policy="section
         facts["captures"]["quartz_numerics::coefficient"] = deepcopy(FACT)
     builder = ScopeBuilder(
         paths, ENTRY if companion else CHILD, facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph", host_threads=4),
+        config=OffloadConfig(policy="sections", host_threads=4),
     )
     if policy == "auto":
         from compiler.offload.collective_calibration import profile_with_collective_measurements
@@ -315,7 +315,7 @@ def test_global_admission_checks_are_constant_for_original_teams(tmp_path, monke
     }
     parent = ScopeBuilder(
         [path], "bounded_team::step", facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph", host_threads=4),
+        config=OffloadConfig(policy="sections", host_threads=4),
     )
     original = StorageAdmission._check
     checks = []

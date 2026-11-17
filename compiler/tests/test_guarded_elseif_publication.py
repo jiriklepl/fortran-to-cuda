@@ -91,7 +91,7 @@ def emit(directory, monkeypatch, *, managed=False, nested=False, source=None):
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": captures}
     builder = ScopeBuilder([path], "guarded_fixture::advance", facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     original = LexicalOwner._emit_checked_lexical
     owners = []
 

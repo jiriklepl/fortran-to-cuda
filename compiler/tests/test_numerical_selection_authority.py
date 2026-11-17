@@ -15,8 +15,8 @@ from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
 
 ENTRY = "selection_owner::advance"
-OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
-CONFIG = OffloadConfig(policy="sections", scope_execution="graph")
+OPTIONS = CompilerOptions(gpu_policy="sections", source_graph=True)
+CONFIG = OffloadConfig(policy="sections")
 
 
 def selection_fixture(directory, *, padding=1, unsupported=False, team=False):

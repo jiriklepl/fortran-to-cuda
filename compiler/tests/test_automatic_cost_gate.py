@@ -9,7 +9,7 @@ from compiler.tests.test_numerical_sources import package
 from compiler.tests.test_source_scopes import FACT, PROGRAM
 
 
-def builder(tmp_path, *, execution="bounded", config=None, normalized=False, entry="step", corrupt=False):
+def builder(tmp_path, *, config=None, normalized=False, entry="step", corrupt=False):
     if normalized:
         path, lowered, document = package(tmp_path)
     else:
@@ -23,7 +23,7 @@ def builder(tmp_path, *, execution="bounded", config=None, normalized=False, ent
     if corrupt:
         facts["sources"][str(path)] = "0" * 64
     value = ScopeBuilder([path], entry, facts=facts, options=CompilerOptions(),
-                         config=config or OffloadConfig("auto", scope_execution=execution),
+                         config=config or OffloadConfig("auto"),
                          numerical_sources=document)
     return path, lowered, value
 

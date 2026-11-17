@@ -144,7 +144,7 @@ def fixture(directory, source=SOURCE):
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"forcing::" + name: dict(fact) for name in ("u", "v", "w", "output")}}
     builder = ScopeBuilder([path], "forcing::advance", facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"),
+        config=OffloadConfig(policy="sections"),
         contracts={"forcing::advance": {"native_ancestor": {"version": 1,
             "device_roots": ["forcing::producer", "forcing::consumer"]}}})
     return path, builder

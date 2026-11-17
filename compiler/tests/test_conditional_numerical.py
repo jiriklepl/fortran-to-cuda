@@ -170,7 +170,7 @@ def test_normal_builder_seals_source_context_and_emits_guarded_sections(tmp_path
     path = tmp_path/'normal.f90'
     path.write_text(SOURCE)
     builder = ScopeBuilder([path], ENTRY, options=CompilerOptions(opt_level=0),
-        config=OffloadConfig(policy='sections', scope_execution='graph', host_threads=4),
+        config=OffloadConfig(policy='sections', host_threads=4),
         facts={'schema_version':1, 'participation':'serial',
                'sources':{str(path):sha256(path.read_bytes()).hexdigest()},
                'captures':{'argument::a':dict(FACT)}})

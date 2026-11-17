@@ -79,7 +79,7 @@ def _compile_priced_source(directory, child, *, transfers="direct"):
              "sources": {str(original): sha256(original.read_bytes()).hexdigest()},
              "captures": {"argument::" + name: deepcopy(FACT) for name in ("a", "b")}}
     builder = ScopeBuilder([original], "stencil::" + ("outer" if child else "advance"), facts=facts,
-        options=CompilerOptions(), config=OffloadConfig(policy="auto", scope_execution="graph", profile=profile,
+        options=CompilerOptions(), config=OffloadConfig(policy="auto", profile=profile,
                                                        scope_transfers=transfers))
     outputs, manifest = builder.run()
     assert manifest["scope_count"] == 1, manifest.get("graph_owner_attempt")

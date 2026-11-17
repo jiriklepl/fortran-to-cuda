@@ -56,7 +56,7 @@ def fixture(directory, *, automatic=False, include=False, source=SOURCE):
     facts={'schema_version':1,'participation':'serial','sources':hashes,
         'captures':{'scratch_team::'+name:dict(fact) for name in ('u','a','b')}}
     builder=ScopeBuilder([original],'scratch_team::advance',facts=facts,options=CompilerOptions(),
-        config=OffloadConfig(policy='sections',scope_execution='graph'),analysis_sources=configured,
+        config=OffloadConfig(policy='sections'),analysis_sources=configured,
         contracts={'scratch_team::advance':{'native_ancestor':{'version':1,
             'device_roots':['scratch_team::producer','scratch_team::consumer']}}})
     routine=builder.analysis.routines['scratch_team::diffusion']

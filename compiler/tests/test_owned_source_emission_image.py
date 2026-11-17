@@ -52,7 +52,7 @@ end module
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::" + name: deepcopy(FACT) for name in ("a", "b")}}
     return path, ScopeBuilder([path], "stencil::outer", facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy=policy, scope_execution="graph", scope_transfers=transfers,
+        config=OffloadConfig(policy=policy, scope_transfers=transfers,
                              profile=live_profile() if policy == "auto" else None))
 
 

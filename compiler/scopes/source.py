@@ -649,8 +649,7 @@ class ScopeBuilder:
                     from compiler.offload.source_compute import _native_participation
                     participation = _native_participation(analysis, procedure, summary["native_completion"])
                     sources = generate_sources(function, plan,
-                        offload_config=self.config.for_numerical_entry(native_participation=participation),
-                        memory_model="scoped")
+                        offload_config=self.config.for_numerical_entry(native_participation=participation))
                     if sources.scoped:
                         result = sources
                     else:
@@ -2815,7 +2814,7 @@ class ScopeBuilder:
                     "definition_authority": False,
                     "supported_consumers": ["original_lexical", "original_module_companion"],
                     "unsupported_consumers": ["synthetic_owner", "qualified_collective_owner"]},
-                "scope_execution": self.config.scope_execution,
+                "scope_execution": "graph",
                 **({"reached_plan_schema_version": 1}),
                 **({"graph_owner_attempt": deepcopy(self.graph_owner_attempt)}
                    if hasattr(self, "graph_owner_attempt") else {}),

@@ -24,7 +24,7 @@ def fixture(tmp_path, *, scalar=False):
     facts = {"schema_version": 1, "participation": "serial", "sources": dict(_analysis.sources),
              "captures": {"argument::" + name: dict(FACT) for name in ("a", "b", "scale")}}
     builder = ScopeBuilder([path], routine.qualified, facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     analysis, routine = builder.analysis, builder.entry
     nodes = tuple(routine.execution.content)
     proof = prove_tile_private_team(analysis, routine, nodes)

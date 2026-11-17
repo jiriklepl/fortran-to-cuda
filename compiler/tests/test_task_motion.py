@@ -9,7 +9,7 @@ from compiler.driver.pipeline import prepare_function
 from compiler.frontend import lower_file
 
 ROOT = Path(__file__).resolve().parents[2]
-GRAPH = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
+GRAPH = CompilerOptions(gpu_policy="sections", source_graph=True)
 
 
 @pytest.mark.parametrize(("case", "filename"), [("CDU", "cdu.f90"), ("CDV", "cvd.f90"), ("CDW", "cdw.f90")])

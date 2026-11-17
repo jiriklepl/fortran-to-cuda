@@ -83,7 +83,7 @@ def transfer_profile():
 def numerical(tmp_path, source=FLAT, mode="pipelined", profile=None):
     path = tmp_path / "numerical.f90"
     path.write_text(source)
-    options = CompilerOptions(opt_level=0, gpu_policy="sections", memory_model="scoped", scope_transfers=mode)
+    options = CompilerOptions(opt_level=0, gpu_policy="sections", scope_transfers=mode)
     function, plan = prepare_function(lower_file(path, "advance"), options=options)
     config = OffloadConfig("sections", transfer_profile() if profile is None else profile, 4, scope_transfers=mode)
     return generate_scoped(function, plan, config, "common_functions.cuh", runtime_id=read_scoped_runtime()[1]["runtime_id"])

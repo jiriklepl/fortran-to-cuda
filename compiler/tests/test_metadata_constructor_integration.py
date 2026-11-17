@@ -31,7 +31,7 @@ def emit(tmp_path, *, managed=False, pure=True):
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): digest(path)},
              "captures": captures}
     builder = ScopeBuilder([path], "external_fixture::advance", facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"), contracts=analysis.contracts)
+        config=OffloadConfig(policy="sections"), contracts=analysis.contracts)
     outputs, report = builder.run()
     return builder, outputs[report["sources"][str(path)]["replacement"]], report
 

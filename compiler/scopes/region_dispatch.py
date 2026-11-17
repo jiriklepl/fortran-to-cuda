@@ -487,7 +487,7 @@ class InlineRegions:
         # never a separately generated numerical worker.
         config = self.builder.config.for_numerical_entry(
             collective=collective, native_participation=native_participation, source_applicability=applicability)
-        generated = generate_sources(function, plan, offload_config=config, memory_model="scoped")
+        generated = generate_sources(function, plan, offload_config=config)
         if generated.scoped is None:
             raise CompilationError("inline numerical candidate has no shared numerical entry")
         if any(item.name in generated.scoped["planning"]["scalar_inputs"]

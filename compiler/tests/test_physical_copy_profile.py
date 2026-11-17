@@ -234,7 +234,7 @@ def test_collective_decline_preserves_independently_valid_copy_costs(tmp_path, m
         value["scoped"]["runtime_id"] = "f" * 64
     source = tmp_path / "numerical.f90"
     source.write_text(FLAT)
-    options = CompilerOptions(opt_level=0, gpu_policy="sections", memory_model="scoped", scope_transfers=mode)
+    options = CompilerOptions(opt_level=0, gpu_policy="sections", scope_transfers=mode)
     function, plan = prepare_function(lower_file(source, "advance"), options=options)
     config = OffloadConfig("sections", value, 4, True, scope_transfers=mode)
     emitted = generate_scoped(function, plan, config, "common_functions.cuh",

@@ -89,7 +89,7 @@ def test_graph_retains_exchange_as_a_lifetime_task_with_postmutation_checks(tmp_
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::a": dict(FACT), "argument::b": dict(FACT)}}
     outputs, report = ScopeBuilder([path], "fields::advance", facts=facts, options=CompilerOptions(),
-                                  config=OffloadConfig(policy="sections", scope_execution="graph")).run()
+                                  config=OffloadConfig(policy="sections")).run()
     owner, = report["scopes"]
     assert not owner["boundaries"]
     member, = owner["checked_execution_plan"]["storage_epoch"]["members"]

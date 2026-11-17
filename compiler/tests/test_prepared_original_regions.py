@@ -28,8 +28,8 @@ def prepare_original_region(analysis, procedure, exact_original_selection, *, op
     return provider.prepare(analysis, procedure, exact_original_selection, consume=consume)
 
 ENTRY = "renamed_region::form_field"
-OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
-CONFIG = OffloadConfig(policy="sections", scope_execution="graph")
+OPTIONS = CompilerOptions(gpu_policy="sections", source_graph=True)
+CONFIG = OffloadConfig(policy="sections")
 ASSOCIATION_SOURCE = """module original_aliases
 implicit none
 contains

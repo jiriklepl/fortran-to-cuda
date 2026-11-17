@@ -27,7 +27,6 @@ class GeneratedSources:
 
 def generate_sources(
     function: FunctionIR, plan: ExecutionPlan, *, common_header: str = "common_functions.cuh", offload_config=None,
-    memory_model: str = "scoped",
 ) -> GeneratedSources:
     """Emit the shared graph backend; callers own storage and publication."""
     import json
@@ -36,8 +35,6 @@ def generate_sources(
     from compiler.emission.cuda.scoped import generate_scoped
     from compiler.offload.config import OffloadConfig
 
-    if memory_model != "scoped":
-        raise CompilationError("ordinary-call generation was removed; use caller-owned scoped memory")
     config = offload_config or OffloadConfig(policy="sections")
     if config.policy not in {"sections", "auto"}:
         raise CompilationError("ordinary GPU policies were removed; use sections or auto with shared graph execution")

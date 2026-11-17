@@ -15,7 +15,7 @@ from compiler.offload.config import OffloadConfig
 
 
 @pytest.mark.parametrize("extra", [["--scope-cost", "missing.json"], ["--scope-measurement", "native"],
-                                   ["--scope-execution", "bounded"], ["--scope-execution", "reached"]])
+                                   ["--scope-execution", "graph"], ["--memory-model", "scoped"]])
 def test_cli_rejects_removed_flags_without_touching_output(tmp_path, extra):
     output = tmp_path / "output"
     output.mkdir()
@@ -32,29 +32,22 @@ def test_cli_rejects_removed_flags_without_touching_output(tmp_path, extra):
 
 
 def test_public_configuration_has_no_legacy_execution_or_window_cost_constructors():
-    assert OffloadConfig().scope_execution == "graph"
-    assert CompilerOptions().scope_execution is None
-    for execution in ("bounded", "reached"):
-        with pytest.raises(ValueError, match="graph execution"):
-            OffloadConfig(scope_execution=execution)
-        with pytest.raises(CompilationError, match="graph execution"):
-            CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution=execution)
-    for obsolete in ("exact_window", "scope_measurement"):
+    assert CompilerOptions().source_graph is False
+    with pytest.raises(CompilationError, match="boolean"):
+        CompilerOptions(source_graph="graph")
+    for obsolete in ("memory_model", "scope_execution"):
+        with pytest.raises(TypeError, match=obsolete):
+            CompilerOptions(**{obsolete: None})
+    for obsolete in ("exact_window", "scope_measurement", "scope_execution"):
         with pytest.raises(TypeError, match=obsolete):
             OffloadConfig(**{obsolete: None})
 
 
-def test_form_scopes_defaults_to_graph_scoped_memory_and_sections(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["compiler", "--form-scopes", "--scope-facts", "facts.json",
-                                     "--input", "source.f90", "--kernel", "advance"])
+@pytest.mark.parametrize("scopes", [["--form-scopes", "--scope-facts", "facts.json"], []])
+def test_placement_defaults_to_sections_with_and_without_source_scopes(monkeypatch, scopes):
+    monkeypatch.setattr(sys, "argv", ["compiler", *scopes, "--input", "source.f90", "--kernel", "advance"])
     args = _parse_args()
-    assert (args.scope_execution, args.memory_model, args.gpu_policy) == ("graph", "scoped", "sections")
-
-
-def test_standalone_defaults_use_shared_graph_interface(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["compiler", "--input", "source.f90", "--kernel", "advance"])
-    args = _parse_args()
-    assert (args.scope_execution, args.memory_model, args.gpu_policy) == (None, "scoped", "sections")
+    assert (args.form_scopes, args.gpu_policy) == (bool(scopes), "sections")
 
 
 def test_default_source_cli_emits_graph_artifacts(tmp_path):

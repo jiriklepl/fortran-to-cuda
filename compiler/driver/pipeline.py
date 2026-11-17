@@ -17,13 +17,13 @@ def prepare_function(
     # legal fusion. Its entry/replica lifetime does not depend on source passes.
     # Calibrated legacy partitions still price their original units.
     graph_report = ()
-    if options.scope_execution == "graph" and options.opt_level:
+    if options.source_graph and options.opt_level:
         from compiler.transforms.task_motion import order_function_tasks
 
         function, ordered = order_function_tasks(function, options=options)
         graph_report = ordered.reports
     preparation = (replace(options, opt_level=0)
-                   if options.gpu_policy == "auto" and options.scope_execution != "graph" else options)
+                   if options.gpu_policy == "auto" and not options.source_graph else options)
     function, plan = optimize_function(function, options=preparation)
     if graph_report:
         plan = replace(plan, reports=(*graph_report, *plan.reports))

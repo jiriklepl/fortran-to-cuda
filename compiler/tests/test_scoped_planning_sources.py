@@ -35,7 +35,7 @@ def generate(tmp_path, monkeypatch, source=PROGRAM, *, captures=None, numerical_
              "captures": captures or {"argument::a": FACT, "argument::b": {**FACT, "initialized": "none"},
                                        "argument::out": {**FACT, "initialized": "none"}}}
     outputs, report = form_source_scopes([path], "step", facts=facts,
-                                         options=CompilerOptions(fallback="host", gpu_policy="auto", memory_model="scoped"),
+                                         options=CompilerOptions(fallback="host", gpu_policy="auto"),
                                          config=OffloadConfig("auto", profile), numerical_sources=numerical_sources)
     return outputs, report
 

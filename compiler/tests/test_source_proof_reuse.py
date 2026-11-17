@@ -117,7 +117,7 @@ def test_native_fragment_issues_copied_authority_once_after_capture_facts(tmp_pa
     proof = analysis.worksharing_native_completion(routine.qualified, joined, (loops[0],))
     builder = SimpleNamespace(analysis=analysis, entry=routine,
                               inline=SimpleNamespace(original_selection=lambda nodes: tuple(nodes)),
-                              config=SimpleNamespace(scope_execution="reached"))
+                              config=SimpleNamespace())
     issuances = []
     original = SourceEffects.worksharing_native_completion
 

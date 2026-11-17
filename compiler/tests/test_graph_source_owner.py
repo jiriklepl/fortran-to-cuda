@@ -90,7 +90,7 @@ def emit(directory, source=SOURCE, *, policy="sections", captures=None):
         "graph_fixture::advance",
         facts=facts,
         options=CompilerOptions(),
-        config=OffloadConfig(policy=policy, scope_execution="graph"),
+        config=OffloadConfig(policy=policy),
     )
     outputs, report = builder.run()
     return path, outputs, report

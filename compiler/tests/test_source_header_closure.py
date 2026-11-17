@@ -41,7 +41,7 @@ def test_ordinary_entry_headers_compile_without_aggregate_include_directory(tmp_
     compiler = shutil.which("g++-14") or shutil.which("g++")
     if not compiler:
         pytest.skip("C++ compiler unavailable")
-    _, output, _ = generate(tmp_path / "source", scope_execution="graph", entry="original::step")
+    _, output, _ = generate(tmp_path / "source", entry="original::step")
     entries = sorted(output.glob("entries/*/scoped_entry.hpp"))
     assert entries, "fixture must exercise ordinary numerical entry packaging"
     for number, header in enumerate(entries):

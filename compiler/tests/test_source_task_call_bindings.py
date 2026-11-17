@@ -75,7 +75,7 @@ end subroutine
         "caller::step",
         facts=facts,
         options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"),
+        config=OffloadConfig(policy="sections"),
     )
 
 

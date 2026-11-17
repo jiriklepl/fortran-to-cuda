@@ -174,7 +174,7 @@ end module
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::" + name: deepcopy(FACT) for name in ("a", "b")}}
     builder = ScopeBuilder([path], "stencil::" + ("outer" if child else "advance"), facts=facts,
-        options=CompilerOptions(), config=OffloadConfig(policy="auto", scope_execution="graph", profile=measured_fixture()))
+        options=CompilerOptions(), config=OffloadConfig(policy="auto", profile=measured_fixture()))
     outputs, report = builder.run()
     scope, = report["scopes"]
     task, = scope["source_device_tasks"]

@@ -103,7 +103,7 @@ def sealed_emission(directory):
     facts = {'schema_version': 1, 'participation': 'serial', 'sources': {str(original): sha256(original.read_bytes()).hexdigest()},
              'captures': {'opaque_chain::' + name: dict(fact) for name in ('values', 'output')}}
     builder = ScopeBuilder([original], 'opaque_chain::advance', facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy='sections', scope_execution='graph'))
+        config=OffloadConfig(policy='sections'))
     outputs, report = builder.run()
     (directory / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     assert report['scope_count'] == 1, report.get('graph_owner_attempt')

@@ -50,7 +50,7 @@ def source_builder(tmp_path, *, guarded=True, initialized="whole", text=None):
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"formal_reduction::" + name: dict(fact) for name in ("values", "output")}}
     builder = ScopeBuilder([path], CALLER, facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     return path, builder
 
 

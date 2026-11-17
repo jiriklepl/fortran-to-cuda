@@ -134,7 +134,7 @@ def emit(directory, monkeypatch, *, queued=True, source=SOURCE, entry="stencil::
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::" + name: dict(FACT) for name in captures}}
     builder = ScopeBuilder([path], entry, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"), facts=facts)
+                           config=OffloadConfig(policy="sections"), facts=facts)
     outputs, manifest = builder.run()
     return outputs, manifest, facts
 

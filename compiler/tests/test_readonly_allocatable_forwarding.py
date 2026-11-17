@@ -49,8 +49,8 @@ def fixture(tmp_path, source=SOURCE, initialized="none"):
              "captures": {"argument::" + name: {"storage": "stable", "initialized": initialized if name == "q" else "whole",
                  "escapes": False, "allocation_changes": False} for name in ("a", "q")}}
     return ScopeBuilder([path], "forwarding::advance", facts=facts,
-        options=CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph"),
-        config=OffloadConfig(policy="sections", scope_execution="graph"))
+        options=CompilerOptions(gpu_policy="sections", source_graph=True),
+        config=OffloadConfig(policy="sections"))
 
 
 def generate(tmp_path, source=SOURCE, initialized="none"):

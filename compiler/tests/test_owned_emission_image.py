@@ -30,7 +30,7 @@ def source_builder(directory, *, source=None):
     }
     builder = ScopeBuilder(
         [path], "local_owner::step", facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"),
+        config=OffloadConfig(policy="sections"),
     )
     return path, builder
 
@@ -394,7 +394,7 @@ def test_failure_in_owned_route_never_adopts_candidate_artifacts(tmp_path, monke
 def test_preparation_pins_absent_generation_marker(tmp_path):
     from compiler.tests.test_checked_execution_plan import scanned
 
-    with scanned(tmp_path, config=OffloadConfig(policy="sections", scope_execution="graph")) as (owner, plan):
+    with scanned(tmp_path, config=OffloadConfig(policy="sections")) as (owner, plan):
         assert getattr(owner.builder, "_generation_transaction_marker", None) is None
         token = plan.emission_preparation()
         owner.builder._generation_transaction_marker = object()

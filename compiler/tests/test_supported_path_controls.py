@@ -14,7 +14,7 @@ from compiler.scopes.source import ScopeBuilder
 
 
 def test_every_rearm_requires_eligibility_even_when_return_retention_allows_it():
-    owner = SimpleNamespace(builder=SimpleNamespace(config=SimpleNamespace(scope_execution="graph", policy="sections")),
+    owner = SimpleNamespace(builder=SimpleNamespace(config=SimpleNamespace(policy="sections")),
                             enabled="enabled", retention_allowed="retained", eligibility_allowed="eligible")
     owner.owner = owner
     text = "\n".join(LexicalOwner.rearm_epoch(owner))
@@ -22,7 +22,7 @@ def test_every_rearm_requires_eligibility_even_when_return_retention_allows_it()
 
 
 def test_ordinary_rearm_output_remains_unchanged_without_eligibility_control():
-    owner = SimpleNamespace(builder=SimpleNamespace(config=SimpleNamespace(scope_execution="graph", policy="sections")),
+    owner = SimpleNamespace(builder=SimpleNamespace(config=SimpleNamespace(policy="sections")),
                             enabled="enabled")
     owner.owner = owner
     assert LexicalOwner.rearm_epoch(owner) == ["block", "use fort_scoped_memory, only: fort_scope_serial_caller",

@@ -62,7 +62,7 @@ def generate(tmp_path, text=SOURCE, *, initialized="whole", capture_updates=None
              "captures": {"native_graph::" + name: dict(fact) for name in ("a", "b", "c")}}
     facts["captures"].update(capture_updates or {})
     builder = ScopeBuilder([path], "native_graph::advance", facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     outputs, report = builder.run()
     (tmp_path / "report.json").write_text(json.dumps(report, indent=2))
     return path, builder, outputs, report

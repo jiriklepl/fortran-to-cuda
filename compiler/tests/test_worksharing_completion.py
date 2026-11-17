@@ -70,8 +70,7 @@ def test_proven_subregion_lowers_through_existing_collective_backend(tmp_path):
     region = extract_region(analysis, analysis.routines[PROCEDURE], loops[0], worksharing=proof)
     function, plan = prepare_function(lower_source(region.source, region.entry, source_name='worksharing.f90'))
     assert plan.regions
-    generated = generate_sources(function, plan, memory_model='scoped',
-        offload_config=OffloadConfig(policy='sections', collective=True, host_threads=4))
+    generated = generate_sources(function, plan, offload_config=OffloadConfig(policy='sections', collective=True, host_threads=4))
     team = generated.scoped['team']
     assert team['available']
     assert team['fortran_procedure'] == 'run_team'

@@ -165,7 +165,7 @@ def collective_configured_binary(tmp_path_factory):
     (directory / "profile.json").write_text(json.dumps(profile, indent=2))
     source = directory / "original.f90"
     source.write_text(FLAT)
-    options = CompilerOptions(opt_level=0, gpu_policy="sections", memory_model="scoped", scope_transfers="auto")
+    options = CompilerOptions(opt_level=0, gpu_policy="sections", scope_transfers="auto")
     function, plan = prepare_function(lower_file(source, "advance"), options=options)
     artifacts, manifest = read_scoped_runtime()
     emitted = generate_scoped(function, plan, OffloadConfig("sections", profile, 4, True, scope_transfers="auto"),

@@ -154,7 +154,7 @@ def external_binaries(tmp_path_factory):
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): digest(path)},
              "captures": {"argument::a": dict(FACT), "argument::b": dict(FACT)}}
     outputs, manifest = ScopeBuilder([path], "external_fixture::advance", facts=facts, options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"), contracts=analysis.contracts).run()
+        config=OffloadConfig(policy="sections"), contracts=analysis.contracts).run()
     assert not manifest["scopes"][0]["boundaries"]
     assert len(manifest["scopes"][0]["external_device_tasks"]) == 1
     build = directory / "build"

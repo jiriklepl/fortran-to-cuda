@@ -169,7 +169,7 @@ def sealed_emission(directory, variant):
     facts = {"schema_version": 1, "participation": "serial",
              "sources": {str(original): sha256(original.read_bytes()).hexdigest()}, "captures": captures}
     builder = ScopeBuilder([original], "guarded_device::advance", facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     outputs, report = builder.run()
     assert report["scope_count"] == 1, report.get("graph_owner_attempt")
     validate_checked_execution_plans(json.loads(outputs["scope-manifest.json"]), capture_facts=facts)

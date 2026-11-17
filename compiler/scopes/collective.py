@@ -82,7 +82,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
                 function, plan = prepare_function(function, options=self.options)
                 if not plan.regions:
                     raise CompilationError("numerical source has no parallel region")
-                sources = generate_sources(function, plan, offload_config=self.config, memory_model="scoped")
+                sources = generate_sources(function, plan, offload_config=self.config)
                 if not sources.scoped or not sources.scoped.get("team", {}).get("available"):
                     raise CompilationError("numerical source has no supported full-team entry")
                 result = sources

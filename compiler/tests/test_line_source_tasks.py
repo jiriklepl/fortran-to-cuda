@@ -29,7 +29,7 @@ def source_builder(tmp_path, text=None):
         routine.qualified,
         facts=facts,
         options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"),
+        config=OffloadConfig(policy="sections"),
     )
     return builder, selections(builder.entry)[0]
 
@@ -187,7 +187,7 @@ def emit_chain(tmp_path, *, repeat_first=False):
         routine.qualified,
         facts=facts,
         options=CompilerOptions(),
-        config=OffloadConfig(policy="sections", scope_execution="graph"),
+        config=OffloadConfig(policy="sections"),
     )
     outputs, report = builder.run()
     return path, outputs, report

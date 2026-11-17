@@ -271,7 +271,7 @@ def build_joined_binaries(tmp_path_factory, labels):
         if label == 'zero_budget':
             facts['device_budget_bytes'] = 0
         original, output, manifest = generate(case, source_case(label), entry='joined_owner::step',
-            facts=facts, checkout=checkout, scope_execution='graph' if label == 'many_numerical' else 'reached')
+            facts=facts, checkout=checkout)
         (team, operations), = teams(manifest)
         assert len(team['numerical_units']) == (33 if label == 'many_numerical' else 2)
         assert not manifest['scopes'][0]['boundaries']

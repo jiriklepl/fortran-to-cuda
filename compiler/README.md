@@ -184,8 +184,8 @@ remain independent of fparser and ISL.
 python -m compiler --input input.f90 --kernel advance --json --output-dir out/advance
 ```
 
-Numerical generation now defaults to shared graph execution: `--memory-model
-scoped --gpu-policy sections`. It publishes artifact schema 2 with
+Numerical generation always uses shared graph execution with caller-owned
+storage; `--gpu-policy sections` is the default placement. It publishes artifact schema 2 with
 `shared_entry.cu`, `shared_interface.f90`, the common header and versioned runtime
 artifacts. Compile the sources listed in `build_sources`, linking the common
 runtime once. Apply each source's numerical build contract. `--gpu-policy auto`
@@ -200,9 +200,15 @@ per call is no longer an implicit compiler policy. A checked return preserves
 replicas; returning to an unmanaged owner requires explicit publication or domain
 retirement. Read-only host/device accesses preserve the other valid replica.
 
-The `call` memory model, `always`, `chunked` and `hybrid` GPU policies, ordinary
-CUDA/C++/Fortran output switches, and owned-session application API have been
-removed. The public CLI and Python generator reject them with migration errors.
+The `call` memory model and its `--memory-model` switch, the `always`, `chunked`
+and `hybrid` GPU policies, ordinary CUDA/C++/Fortran output switches, and the
+owned-session application API have been removed. The public CLI and Python
+generator reject them.
+
+`CompilerOptions.source_graph` tells `prepare_function` that the function is one
+leaf of a checked source graph: its tasks are then ordered along the dependency
+schedule before fusion, and automatic placement keeps fusion. `--form-scopes`
+sets it; plain `--kernel` entries leave it off.
 
 For the primary ELMM configurations, use the pipeline's `resident-build` command.
 It generates the hot path and builds the explicitly supplied local Poisson
@@ -343,7 +349,7 @@ Emit a numerical entry that borrows common buffer handles:
 
 ```bash
 python -m compiler --input input.f90 --kernel advance --gpu-policy sections \
-  --memory-model scoped --json --output-dir out/scoped-entry
+  --json --output-dir out/scoped-entry
 ```
 
 Scoped numerical generation publishes artifact schema 2: `shared_entry.cu`,
@@ -434,7 +440,7 @@ and archived compiler.
 ```bash
 python -m compiler --input application.f90 --kernel application::advance \
   --source-file helpers.f90 --form-scopes --scope-facts captures.json \
-  --memory-model scoped --gpu-policy sections --json --output-dir out/scopes
+  --gpu-policy sections --json --output-dir out/scopes
 ```
 
 The capture document has `schema_version: 1`, `participation: "serial"`, and
@@ -605,9 +611,8 @@ establish an allocation's numerical bounds.
 An adapter verifies these artifacts, applies replacements to an application copy,
 and links the common runtime once. It does not inspect compiler IR or CUDA text.
 No accepted scopes is a successful unchanged/native result.
-The independent pipeline exposes this path through opt-in
-`--memory-model scoped`, an explicit scope entry/source selection, and a capture
-facts file. It exports configured and normalized source packages and consumes
+The independent pipeline exposes this path through an explicit scope
+entry/source selection and a capture facts file. It exports configured and normalized source packages and consumes
 these public build roles; it does not infer initialization from argument intents.
 See [the pipeline interface](../elmm-pipeline/README.md) for its options.
 
@@ -821,7 +826,7 @@ for the exact common runtime:
 python -m compiler.offload.calibrate --output hardware.json --threads 4 \
   --precision 64 --cuda-host-cxx g++-14 --scoped-costs
 python -m compiler --input application.f90 --kernel application::advance \
-  --form-scopes --scope-facts captures.json --memory-model scoped --gpu-policy auto \
+  --form-scopes --scope-facts captures.json --gpu-policy auto \
   --calibration-profile hardware.json --host-threads 4 --json --output-dir out/scopes
 ```
 
@@ -2838,7 +2843,7 @@ general bounds checking and broader Fortran semantics are outside this subset.
 ### Retired source-window configuration
 
 The public CLI no longer accepts `--scope-cost`, `--scope-measurement`, or
-`--scope-execution bounded|reached`. Source graphs use canonical memory coherence,
+`--scope-execution`. Source graphs use canonical memory coherence,
 checked dependencies and hardware costs. The historical complete-window evidence
 protocols (exact-window, scope measurement, checked-interval selection costs and
 application-build attestation) have been removed together with their reference

@@ -43,7 +43,7 @@ def scanned(directory, before_plan=None, *, config=None, source=SOURCE):
 def test_immutable_handoff_avoids_rederiving_geometry_and_rechecks_registry(tmp_path, monkeypatch):
     from compiler.frontend.numerical_preparation import PreparedOriginalRegion
 
-    with scanned(tmp_path, config=OffloadConfig(policy="sections", scope_execution="graph")) as (_owner, plan):
+    with scanned(tmp_path, config=OffloadConfig(policy="sections")) as (_owner, plan):
         proof = plan._numerical_authorities[0]
 
         def unexpected(*_args, **_kwargs):

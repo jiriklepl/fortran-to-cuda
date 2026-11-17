@@ -157,13 +157,13 @@ def executable(request, tmp_path_factory):
     directory = tmp_path_factory.mktemp("generated_graph_views" if request.param else "generated_graph")
     source = directory / "original.f90"
     source.write_text(SOURCE)
-    options = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
+    options = CompilerOptions(gpu_policy="sections", source_graph=True)
     function, plan = prepare_function(lower_file(source, "entry"), options=options)
     assert len(plan.regions) == 2
     generated = generate_scoped(
         function,
         plan,
-        OffloadConfig(policy="sections", scope_execution="graph"),
+        OffloadConfig(policy="sections"),
         "common_functions.cuh",
         root_views=request.param,
     )

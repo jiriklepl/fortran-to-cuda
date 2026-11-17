@@ -32,27 +32,10 @@ def test_default_generation_uses_scoped_transfer_ownership(transfers):
     from compiler.offload.config import OffloadConfig
 
     options = CompilerOptions(scope_transfers=transfers)
-    assert options.memory_model == "scoped"
     function, plan = prepare_function(lower_file(Path(__file__).parent / "fixtures/fill_array.f90", "fill_array"),
                                      options=options)
     generated = generate_sources(function, plan, offload_config=OffloadConfig(scope_transfers=transfers))
     assert generated.scoped["transfer_configuration"]["requested"] == transfers
-
-
-def test_removed_call_mode_preserves_public_outputs(tmp_path):
-    output = tmp_path / "generated"
-    output.mkdir()
-    expected = {name: f"original {name}" for name in OUTPUT_FILES}
-    for name, text in expected.items():
-        (output / name).write_text(text)
-    result = subprocess.run([
-        sys.executable, "-m", "compiler", "--input",
-        str(Path(__file__).parent / "fixtures/fill_array.f90"), "--kernel", "fill_array",
-        "--output-dir", str(output), "--memory-model", "call", "--json",
-    ], cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
-    assert result.returncode != 0
-    assert "ordinary-call generation was removed" in result.stderr
-    assert {path.name: path.read_text() for path in output.iterdir()} == expected
 
 
 @pytest.mark.parametrize("existing_outputs", [False, True], ids=["new-directory", "existing-outputs"])

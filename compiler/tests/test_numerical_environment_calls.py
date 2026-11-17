@@ -17,8 +17,8 @@ from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
 
 ENTRY = "environment_route::evolve"
-OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
-CONFIG = OffloadConfig(policy="sections", scope_execution="graph")
+OPTIONS = CompilerOptions(gpu_policy="sections", source_graph=True)
+CONFIG = OffloadConfig(policy="sections")
 STRUCTURAL_SOURCE = """module nested_calls
 type receiver
 contains

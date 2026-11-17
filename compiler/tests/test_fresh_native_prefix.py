@@ -48,7 +48,7 @@ def emit(directory, source=SOURCE, *, entry="fresh_prefix::advance", captures=No
              "captures": {name: dict(fact) for name in ("argument::a", "argument::b", "metadata::tile")}}
     facts["captures"].update(captures or {})
     builder = ScopeBuilder([path], entry, facts=facts,
-        options=CompilerOptions(), config=OffloadConfig(policy="sections", scope_execution="graph"))
+        options=CompilerOptions(), config=OffloadConfig(policy="sections"))
     outputs, report = builder.run()
     text = outputs[report["sources"][str(path)]["replacement"]]
     return path, outputs, report, text

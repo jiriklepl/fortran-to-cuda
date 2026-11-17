@@ -324,7 +324,7 @@ def compiled_team(tmp_path_factory):
         output = directory / entry
         result = _run([sys.executable, "-m", "compiler", "--input", str(original), "--kernel", entry,
                        "--fallback", "host", "--gpu-policy", "sections", "--gpu-collective", "--host-threads", "4",
-                       "--memory-model", "scoped", "--json", "--output-dir", str(output),
+                       "--json", "--output-dir", str(output),
                        # The guarded client addresses both source loops; default fusion would merge them.
                        *(["--opt-level", "0"] if entry == "guarded" else [])], checkout, env=env)
         reports[entry] = json.loads(result.stdout)

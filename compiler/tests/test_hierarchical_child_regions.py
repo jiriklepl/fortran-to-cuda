@@ -85,7 +85,7 @@ def fixture(tmp_path, source=SOURCE):
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"hierarchical::"+name: dict(fact) for name in ("left", "right")}}
     builder = ScopeBuilder([path], ENTRY, facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     return path, builder
 
 
@@ -326,7 +326,7 @@ def test_native_counted_read_rejects_discarded_descriptor_generation(tmp_path):
     path, original = fixture(tmp_path, READ_FIRST_SOURCE)
     entry = "hierarchical::middle"
     builder = ScopeBuilder([path], entry, facts=original.facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     analysis = builder.analysis
     selection = tuple(node for node in builder.entry.execution.content
                       if type(node).__name__ == "Block_Nonlabel_Do_Construct")

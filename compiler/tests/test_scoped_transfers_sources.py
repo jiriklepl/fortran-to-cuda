@@ -17,7 +17,7 @@ from compiler.tests.test_structured_offload import SOURCE
 def emit(tmp_path, transfers, *, profile=None, collective=False):
     source = tmp_path / "source.f90"
     source.write_text(SOURCE)
-    options = CompilerOptions(gpu_policy="auto", memory_model="scoped", scope_transfers=transfers)
+    options = CompilerOptions(gpu_policy="auto", scope_transfers=transfers)
     function, plan = prepare_function(lower_file(source, "advance"), options=options)
     return generate_scoped(function, plan, OffloadConfig("auto", profile, 4, collective, scope_transfers=transfers),
                            "common_functions.cuh", runtime_id=read_scoped_runtime()[1]["runtime_id"])

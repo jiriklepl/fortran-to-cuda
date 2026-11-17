@@ -40,7 +40,7 @@ def emit_chain(tmp_path):
             'argument::gate': {**FACT, 'initialized': 'none', 'lifetime': 'invocation'}}}
     builder = ScopeBuilder([path], 'atomic_owner::exercise', facts=facts,
         options=CompilerOptions(opt_level=0),
-        config=OffloadConfig(policy='sections', scope_execution='graph', host_threads=4))
+        config=OffloadConfig(policy='sections', host_threads=4))
     outputs, report = builder.run()
     (tmp_path / "source-report.json").write_text(json.dumps(report, indent=2) + "\n")
     return outputs, report, facts

@@ -133,7 +133,7 @@ def emit(tmp_path):
         [path],
         "atomic_calls::step",
         options=CompilerOptions(opt_level=0),
-        config=OffloadConfig(policy="sections", scope_execution="graph", host_threads=4),
+        config=OffloadConfig(policy="sections", host_threads=4),
         facts={
             "schema_version": 1,
             "participation": "serial",

@@ -66,7 +66,7 @@ def atomic_builder(tmp_path, source=SOURCE, names=("a", "b", "p", "q", "n", "fla
         [path],
         "atomic_calls::step",
         options=CompilerOptions(opt_level=0),
-        config=OffloadConfig(policy="sections", scope_execution="graph", host_threads=4),
+        config=OffloadConfig(policy="sections", host_threads=4),
         facts={
             "schema_version": 1,
             "participation": "serial",

@@ -36,7 +36,7 @@ def rendered(tmp_path, monkeypatch, repeats):
     analysis = SourceEffects([path])
     routine = analysis.routines["registration_fixture::owner"]
     monkeypatch.setattr(provenance, "position", lambda *_args, **_kwargs: [])
-    builder = SimpleNamespace(entry=routine, config=SimpleNamespace(scope_execution="graph"),
+    builder = SimpleNamespace(entry=routine, config=SimpleNamespace(),
         provider_only_lifetime=None, device_budget=4096,
         capture_many=lambda bindings: [{"storage": "stable", "initialized": "none", "escapes": False,
                                       "allocation_changes": False,

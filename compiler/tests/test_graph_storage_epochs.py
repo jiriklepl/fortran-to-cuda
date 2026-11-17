@@ -64,7 +64,7 @@ def builder_at(tmp_path, source=SOURCE):
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::left": dict(fact), "argument::right": dict(fact)}}
     builder = ScopeBuilder([path], "epochs::advance", facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     return path, builder
 
 
@@ -199,7 +199,7 @@ def local_builder_at(tmp_path, *, save=True):
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"epochs::advance::" + name: dict(fact) for name in ("left", "right")}}
     return path, ScopeBuilder([path], "epochs::advance", facts=facts, options=CompilerOptions(),
-                              config=OffloadConfig(policy="sections", scope_execution="graph"))
+                              config=OffloadConfig(policy="sections"))
 
 
 def test_exact_local_save_arrays_use_selected_epoch_with_no_prefix_definition_credit(tmp_path):

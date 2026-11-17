@@ -64,7 +64,7 @@ def test_conditional_scalar_distinguishes_byte_storage_from_whole_definition_and
              "captures": {"argument::" + name: dict(FACT) for name in ("a", "b", "scale")}}
     facts["captures"]["argument::scale"]["initialized"] = "none"
     builder = ScopeBuilder([path], routine.qualified, facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     analysis, routine = builder.analysis, builder.entry
     nodes = tuple(routine.execution.content)
     byte_proof = source_device_task(analysis, routine, nodes, builder=builder)
@@ -72,7 +72,7 @@ def test_conditional_scalar_distinguishes_byte_storage_from_whole_definition_and
     assert all(b.root != "argument::scale" for b in byte_proof.readable_scalars)
     facts["captures"]["argument::scale"]["initialized"] = "whole"
     builder = ScopeBuilder([path], routine.qualified, facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     proof = source_device_task(builder.analysis, builder.entry, tuple(builder.entry.execution.content), builder=builder)
     capture, = [item for item in proof.public()["scalar_captures"] if item["resource"] == "argument::scale"]
     assert capture["authority"]["kind"] == "explicit checked whole-defined scalar entry fact"
@@ -101,7 +101,7 @@ end module
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {root: dict(FACT) for root in ("argument::left", "argument::right", "stencil::scale")}}
     builder = ScopeBuilder([path], "stencil::outer", facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+                           config=OffloadConfig(policy="sections"))
     _outputs, report = builder.run()
     owner, = report["scopes"]
     task, = owner["source_device_tasks"]

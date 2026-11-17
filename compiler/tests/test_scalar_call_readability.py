@@ -33,7 +33,7 @@ integer::unknown
     return ScopeBuilder([path], "caller::step", facts={"schema_version": 1, "participation": "serial",
         "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
         "captures": {"argument::"+n: dict(FACT) for n in ("a", "mask", "nx", "ny", "nz")}},
-        options=CompilerOptions(), config=OffloadConfig(policy="sections", scope_execution="graph"))
+        options=CompilerOptions(), config=OffloadConfig(policy="sections"))
 
 
 def proofs(builder):

@@ -284,7 +284,7 @@ def branching_builder(tmp_path, text=None):
     return ScopeBuilder([path], "lines::advance", facts={"schema_version": 1, "participation": "serial",
         "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
         "captures": {"argument::"+n: dict(FACT) for n in ("a", "mask", "nx", "ny", "nz", "dir")}},
-        options=CompilerOptions(), config=OffloadConfig(policy="sections", scope_execution="graph"))
+        options=CompilerOptions(), config=OffloadConfig(policy="sections"))
 
 
 def test_actual_if_elseif_else_prefix_history_is_three_checked_tasks_in_one_graph(tmp_path):

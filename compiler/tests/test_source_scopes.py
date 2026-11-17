@@ -84,8 +84,7 @@ def run(command, *, cwd, env=None, timeout=120):
     return result
 
 
-def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=None, checkout=None, profile=None,
-             scope_execution="graph"):
+def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=None, checkout=None, profile=None):
     directory.mkdir(parents=True,exist_ok=True)
     if isinstance(profile, dict):
         profile_path = directory / "synthetic-profile.json"
@@ -102,8 +101,7 @@ def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=
     facts_file.write_text(json.dumps(document))
     output = directory/"output"
     response = run([sys.executable,"-m","compiler","--form-scopes","--scope-facts",str(facts_file),
-                    "--input",str(original),"--kernel",entry,"--memory-model","scoped","--gpu-policy",mode,
-                    "--scope-execution", scope_execution,
+                    "--input",str(original),"--kernel",entry,"--gpu-policy",mode,
                     *( ["--calibration-profile", str(profile)] if profile else []),
                     "--json","--output-dir",str(output)],cwd=checkout or ROOT,
                    env={**os.environ,"PYTHONPATH":str(checkout or ROOT)})
@@ -167,7 +165,7 @@ def test_collective_scope_is_rejected_without_source_changes(tmp_path):
     facts=directory/"facts.json"
     facts.write_text(json.dumps({"schema_version":1,"participation":"collective","captures":{}}))
     result=subprocess.run([sys.executable,"-m","compiler","--form-scopes","--scope-facts",str(facts),
-                           "--input",str(original),"--kernel","step","--memory-model","scoped","--gpu-policy","sections",
+                           "--input",str(original),"--kernel","step","--gpu-policy","sections",
                            "--json","--output-dir",str(directory/"output")],cwd=ROOT,capture_output=True,text=True,timeout=60)
     assert result.returncode
     assert "serial" in json.loads(result.stdout)["reason"]
@@ -346,7 +344,7 @@ def compile_contiguous_native_fallback(directory, *, checkout, profile, source=N
     facts.write_text(json.dumps(captures))
     output = directory / "output"
     response = run([sys.executable, "-m", "compiler", "--input", str(original), "--kernel", "step",
-                    "--form-scopes", "--scope-facts", str(facts), "--memory-model", "scoped", "--gpu-policy", "auto",
+                    "--form-scopes", "--scope-facts", str(facts), "--gpu-policy", "auto",
                     "--calibration-profile", str(profile), "--json", "--output-dir", str(output)], cwd=checkout,
                    env={**os.environ, "PYTHONPATH": str(checkout), "PYTHONHASHSEED": "0", "OMP_NUM_THREADS": "4"})
     manifest = json.loads(response.stdout)["scopes"]

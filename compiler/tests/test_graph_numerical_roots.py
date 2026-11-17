@@ -18,7 +18,7 @@ def test_original_parallel_tasks_keep_checked_graph_plans(tmp_path, explicit_sha
         source = source.replace("!$omp parallel do private", "!$omp parallel do default(none) "
                                 "shared(a,b,nx,ny,nz,tx,ty,tz,coefficient) private")
     selected = builder(tmp_path / "original.f90", source,
-                       config=OffloadConfig(policy="sections", scope_execution="graph"))
+                       config=OffloadConfig(policy="sections"))
     assert admit_numerical_roots(selected)
     outputs, report = selected.finish()
     assert report["scope_count"] == 2

@@ -8,8 +8,8 @@ import pytest
 
 
 @pytest.mark.parametrize("extra", [[], ["--form-scopes"],
-    ["--form-scopes", "--scope-execution", "graph", "--gpu-policy", "auto"],
-    ["--form-scopes", "--scope-execution", "graph", "--gpu-policy", "sections", "--gpu-collective"]])
+    ["--form-scopes", "--gpu-policy", "auto"],
+    ["--form-scopes", "--gpu-policy", "sections", "--gpu-collective"]])
 def test_cli_rejects_incompatible_measurement_without_touching_output(tmp_path, extra):
     output = tmp_path / "output"
     output.mkdir()

@@ -30,7 +30,7 @@ def final_plan(tmp_path):
 
 
 def test_ordinary_invocation_activates_and_keeps_identical_record(tmp_path, monkeypatch):
-    with scanned(tmp_path, config=OffloadConfig(policy="sections", scope_execution="graph")) as (owner, plan):
+    with scanned(tmp_path, config=OffloadConfig(policy="sections")) as (owner, plan):
         assert getattr(owner, "position_epoch", None) is None
         assert _supported(plan)
         proof = plan.storage_epoch()
@@ -198,7 +198,7 @@ enddo""",
 
 @pytest.mark.parametrize("fault", ["host_metadata", "native_opaque_accesses", "native", "tree", "guarded"])
 def test_ordinary_storage_role_topology_cannot_change_before_membership(tmp_path, fault):
-    with scanned(tmp_path, config=OffloadConfig(policy="sections", scope_execution="graph")) as (owner, plan):
+    with scanned(tmp_path, config=OffloadConfig(policy="sections")) as (owner, plan):
         member, bindings = query(plan)
         unit = next(unit for unit in owner.units if unit.scope.native)
 
