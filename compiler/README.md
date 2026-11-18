@@ -2370,10 +2370,8 @@ Runtime setup and profiling preserve pre-existing flags, rounding and trap masks
 Short serial reduction semantics were checked against the supported native
 gfortran 15 backend and semantic flags in both precisions; a different native
 backend needs independent conformance evidence, not an assumed parallel contract.
-Ordinary AUTO and retained private fitted-protocol references decline automatic
-estimates for these guarded entries until offline calibration prices their extra
-entry/session checks and collective coordination. An unchanged profile hash alone
-cannot price that protocol. Public graph AUTO instead permits hardware roofline
+Static work counts do not price the extra entry/session checks and collective
+coordination of these guarded entries. Graph AUTO permits hardware roofline
 ranking from measured hardware rates and a static real-arithmetic work proxy.
 Numerical-environment checks and missing team coordination costs remain unpriced;
 this heuristic does not attest original Fortran protocol timings or guarantee a
@@ -2457,237 +2455,25 @@ their original source locations. Scoped runtime setup and planning save and
 restore the caller thread's rounding mode, exception flags and trap mask;
 numerical computation is not moved into setup or query evaluation.
 
-`--numerical-costs` extends offline hardware calibration with generic private
-array and transcendental workloads. Numerical calibration v2 measures original
-Fortran serial and fork/join implementations separately from generated CPU and
-GPU workers. Seven predefined interleaved batches run for at least 200 ms each,
-with fixed CPU placement, independent sizes and mixed-expression holdouts, and
-a 25% validation ceiling. Rejected observations remain in the profile; each
-backend and workload class is accepted independently. Compiler options, device,
-precision, CPU placement and runtime size ranges must match before AUTO can
-use a model. Existing-team execution requires its own coordination calibration.
-Runtime real division has a separately validated primitive family; division by
-a compile-time constant remains in ordinary arithmetic. Mixed holdouts include
-data-dependent division and validate the exact fixed terms emitted at runtime.
-Memory calibration uses eight predefined working-set sizes and independent
-intermediate holdouts. A bounded bandwidth table follows cache-size changes;
-it never extrapolates. Runtime pricing separates read/write traffic from the
-unique physical union of accessed sections. Opposite faces remain separate,
-read/write overlaps count once in the working set, and unknown footprints,
-repeated touched root aliases or checked-arithmetic failures leave AUTO native.
-CPU execution startup is removed from the memory measurements and charged
-once outside the computation/memory maximum; validation uses the same formula.
-If a fitted startup exceeds a measured memory invocation, that family is
-rejected rather than clamped. Successful primitive fits do not override failed
-mixed-expression validation or establish costs for a different dependency shape.
+The profile carries no per-kernel cost models. The fitted numerical,
+CPU-protocol, dependency and GPU-execution calibrations and their producers were
+removed. A profile that still contains those sections loads, and the sections
+are ignored. Graph AUTO ranks every unit with the hardware roofline heuristic
+described above; without a profile AUTO stays native. Under `sections` placement
+is forced, and the report carries a static work count where one exists. Units
+with scalar math or retained loops, and units whose native alternative is the
+original Fortran, have no static estimate.
 
-Original `SCHEDULE(runtime)` work needs the separate top-level
-`source_schedule_validation` profile section. Its fixed paired protocol compares
-runtime-static execution against the frozen compute model without fitting new
-coefficients, retains every observation, and intersects only structurally valid
-working-set ranges. Missing or failed evidence keeps AUTO native. An admitted
-entry checks the current OpenMP schedule before context creation and in every
-public query; static scheduling with default contiguous chunks is required.
-Changing the schedule or selecting cyclic chunks invalidates the estimate.
-The standalone `python -m compiler.offload.schedule_calibrate` producer takes
-`--profile`, a new `--output`, a new `--build-dir`, and repeated
-`--fortran-flag=...` arguments matching the numerical profile. It checks both
-compiled Fortran identities and CPU placement before timing. A profile with no
-accepted native workload class is rejected before building the validation job.
-
-Two optional CPU calibration sections separate measured execution startup from
-the numerical-v2 regression intercept. First,
-`python -m compiler.offload.cpu_protocol_calibration` adds
-`cpu_execution_protocol`: zero/one/eight-item startup controls, an untimed
-OpenMP team-entry proof over the same object files, and fresh three-array memory
-observations. Generated controls use the production cyclic worker renderer,
-while original Fortran controls retain their original static worksharing.
-The timed and proof executables share their numerical objects;
-the proof instrumentation is absent from timing. Seven interleaved batches per
-size retain raw observations, actual team size, thread limits, CPU placement,
-Fortran options and `OMP_WAIT_POLICY`/`GOMP_SPINCOUNT`. Archived numerical-v2
-memory observations remain diagnostics and cannot establish this new protocol.
-Startup is charged once outside the compute/memory maximum. Failed startup or
-memory validation makes the affected backend unavailable.
-
-The explicit `--numerical-costs --numerical-version 3` calibration path records
-the repaired CPU protocol in a separate `numerical_execution` section. It uses
-the original Fortran serial/static-team bodies and production generated cyclic
-workers with four host threads, independent zero-item startup controls, and
-seven complete global rounds of at least 200 ms per cell. Size, expression,
-helper and domain holdouts never fit coefficients. Fresh memory observations remove the measured startup;
-the model adds that startup once outside the compute/memory maximum. The raw
-batch file is created exclusively and flushed as each batch completes, so an
-interrupted attempt remains evidence rather than being overwritten.
-This initial section is CPU-only: it does not supply GPU costs or authorize
-automatic SGS placement. If supplied for source placement, incomplete or
-rejected new evidence keeps execution native; it cannot borrow older numerical
-coefficients. Versions 1 and 2 retain their existing defaults and interpretation.
-The standalone `python -m compiler.offload.numerical_execution_calibration`
-adds this evidence to a preserved compatible base profile using `--profile`,
-a new `--output`, a new `--build-dir`, and explicit original
-`--fortran-flag=...` arguments. Its `--preflight-only` mode builds and checks
-the workers without sampling or adding cost evidence.
-
-The separate `python -m compiler.offload.numerical_gpu_execution_calibration`
-producer records optional `numerical_execution_gpu` observations using those
-same seventeen recipes and their production CUDA kernels and launch code.
-It accepts `--profile`, new `--output` and `--build-dir` paths, and explicit
-`--nvcc`, `--cuda-host-cxx`, `--arch` and `--device` selections. Fixed enqueue
-CPU placement comes from `--cpu-affinity` or the existing CPU evidence. Inputs
-remain resident during measurement. Complete outputs, unchanged inputs and sentinel
-halos are checked before seven global rounds over the predefined sizes;
-interrupted attempts retain their flushed raw observations. CUDA-event,
-host-enqueue and wall durations and actual launch counts remain separate.
-Zero-item controls issue no CUDA launch and cannot establish launch overhead.
-This initial GPU section supplies evidence only: it does not fit transferable
-startup costs, combine CPU/GPU cost models or authorize automatic placement.
-The base profile and existing CPU evidence are preserved. Profile loading
-checks the observations without lowering source; using an archived backend
-requires a separate check against current renderer and numerical identities.
-
-`python -m compiler.offload.numerical_gpu_launch_calibration` adds the separate
-`numerical_execution_gpu_costs` section to that evidence. It takes `--profile`,
-fresh `--output` and `--build-dir` paths, and optional `--nvcc` and
-`--cuda-host-cxx`. The producer authenticates and reuses the parent worker object,
-header and driver, then builds only a launch-control driver. Zero/one/eight/seventeen
-item preflights check outputs and sentinels; seven global rounds of at least
-200 ms measure the three nonempty sizes. One item fits a launch-inclusive fixed
-interval; eight and seventeen items validate it independently. The original
-production observations supply compute costs and independent expression,
-helper, private-array and domain holdouts, with the same 25% error ceiling.
-Cost protocol v2 interpolates total GPU memory-launch intervals without subtracting
-the separate fixed estimate, then uses `max(fixed + compute, total_memory)`;
-only the tested pointwise traffic-equals-working-set class is priced. Historical
-v1 profiles retain their original reconstruction and cannot supply v2 queries.
-The cost query requires current source identities and accepted families, classes,
-domains, features and size ranges. Resident-event intervals already include
-enqueue starvation, so their separately recorded enqueue time is not added again.
-The measurement retains the original sixteen-launch/join cadence; applying its
-costs to a different enqueue/wait protocol requires separate evidence.
-Setup, allocation, transfers, coordination and source guard costs remain separate.
-This interface alone does not establish source applicability or AUTO placement.
-
-The other existing producer, `python -m compiler.offload.cpu_dependency_calibration`, adds
-`cpu_dependency`, without changing the numerical-v2 section. Its 26 predefined
-generic recipes distinguish ordinary operations, constant/dynamic division and
-selected transcendental families. One-chain and four-chain bases identify a
-bounded work/span hypothesis; independent sizes, inline/separate helper forms,
-diamonds, private arrays and argument-domain holdouts validate it. Every timed
-batch lasts at least 200 ms; all seven observations and rejected families are
-retained. Memory-limited or unidentifiable bases reject instead of changing the
-fitting equation. The same three-array access contract and proven execution
-identity apply to the new compute observations. Both producers take
-`--profile`, a new `--output`, a new `--build-dir`, optional compiler paths and
-repeated `--fortran-flag=...` arguments matching the original Fortran build.
-Run them sequentially under the campaign memory guard, before application
-measurements; neither producer reads or fits application timings.
-
-When the input contains current `numerical_execution` evidence, the dependency
-producer uses `source-work-span-current-execution-cpu-v2`: 49 fixed recipes and
-735 cells, sampled in seven global rounds. Only the twelve one/four-chain bases
-fit coefficients. Two-chain controls and the seventeen unchanged original
-execution recipes are independent holdouts. Current startup and memory evidence
-can be accepted separately from rejected arithmetic families; rejected arithmetic
-is never borrowed. Queries explicitly select `direct_loop`,
-`value_function_same_unit` or `value_function_separate`, with independent class,
-domain and private-feature validation for each form. Direct loops retain the
-measured 32-element/two-array private limit; value-function forms can admit
-64 elements/four arrays only when their own controls accept. These names describe
-compiled source forms, without asserting vectorization. Source placement still
-requires proofs that the original and generated implementations match the
-measured forms, memory access, domains and execution protocol. The existing
-26-recipe protocol remains available with its original foundation.
-
-Public unit diagnostics expose the bounded source dependency identity and
-physical memory access class separately from legality. The first source
-attachment admits contiguous one-dimensional pointwise work with two distinct
-immutable inputs and one write-only output. Mixed floating-point conversions,
-unpriced integer/logical numerical work, unproved primitive input domains
-(including dynamic division), uniform numerical folding/hoisting, borrowed-view
-addressing, unconsumed private work, other memory patterns and existing-team
-costs remain unavailable.
-Runtime checks
-enforce original root strides, CPU placement, team budget and calibrated wait
-environment. The wait/spin environment must remain fixed from process launch:
-live checks detect mismatches but cannot read libgomp's private effective wait
-state or establish that changing `getenv` values reconfigured an initialized
-runtime. An optional rejected dependency section keeps AUTO native rather
-than borrowing an accepted older expression class. Numerical-v2-only profiles
-retain their existing path; these additions do not establish automatic SGS
-placement or an application speedup.
-
-A profile requesting current `cpu_dependency` or GPU execution costs takes the
-current source-cost path before the CPU-only placeholder. Original inline-region
-preparation can supply `source_compute_applicability_v1` metadata for a single
-helper-free direct loop with serial or fixed fork/join participation. The record
-is issued before artifact rewriting and carries original preparation and source
-identities; it grants no execution, capture or definition authority. Each region
-keeps its own provenance when identical work shares a worker, and the manifest
-identifies the shared artifact's issuing region separately. Reuse also requires
-the same compiled-form, participation and access contract. Whole-procedure
-lowering without an original-region preparation does not invent that evidence.
-
-This attachment still requires the exact one-dimensional pointwise memory class,
-observable dependency work, supported primitive domains and independently
-accepted costs for each implementation that a candidate uses. Source model schema
-2 records unavailable native Fortran, generated CPU or GPU estimates as `null`
-with separate rejection reasons. It intersects known estimates' tested item
-ranges and requires matching CPU placement and native Fortran identities.
-Missing current evidence never borrows legacy costs. Unpriced
-numerical-environment guards remain unavailable. Optional source classification
-does not run for ordinary generation without a current cost bundle.
-Preparation schema 2 fingerprints the full raw calibration profile separately
-from executable syntax, with a 32 MiB JSON limit and charged hashing work.
-Every validation rehashes it; changing any retained observation invalidates
-preparation. Large profiles do not consume the statement budget as if their
-measurement fields were source operations.
-
-One synchronous source-cost attachment shares raw reconstruction across its
-units and their native/generated implementation queries. Evidence is copied
-lazily after the source eligibility guards into an owned JSON snapshot; small
-validated cost sections are retained as immutable serialized data. Each query
-still checks its compiled form, workload, domains, features and access class.
-Returned dictionaries own their values. No snapshot survives the operation or
-supplies allocation freshness at application runtime.
-
-Before publishing any estimates, attachment checks the complete original profile
-and current reader/backend identities again. A change discards all estimates
-from that operation, including estimates for earlier units, and keeps AUTO
-native. Public cost queries continue to reconstruct evidence afresh. Rejected
-observations and acceptance thresholds are unchanged; reader changes still
-invalidate their calibration identities and do not relabel archived profiles.
-
-Source planning supplies complete compute seconds for known implementations
-through `fort_scope_plan_add_compute_costs_v3`. Transfers, launches, allocation
-and coordination are charged separately. The unchanged compute-cost payload
-layout accepts versions 1 and 2. Version 2 can mark a known GPU total with
-`FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED`; the planner then omits only that
-operation's separate enqueue charge. Legacy neighbors retain their own launch
-costs. The cheap native-rejection bound also respects this coverage, while all
-setup, transfer and synchronization charges remain. A native operation inside an active
-owner uses its actual coordinated host cost, including candidate-only inspectors;
-that differs from the whole-original native fallback. A fresh owner can compare
-the original native body with an all-GPU alternative without pricing unused
-generated CPU workers. Mixed candidates require each coordinated CPU cost they
-use; missing preparation costs reject those candidates. A missing original
-native estimate keeps AUTO unavailable. Continuations compare against coherent host execution
-and cannot replay an earlier GPU prefix. The existing v2 additive-cost ABI and
-legacy calibration reader remain available (`--numerical-version 1`), but C++
-measurements cannot establish original Fortran costs.
+The runtime keeps the compute-cost payload `fort_scope_compute_costs_v1`, which
+source task quotes use. Generated numerical entries record their units through
+`fort_scope_plan_add_costs_v2` and supply no per-backend seconds.
 
 When every numerical alternative statically lacks an applicable estimate,
 AUTO preserves the original caller source without descriptor or IEEE guards,
 runtime registration or queries. This is a successful native decision. A valid
 alternative retains reached runtime planning and its guarded evaluations.
-For a fresh, unconditional single numerical unit, `native_preflight_v1` can also
-prove native execution from an empty domain or an item count outside the model's
-validated range. It reads only guarded descriptor metadata and read-only INTEGER
-inputs, before context creation or registration. Unknown or overflowing inputs
-continue ordinary planning. Reached lexical units with definition changes retain
-registration and ordered validation; an existing owner always uses coherent
-continuation. This preflight does not yet prove native execution from GPU startup
-costs; no unproved native memory-cost upper bound is assumed.
+Reached lexical units with definition changes retain registration and ordered
+validation; an existing owner always uses coherent continuation.
 
 Graph AUTO can also retain a conservative original-CPU hint for a complete
 owning invocation. An ordinary sample qualifies only after successful normal

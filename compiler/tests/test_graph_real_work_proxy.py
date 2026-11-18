@@ -7,13 +7,6 @@ from compiler.frontend import lower_source
 from compiler.ir import Binary, Block, Literal, Loop, Reference, ScalarType, Symbol
 from compiler.offload.graph_costs import graph_work_proxy
 
-
-def _compute_arithmetic_operations(block):
-    from compiler.offload.analysis import _compute_operation_counts
-
-    operations, _, reason = _compute_operation_counts(block)
-    return operations, reason
-
 SOURCE = '''module work_proxy
 implicit none
 contains
@@ -37,10 +30,7 @@ def region(source=SOURCE):
 
 def test_array_rebasing_does_not_inflate_real_arithmetic():
     rebased = region()
-    ordinary, reason = _compute_arithmetic_operations(rebased.body)
-    assert reason is None
-    assert ordinary == 2
-    assert graph_work_proxy(rebased) == (ordinary, ())
+    assert graph_work_proxy(rebased) == (2, ())
     direct = region(SOURCE.replace('i-lb+1', 'i'))
     assert graph_work_proxy(direct) == graph_work_proxy(rebased)
 

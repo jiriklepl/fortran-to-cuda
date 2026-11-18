@@ -240,85 +240,17 @@ end module""")
 CONTIGUOUS_WRAPPER_PROGRAM = WRAPPER_PROGRAM.replace("real(8),intent", "real(8),contiguous,intent")
 
 
-def _synthetic_native_fallback_profile(directory, supplied_profile, flags):
-    """Bind test-only observations to the supplied identity and original flags."""
-    from compiler.offload.collective_calibration import normalize_fortran_options
-    from compiler.offload.numerical_calibration import profile_from_compute_measurements
-    from compiler.tests.test_numerical_calibration_v2 import observations_v2
-
+def _synthetic_native_fallback_profile(directory, supplied_profile):
+    """Rank the GPU far below the CPU, keeping the supplied identity and host costs."""
     base = json.loads(supplied_profile.read_text())
     assert base["precision_bits"] == 64, "this fixture uses original REAL(8) source"
-    probe = directory / "fortran-identity.f90"
-    probe.write_text("""program identity
-use iso_fortran_env,only:compiler_version,compiler_options
-print '(a)',compiler_version()
-print '(a)',compiler_options()
-end program
-""")
-    object_file, binary = directory / "fortran-identity.o", directory / "fortran-identity"
-    commands = []
-    # Original modules are compiled with -c. A combined compile/link probe
-    # can report driver-injected link options absent from those source objects.
-    for role, command in (
-        ("identity-compile", [*flags, "-c", str(probe), "-o", str(object_file)]),
-        ("identity-link", [*flags, str(object_file), "-o", str(binary)]),
-        ("identity-run", [str(binary)]),
-    ):
-        response = run(command, cwd=directory)
-        commands.append({"role": role, "argv": command, "returncode": response.returncode,
-                         "stdout": response.stdout, "stderr": response.stderr})
-    version, options = commands[-1]["stdout"].strip().splitlines()
-    observations = observations_v2()
-    identity = observations[0]
-    identity.update({name: base["hardware"][name]
-                     for name in ("gpu_name", "gpu_uuid", "compute_capability")})
-    identity.update({name: base["toolchain"][name]
-                     for name in ("cuda_runtime_version", "driver_version")})
-    identity.update(precision_bits=base["precision_bits"], cpu_threads=base["cpu_threads"],
-                    cpu_affinity=sorted(os.sched_getaffinity(0)),
-                    fortran={"compiler_version": version, "compiler_options": options,
-                             "semantic_options": normalize_fortran_options(options)})
-    assert len(identity["cpu_affinity"]) == base["cpu_threads"], "matching offline CPU placement required"
-    # This fixture tests the all-native branch, independently of measured
-    # host management costs. The shared synthetic observations model GPU
-    # compute at 0.05 times serial native cost; scale only those synthetic
-    # GPU durations to make its primitive and memory costs 100 times native.
-    # Keep the fit/holdout grid, repetitions and genuine base costs intact.
-    gpu_duration_scale = 2000
-    for observation in observations[1:]:
-        if observation["backend"] == "gpu":
-            for sample in observation["samples"]:
-                sample["elapsed_seconds"] *= gpu_duration_scale
-                sample["wall_seconds"] *= gpu_duration_scale
-    synthetic_ranking = {"version": 1, "purpose": "all_native_correctness",
-                         "gpu_duration_scale": gpu_duration_scale,
-                         "gpu_to_native_serial_compute_cost": 100}
-    # AUTO graph placement uses the generic hardware-rate path instead of
-    # the numerical-v2 rates. Give that path the same explicit test ranking.
-    synthetic_rate_overrides = {
-        "gpu_flops_per_second": base["rates"]["cpu_flops_per_second"] / 100,
-        "gpu_memory_bytes_per_second": base["rates"]["cpu_memory_bytes_per_second"] / 100,
-    }
-    synthetic_base = {**base, "rates": {**base["rates"], **synthetic_rate_overrides}}
-    synthetic_ranking["hardware_rate_overrides"] = synthetic_rate_overrides
-    calibration = profile_from_compute_measurements(synthetic_base, observations,
-        calibration={"synthetic_correctness_only": True,
-                     "synthetic_ranking": synthetic_ranking})
-    assert {key: value for key, value in calibration.items() if key != "numerical"} == {
-        key: value for key, value in synthetic_base.items() if key != "numerical"}
+    assert len(os.sched_getaffinity(0)) == base["cpu_threads"], "matching offline CPU placement required"
+    # This fixture tests the all-native branch, independently of measured host
+    # management costs: AUTO ranks from these hardware rates.
+    rates = {"gpu_flops_per_second": base["rates"]["cpu_flops_per_second"] / 100,
+             "gpu_memory_bytes_per_second": base["rates"]["cpu_memory_bytes_per_second"] / 100}
     profile = directory / "synthetic-native-fallback-profile.json"
-    profile.write_text(json.dumps(calibration, indent=2, sort_keys=True) + "\n")
-    (directory / "synthetic-native-fallback-profile-evidence.json").write_text(json.dumps({
-        "schema_version": 2, "synthetic_calibration_for_correctness_only": True,
-        "synthetic_ranking": synthetic_ranking,
-        "performance_samples": 0, "base_profile": {
-            "path": str(supplied_profile), "sha256": sha256(supplied_profile.read_bytes()).hexdigest()},
-        "profile": {"path": str(profile), "sha256": sha256(profile.read_bytes()).hexdigest()},
-        "compile_mode": "separate_object", "fortran_flags": flags,
-        "fortran": identity["fortran"], "cpu_affinity": identity["cpu_affinity"], "commands": commands,
-        "artifacts_sha256": {path.name: sha256(path.read_bytes()).hexdigest()
-                             for path in (probe, object_file, binary)},
-    }, indent=2, sort_keys=True) + "\n")
+    profile.write_text(json.dumps({**base, "rates": {**base["rates"], **rates}}, indent=2, sort_keys=True) + "\n")
     return profile
 
 
@@ -335,7 +267,7 @@ def compile_contiguous_native_fallback(directory, *, checkout, profile, source=N
     assert host, "CUDA/Fortran fixture requires installed C++ toolchain"
     assert nvcc, "CUDA/Fortran fixture requires installed CUDA toolchain"
     flags = [fortran, "-std=f2018", "-fopenmp", "-fcheck=all,array-temps"]
-    profile = _synthetic_native_fallback_profile(directory, profile, flags)
+    profile = _synthetic_native_fallback_profile(directory, profile)
     captures = {"schema_version": 1, "participation": "serial",
                 "sources": {str(original): sha256(original.read_bytes()).hexdigest()},
                 "captures": {"argument::a": FACT, "argument::b": {**FACT, "initialized": "none"},
@@ -369,8 +301,7 @@ def compile_contiguous_native_fallback(directory, *, checkout, profile, source=N
             if item["language"] == "cuda":
                 reusable[item["path"]] = {"sha256": digest, "object": str(target)}
     driver = output / "caller.f90"
-    # Keep the generic shared driver unchanged. This calibrated fixture needs
-    # dimensions within the existing v2 compute and physical working-set ranges.
+    # Keep the generic shared driver unchanged apart from larger fields.
     driver.write_text(DRIVER.replace("n=8+8*shape", "n=131072*shape"))
     target = output / "caller"
     run([*flags, str(driver), *objects,
@@ -396,7 +327,7 @@ def contiguous_native_fallback(tmp_path_factory):
 
 
 @pytest.mark.native
-def test_calibrated_all_native_wrappers_do_not_create_array_temporaries(contiguous_native_fallback):
+def test_all_native_wrappers_do_not_create_array_temporaries(contiguous_native_fallback):
     target, output, _manifest, _reusable = contiguous_native_fallback
     result = run([str(target)], cwd=output,
                  env={**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "FORT_RUNTIME_TRACE": "1"})

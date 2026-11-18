@@ -79,9 +79,6 @@ def _metadata(function, analysis, signature, name, value=_value, *, host_pointer
                       "        }"]
         lines += ["        u.iterations = active && d.valid ? points : 0;",
                   f"        u.flops = static_cast<double>(u.iterations) * {unit.work_per_iteration or 0};",
-                  *([f"        u.cpu_numerical_seconds = static_cast<double>(u.iterations) * {unit.cpu_numerical_seconds_per_iteration!r};",
-                     f"        u.gpu_numerical_seconds = static_cast<double>(u.iterations) * {unit.gpu_numerical_seconds_per_iteration!r};"]
-                    if unit.cpu_numerical_seconds_per_iteration or unit.gpu_numerical_seconds_per_iteration else []),
                   "        d.units.push_back(u);", "    }"]
     if not cost_footprints:
         # Definition-only scoped queries emit their exact access descriptors

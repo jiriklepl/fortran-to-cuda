@@ -1,19 +1,15 @@
-"""A calibrated reached child builds independently and preserves native fields."""
+"""An automatically placed reached child builds independently and preserves native fields."""
 
 import json
 import os
-import shlex
 import shutil
 from hashlib import sha256
 
 import pytest
 
 from compiler.numerical_contract import require_numerical_build_contract
-from compiler.offload.collective_calibration import normalize_fortran_options
-from compiler.offload.numerical_calibration import profile_from_compute_measurements
 from compiler.tests.borrowed_source_coordinators_support import source
 from compiler.tests.scoped_batch_sources_cuda_support import actual_profile
-from compiler.tests.test_numerical_calibration_v2 import observations_v2
 from compiler.tests.test_source_scopes import FACT, ROOT, generate, run
 
 DRIVER = """program verify
@@ -44,79 +40,23 @@ end program
 """
 
 
-def synthetic_native_profile(directory, nvcc, host, flags):
-    """Exercise AUTO with valid identities, never measured performance costs."""
-    profile = actual_profile(directory, nvcc, host)
-    probe = directory / "fortran-identity.f90"
-    probe.write_text("""program identity
-use iso_fortran_env,only:compiler_version,compiler_options
-print '(a)',compiler_version()
-print '(a)',compiler_options()
-end program
-""")
-    binary = directory / "fortran-identity"
-    object_file = directory / "fortran-identity.o"
-    # The original module is compiled with -c. A compile-and-link probe can
-    # report additional driver-injected link options that its object lacks.
-    commands = []
-    for role, command in (
-        ("identity-compile", [*flags, "-c", str(probe), "-o", str(object_file)]),
-        ("identity-link", [*flags, str(object_file), "-o", str(binary)]),
-        ("identity-run", [str(binary)]),
-    ):
-        result = run(command, cwd=directory)
-        commands.append({"role": role, "argv": command, "returncode": result.returncode,
-                         "stdout": result.stdout, "stderr": result.stderr})
-    version, options = commands[-1]["stdout"].strip().splitlines()
-    observations = observations_v2()
-    identity = observations[0]
-    identity.update({name: profile["hardware"][name]
-                     for name in ("gpu_name", "gpu_uuid", "compute_capability")})
-    identity.update({name: profile["toolchain"][name]
-                     for name in ("cuda_runtime_version", "driver_version")})
-    identity["cpu_affinity"] = sorted(os.sched_getaffinity(0))
-    if len(identity["cpu_affinity"]) != profile["cpu_threads"]:
-        pytest.skip("AUTO CUDA correctness requires the calibrated four-CPU placement")
-    identity["fortran"] = {"compiler_version": version, "compiler_options": options,
-                            "semantic_options": normalize_fortran_options(options)}
-    (directory / "fortran-identity-evidence.json").write_text(json.dumps({
-        "schema_version": 1, "compile_mode": "separate_object", "commands": commands,
-        "fortran_flags": flags,
-        "normalized_compile_flags": normalize_fortran_options(shlex.join(flags[1:])),
-        "fortran": identity["fortran"],
-        "artifacts_sha256": {path.name: sha256(path.read_bytes()).hexdigest()
-                             for path in (probe, object_file, binary)},
-        "synthetic_calibration_for_correctness_only": True,
-    }, indent=2, sort_keys=True) + "\n")
-    # Scale complete CPU observations, including holdouts, to favor offload.
-    # The synthetic GPU observations and applicability ranges remain intact.
-    for row in observations[1:]:
-        if row["backend"] != "gpu":
-            for sample in row["samples"]:
-                sample["elapsed_seconds"] *= 1e8
-                sample["wall_seconds"] *= 1e8
-    return profile_from_compute_measurements(profile, observations,
-        calibration={"synthetic_correctness_only": True})
-
-
 @pytest.fixture(scope="module", params=("graph", "graph_rollback"))
-def calibrated_child_binary(tmp_path_factory, request):
+def auto_child_binary(tmp_path_factory, request):
     nvcc, host = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++")
     fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
     if not all((nvcc, host, fortran)):
         pytest.skip("CUDA/C++/Fortran toolchain unavailable")
-    directory = tmp_path_factory.mktemp("calibrated_borrowed_child")
+    directory = tmp_path_factory.mktemp("auto_borrowed_child")
     checkout = directory / "independent-compiler"
     shutil.copytree(ROOT / "compiler", checkout / "compiler", ignore=shutil.ignore_patterns(
         "__pycache__", ".*cache", "CODE_MAP.md", "MEMORY_MODEL_PLAN.md"))
     profile = directory / "profile.json"
-    # Favorable synthetic correctness costs, bound to the actual hardware and
-    # tool identities, exercise AUTO; these are never performance evidence.
     flags = [fortran, "-O3", "-std=f2018", "-fopenmp", "-fcheck=all,array-temps"]
-    calibration = synthetic_native_profile(directory, nvcc, host, flags)
-    identity_evidence_path = directory / "fortran-identity-evidence.json"
-    identity_evidence = json.loads(identity_evidence_path.read_text())
-    assert calibration["numerical"]["identity"]["fortran"] == identity_evidence["fortran"]
+    # The profile is bound to the actual hardware and tool identities so that
+    # AUTO ranks the child; its rates are not performance evidence.
+    calibration = actual_profile(directory, nvcc, host)
+    if len(os.sched_getaffinity(0)) != calibration["cpu_threads"]:
+        pytest.skip("AUTO CUDA correctness requires the profiled four-CPU placement")
     profile.write_text(json.dumps(calibration))
     text = source()
     if request.param == 'graph_rollback':
@@ -144,9 +84,6 @@ def calibrated_child_binary(tmp_path_factory, request):
                             *("-Xcompiler=" + option for option in contract["required_host_options"])]
             else:
                 compiler = flags
-                if role == "original_source":
-                    assert normalize_fortran_options(shlex.join(compiler[1:])) == (
-                        identity_evidence["normalized_compile_flags"])
             command = [*compiler, "-I", str(output), "-c", str(artifact), "-o", str(target)]
             run(command, cwd=output)
             commands.append({"path": item["path"], "role": role, "argv": command,
@@ -170,16 +107,14 @@ def calibrated_child_binary(tmp_path_factory, request):
     (output / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     (output / "artifact-evidence.json").write_text(json.dumps({"headers": headers,
-        "runtime_id": manifest["runtime"]["runtime_id"], "profile": str(profile),
-        "fortran_identity_evidence": {"path": str(identity_evidence_path),
-            "sha256": sha256(identity_evidence_path.read_bytes()).hexdigest()}}, indent=2))
+        "runtime_id": manifest["runtime"]["runtime_id"], "profile": str(profile)}, indent=2))
     return target, output, expected
 
 
 @pytest.mark.cuda
 @pytest.mark.parametrize("disabled", [False, True])
-def test_calibrated_auto_child_preserves_reached_native_fallback(calibrated_child_binary, disabled):
-    target, output, expected = calibrated_child_binary
+def test_auto_child_preserves_reached_native_fallback(auto_child_binary, disabled):
+    target, output, expected = auto_child_binary
     environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "FORT_RUNTIME_TRACE": "1"}
     if disabled:
         environment["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -201,6 +136,5 @@ def test_calibrated_auto_child_preserves_reached_native_fallback(calibrated_chil
         "launches": result.stderr.count("FORT_SCOPED launch "),
         "complete_arrays_and_halos_equal": True,
         "independent_compiler_checkout": True,
-        "synthetic_calibration_for_correctness_only": True,
         "performance_sample": False,
     }, indent=2, sort_keys=True) + "\n")

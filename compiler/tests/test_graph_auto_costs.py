@@ -5,25 +5,44 @@ from hashlib import sha256
 
 import pytest
 
+from compiler.analysis import build_execution_plan
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.emission.cuda.scoped import generate_scoped
 from compiler.frontend import lower_source
+from compiler.offload.analysis import analyze_offload
 from compiler.offload.config import OffloadConfig
 from compiler.offload.graph_costs import apply_graph_hardware_costs, graph_work_proxy
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_graph_source_owner import FACT
 from compiler.tests.test_scoped_planning_entries import calibration
-from compiler.tests.test_source_compute_costs import SOURCE, source_analysis
+
+SOURCE = """module generic_source_compute
+contains
+subroutine evaluate(a,n)
+real(8),intent(inout)::a(:)
+integer,intent(in)::n
+integer::i
+do i=1,n
+a(i)=sqrt(a(i)*a(i)+1.0_8)+cos(a(i))
+enddo
+end subroutine
+end module
+"""
+
+
+def source_analysis():
+    function = lower_source(SOURCE, "evaluate", source_name="generic_source_compute.f90")
+    plan = build_execution_plan(function)
+    return function, plan, analyze_offload(function, plan)
 
 
 def emit(source=SOURCE, *, profile=None, collective=False, numerical_environment=False):
     function, plan = prepare_function(lower_source(source, "evaluate", source_name="graph_auto.f90"),
         options=CompilerOptions(gpu_policy="auto"))
     function = replace(function, requires_numerical_environment=numerical_environment)
-    config = OffloadConfig("auto", profile, 4, collective,
-                           native_participation="existing_team" if collective else "serial")
+    config = OffloadConfig("auto", profile, 4, collective, original_native=True)
     return generate_scoped(function, plan, config, "common_functions.cuh",
                            runtime_id=read_scoped_runtime()[1]["runtime_id"])
 
@@ -39,7 +58,6 @@ def test_generic_static_proxy_prices_intrinsics_without_family_attestation():
     estimated = units[unit.region.id]
     assert estimated.footprints is unit.footprints
     assert estimated.region is unit.region
-    assert estimated.compute_model is None
     assert not diagnostics[unit.region.id]["original_fortran_family_attestation"]
     assert not diagnostics[unit.region.id]["speedup_guaranteed"]
 
@@ -112,7 +130,6 @@ def test_original_source_owner_can_rank_without_original_fortran_family_evidence
     owner, = report["scopes"]
     assert owner["planning_reason"] is None
     assert owner["gpu_leaves"]
-    assert owner["planning_segments"][0]["compute_identity"]["required"] is False
     replacement = outputs[report["sources"][str(path)]["replacement"]]
     assert "fort_scope_plan_reset_mode" in replacement
     assert "fort_decision" in replacement

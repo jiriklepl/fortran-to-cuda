@@ -96,8 +96,7 @@ def apply_graph_hardware_costs(units):
     result, provenance = {}, {}
     for identity, unit in units.items():
         proxy, unknown = graph_work_proxy(unit.region)
-        result[identity] = replace(unit, work_per_iteration=proxy, compute_model=None,
-            cpu_numerical_seconds_per_iteration=0, gpu_numerical_seconds_per_iteration=0,
+        result[identity] = replace(unit, work_per_iteration=proxy,
             work_estimate_reason='heuristic static IR work proxy; measured hardware roofline ranking')
         provenance[identity] = {'kind': 'hardware_roofline_heuristic', 'static_work_proxy': proxy,
             'work_proxy_semantics': 'real arithmetic only; no assignment, address, INTEGER or logical-operation FLOPs',

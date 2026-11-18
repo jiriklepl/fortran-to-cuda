@@ -179,47 +179,7 @@ def validate_profile(
         _number(transfer.get("bandwidth_bytes_per_second"), f"rates.{name}.bandwidth_bytes_per_second")
         if "fit_max_relative_error" in transfer:
             _number(transfer["fit_max_relative_error"], f"rates.{name}.fit_max_relative_error", zero=True)
-    if "numerical" in profile:
-        from .numerical_calibration import NumericalCalibrationError, validate_numerical_profile
-        try:
-            validate_numerical_profile(profile["numerical"], profile)
-        except NumericalCalibrationError as error:
-            raise ProfileError(str(error)) from error
-    if "numerical_execution" in profile:
-        from .numerical_calibration import NumericalCalibrationError
-        from .numerical_execution import validate_execution_profile
-        try:
-            validate_execution_profile(profile)
-        except NumericalCalibrationError as error:
-            raise ProfileError(str(error)) from error
-    if "numerical_execution_gpu" in profile:
-        from .numerical_calibration import NumericalCalibrationError
-        from .numerical_gpu_execution import validate_gpu_execution_profile
-        try:
-            validate_gpu_execution_profile(profile)
-        except NumericalCalibrationError as error:
-            raise ProfileError(str(error)) from error
-    if "numerical_execution_gpu_costs" in profile:
-        from .numerical_calibration import NumericalCalibrationError
-        from .numerical_gpu_execution_costs import validate_gpu_execution_costs
-        try:
-            validate_gpu_execution_costs(profile)
-        except NumericalCalibrationError as error:
-            raise ProfileError(str(error)) from error
-    if "cpu_execution_protocol" in profile:
-        from .cpu_protocol_calibration import validate_cpu_protocol
-        from .numerical_calibration import NumericalCalibrationError
-        try:
-            validate_cpu_protocol(profile)
-        except NumericalCalibrationError as error:
-            raise ProfileError(str(error)) from error
-    if "cpu_dependency" in profile:
-        from .cpu_dependency_calibration import validate_dependency_profile
-        from .numerical_calibration import NumericalCalibrationError
-        try:
-            validate_dependency_profile(profile)
-        except NumericalCalibrationError as error:
-            raise ProfileError(str(error)) from error
+    # Sections written by the retired per-kernel calibrations are ignored.
     if "scoped" in profile:
         scoped = profile["scoped"]
         if not isinstance(scoped, dict) or type(scoped.get("schema_version")) is not int or scoped["schema_version"] != 1:

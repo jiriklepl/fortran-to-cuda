@@ -9,11 +9,6 @@ extension; scoped automatic execution requires matching runtime calibration.
 Add --collective-costs to measure the original persistent OpenMP team and its
 generated protocol. It also identifies the actual Fortran compiler and ordered
 semantic flags; defaults are -std=f2018 -O3 -fopenmp.
-Add --numerical-costs for independently validated native Fortran, generated CPU
-and GPU compute models. Rejected families retain their raw evidence. Version 1
-is available explicitly for legacy C++/CUDA consumers. Explicit version 3
-repairs CPU protocol measurement using production workers and global rounds;
-its CPU-only evidence cannot authorize GPU placement.
 """
 from __future__ import annotations
 
@@ -615,23 +610,6 @@ def calibrate(args: argparse.Namespace) -> dict:
             profile = calibrate_source_protocol(profile, args, directory, nvcc, host, run=_run, tool=_tool)
         except ValueError as error:
             raise CalibrationError(str(error)) from error
-    if getattr(args, "numerical_costs", False):
-        from .numerical_calibration import NumericalCalibrationError, calibrate_numerical, calibrate_numerical_v2
-        print("Measuring independent numerical families and backends...", file=sys.stderr, flush=True)
-        try:
-            version = getattr(args, "numerical_version", 2)
-            if version == 1:
-                profile = calibrate_numerical(profile, args, directory, nvcc, host, run=_run)
-            elif version == 2:
-                profile = calibrate_numerical_v2(profile, args, directory, nvcc, host, run=_run, tool=_tool)
-            elif version == 3:
-                from .numerical_execution_calibration import calibrate_numerical_execution
-                profile = calibrate_numerical_execution(profile, args, directory, nvcc, host,
-                                                       run=_run, tool=_tool)
-            else:
-                raise NumericalCalibrationError("unsupported numerical calibration version")
-        except NumericalCalibrationError as error:
-            raise CalibrationError(str(error)) from error
     with tempfile.NamedTemporaryFile(mode="w", dir=output.parent, prefix=output.name + ".", delete=False) as stream:
         temporary = Path(stream.name)
         try:
@@ -666,15 +644,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="also measure bounded source-submit, scratch and original-team protocols; requires --scoped-costs")
     parser.add_argument("--source-submit-model", action="store_true",
                         help="qualify the fixed-ABI nonnegative binding/launch submit model; requires --source-task-costs")
-    parser.add_argument("--numerical-costs", action="store_true",
-                        help="also validate generic numerical costs for native Fortran, generated CPU and GPU")
-    parser.add_argument("--numerical-version", type=int, choices=(1, 2, 3), default=2,
-                        help="numerical protocol (default 2; 1 is legacy C++; 3 collects repaired CPU-only evidence)")
-    parser.add_argument("--cpu-affinity", help="fixed comma-separated CPU indices for numerical v2/v3 (default first allowed CPUs matching --threads)")
-    parser.add_argument("--fortran", help="Fortran compiler for numerical/collective calibration (default gfortran-15, gfortran-14 or gfortran)")
+    parser.add_argument("--fortran", help="Fortran compiler for collective calibration (default gfortran-15, gfortran-14 or gfortran)")
     parser.add_argument("--fortran-flag", action="append", default=[],
                         help="repeat to replace Fortran defaults in order; include -fopenmp "
-                             "(v1/v2 defaults: -std=f2018 -O3 -fopenmp; v3 requires explicit original flags)")
+                             "(defaults: -std=f2018 -O3 -fopenmp)")
     args = parser.parse_args(argv)
     if args.threads < 1 or args.device < 0 or not 8 <= args.max_mib <= 1024:
         parser.error("threads must be positive, device nonnegative, and max-mib between 8 and 1024")

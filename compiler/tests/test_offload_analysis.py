@@ -80,22 +80,20 @@ def test_same_iteration_definition_does_not_require_an_incoming_replica(tmp_path
     assert result.writes
 
 
-def test_scalar_math_has_explicit_counts_and_cannot_use_ordinary_fma_rate(tmp_path):
+def test_scalar_math_has_no_static_count_and_cannot_use_ordinary_fma_rate(tmp_path):
     analysis = analyze(tmp_path, RANK1, "do i=1,n\na(i)=sqrt(abs(b(i)))+cos(acos(b(i)))\nend do")
     unit = analysis.units[0]
-    assert dict(unit.intrinsic_work_per_iteration) == {"sqrt": 1, "cos": 1, "acos": 1}
     assert unit.work_per_iteration is None
-    assert unit.arithmetic_work_per_iteration > 0
-    assert "numerical calibration" in unit.work_estimate_reason
+    assert unit.work_estimate_reason == "scalar math has no static work count"
     record = analysis.to_dict()["units"][0]
-    assert record["intrinsic_work_per_iteration"] == {"acos": 1, "cos": 1, "sqrt": 1}
     assert record["work_per_iteration"] is None
+    assert record["work_estimate_reason"] == unit.work_estimate_reason
 
 
 def test_ordinary_arithmetic_preserves_existing_public_cost_report(tmp_path):
     analysis = analyze(tmp_path, RANK1, "do i=1,n\na(i)=2*b(i)+1\nend do")
     assert analysis.units[0].work_per_iteration is not None
-    assert "intrinsic_work_per_iteration" not in analysis.to_dict()["units"][0]
+    assert analysis.to_dict()["units"][0]["work_estimate_reason"] is None
 
 
 def test_physical_affine_signed_permutation_matches_enumerated_accesses(tmp_path):

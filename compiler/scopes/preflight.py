@@ -19,8 +19,6 @@ from compiler.frontend.native_group_structure import NativeGroupCandidate, group
 from compiler.frontend.numerical_preparation import NumericalPreparationProvider, _Budget, _walk
 from compiler.frontend.source_effects import _children, _kind
 from compiler.ir import CompilationError
-from compiler.offload.source_applicability import source_compute_applicability
-from compiler.offload.source_compute import apply_source_compute_costs, fork_join_participation
 
 
 def _digest(value):
@@ -81,25 +79,18 @@ def _units(analysis, routine, graph):
     yield from sequence(_children(routine.execution))
 
 
-def _cost(prepared, analysis, config):
-    completion = prepared.completion
-    participation = (fork_join_participation(prepared.extraction.nodes)
-                     if completion.get("has_openmp_in_closure") else
-                     "serial" if completion.get("available") else "unknown")
-    applicability = source_compute_applicability(analysis, prepared, native_participation=participation)
-    priced = apply_source_compute_costs(prepared.offload, config.profile, participation,
-                                       source_applicability=applicability)
-    reasons = [unit.work_estimate_reason or "work estimate is unknown or conditional"
-               for unit in priced.units if unit.work_per_iteration is None or unit.work_is_upper_bound]
-    if prepared.function.requires_numerical_environment:
-        reasons.append("numerical_environment_protocol_calibration_unavailable")
+def _cost(prepared, config):
+    """Whether automatic placement would rank this candidate, as the emitter decides it."""
+    values = {"unit_count": len(prepared.offload.units),
+              "scope_transfer_estimate": "not_requested", "placement_authorized": False}
+    if config.policy != "auto":
+        return _status("not_requested", **values)
+    reasons = []
+    if config.profile is None:
+        reasons.append(config.profile_reason or "hardware profile is missing")
     if prepared.extraction.scalar_element_captures:
-        reasons.append("immutable element preparation lacks compatible offline cost estimates")
-    return _status("unavailable" if reasons else "available", reasons,
-                   native_participation=participation,
-                   source_applicability=applicability.public() if applicability else None,
-                   unit_count=len(priced.units),
-                   scope_transfer_estimate="not_requested", placement_authorized=False)
+        reasons.append("immutable element preparation has no cost estimate")
+    return _status("unavailable" if reasons else "available", reasons, **values)
 
 
 def preflight_scope(builder, *, follow_calls=True, observer=None, resource_demands=None):
@@ -291,7 +282,7 @@ def preflight_scope(builder, *, follow_calls=True, observer=None, resource_deman
                 try:
                     prepared = provider.prepare(analysis, procedure, selection)
                     row["numerical"] = _status("available", preparation=prepared.public())
-                    row["cost"] = _cost(prepared, analysis, builder.config)
+                    row["cost"] = _cost(prepared, builder.config)
                     for reason in row["cost"]["reasons"]:
                         blocker(row, "cost", reason)
                 except CompilationError as error:

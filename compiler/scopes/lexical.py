@@ -118,8 +118,6 @@ class Unit:
 @dataclass
 class UnitEmission:
     """Results produced while emitting an already admitted immutable unit."""
-    compute_identity: dict | None = None
-    native_preflight: dict | None = None
     fresh_native_prefix: dict | None = None
     prepared: object = None
 
@@ -1181,21 +1179,12 @@ class LexicalOwner:
             # no query or VALUE arguments reading dormant inner controls.
             # Earlier device state remains valid; this is not an owner close.
             prepare += [f"if (.not. {element_active}) exit {block}"]
-        metadata_native = None
-        preflight = None
         if self.price_units:
-            from compiler.scopes.compute_identity import compute_identity_guard
             # An earlier rejected candidate can roll back artifact maps while
-            # retaining reusable child proofs. Restore only this admitted
-            # unit's numerical leaves before its prepared-only identity query.
+            # retaining reusable child proofs. Restore this admitted unit's
+            # numerical leaves before it is emitted.
             for leaf in sorted(unit.leaves):
                 builder.numerical(leaf)
-            identity = compute_identity_guard(builder, unit.leaves, caller=self.routine)
-            result.compute_identity = identity.public()
-            if identity.required:
-                imports += list(identity.imports)
-                prepare += ["if (.not. (" + identity.expression + ")) then",
-                            *close(), "exit " + block, "endif"]
         for root, binding in arrays.items():
             name, number = parameters[root], self.resources[root][1]
             dtype, enum, width = DTYPES[binding.signature()[:2]]
@@ -1236,32 +1225,6 @@ class LexicalOwner:
             prepare += [*guard_code, "if (.not. fort_numerical_guard) then",
                         *close(reason="original numerical preparation guard failed"),
                         "exit " + block, "endif"]
-        from compiler.scopes.segments import Segment
-        if self.price_units and unit.definition_summary.changes:
-            result.native_preflight = {"abi_version": 1, "available": False,
-                "reason": "ordered definition changes require reached registration and validation"}
-        if (self.price_units and not combined_team and not unit.definition_summary.changes
-                and not unit.scope.native and len(unit.scope.tree) == 1
-                and isinstance(unit.scope.tree[0], Segment)
-                and unit.scope.tree[0].query and unit.scope.tree[0].query[0]):
-            from compiler.scopes.native_preflight import source_native_preflight
-            preflight = source_native_preflight(builder, unit.scope.calls, unit.leaves, parameters,
-                                               original_descriptors=True)
-            result.native_preflight = preflight.public
-            if preflight.expression is not None:
-                metadata_native = "fort_metadata_native_" + block.rsplit("_", 1)[-1]
-                scope = self.routine.scope
-                if (builder.analysis._binding(scope, metadata_native) is not None
-                        or builder.analysis._candidates(scope, metadata_native)
-                        or metadata_native in scope.imports or metadata_native in scope.ambiguous_imports
-                        or metadata_native in scope.generics):
-                    metadata_native = None
-                    result.native_preflight = {"abi_version": 1, "available": False,
-                                             "reason": "metadata flag conflicts with original source"}
-                else:
-                    imports += list(preflight.imports)
-                    prepare += ["if (fort_context == 0) then", "if (" + preflight.expression + ") then",
-                                metadata_native + " = .true.", "exit " + block, "endif", "endif"]
         from compiler.scopes.registration import fresh_undefined_read_guard
 
         # validate_scheduled_unit authenticates this member and unit in
@@ -1441,19 +1404,11 @@ class LexicalOwner:
                     (last+1, last, "\n".join(fortran_lines(suffix))+"\n"), *joined_patches]
         original = unit.native_source if unit.native_source is not None else self.original(unit.nodes)
         native_condition = f".not. {self.enabled}"
-        if metadata_native is not None:
-            native_condition += " .or. " + metadata_native
         if element_active is not None:
             native_condition += " .or. .not. " + element_active
         lines = [*self.rearm_epoch(), f"if ({self.enabled}) then", f"associate(fort_context => {self.context})", block + ": block",
                  *dict.fromkeys(imports), *spec, *prepare, *execution, "end block " + block, "end associate", "endif",
                  f"if ({native_condition}) then", *original.splitlines(), "endif"]
-        if metadata_native is not None:
-            # A fresh native unit must not disable profitable later segments.
-            # Existing contexts never take this shortcut: their coherent CPU
-            # continuation still publishes the sections it actually needs.
-            lines = ["block", "logical :: " + metadata_native, metadata_native + " = .false.",
-                     *lines, "end block"]
         if element_active is not None:
             lines = ["block", "logical :: " + element_active, element_active + " = .false.",
                      *lines, "end block"]
@@ -1480,9 +1435,7 @@ class LexicalOwner:
 
         from compiler.scopes.unit_emission import PreparedUnitEmission
 
-        diagnostics = json.dumps({"compute_identity": result.compute_identity,
-                                  "native_preflight": result.native_preflight,
-                                  "fresh_native_prefix": result.fresh_native_prefix},
+        diagnostics = json.dumps({"fresh_native_prefix": result.fresh_native_prefix},
                                  separators=(",", ":"), allow_nan=False).encode()
         image = PreparedUnitEmission(tuple((first, last, tuple(lines)) for first, last, lines in edits), diagnostics,
                                      tuple((first, last, text) for first, last, text in finished_edits))
@@ -1867,19 +1820,14 @@ class LexicalOwner:
         builder.scopes.append({"owner": self.context, "owner_variant": variant.identity,
             "path": str(self.routine.scope.path), "first_line": first, "last_line": last,
             "gpu_leaves": sorted(self.leaves), "mode": builder.config.policy,
-            "estimate_available": not has_source_tasks and not has_position_epoch and all(unit.scope.planning_status()[0] and
-                                      (member.unit_emission(unit).compute_identity is None
-                                       or member.unit_emission(unit).compute_identity["available"])
-                                      for member in self.members.values() for unit in member.units),
+            "estimate_available": not has_source_tasks and not has_position_epoch and all(
+                unit.scope.planning_status()[0] for member in self.members.values() for unit in member.units),
             "planning_reason": (("local source-task quotes exclude unpriced common/owner work"
                                   if any(task.pricing is not None for member in self.members.values()
                                          for task in member.source_device_tasks) else
                                   "source-issued tile task and scratch preparation are unpriced") if has_source_tasks else
                                 "selected-position storage guards are unpriced" if has_position_epoch else None)
-                or native_reason or next((member.unit_emission(unit).compute_identity["reason"]
-                for member in self.members.values() for unit in member.units
-                if member.unit_emission(unit).compute_identity is not None
-                and not member.unit_emission(unit).compute_identity["available"]), None),
+                or native_reason,
             "ownership": {"lifetime": "one original invocation", "planning_mode": "continuation",
                           "retained_resources": list(self.resources), "end_reason": "reached boundary or original invocation end"},
             "native_owner_hint": (self.emission.native_owner_hint.public()
@@ -1909,8 +1857,6 @@ class LexicalOwner:
                 "planning_segments": [{"segment_id": index, "first_line": unit.scope.first,
                     "last_line": unit.scope.last, "resources": list(unit.arrays),
                     "gpu_leaves": sorted(unit.leaves), "ordered_definitions": unit.definition_summary.public(),
-                    "compute_identity": member.unit_emission(unit).compute_identity,
-                    "native_preflight": member.unit_emission(unit).native_preflight,
                     "operations": plan.operations(member, index)}
                     for index, unit in enumerate(member.units)]}
                 for member in self.members.values() if member is not self and not hasattr(member, "emit_companion")],
@@ -1919,8 +1865,6 @@ class LexicalOwner:
             "planning_segments": [{"segment_id": index, "first_line": unit.scope.first, "last_line": unit.scope.last,
                                    "resources": list(unit.arrays), "gpu_leaves": sorted(unit.leaves),
                                    "ordered_definitions": unit.definition_summary.public(),
-                                   "compute_identity": self.unit_emission(unit).compute_identity,
-                                   "native_preflight": self.unit_emission(unit).native_preflight,
                                    "fresh_native_prefix": self.unit_emission(unit).fresh_native_prefix,
                                    "operations": plan.operations(self, index)} for index,unit in enumerate(plan.units(self))],
             "boundaries": self.boundaries, "native_continuation": "original lexical scope; no replay and no synthetic argument association",

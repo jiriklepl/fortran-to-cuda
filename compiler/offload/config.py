@@ -1,12 +1,8 @@
 """Shared graph execution configuration."""
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
 
 from compiler.numerical_contract import require_numerical_build_contract
-
-if TYPE_CHECKING:
-    from compiler.offload.source_applicability import SourceComputeApplicability
 
 
 @dataclass(frozen=True)
@@ -17,12 +13,9 @@ class OffloadConfig:
     collective: bool = False
     profile_reason: str | None = None
     scope_transfers: str = "direct"
-    # None prices generated workers only. Source-backed original Fortran
-    # alternatives require a separately calibrated participation contract.
-    native_participation: str | None = None
-    # Issued for one authenticated original region, before artifact rewriting.
-    # This describes cost applicability only; it cannot authorize execution.
-    source_applicability: "SourceComputeApplicability | None" = None
+    # The native alternative is the original Fortran, not the generated worker.
+    # Static work counts describe only the generated worker.
+    original_native: bool = False
     def __post_init__(self):
         if self.policy not in {"sections", "auto"}:
             raise ValueError("Ordinary GPU policies were removed; use sections or auto")
@@ -32,14 +25,8 @@ class OffloadConfig:
             raise ValueError("Pipelined slab batching was removed; use shared graph execution")
         if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
             raise ValueError("Unknown scope transfer mode")
-        if self.native_participation not in {None, "serial", "fork_join", "fork_join_runtime", "existing_team", "unknown"}:
-            raise ValueError("Unknown native Fortran participation")
-        if self.source_applicability is not None:
-            from compiler.offload.source_applicability import SourceComputeApplicability
-            if type(self.source_applicability) is not SourceComputeApplicability:
-                raise ValueError("Source compute applicability requires original-region metadata")
-            if self.source_applicability.native_participation != self.native_participation:
-                raise ValueError("Source compute applicability participation differs")
+        if type(self.original_native) is not bool:
+            raise ValueError("original_native must be a boolean")
         if self.profile is not None:
             try:
                 require_numerical_build_contract(self.profile.get("numerical_contract")

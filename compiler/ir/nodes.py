@@ -33,12 +33,12 @@ class CompilationError(Exception):
 
 @dataclass(frozen=True)
 class PrivateArrayOrigin:
-    """Cost provenance for one scalarized element of original fixed storage.
+    """Which element of original fixed private storage a scalarized symbol holds.
 
     ``group_id`` is local to the lowered function, including its inlined helper
     activations. Bounds describe the original declared storage, before a helper's
-    dummy association rebases coordinates. This metadata proves no numerical
-    legality, native participation, or calibrated workload applicability.
+    dummy association rebases coordinates. This provenance proves no numerical
+    legality.
     """
 
     group_id: int
@@ -59,7 +59,7 @@ class Symbol:
     rank: int = 0
     intent: str | None = None
     parameter: bool = False
-    # Cost metadata must not change numerical symbol identity or legality.
+    # Provenance must not change numerical symbol identity or legality.
     private_array_origin: PrivateArrayOrigin | None = field(default=None, compare=False)
     # VALUE scalar dummies are defined on entry, including on untaken paths.
     by_value: bool = False

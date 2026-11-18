@@ -15,7 +15,8 @@ def prepare_function(
     options = options or CompilerOptions()
     # Explicit scoped placement executes the checked numerical graph, including
     # legal fusion. Its entry/replica lifetime does not depend on source passes.
-    # Calibrated legacy partitions still price their original units.
+    # Automatic placement outside a source graph ranks the original units, so
+    # they are not fused.
     graph_report = ()
     if options.source_graph and options.opt_level:
         from compiler.transforms.task_motion import order_function_tasks

@@ -170,11 +170,8 @@ def prepared_image_case(directory):
                 state = member.unit_emission(unit)
                 edits = tuple((str(member.routine.scope.path), first, last, text, False)
                               for first, last, text in state.source_edits)
-                diagnostics = json.dumps({
-                    "compute_identity": state.compute_identity,
-                    "native_preflight": state.native_preflight,
-                    "fresh_native_prefix": state.fresh_native_prefix,
-                }, separators=(",", ":"), allow_nan=False).encode()
+                diagnostics = json.dumps({"fresh_native_prefix": state.fresh_native_prefix},
+                                         separators=(",", ":"), allow_nan=False).encode()
                 units.append((token.ticket(member_index, ordinal), edits, diagnostics))
         payload = {
             "units": tuple(units),

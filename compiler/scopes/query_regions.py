@@ -749,14 +749,10 @@ def _emit_region(proof, ordinal):
                 args.append(prepared[id(step), parameter.resource])
         code += ["if (fort_status == FORT_SCOPE_OK) then",
                  *_fortran_list("fort_status = " + alias + "(", args, ")", 0), "endif"]
-    from compiler.scopes.compute_identity import compute_identity_guard
-    guard = compute_identity_guard(builder, sorted(leaves), caller=anchor.routine)
-    imports += list(guard.imports)
     selector_step = next(step for step in proof.steps if step.call is not None)
     selector, _ = selector_step.member.builder.entry_artifacts(selector_step.call.procedure)
     imports.append(f"use {selector['fortran_module']}, only: fort_region_choose => {selector['planning']['fortran_selector']}")
-    code += [f"if (.not. ({guard.expression})) fort_status = FORT_SCOPE_BOUNDARY",
-        f"if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate({anchor.context})",
+    code += [f"if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate({anchor.context})",
         f"if (fort_status == FORT_SCOPE_OK) fort_status = fort_region_choose({anchor.context}, fort_decision)",
         f"if (fort_status /= FORT_SCOPE_OK) exit {block}", f"{anchor.query_plan} = .true.", f"{own} = .true."]
     activation = [f"if ({anchor.enabled}) then", f"if (.not. {anchor.query_plan}) then",

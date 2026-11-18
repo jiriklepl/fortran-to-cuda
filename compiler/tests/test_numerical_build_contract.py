@@ -24,7 +24,6 @@ from compiler.numerical_contract import (
 from compiler.offload.calibrate import _calibrate_scoped, calibrate, profile_from_measurements
 from compiler.offload.collective_calibration import calibrate_collective
 from compiler.offload.config import OffloadConfig
-from compiler.offload.numerical_calibration import calibrate_numerical, calibrate_numerical_v2
 from compiler.offload.profile import ProfileError, compiler_identity, validate_profile
 from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_offload_profile import observations, profile
@@ -99,7 +98,7 @@ def test_reinterpreting_unlabelled_raw_measurements_does_not_invent_build_author
 
 
 @pytest.mark.parametrize("name", ["NVCC_PREPEND_FLAGS", "NVCC_APPEND_FLAGS"])
-@pytest.mark.parametrize("call", ["base", "scoped", "numerical", "compute", "collective"])
+@pytest.mark.parametrize("call", ["base", "scoped", "collective"])
 def test_hidden_nvcc_flags_fail_before_any_build_or_tool_invocation(tmp_path, monkeypatch, name, call):
     monkeypatch.setenv(name, "--fmad=true")
     invoked = []
@@ -110,10 +109,6 @@ def test_hidden_nvcc_flags_fail_before_any_build_or_tool_invocation(tmp_path, mo
     calls = {
         "base": lambda: calibrate(args),
         "scoped": lambda: _calibrate_scoped(None, args, tmp_path / "absent", "nvcc", "host"),
-        "numerical": lambda: calibrate_numerical(
-            None, args, tmp_path / "absent", "nvcc", "host", run=record_invocation),
-        "compute": lambda: calibrate_numerical_v2(
-            None, args, tmp_path / "absent", "nvcc", "host", run=record_invocation, tool=record_invocation),
         "collective": lambda: calibrate_collective(
             None, args, tmp_path / "absent", "nvcc", "host", run=record_invocation, tool=record_invocation),
     }
