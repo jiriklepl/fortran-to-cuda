@@ -1918,31 +1918,53 @@ void drain_resources(Context &c,const fort_buffer_t *handles,size_t count) {
     }
     drain_effects(c,accesses);
 }
-void enqueue_graph(Context &c,uint64_t key,const fort_scope_graph_task_v1 *task,const size_t *sizes) {
-    require(key && task,FORT_SCOPE_ARGUMENT,"missing queued graph task or code key");
-    const auto invalid=fort_scoped::graphs::invalid(&task->kernel,1);
+// A queued launch runs its members concurrently: each member is a part of the
+// kernel with its own effects. The launch is accepted only when no member
+// depends on another, judged on the actual sections, and then carries the
+// union of their effects. One member is the ordinary single task.
+void enqueue_graph(Context &c,uint64_t key,const fort_scope_kernel_v1 &kernel,const size_t *sizes,
+                   const fort_scope_graph_member_v1 *members,size_t member_count) {
+    require(key && members && member_count,FORT_SCOPE_ARGUMENT,"missing queued graph task or code key");
+    const auto invalid=fort_scoped::graphs::invalid(&kernel,1);
     require(!invalid,FORT_SCOPE_ARGUMENT,invalid?invalid:"invalid queued kernel");
-    require(!task->kernel.argument_count || sizes,FORT_SCOPE_ARGUMENT,"missing queued kernel argument sizes");
-    require(!task->binding_count || task->bindings,FORT_SCOPE_ARGUMENT,"missing queued task effects");
-    auto owned=std::make_unique<QueuedTask>(); owned->key=key; owned->kernel=task->kernel;
+    require(!kernel.argument_count || sizes,FORT_SCOPE_ARGUMENT,"missing queued kernel argument sizes");
+    for (size_t m=0; m<member_count; ++m)
+        require(!members[m].binding_count || members[m].bindings,FORT_SCOPE_ARGUMENT,"missing queued task effects");
+    auto owned=std::make_unique<QueuedTask>(); owned->key=key; owned->kernel=kernel;
     if (trace_enabled() && trace_allocation_allowed("enqueue"))
         owned->provenance.reset(new(std::nothrow) fort_scope_trace_state_v1(c.provenance));
-    owned->arguments.reserve(task->kernel.argument_count);
+    owned->arguments.reserve(kernel.argument_count);
     uint64_t bytes=0;
-    for (size_t i=0; i<task->kernel.argument_count; ++i) {
+    for (size_t i=0; i<kernel.argument_count; ++i) {
         require(sizes[i] && sizes[i]<=std::numeric_limits<uint64_t>::max()-bytes,FORT_SCOPE_ARGUMENT,"invalid queued argument size");
         bytes+=sizes[i];
     }
-    require(owned->values.capture(task->kernel,sizes),FORT_SCOPE_ARGUMENT,"queued argument padding overflows size_t");
-    for (size_t i=0;i<task->kernel.argument_count;++i) owned->arguments.push_back(owned->values.argument(i));
-    for (size_t i=0; i<task->binding_count; ++i) {
-        const auto &binding=task->bindings[i]; auto &b=buffer(c,binding.buffer);
+    require(owned->values.capture(kernel,sizes),FORT_SCOPE_ARGUMENT,"queued argument padding overflows size_t");
+    for (size_t i=0;i<kernel.argument_count;++i) owned->arguments.push_back(owned->values.argument(i));
+    for (size_t m=0; m<member_count; ++m) for (size_t i=0; i<members[m].binding_count; ++i) {
+        const auto &binding=members[m].bindings[i]; auto &b=buffer(c,binding.buffer);
         for (size_t k=0; k<i; ++k)
-            require(task->bindings[k].buffer!=binding.buffer,FORT_SCOPE_ALIAS,"queued task repeats a canonical buffer");
+            require(members[m].bindings[k].buffer!=binding.buffer,FORT_SCOPE_ALIAS,"queued task repeats a canonical buffer");
         require(!b.prepared,FORT_SCOPE_STATE,"queued resource already prepared");
         require(!b.bytes || b.device,FORT_SCOPE_STATE,"reserve queued device storage before enqueue");
-        owned->bindings.push_back({binding.buffer,parsed_effects(c,b,&binding.access)});
-        owned->buffers|=buffer_bit(binding.buffer);
+        auto parsed=parsed_effects(c,b,&binding.access);
+        const auto shared=std::find_if(owned->bindings.begin(),owned->bindings.end(),[&](const QueuedBinding &earlier) {
+            return earlier.buffer==binding.buffer;
+        });
+        if (shared==owned->bindings.end()) {
+            owned->bindings.push_back({binding.buffer,std::move(parsed)});
+            owned->buffers|=buffer_bit(binding.buffer);
+            continue;
+        }
+        // The same buffer under two members, including one array passed for
+        // two arguments. The caller runs such members one after another.
+        if (conflicts(*shared->effects,*parsed))
+            throw Error(FORT_SCOPE_BOUNDARY,"members of a queued launch depend on each other");
+        Budget budget;
+        shared->effects=std::make_shared<const Effects>(Effects{
+            unite(shared->effects->reads,parsed->reads,budget),
+            unite(shared->effects->writes,parsed->writes,budget),
+            unite(shared->effects->overwrites,parsed->overwrites,budget)});
     }
 #ifndef FORT_SCOPE_CPU_TEST
     initialize(c); // Device availability is checked before accepting work.
@@ -4788,7 +4810,20 @@ extern "C" int fort_scope_graph_execute_v1(fort_scope_t h, uint64_t key,
 extern "C" int fort_scope_graph_enqueue_v1(fort_scope_t h,uint64_t key,
                                             const fort_scope_graph_task_v1 *task,const size_t *sizes) {
     native_hint_gpu_generation.advance();
-    return with(h,[&](Context &c) { enqueue_graph(c,key,task,sizes); },Change::Query);
+    return with(h,[&](Context &c) {
+        require(task,FORT_SCOPE_ARGUMENT,"missing queued graph task or code key");
+        const fort_scope_graph_member_v1 member{task->bindings,task->binding_count};
+        enqueue_graph(c,key,task->kernel,sizes,&member,1);
+    },Change::Query);
+}
+extern "C" int fort_scope_graph_enqueue_members_v1(fort_scope_t h,uint64_t key,const fort_scope_kernel_v1 *kernel,
+                                                    const size_t *sizes,const fort_scope_graph_member_v1 *members,
+                                                    size_t member_count) {
+    native_hint_gpu_generation.advance();
+    return with(h,[&](Context &c) {
+        require(kernel,FORT_SCOPE_ARGUMENT,"missing queued graph task or code key");
+        enqueue_graph(c,key,*kernel,sizes,members,member_count);
+    },Change::Query);
 }
 extern "C" int fort_scope_graph_flush_v1(fort_scope_t h) {
     return with(h,[&](Context &c) { flush_commands(c); });

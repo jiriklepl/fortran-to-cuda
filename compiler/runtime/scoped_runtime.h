@@ -914,6 +914,19 @@ typedef struct fort_scope_graph_queue_stats_v1 {
  * launches. Numerical launch/execution failure poisons the context. */
 int fort_scope_graph_enqueue_v1(fort_scope_t context, uint64_t code_key,
                                 const fort_scope_graph_task_v1 *task, const size_t *argument_sizes);
+/* Defer one launch whose kernel runs several members concurrently. Each member
+ * has its own effects. The launch is accepted only when no member reads or
+ * writes a section that another member writes, judged on the actual sections;
+ * otherwise this returns BOUNDARY and queues nothing, and the caller runs the
+ * members one after another. An accepted launch carries the union of the
+ * members' effects. Other statuses are those of graph_enqueue. */
+typedef struct fort_scope_graph_member_v1 {
+    const fort_scope_plan_binding *bindings;
+    size_t binding_count;
+} fort_scope_graph_member_v1;
+int fort_scope_graph_enqueue_members_v1(fort_scope_t context, uint64_t code_key,
+                                        const fort_scope_kernel_v1 *kernel, const size_t *argument_sizes,
+                                        const fort_scope_graph_member_v1 *members, size_t member_count);
 int fort_scope_graph_flush_v1(fort_scope_t context);
 int fort_scope_graph_queue_cancel_v1(fort_scope_t context);
 int fort_scope_graph_queue_stats_get_v1(fort_scope_t context, fort_scope_graph_queue_stats_v1 *stats);

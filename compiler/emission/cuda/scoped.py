@@ -11,8 +11,8 @@ from compiler.emission.common.c_family import cpp_type, indent, render_assignmen
 from compiler.emission.common.loops import _loop_snapshot, sequential_block
 from compiler.emission.common.schedules import checked_product, region_schedule, tile_counts
 from compiler.emission.common.symbols import host_symbols, region_symbols
-from compiler.emission.cuda.graphs import generate_graph_group, graph_group_eligible
-from compiler.emission.cuda.kernels import generate_kernel, generate_launch
+from compiler.emission.cuda.graphs import _kernel_arguments, generate_graph_group, graph_group_eligible
+from compiler.emission.cuda.kernels import generate_group_kernel, generate_kernel, generate_launch
 from compiler.emission.cuda.offload import _cpu_worker, _host_profile_compatibility, _metadata, _precision
 from compiler.emission.cuda.structured import _query_expression
 from compiler.emission.fortran.formatting import _fortran_list
@@ -309,6 +309,60 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             for a in abi)
         lines.extend(generate_kernel(region, array_views=root_views))
         lines.extend(_cpu_worker(units[region.id], worker_signature + extra_signature, f"cpu_{region.id}"))
+
+    def launch_groups(current):
+        """Runs of adjacent regions that one launch can execute concurrently.
+
+        Members touch no array that another member writes, by symbol, and
+        write no shared scalar. Two arguments can still name one array, or a
+        footprint can be wider than the work; the runtime rechecks the actual
+        sections and the entry keeps its one-kernel-per-region path for that.
+        """
+        groups, run = [], []
+
+        def arrays_of(region):
+            footprints = units[region.id].footprints
+            return ({fp.symbol for fp in footprints if fp.reads or fp.full_read},
+                    {fp.symbol for fp in footprints if fp.writes or fp.full_write})
+
+        def groupable(region):
+            schedule = region_schedule(region)
+            return (not schedule.tile_sizes and graph_group_eligible((region,), units, protected)
+                    and not any(not symbol.rank and symbol not in region.private_symbols
+                                for symbol in region.write_symbols))
+
+        def independent(first, second):
+            first_reads, first_writes = arrays_of(first)
+            second_reads, second_writes = arrays_of(second)
+            return (not first_writes & (second_reads | second_writes) and not second_writes & first_reads
+                    and region_schedule(first).cuda_threads == region_schedule(second).cuda_threads)
+
+        def close():
+            if len(run) > 1:
+                groups.append(tuple(run))
+            run.clear()
+
+        for step in current.steps:
+            if isinstance(step, ConditionalRegion):
+                close()
+                groups.extend(launch_groups(step.then_plan))
+                groups.extend(launch_groups(step.else_plan))
+                continue
+            member = isinstance(step, ParallelRegion) and groupable(step)
+            # One launch passes every member's arguments; stay far below the launch limit.
+            if (member and all(independent(earlier, step) for earlier in run)
+                    and sum(len(_kernel_arguments(region)) for region in (*run, step)) <= 192):
+                run.append(step)
+                continue
+            close()
+            if member:
+                run.append(step)
+        close()
+        return groups
+
+    merged_launches = [] if config.collective or root_views or batch_enabled else launch_groups(plan)
+    for group in merged_launches:
+        lines.extend(generate_group_kernel(group, array_views=root_views))
     if batch_eligible:
         from compiler.emission.cuda.batch import numerical_batch_helpers
         lines[0:0] = ["#include <memory>", "#include <vector>"]
@@ -530,8 +584,27 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             root_views=root_views, group_key=key, fallback=(), enqueue=True,
             accepted=accepted, condition="fort_gpu", prepared_access="fort_access")
 
+    def merged_launch(group, fallback):
+        key = int(sha256(f"{name}:group:{'-'.join(str(region.id) for region in group)}".encode()).hexdigest()[:16], 16)
+        graph_launch_groups[key] = {"key": key, "regions": [region.id for region in group],
+            "ordering": "members of one launch; no member touches an array another writes",
+            "effects": "per-member effects; the runtime accepts only independent actual sections and queues their union",
+            "empty_domains": "omitted before argument capture and resource acquisition",
+            "fallback": "the members' own tasks in order, before enqueue; accepted work is never replayed"}
+        position = (f'fort_scoped::TracePosition fort_worker_trace(fort_context, "{procedure_id}", '
+                    f'"{implementation_ids[group[0].id, "cuda"]}");')
+        return generate_graph_group(group, units=units, arrays=arrays, capacity=capacity,
+            bounds=bounds, descriptors=descriptors, array_argument=array_argument,
+            root_views=root_views, group_key=key, fallback=fallback, enqueue=True,
+            accepted=("fort_entry_work_started = true;",), condition="fort_gpu_requested",
+            merged=True, prologue=(position,))
+
+    group_first = {group[0].id: group for group in merged_launches}
+    group_last = {group[-1].id: group for group in merged_launches}
+
     def execution(current):
         result = []
+        group_start = None
         for step in current.steps:
             if isinstance(step, ConditionalRegion):
                 result += prefetch(expression_reads((step.condition,)))
@@ -543,6 +616,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 result += host(step, sequential_block(step.body, 0, [0]))
             elif isinstance(step, ParallelRegion):
                 unit = units[step.id]
+                if step.id in group_first:
+                    group_start = len(result)
                 if batch_enabled:
                     position = next(index for index, region in enumerate(plan.regions) if region.id == step.id)
                     result += [f"if ({position}ULL >= fort_batch_skip) {{"]
@@ -595,6 +670,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 result += [*indent(body, 2), "    }", "}"]
                 if batch_enabled:
                     result += ["}", "}"]
+                if step.id in group_last:
+                    # The members' own code, emitted just above, is the fallback.
+                    result[group_start:] = merged_launch(group_last[step.id], result[group_start:])
             else:
                 raise TypeError(step)
         return result

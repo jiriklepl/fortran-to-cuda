@@ -18,9 +18,15 @@ class QueueStats(c.Structure):
                                  "direct_submissions", "direct_kernels", "graph_resource_fallbacks")]
 
 
+class Member(c.Structure):
+    _fields_ = [("bindings", c.POINTER(Binding)), ("binding_count", SIZE)]
+
+
 @pytest.fixture
 def queue(graphs):
     graphs.fort_scope_graph_enqueue_v1.argtypes = [TOKEN, TOKEN, c.POINTER(Task), c.POINTER(SIZE)]
+    graphs.fort_scope_graph_enqueue_members_v1.argtypes = [TOKEN, TOKEN, c.POINTER(Kernel), c.POINTER(SIZE),
+                                                           c.POINTER(Member), SIZE]
     graphs.fort_scope_graph_flush_v1.argtypes = graphs.fort_scope_graph_queue_cancel_v1.argtypes = [TOKEN]
     graphs.fort_scope_graph_queue_stats_get_v1.argtypes = [TOKEN, c.POINTER(QueueStats)]
     graphs.fort_scope_plan_reset.argtypes = graphs.fort_scope_plan_validate.argtypes = [TOKEN]
@@ -53,6 +59,80 @@ def enqueue(scope, key, bindings, *, scalar=7):
     task = Task(descriptor, bindings, len(bindings))
     sizes = (SIZE * 1)(c.sizeof(value))
     return scope.lib.fort_scope_graph_enqueue_v1(scope.handle, key, c.byref(task), sizes)
+
+
+def enqueue_members(scope, key, *members):
+    value = c.c_int(7)
+    arguments = (c.c_void_p * 1)(c.addressof(value))
+    descriptor = kernel()
+    descriptor.arguments, descriptor.argument_count = arguments, 1
+    packed = (Member * len(members))(*(Member(bindings, len(bindings)) for bindings in members))
+    return scope.lib.fort_scope_graph_enqueue_members_v1(
+        scope.handle, key, c.byref(descriptor), (SIZE * 1)(c.sizeof(value)), packed, len(members))
+
+
+@pytest.mark.native
+def test_independent_members_queue_as_one_launch_with_united_effects(queue):
+    scope = Scope(queue)
+    _, a = reserve(scope, 1)
+    _, b = reserve(scope, 2)
+    _, shared = reserve(scope, 3, initialized=True)
+    host, other = reserve(scope, 4, initialized=True)
+    # Two members write different arrays and read different halves of a third.
+    scope.check(enqueue_members(
+        scope, 11,
+        pack((a, access(flags=6)), (shared, access(read=[([0], [4])]))),
+        pack((b, access(flags=6)), (shared, access(read=[([4], [8])])))))
+    result = stats(scope)
+    assert result.accepted_tasks == result.pending_tasks == 1
+    assert scope.stats().launches == 0
+    # The one queued launch reads both halves: a host write to either half
+    # must run it first, which the reference backend cannot do.
+    for lower in (1, 6):
+        assert queue.fort_scope_host_begin(
+            scope.handle, shared, c.byref(access(write=[([lower], [lower + 1])]))) == 4
+    # Work on an unrelated array leaves it queued, as does reading the shared one.
+    scope.cpu_begin(other, access(flags=3))
+    host[0] = 5
+    scope.cpu_end(other)
+    scope.cpu_begin(shared, access(flags=1))
+    scope.cpu_end(shared)
+    assert stats(scope).pending_tasks == 1
+    scope.check(queue.fort_scope_graph_queue_cancel_v1(scope.handle))
+    scope.close()
+
+
+@pytest.mark.native
+def test_members_of_one_array_are_judged_on_their_actual_sections(queue):
+    scope = Scope(queue)
+    _, a = reserve(scope, 1, initialized=True)
+    halves = [access(write=[([0], [4])], overwrite=[([0], [4])]), access(write=[([4], [8])], overwrite=[([4], [8])])]
+    scope.check(enqueue_members(scope, 21, pack((a, halves[0])), pack((a, halves[1]))))
+    assert stats(scope).pending_tasks == 1
+    before = bytes(stats(scope))
+    # Overlapping writes, and a read of what another member writes, are refused whole.
+    overlap = access(write=[([3], [5])], overwrite=[([3], [5])])
+    assert enqueue_members(scope, 22, pack((a, halves[0])), pack((a, overlap))) == 5
+    assert enqueue_members(scope, 23, pack((a, halves[0])), pack((a, access(read=[([2], [3])])))) == 5
+    assert bytes(stats(scope)) == before
+    # A refused launch leaves no trace in the definitions later work sees.
+    scope.check(enqueue_members(scope, 24, pack((a, access(read=[([0], [8])])))))
+    assert stats(scope).pending_tasks == 2
+    scope.check(queue.fort_scope_graph_queue_cancel_v1(scope.handle))
+    scope.close()
+
+
+@pytest.mark.native
+def test_member_launch_validates_like_a_single_task(queue):
+    scope = Scope(queue)
+    _, a = reserve(scope, 1)
+    _, b = reserve(scope, 2)
+    # No members, a repeated buffer inside one member, and an undefined read.
+    assert enqueue_members(scope, 31) == 1
+    assert enqueue_members(scope, 32, pack((a, access(flags=6)), (a, access(flags=1)))) == 3
+    assert enqueue_members(scope, 33, pack((a, access(flags=6))), pack((b, access(flags=1)))) == 7
+    assert stats(scope).pending_tasks == stats(scope).accepted_tasks == 0
+    scope.close()
 
 
 @pytest.mark.native

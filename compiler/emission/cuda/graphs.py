@@ -11,7 +11,7 @@ from compiler.emission.common.abi import abi_arguments
 from compiler.emission.common.c_family import cpp_type, indent
 from compiler.emission.common.schedules import region_schedule
 from compiler.emission.common.symbols import region_symbols
-from compiler.emission.cuda.kernels import kernel_name
+from compiler.emission.cuda.kernels import group_kernel_name, kernel_name
 from compiler.ir import ArrayAccess, referenced_symbols, walk_expr
 
 
@@ -83,6 +83,8 @@ def generate_graph_group(
     accepted=(),
     condition="fort_gpu_requested",
     prepared_access=None,
+    merged=False,
+    prologue=(),
 ):
     """Emit a preexecution attempt with stable argument/effect storage.
 
@@ -91,15 +93,27 @@ def generate_graph_group(
     ``prepared_access`` names an access batch that the enclosing scope has
     already filled for the one queued task, next to that task's bounds. The
     attempt then exports those effects and computes neither again.
+    ``merged`` queues all regions as the members of one launch of their group
+    kernel. The runtime accepts it only when the members' actual sections are
+    independent; ``accepted`` then runs only if something was queued.
+    ``prologue`` lines open the attempt.
     """
-    if enqueue and len(regions) != 1:
+    if enqueue and len(regions) != 1 and not merged:
         raise ValueError("Deferred enqueue accepts exactly one checked task")
     if prepared_access is not None and not enqueue:
         raise ValueError("Only a deferred enqueue shares its caller's access batch")
-    declarations = [
+    if merged and (not enqueue or prepared_access is not None or len(regions) < 2
+                   or len({region_schedule(region).cuda_threads for region in regions}) != 1
+                   or any(region_schedule(region).tile_sizes for region in regions)):
+        raise ValueError("A merged launch queues several untiled regions with one block size")
+    declarations = [*prologue] + ([
+        f"fort_scope_graph_member_v1 fort_graph_members[{len(regions)}]{{}};",
+        "std::size_t fort_graph_count = 0, fort_graph_points = 0;",
+    ] if merged else [
         f"fort_scope_graph_task_v1 fort_graph_tasks[{len(regions)}]{{}};",
         "std::size_t fort_graph_count = 0;",
-    ]
+    ])
+    all_arguments = []
     preparations = []
     array_updates = []
     active_arrays = {symbol: [] for symbol in arrays}
@@ -132,12 +146,13 @@ def generate_graph_group(
             + ", ".join(f"&{prefix}_values.value_{index}" for index in range(len(arguments)))
             + "};",
         ]
-        if enqueue:
+        if enqueue and not merged:
             declarations += [
                 f"const std::size_t {prefix}_argument_sizes[] = {{"
                 + ", ".join(f"sizeof({prefix}_values.value_{index})" for index in range(len(arguments)))
                 + "};",
             ]
+        all_arguments += [f"{prefix}_values.value_{index}" for index in range(len(arguments))]
         schedule = region_schedule(region)
         blocks = (
             "fort_internal_total"
@@ -150,6 +165,11 @@ def generate_graph_group(
             *indent(local_code),
             f"    FORT_SHARED_CHECK({access_name}.export_bindings({prefix}_bindings, {capacity}, &{prefix}_binding_count));",
             f"    {prefix}_active = true;",
+        ]
+        code += [
+            f"    fort_graph_members[fort_graph_count++] = {{{prefix}_bindings, {prefix}_binding_count}};",
+            "    if (fort_internal_total > fort_graph_points) fort_graph_points = fort_internal_total;",
+        ] if merged else [
             f"    auto &{prefix}_task = fort_graph_tasks[fort_graph_count++];",
             f"    {prefix}_task.bindings = {prefix}_bindings;",
             f"    {prefix}_task.binding_count = {prefix}_binding_count;",
@@ -211,6 +231,29 @@ def generate_graph_group(
         if enqueue
         else f"return fort_scope_graph_execute_v1(fort_context, {group_key}ULL, fort_graph_tasks, fort_graph_count);"
     )
+    if merged:
+        threads = region_schedule(regions[0]).cuda_threads
+        submit = "\n".join([
+            "if (!fort_graph_count) return FORT_SCOPE_OK;",
+            "void *fort_graph_parameters[] = {" + ", ".join("&" + value for value in all_arguments) + "};",
+            "const std::size_t fort_graph_argument_sizes[] = {"
+            + ", ".join(f"sizeof({value})" for value in all_arguments) + "};",
+            "fort_scope_kernel_v1 fort_graph_kernel{};",
+            "fort_graph_kernel.version = FORT_SCOPE_GRAPH_ABI_VERSION;",
+            f"fort_graph_kernel.function = reinterpret_cast<const void *>({group_kernel_name(regions)});",
+            # Every thread strides through each member, so the largest member sizes the grid.
+            f"const std::size_t fort_graph_blocks = (fort_graph_points - 1) / {threads} + 1;",
+            "fort_graph_kernel.grid[0] = static_cast<unsigned int>(fort_graph_blocks > 65535 ? 65535 : fort_graph_blocks);",
+            "fort_graph_kernel.grid[1] = fort_graph_kernel.grid[2] = 1;",
+            f"fort_graph_kernel.block[0] = {threads};",
+            "fort_graph_kernel.block[1] = fort_graph_kernel.block[2] = 1;",
+            "fort_graph_kernel.arguments = fort_graph_parameters;",
+            f"fort_graph_kernel.argument_count = {len(all_arguments)};",
+            f"FORT_SHARED_CHECK(fort_scope_graph_enqueue_members_v1(fort_context, {group_key}ULL, &fort_graph_kernel, "
+            "fort_graph_argument_sizes, fort_graph_members, fort_graph_count));",
+            "fort_graph_queued = true;",
+            "return FORT_SCOPE_OK;",
+        ])
     attempt = [
         *declarations,
         *preparations,
@@ -218,9 +261,12 @@ def generate_graph_group(
         *array_updates,
         *submit.splitlines(),
     ]
+    if merged:
+        accepted = ["if (fort_graph_queued) {", *indent(accepted), "}"]
     return [
         "{",
         "    bool fort_graph_done = false;",
+        *(["    bool fort_graph_queued = false;"] if merged else []),
         f"    if ({condition}) {{",
         "        const int fort_graph_status = [&]() -> int {",
         *indent(attempt, 3),

@@ -1354,6 +1354,19 @@ is recognized as changing no coherence state without running the region
 algebra. None of this changes which sections are copied or when. The runtime
 identity changed with it, so scoped costs need a fresh calibration.
 
+Adjacent regions of an entry that touch no array another of them writes share
+one queued launch under forced device placement. Loop fusion does not apply to
+them when their loop domains differ, for example one loop per velocity
+component. The entry emits one group kernel in which every thread takes its
+share of the points of each member in turn, and queues it through
+`fort_scope_graph_enqueue_members_v1` with each member's own effects. The
+runtime accepts the launch only when no member reads or writes a section that
+another member writes, judged on the actual sections, and then queues the union
+of the effects as one task. Otherwise it returns a boundary and the entry runs
+the members' own tasks in order, as before. Regions with tile schedules,
+protected scalars or scalar results keep their own launches, as does automatic
+placement, which decides per region.
+
 Full-section initialization and pointwise updates inside independent loops
 (for example `a(:,:,k) = value`) use original logical bounds and checked
 conformance. Shifted or nonpointwise reads that require a snapshot remain native.

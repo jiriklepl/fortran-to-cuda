@@ -19,6 +19,14 @@ def kernel_name(region: ParallelRegion) -> str:
     return f"kernel_region_{region.id}_device"
 
 
+def points_name(region: ParallelRegion) -> str:
+    return f"kernel_region_{region.id}_points"
+
+
+def group_kernel_name(regions) -> str:
+    return "kernel_group_" + "_".join(str(region.id) for region in regions) + "_device"
+
+
 def _point_body(region: ParallelRegion, depth: int) -> list[str]:
     lines = indent(mapped_coordinates(region), depth)
     lines.extend(indent([f"{cpp_type(symbol)} {symbol.cpp_name};" for symbol in region.private_symbols], depth))
@@ -126,7 +134,7 @@ def _tiled_body(region: ParallelRegion) -> list[str]:
     return lines
 
 
-def generate_kernel(region: ParallelRegion, *, array_views: bool = False) -> list[str]:
+def _kernel_parameters(region: ParallelRegion, *, array_views: bool = False) -> list[str]:
     schedule = region_schedule(region)
     parameters = [cpp_declaration(argument, array_views=array_views) for argument in abi_arguments(region_symbols(region))]
     for axis in range(len(region.loops)):
@@ -140,13 +148,63 @@ def generate_kernel(region: ParallelRegion, *, array_views: bool = False) -> lis
     parameters.append("std::size_t fort_internal_total")
     if schedule.tile_sizes:
         parameters.append("std::size_t fort_internal_tile_volume")
-    lines = [f"static __global__ void {kernel_name(region)}("]
+    return parameters
+
+
+def _signature(prefix: str, parameters: list[str]) -> list[str]:
+    lines = [prefix + "("]
     lines.extend(
         indent([parameter + ("," if index < len(parameters) - 1 else "") for index, parameter in enumerate(parameters)])
     )
     lines.append(") {")
+    return lines
+
+
+def generate_kernel(region: ParallelRegion, *, array_views: bool = False) -> list[str]:
+    schedule = region_schedule(region)
+    lines = _signature(f"static __global__ void {kernel_name(region)}", _kernel_parameters(region, array_views=array_views))
     lines.extend(_tiled_body(region) if schedule.tile_sizes else _untiled_body(region))
     lines.extend(["}", ""])
+    return lines
+
+
+def generate_group_kernel(regions, *, array_views: bool = False) -> list[str]:
+    """One kernel that runs several untiled regions, for regions that do not depend on each other.
+
+    Every thread takes its share of the points of each member in turn, so the
+    members interleave across threads exactly as independent launches could.
+    The parameters are those of the members' own kernels, one member after
+    another; a member with no points is passed a zero total.
+    """
+    lines = []
+    parameters, calls = [], []
+    for position, region in enumerate(regions):
+        if region_schedule(region).tile_sizes:
+            raise ValueError("A group kernel takes untiled regions only")
+        own = _kernel_parameters(region, array_views=array_views)
+        lines.extend(_signature(
+            f"static __device__ __forceinline__ void {points_name(region)}",
+            [*own, "const std::size_t fort_internal_grid_stride", "std::size_t fort_internal_point"],
+        ))
+        # The region's point loop, without the two declarations these parameters replace.
+        lines.extend(_untiled_body(region)[2:])
+        lines.extend(["}", ""])
+        names = []
+        for index, parameter in enumerate(own):
+            declared_type, _, _name = parameter.rpartition(" ")
+            names.append(f"fort_member{position}_{index}")
+            parameters.append(f"{declared_type} {names[-1]}")
+        calls.append(f"    {points_name(region)}({', '.join(names)}, fort_internal_grid_stride, fort_internal_point);")
+    lines.extend(_signature(f"static __global__ void {group_kernel_name(regions)}", parameters))
+    lines.extend(
+        [
+            "    const std::size_t fort_internal_grid_stride = static_cast<std::size_t>(gridDim.x) * blockDim.x;",
+            "    const std::size_t fort_internal_point = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;",
+            *calls,
+            "}",
+            "",
+        ]
+    )
     return lines
 
 
