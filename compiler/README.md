@@ -1342,6 +1342,18 @@ until conditional publication under all preceding guards is supported.
 Supported `ASSOCIATE` bodies retain their original selectors and use separate
 reached operations, so a later fallback cannot repeat an earlier GPU prefix.
 
+The runtime keeps the per-kernel cost of this bookkeeping small. Section
+coordinates are stored inline, for arrays of at most 15 dimensions; a
+registration with a higher rank is rejected. Each distinct section list of an
+array shape is parsed once per context and shared by the commands that use it.
+A queued command keeps its parsed effects, so a flush does not parse them
+again. The state that queued commands will produce is rebuilt per buffer and on
+demand, from the commands that touch that buffer. Device work on sections that
+are already defined and current on the device, with no overlapping host mirror,
+is recognized as changing no coherence state without running the region
+algebra. None of this changes which sections are copied or when. The runtime
+identity changed with it, so scoped costs need a fresh calibration.
+
 Full-section initialization and pointwise updates inside independent loops
 (for example `a(:,:,k) = value`) use original logical bounds and checked
 conformance. Shifted or nonpointwise reads that require a snapshot remain native.

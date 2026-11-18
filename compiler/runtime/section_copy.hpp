@@ -48,7 +48,7 @@ template<class Visitor> bool visit_tiles(const CopyOperation &op, std::size_t ca
     return true;
 }
 class CopyPlan {
-    const std::vector<std::size_t> &lower_, &upper_;
+    const std::size_t *lower_, *upper_;
     std::vector<std::size_t> strides_;
     std::size_t outer_ = 0;
     CopyOperation shape_{};
@@ -59,9 +59,11 @@ class CopyPlan {
 public:
     bool valid = true;
     std::size_t bytes = 0, copies = 0;
+    // The corner coordinates must outlive the plan; any contiguous container fits.
+    template<class Lower, class Upper>
     CopyPlan(std::size_t element_bytes, const std::vector<std::size_t> &extents,
-             const std::vector<std::size_t> &lower, const std::vector<std::size_t> &upper)
-        : lower_(lower), upper_(upper) {
+             const Lower &lower, const Upper &upper)
+        : lower_(lower.data()), upper_(upper.data()) {
         const auto rank = extents.size();
         if (!rank || !element_bytes || lower.size()!=rank || upper.size()!=rank) { valid=false; return; }
         bool empty = false;
@@ -101,7 +103,7 @@ public:
     template<class Visitor> bool visit(Visitor visitor) const {
         if (!valid) return false;
         if (!bytes) return true;
-        auto coordinate = lower_;
+        std::vector<std::size_t> coordinate(lower_, lower_+strides_.size());
         for (;;) {
             auto op = shape_;
             for (std::size_t k=0; k<coordinate.size(); ++k) op.offset += coordinate[k]*strides_[k];

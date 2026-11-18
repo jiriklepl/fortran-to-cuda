@@ -90,20 +90,11 @@ struct Buffer {
     Region unfenced_uploads;
     std::vector<UploadReader> upload_readers;
     std::optional<Prepared> prepared;
-    Box full() const { return {std::vector<size_t>(extents.size(), 0), extents}; }
+    Box full() const { return {Coordinates(extents.size()), Coordinates(extents)}; }
 };
 struct QueuedBinding {
     fort_buffer_t buffer;
-    Effects effects;
-    std::vector<fort_scope_section> reads,writes,overwrites;
-    fort_scope_plan_binding view() {
-        auto pack=[](const Region &region,std::vector<fort_scope_section> &out) {
-            out.clear(); out.reserve(region.size());
-            for (const auto &box : region) out.push_back({box.lo.data(),box.hi.data()});
-        };
-        pack(effects.reads,reads); pack(effects.writes,writes); pack(effects.overwrites,overwrites);
-        return {buffer,{0,reads.size(),reads.data(),writes.size(),writes.data(),overwrites.size(),overwrites.data()}};
-    }
+    std::shared_ptr<const Effects> effects;
 };
 struct QueuedTask {
     uint64_t key;
@@ -114,12 +105,11 @@ struct QueuedTask {
     fort_scoped::graphs::ArgumentValues values;
     std::vector<void *> arguments;
     std::vector<QueuedBinding> bindings;
-    std::vector<fort_scope_plan_binding> binding_views;
-    fort_scope_graph_task_v1 view() {
-        binding_views.clear(); binding_views.reserve(bindings.size());
-        for (auto &binding : bindings) binding_views.push_back(binding.view());
+    // One bit per buffer handle, modulo 64: tasks with disjoint sets share no buffer.
+    uint64_t buffers = 0;
+    fort_scope_kernel_v1 launch() {
         kernel.arguments=arguments.data();
-        return {kernel,binding_views.data(),binding_views.size()};
+        return kernel;
     }
 };
 struct KernelTracePositions {
@@ -230,8 +220,18 @@ struct Context {
     fort_scope_residency_stats_v1 &residency_stats;
     uint64_t &residency_clock;
     std::vector<std::unique_ptr<QueuedTask>> commands;
-    std::unordered_map<fort_buffer_t,Buffer> virtual_buffers;
-    uint64_t virtual_generation = 0;
+    // The state each buffer will have once the queued commands have run. An
+    // entry is rebuilt on demand, from the commands that touch its buffer.
+    struct VirtualBuffer { uint64_t epoch; Buffer state; };
+    // Section lists repeat from one call of an entry to the next. Parsing
+    // normalizes them with the region algebra, so each distinct list of each
+    // array shape is parsed once.
+    struct ParsedAccess { std::vector<size_t> key; std::shared_ptr<const Effects> effects; };
+    std::unordered_map<uint64_t,std::vector<ParsedAccess>> parsed_accesses;
+    size_t parsed_access_count = 0;
+    std::vector<size_t> parsed_access_key;
+    std::unordered_map<fort_buffer_t,VirtualBuffer> virtual_buffers;
+    uint64_t virtual_epoch = 1, virtual_checked = 0;
     std::vector<Buffer *> &unfenced_upload_buffers;
     std::deque<std::shared_ptr<Completion>> &completions;
     std::weak_ptr<Completion> &tail_completion;
@@ -338,6 +338,9 @@ Buffer &buffer(Context &c, fort_buffer_t handle) {
     auto found = c.buffers.find(handle);
     require(found != c.buffers.end(), FORT_SCOPE_STALE, "invalid, foreign, or stale buffer handle");
     return *found->second;
+}
+uint64_t buffer_bit(fort_buffer_t handle) noexcept {
+    return uint64_t(1) << (handle%64);
 }
 bool trace_enabled() noexcept {
     const char *enabled = std::getenv("FORT_RUNTIME_TRACE");
@@ -594,15 +597,6 @@ void wait_completion(Context &c, std::shared_ptr<Completion> completion) {
     ++c.stats.waits; ++c.completion_stats.event_waits;
     complete_through(c,completion);
     trace(c,"wait");
-}
-bool overlaps(const Region &a, const Region &b) {
-    for (const auto &left : a) for (const auto &right : b) {
-        bool common = true;
-        for (size_t axis=0; axis<left.lo.size(); ++axis)
-            if (left.lo[axis] >= right.hi[axis] || right.lo[axis] >= left.hi[axis]) { common = false; break; }
-        if (common) return true;
-    }
-    return false;
 }
 Region pending_host_reads(const Buffer &b) {
     Region result = b.unfenced_uploads;
@@ -1403,7 +1397,10 @@ Region sections(const Buffer &b, const fort_scope_section *data, size_t count, b
             require(lo <= hi && hi <= b.extents[k], FORT_SCOPE_ARGUMENT, "section outside physical array bounds");
             box.lo.push_back(lo); box.hi.push_back(hi);
         }
-        if (!empty(box)) result = unite(std::move(result), {box}, budget);
+        if (empty(box)) continue;
+        // The first rectangle is its own normalized union.
+        if (result.empty()) result.push_back(box);
+        else result = unite(std::move(result), {box}, budget);
     }
     return result;
 }
@@ -1415,6 +1412,44 @@ Effects effects(const Buffer &b, const fort_scope_access *access) {
     Budget budget;
     require(difference(e.overwrites, e.writes, budget).empty(), FORT_SCOPE_ARGUMENT, "must-overwrite exceeds may-write sections");
     return e;
+}
+std::shared_ptr<const Effects> parsed_effects(Context &c, const Buffer &b, const fort_scope_access *access) {
+    auto &key = c.parsed_access_key;
+    key.clear();
+    // A list that cannot be read as a key takes the parser's own diagnostics.
+    bool readable = access && !(access->flags & ~7U);
+    if (readable) {
+        key.push_back(b.extents.size());
+        key.insert(key.end(),b.extents.begin(),b.extents.end());
+        key.push_back(access->flags);
+        const std::pair<const fort_scope_section *,size_t> lists[] = {
+            {access->reads,access->read_count},{access->writes,access->write_count},
+            {access->overwrites,access->overwrite_count}};
+        for (const auto &list : lists) {
+            readable = readable && list.second <= rectangle_limit && (!list.second || list.first);
+            if (!readable) break;
+            key.push_back(list.second);
+            for (size_t i=0; i<list.second && readable; ++i) {
+                readable = list.first[i].lower && list.first[i].upper;
+                if (!readable) break;
+                key.insert(key.end(),list.first[i].lower,list.first[i].lower+b.extents.size());
+                key.insert(key.end(),list.first[i].upper,list.first[i].upper+b.extents.size());
+            }
+        }
+    }
+    if (!readable) return std::make_shared<const Effects>(effects(b,access));
+    uint64_t hash = 1469598103934665603ULL;
+    for (const auto word : key) hash = (hash^word)*1099511628211ULL;
+    auto &bucket = c.parsed_accesses[hash];
+    for (const auto &entry : bucket) if (entry.key == key) return entry.effects;
+    auto parsed = std::make_shared<const Effects>(effects(b,access));
+    if (c.parsed_access_count >= 4096) {
+        // Queued commands keep the lists they use alive.
+        c.parsed_accesses.clear(); c.parsed_access_count = 0;
+        c.parsed_accesses[hash].push_back({key,parsed});
+    } else bucket.push_back({key,parsed});
+    ++c.parsed_access_count;
+    return parsed;
 }
 Region physical_values(const Buffer &b) {
     return fort_scoped::coherence::physical_values(b);
@@ -1456,14 +1491,11 @@ struct AccessPreparation {
     bool reconciled = false;
 };
 enum class AccessContract { Defined, OriginalHost, OriginalDevice };
-AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device,
-                                  AccessContract contract=AccessContract::Defined) {
-    require(contract!=AccessContract::OriginalHost || !device, FORT_SCOPE_ARGUMENT,
-            "original host access cannot acquire device pointers");
-    require(contract!=AccessContract::OriginalDevice || device, FORT_SCOPE_ARGUMENT,
-            "original device access requires device pointers");
-    require(!b.prepared, FORT_SCOPE_STATE, "buffer access already prepared");
-    AccessPreparation result{&b, {b.initialized, b.host_current, b.device_current}, {}, {}, e.writes, false};
+// `b` is any coherence state: a buffer, or private metadata that simulates one.
+template<class State>
+AccessPreparation prepare_state(Buffer *resource, const State &b, const Effects &e, bool device,
+                                AccessContract contract=AccessContract::Defined) {
+    AccessPreparation result{resource, {b.initialized, b.host_current, b.device_current}, {}, {}, e.writes, false};
     // Simulate the complete acquisition against private metadata. In
     // particular, a later undefined read or invalid binding cannot publish an
     // earlier buffer or leave a write prepared for work that never ran.
@@ -1488,8 +1520,10 @@ AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device,
         }
         auto &chosen = device ? result.state.device_current : result.state.host_current;
         auto missing = difference(requested, chosen, budget);
+        // Uniting nothing only normalizes; do that in place.
+        if (missing.empty()) { coalesce(chosen); return; }
         auto updated = unite(chosen, missing, budget);
-        if (!missing.empty()) result.copies.push_back(std::move(missing));
+        result.copies.push_back(std::move(missing));
         chosen = std::move(updated);
     };
     auto compute = [&]() {
@@ -1509,7 +1543,7 @@ AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device,
         result.copies.clear();
         const auto &other = device ? b.host_current : b.device_current;
         if (!other.empty()) result.copies.push_back(other);
-        (device ? result.state.device_current : result.state.host_current) = physical_values(b);
+        (device ? result.state.device_current : result.state.host_current) = fort_scoped::coherence::physical_values(b);
         result.reconciled = true;
         try { result.prepared = compute(); }
         catch (const Fragmented &) {
@@ -1522,6 +1556,15 @@ AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device,
         }
     }
     return result;
+}
+AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device,
+                                  AccessContract contract=AccessContract::Defined) {
+    require(contract!=AccessContract::OriginalHost || !device, FORT_SCOPE_ARGUMENT,
+            "original host access cannot acquire device pointers");
+    require(contract!=AccessContract::OriginalDevice || device, FORT_SCOPE_ARGUMENT,
+            "original device access requires device pointers");
+    require(!b.prepared, FORT_SCOPE_STATE, "buffer access already prepared");
+    return prepare_state(&b,b,e,device,contract);
 }
 AccessPreparation prepare_access(Buffer &b, const fort_scope_access *access, bool device,
                                  AccessContract contract=AccessContract::Defined) {
@@ -1640,43 +1683,40 @@ void submit_graph(Context &c, uint64_t key, const fort_scope_kernel_v1 *kernels,
     ++c.queue_stats.direct_submissions;
 }
 #endif
-void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tasks, size_t count,bool resource_fallback=false,
-                   KernelTracePositions positions={},const fort_scoped::graphs::ArgumentValues *const *values=nullptr) {
-    require(!count || (key && tasks),FORT_SCOPE_ARGUMENT,"missing graph tasks or stable group key");
-    if (!count) return;
-    std::vector<fort_scope_kernel_v1> kernels;
-    kernels.reserve(count);
-    for (size_t i=0; i<count; ++i) {
-        kernels.push_back(tasks[i].kernel);
-        const auto invalid = fort_scoped::graphs::invalid(&kernels.back(),1);
-        require(!invalid,FORT_SCOPE_ARGUMENT,invalid ? invalid : "invalid graph task kernel");
-        require(!tasks[i].binding_count || tasks[i].bindings,FORT_SCOPE_ARGUMENT,"missing graph task effects");
-    }
+// Bindings names, for member `i` of a graph, the buffers it touches and its
+// effects on each: `size(i)`, `buffer(i,j)` and `effects(i,j,actual)`.
+template<class Bindings>
+void execute_graph(Context &c, uint64_t key, const fort_scope_kernel_v1 *kernels, size_t count,
+                   Bindings &&bindings, bool resource_fallback=false, KernelTracePositions positions={},
+                   const fort_scoped::graphs::ArgumentValues *const *values=nullptr) {
     struct Resource {
         Buffer *actual;
-        Buffer state;
+        AccessState state;
         std::vector<Region> uploads;
         size_t reconciliations = 0;
     };
     std::vector<Resource> resources;
-    std::unordered_map<fort_buffer_t,size_t> indices;
     // Each step sees preceding writes, but none of those definitions become
     // externally visible before the entire group has been submitted safely.
     for (size_t i=0; i<count; ++i) {
-        std::unordered_set<fort_buffer_t> seen;
-        for (size_t j=0; j<tasks[i].binding_count; ++j) {
-            const auto &binding = tasks[i].bindings[j];
-            require(seen.insert(binding.buffer).second,FORT_SCOPE_ALIAS,"graph task repeats a canonical buffer");
-            auto found = indices.find(binding.buffer);
-            if (found == indices.end()) {
-                auto &b = buffer(c,binding.buffer);
+        const size_t binding_count = bindings.size(i);
+        for (size_t j=0; j<binding_count; ++j) {
+            const auto handle = bindings.buffer(i,j);
+            for (size_t k=0; k<j; ++k)
+                require(bindings.buffer(i,k) != handle,FORT_SCOPE_ALIAS,"graph task repeats a canonical buffer");
+            auto found = std::find_if(resources.begin(),resources.end(),[&](const Resource &resource) {
+                return resource.actual->handle == handle;
+            });
+            if (found == resources.end()) {
+                auto &b = buffer(c,handle);
                 require(!b.prepared,FORT_SCOPE_STATE,"graph resource access already prepared");
-                const auto index = resources.size();
-                resources.push_back({&b,b,{ },0});
-                found = indices.emplace(binding.buffer,index).first;
+                resources.push_back({&b,{b.initialized,b.host_current,b.device_current},{},0});
+                found = resources.end()-1;
             }
-            auto &resource = resources[found->second];
-            auto prepared = prepare_access(resource.state,&binding.access,true);
+            auto &resource = *found;
+            const Effects &e = bindings.effects(i,j,*resource.actual);
+            if (device_effects_keep_state(resource.state,e)) continue;
+            auto prepared = prepare_state(resource.actual,resource.state,e,true);
             for (auto &parts : prepared.copies) {
                 Budget budget;
                 require(difference(parts,resource.actual->host_current,budget).empty(),FORT_SCOPE_STATE,
@@ -1690,6 +1730,8 @@ void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tas
         }
     }
 #ifdef FORT_SCOPE_CPU_TEST
+    (void)key;
+    (void)kernels;
     (void)resource_fallback;
     (void)positions;
     (void)values;
@@ -1701,7 +1743,7 @@ void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tas
     reserve_devices(c,handles.data(),handles.size());
     for (auto &resource : resources)
         for (const auto &parts : resource.uploads) copy_region(c,*resource.actual,parts,true);
-    submit_graph(c,key,kernels.data(),count,resource_fallback,positions,values);
+    submit_graph(c,key,kernels,count,resource_fallback,positions,values);
     for (auto &resource : resources) {
         auto &b = *resource.actual;
         b.initialized = std::move(resource.state.initialized);
@@ -1712,44 +1754,94 @@ void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tas
     }
 #endif
 }
-void apply_queued(Context &c,const QueuedTask &task) {
-    for (const auto &binding : task.bindings) {
-        auto &actual=buffer(c,binding.buffer);
-        require(!actual.prepared,FORT_SCOPE_STATE,"queued resource already prepared");
-        auto found=c.virtual_buffers.find(binding.buffer);
-        if (found==c.virtual_buffers.end()) found=c.virtual_buffers.emplace(binding.buffer,actual).first;
-        auto prepared=prepare_effects(found->second,binding.effects,true);
-        found->second.initialized=std::move(prepared.prepared.initialized);
-        found->second.device_current=std::move(prepared.prepared.current);
-        found->second.host_current=std::move(prepared.prepared.opposite);
+void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tasks, size_t count) {
+    require(!count || (key && tasks),FORT_SCOPE_ARGUMENT,"missing graph tasks or stable group key");
+    if (!count) return;
+    std::vector<fort_scope_kernel_v1> kernels;
+    kernels.reserve(count);
+    for (size_t i=0; i<count; ++i) {
+        kernels.push_back(tasks[i].kernel);
+        const auto invalid = fort_scoped::graphs::invalid(&kernels.back(),1);
+        require(!invalid,FORT_SCOPE_ARGUMENT,invalid ? invalid : "invalid graph task kernel");
+        require(!tasks[i].binding_count || tasks[i].bindings,FORT_SCOPE_ARGUMENT,"missing graph task effects");
     }
+    struct Described {
+        const fort_scope_graph_task_v1 *tasks;
+        Effects parsed;
+        size_t size(size_t i) const { return tasks[i].binding_count; }
+        fort_buffer_t buffer(size_t i,size_t j) const { return tasks[i].bindings[j].buffer; }
+        const Effects &effects(size_t i,size_t j,const Buffer &actual) {
+            return parsed = ::effects(actual,&tasks[i].bindings[j].access);
+        }
+    };
+    execute_graph(c,key,kernels.data(),count,Described{tasks,{}});
 }
+void apply_queued(Buffer &state,const QueuedBinding &binding) {
+    if (device_effects_keep_state(state,*binding.effects)) return;
+    auto prepared=prepare_state(&state,state,*binding.effects,true);
+    state.initialized=std::move(prepared.prepared.initialized);
+    state.device_current=std::move(prepared.prepared.current);
+    state.host_current=std::move(prepared.prepared.opposite);
+}
+void forget_virtual(Context &c) noexcept {
+    ++c.virtual_epoch;
+}
+// A queued command never coexists with an unfinished access to its buffers.
 void refresh_virtual(Context &c) {
-    if (c.virtual_generation==c.state_generation) return;
-    c.virtual_buffers.clear();
-    try {
-        for (const auto &task : c.commands) apply_queued(c,*task);
-        c.virtual_generation=c.state_generation;
-    } catch (...) { c.virtual_generation=0; throw; }
+    if (c.virtual_checked==c.virtual_epoch) return;
+    for (const auto &task : c.commands) for (const auto &binding : task->bindings)
+        require(!buffer(c,binding.buffer).prepared,FORT_SCOPE_STATE,"queued resource already prepared");
+    c.virtual_checked=c.virtual_epoch;
+}
+// The state of one buffer after the queued commands, or nullptr when none of
+// them touches it and `create` is false.
+Buffer *virtual_state(Context &c,fort_buffer_t handle,bool create=false) {
+    auto found=c.virtual_buffers.find(handle);
+    if (found!=c.virtual_buffers.end() && found->second.epoch==c.virtual_epoch) return &found->second.state;
+    const auto touches=[&](const std::unique_ptr<QueuedTask> &task) {
+        return (task->buffers&buffer_bit(handle)) &&
+            std::any_of(task->bindings.begin(),task->bindings.end(),[&](const QueuedBinding &binding) {
+                return binding.buffer==handle;
+            });
+    };
+    if (!create && std::none_of(c.commands.begin(),c.commands.end(),touches)) return nullptr;
+    const auto &actual=buffer(c,handle);
+    require(!actual.prepared,FORT_SCOPE_STATE,"queued resource already prepared");
+    // A stale entry is overwritten in place, which reuses its storage. It has
+    // no valid epoch until every queued effect has been applied.
+    if (found==c.virtual_buffers.end()) found=c.virtual_buffers.emplace(handle,Context::VirtualBuffer{0,actual}).first;
+    else { found->second.epoch=0; found->second.state=actual; }
+    auto &state=found->second.state;
+    const uint64_t bit=buffer_bit(handle);
+    for (const auto &task : c.commands) if (task->buffers&bit)
+        for (const auto &binding : task->bindings) if (binding.buffer==handle) apply_queued(state,binding);
+    found->second.epoch=c.virtual_epoch;
+    return &state;
+}
+void apply_queued(Context &c,const QueuedTask &task) {
+    for (const auto &binding : task.bindings) apply_queued(*virtual_state(c,binding.buffer,true),binding);
 }
 Buffer &virtual_buffer(Context &c,fort_buffer_t handle) {
     if (c.commands.empty()) return buffer(c,handle);
     refresh_virtual(c);
-    const auto found=c.virtual_buffers.find(handle);
-    return found==c.virtual_buffers.end()?buffer(c,handle):found->second;
+    auto *state=virtual_state(c,handle);
+    return state ? *state : buffer(c,handle);
 }
 bool conflicts(const Effects &earlier,const Effects &later) {
     return overlaps(earlier.writes,later.reads) || overlaps(earlier.writes,later.writes) ||
            overlaps(earlier.reads,later.writes);
 }
 bool conflicts(const QueuedTask &earlier,const QueuedTask &later) {
+    if (!(earlier.buffers&later.buffers)) return false;
     for (const auto &a : earlier.bindings) for (const auto &b : later.bindings)
-        if (a.buffer==b.buffer && conflicts(a.effects,b.effects)) return true;
+        if (a.buffer==b.buffer && conflicts(*a.effects,*b.effects)) return true;
     return false;
 }
 void flush_commands(Context &c,const std::vector<bool> *selected,bool conflict) {
     if (c.commands.empty()) return;
-    std::vector<fort_scope_graph_task_v1> tasks;
+    std::vector<fort_scope_kernel_v1> kernels;
+    kernels.reserve(c.commands.size());
+    std::vector<const QueuedTask *> tasks;
     tasks.reserve(c.commands.size());
     std::vector<const fort_scoped::graphs::ArgumentValues *> values;
     values.reserve(c.commands.size());
@@ -1760,14 +1852,22 @@ void flush_commands(Context &c,const std::vector<bool> *selected,bool conflict) 
         positions.reset(new(std::nothrow) const fort_scope_trace_state_v1 *[c.commands.size()]);
     uint64_t key=1469598103934665603ULL;
     for (size_t i=0; i<c.commands.size(); ++i) if (!selected || (*selected)[i]) {
-        tasks.push_back(c.commands[i]->view());
+        kernels.push_back(c.commands[i]->launch());
+        tasks.push_back(c.commands[i].get());
         values.push_back(&c.commands[i]->values);
         if (positions) positions[tasks.size()-1]=c.commands[i]->provenance ? c.commands[i]->provenance.get() : &unknown;
         key=(key^c.commands[i]->key)*1099511628211ULL;
     }
     if (tasks.empty()) return;
     // Diagnostic allocation failure loses attribution, never numerical work.
-    execute_graph(c,key?key:1,tasks.data(),tasks.size(),true,{positions.get(),&unknown},values.data());
+    struct Queued {
+        const QueuedTask *const *tasks;
+        size_t size(size_t i) const { return tasks[i]->bindings.size(); }
+        fort_buffer_t buffer(size_t i,size_t j) const { return tasks[i]->bindings[j].buffer; }
+        const Effects &effects(size_t i,size_t j,const Buffer &) const { return *tasks[i]->bindings[j].effects; }
+    };
+    execute_graph(c,key?key:1,kernels.data(),kernels.size(),Queued{tasks.data()},true,
+                  {positions.get(),&unknown},values.data());
     // No numerical work is replayable once submit has succeeded. Remove it
     // before any later source operation can query virtual definitions.
     if (!selected) c.commands.clear();
@@ -1787,9 +1887,11 @@ void flush_commands(Context &c,const std::vector<bool> *selected,bool conflict) 
 void drain_effects(Context &c,const std::vector<fort_scoped::planning::Binding> &accesses) {
     if (c.commands.empty()) return;
     std::vector<bool> selected(c.commands.size(),false);
-    for (size_t i=0; i<c.commands.size(); ++i) for (const auto &queued : c.commands[i]->bindings)
-        for (const auto &access : accesses)
-            if (queued.buffer==access.buffer && conflicts(queued.effects,access.effects)) selected[i]=true;
+    uint64_t wanted=0;
+    for (const auto &access : accesses) wanted|=buffer_bit(access.buffer);
+    for (size_t i=0; i<c.commands.size(); ++i) if (c.commands[i]->buffers&wanted)
+        for (const auto &queued : c.commands[i]->bindings) for (const auto &access : accesses)
+            if (queued.buffer==access.buffer && conflicts(*queued.effects,access.effects)) selected[i]=true;
     // Include dependency ancestors while preserving original relative order.
     // Unrelated earlier tasks remain queued across this host boundary.
     for (size_t j=c.commands.size(); j-->0;) if (selected[j])
@@ -1801,7 +1903,8 @@ void drain_accesses(Context &c,const fort_scope_plan_binding *bindings,size_t co
     require(!count || bindings,FORT_SCOPE_ARGUMENT,"missing queue boundary accesses");
     std::vector<fort_scoped::planning::Binding> accesses;
     accesses.reserve(count);
-    for (size_t i=0; i<count; ++i) accesses.push_back({bindings[i].buffer,effects(buffer(c,bindings[i].buffer),&bindings[i].access)});
+    for (size_t i=0; i<count; ++i)
+        accesses.push_back({bindings[i].buffer,*parsed_effects(c,buffer(c,bindings[i].buffer),&bindings[i].access)});
     drain_effects(c,accesses);
 }
 void drain_resources(Context &c,const fort_buffer_t *handles,size_t count) {
@@ -1832,13 +1935,14 @@ void enqueue_graph(Context &c,uint64_t key,const fort_scope_graph_task_v1 *task,
     }
     require(owned->values.capture(task->kernel,sizes),FORT_SCOPE_ARGUMENT,"queued argument padding overflows size_t");
     for (size_t i=0;i<task->kernel.argument_count;++i) owned->arguments.push_back(owned->values.argument(i));
-    std::unordered_set<fort_buffer_t> seen;
     for (size_t i=0; i<task->binding_count; ++i) {
         const auto &binding=task->bindings[i]; auto &b=buffer(c,binding.buffer);
-        require(seen.insert(binding.buffer).second,FORT_SCOPE_ALIAS,"queued task repeats a canonical buffer");
+        for (size_t k=0; k<i; ++k)
+            require(task->bindings[k].buffer!=binding.buffer,FORT_SCOPE_ALIAS,"queued task repeats a canonical buffer");
         require(!b.prepared,FORT_SCOPE_STATE,"queued resource already prepared");
         require(!b.bytes || b.device,FORT_SCOPE_STATE,"reserve queued device storage before enqueue");
-        owned->bindings.push_back({binding.buffer,effects(b,&binding.access),{},{},{}});
+        owned->bindings.push_back({binding.buffer,parsed_effects(c,b,&binding.access)});
+        owned->buffers|=buffer_bit(binding.buffer);
     }
 #ifndef FORT_SCOPE_CPU_TEST
     initialize(c); // Device availability is checked before accepting work.
@@ -1847,15 +1951,14 @@ void enqueue_graph(Context &c,uint64_t key,const fort_scope_graph_task_v1 *task,
     try {
         apply_queued(c,*owned);
         c.commands.push_back(std::move(owned));
-    } catch (...) { c.virtual_generation=0; throw; }
-    c.virtual_generation=c.state_generation;
+    } catch (...) { forget_virtual(c); throw; }
     c.queue_stats.pending_tasks=c.commands.size();
     const auto accepted_size=c.commands.size();
     if (!c.queue_stats.queue_enabled) {
         try { flush_commands(c); }
         catch (const Error &error) {
             if (error.status==FORT_SCOPE_RESOURCE) {
-                c.commands.pop_back(); c.virtual_generation=0; c.queue_stats.pending_tasks=c.commands.size();
+                c.commands.pop_back(); forget_virtual(c); c.queue_stats.pending_tasks=c.commands.size();
             }
             throw;
         }
@@ -2002,7 +2105,7 @@ void invalidate(Context &c, Change change) noexcept {
     if (change == Change::None) return;
     c.definition_proof.reset(); c.planning_snapshot.reset(); c.preview.reset();
     auto &generation = change == Change::Query ? c.query_generation : c.state_generation;
-    if (change == Change::State) c.virtual_generation=0;
+    if (change == Change::State) ++c.virtual_epoch;
     // Both cached stamps are discarded before wrapping, so a reused generation
     // can never match a surviving old proof or preview.
     generation = generation == std::numeric_limits<uint64_t>::max() ? 1 : generation+1;
@@ -2764,7 +2867,7 @@ struct EvidenceOutput {
     size_t rows = 0;
     bool truncated = false;
 };
-void json_coordinates(std::ostream &out, const std::vector<size_t> &values) {
+template<class Values> void json_coordinates(std::ostream &out, const Values &values) {
     out << '[';
     for (size_t k=0; k<values.size(); ++k) { if (k) out << ','; out << values[k]; }
     out << ']';
@@ -3999,7 +4102,8 @@ static int register_buffer(fort_scope_t h, uint64_t identity, uint64_t generatio
                            const fort_scope_layout *layout, bool full_initialized,
                            const fort_scope_section *defined, size_t defined_count, fort_buffer_t *out) {
     return with(h, [&](Context &c) {
-        require(layout && out && identity && generation && layout->rank && layout->extents && layout->lower_bounds &&
+        require(layout && out && identity && generation && layout->rank && layout->rank <= rank_limit &&
+                layout->extents && layout->lower_bounds &&
                 layout->element_bytes && layout->type <= FORT_SCOPE_LOGICAL, FORT_SCOPE_ARGUMENT, "invalid buffer registration");
         const size_t widths[] = {layout->element_bytes, 4, 8, 4, 1};
         require(widths[layout->type] == layout->element_bytes, FORT_SCOPE_ARGUMENT, "element width does not match type");
@@ -4691,7 +4795,7 @@ extern "C" int fort_scope_graph_flush_v1(fort_scope_t h) {
 }
 extern "C" int fort_scope_graph_queue_cancel_v1(fort_scope_t h) {
     return with(h,[&](Context &c) {
-        c.commands.clear(); c.virtual_buffers.clear(); c.virtual_generation=0; c.queue_stats.pending_tasks=0;
+        c.commands.clear(); c.virtual_buffers.clear(); ++c.virtual_epoch; c.queue_stats.pending_tasks=0;
         trace(c,"queue_cancel");
     },Change::Query);
 }

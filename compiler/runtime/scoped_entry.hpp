@@ -194,13 +194,15 @@ class NativeWorkerCollector {
     std::vector<Worker> workers_;
     bool begun_ = false;
     static coherence::Region copy(const fort_scope_section *parts,size_t count,size_t rank) {
-        if (count>coherence::rectangle_limit || (count && !parts)) throw int(FORT_SCOPE_ARGUMENT);
+        if (count>coherence::rectangle_limit || (count && !parts) || rank>coherence::rank_limit)
+            throw int(FORT_SCOPE_ARGUMENT);
         coherence::Region result;
         result.reserve(count);
         for (size_t i=0;i<count;++i) {
             if (!parts[i].lower || !parts[i].upper) throw int(FORT_SCOPE_ARGUMENT);
-            result.push_back({std::vector<size_t>(parts[i].lower,parts[i].lower+rank),
-                              std::vector<size_t>(parts[i].upper,parts[i].upper+rank)});
+            coherence::Box box;
+            for (size_t k=0;k<rank;++k) { box.lo.push_back(parts[i].lower[k]); box.hi.push_back(parts[i].upper[k]); }
+            result.push_back(box);
         }
         return result;
     }

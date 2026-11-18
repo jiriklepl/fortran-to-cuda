@@ -21,14 +21,15 @@ namespace {
 size_t heap_live=0, heap_peak=0;
 struct alignas(std::max_align_t) Allocation { size_t bytes; };
 }
-void *operator new(size_t bytes) {
+// Kept out of line: inlined into container code, GCC diagnoses the header arithmetic.
+[[gnu::noinline]] void *operator new(size_t bytes) {
     if (bytes > std::numeric_limits<size_t>::max()-sizeof(Allocation)) throw std::bad_alloc{};
     auto *allocation=static_cast<Allocation *>(std::malloc(sizeof(Allocation)+bytes));
     if (!allocation) throw std::bad_alloc{};
     allocation->bytes=bytes; heap_live+=bytes; heap_peak=std::max(heap_peak,heap_live);
     return allocation+1;
 }
-void operator delete(void *pointer) noexcept {
+[[gnu::noinline]] void operator delete(void *pointer) noexcept {
     if (!pointer) return;
     auto *allocation=static_cast<Allocation *>(pointer)-1;
     heap_live-=allocation->bytes; std::free(allocation);
@@ -52,7 +53,7 @@ fort_scope_plan_costs costs() {
 Resource resource(fort_buffer_t handle, std::vector<size_t> extents) {
     Resource b; b.handle=handle; b.element_bytes=8; b.extents=extents; b.bytes=8;
     for (size_t n: extents) b.bytes*=n;
-    Box full{std::vector<size_t>(extents.size(),0),extents};
+    Box full{fort_scoped::coherence::Coordinates(extents.size()),extents};
     b.initialized=b.host_current={full}; return b;
 }
 Effects rw(const Region &r) { return {r,r,{}}; }

@@ -24,7 +24,7 @@ struct Key {
         uint64_t bits=0; static_assert(sizeof(bits)==sizeof(value));
         std::memcpy(&bits,&value,sizeof(bits)); integer(bits);
     }
-    void coordinates(const std::vector<size_t> &values) {
+    template<class Values> void coordinates(const Values &values) {
         integer(values.size());for(auto value:values)integer(value);
     }
     void region(const coherence::Region &parts) {
