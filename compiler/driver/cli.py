@@ -6,9 +6,15 @@ import sys
 from pathlib import Path
 
 from compiler.analysis import format_plan
+from compiler.driver.kernel_entry import (
+    compile_kernel_entry,
+    kernel_entry_outputs,
+    kernel_entry_report,
+    write_kernel_entry,
+)
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
-from compiler.emission import generate_sources, read_common_header
+from compiler.emission import generate_sources
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.frontend import analyze_source_effects, discover_file, lower_file
 from compiler.ir import CompilationError, format_ir
@@ -324,12 +330,10 @@ def main() -> None:
         if args.list_candidates:
             _list_candidates(source_file, args, options)
             return
-        function = lower_file(source_file, args.kernel)
-        function, plan = prepare_function(function, options=options)
-        sources = generate_sources(function, plan, common_header=args.common_header, offload_config=_offload_config(args))
-        if args.common_header in sources.artifacts:
-            raise CompilationError("common header filename conflicts with a shared runtime/entry artifact")
-        common_header = read_common_header()
+        function, plan, sources = compile_kernel_entry(
+            source_file, args.kernel, options=options, offload_config=_offload_config(args),
+            common_header=args.common_header)
+        outputs = kernel_entry_outputs(sources, common_header=None if args.no_common_header else args.common_header)
     except CompilationError as error:
         if args.json and not args.list_candidates:
             print(
@@ -347,40 +351,10 @@ def main() -> None:
               file=stream)
 
     # Publish only after every stage has validated and generated successfully.
-    output_dir = Path(args.output_dir).resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    outputs = {}
-    if not args.no_common_header:
-        outputs[args.common_header] = common_header
-    outputs.update(sources.artifacts)
-    for filename, code in outputs.items():
-        (output_dir / filename).write_text(code, encoding="utf-8")
+    output_dir = write_kernel_entry(outputs, args.output_dir)
 
     if args.json:
-        print(
-            json.dumps(
-                {
-                    "kernel": args.kernel,
-                    "artifact_schema_version": 2,
-                    "memory_model": "scoped",
-                    "supported": True,
-                    "reason": None,
-                    "parallel_regions": len(plan.regions),
-                    "execution_plan": format_plan(plan),
-                    "memory_plan": "Caller-owned domain; shared entries borrow canonical handles and preserve replicas.",
-                    "outputs": list(outputs),
-                    "numerical_contract": sources.numerical_contract,
-                    "build_sources": [
-                        *[{**item, "role": "common_runtime"} for item in sources.scoped["runtime"]["sources"]],
-                        {"path": "shared_entry.cu", "language": "cuda", "role": "shared_entry",
-                             "numerical_contract": sources.numerical_contract},
-                        {"path": "shared_interface.f90", "language": "fortran", "role": "shared_entry"},
-                    ],
-                    "scoped": sources.scoped,
-                },
-                indent=2,
-            )
-        )
+        print(json.dumps(kernel_entry_report(args.kernel, plan, sources, outputs), indent=2))
     else:
         print(f"Generated files in {output_dir}/")
         for filename in outputs:
