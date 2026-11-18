@@ -82,14 +82,20 @@ def generate_graph_group(
     enqueue=False,
     accepted=(),
     condition="fort_gpu_requested",
+    prepared_access=None,
 ):
     """Emit a preexecution attempt with stable argument/effect storage.
 
     A rejected attempt falls through to the original per-task implementation.
     Graph submission errors after execution starts are terminal runtime errors.
+    ``prepared_access`` names an access batch that the enclosing scope has
+    already filled for the one queued task, next to that task's bounds. The
+    attempt then exports those effects and computes neither again.
     """
     if enqueue and len(regions) != 1:
         raise ValueError("Deferred enqueue accepts exactly one checked task")
+    if prepared_access is not None and not enqueue:
+        raise ValueError("Only a deferred enqueue shares its caller's access batch")
     declarations = [
         f"fort_scope_graph_task_v1 fort_graph_tasks[{len(regions)}]{{}};",
         "std::size_t fort_graph_count = 0;",
@@ -99,9 +105,9 @@ def generate_graph_group(
     active_arrays = {symbol: [] for symbol in arrays}
     for ordinal, region in enumerate(regions):
         prefix = f"fort_graph_{ordinal}"
-        access_name = prefix + "_access"
+        access_name = prepared_access or prefix + "_access"
         local_declarations, local_code = [], []
-        for line in descriptors(units[region.id]):
+        for line in descriptors(units[region.id]) if prepared_access is None else ():
             line = (
                 line.replace("fort_access", access_name)
                 .replace("fort_effect_", prefix + "_effect_")
@@ -139,7 +145,7 @@ def generate_graph_group(
             else (f"(fort_internal_total - 1) / {schedule.cuda_threads} + 1")
         )
         code = [
-            *bounds(region),
+            *(bounds(region) if prepared_access is None else ()),
             "if (fort_internal_total) {",
             *indent(local_code),
             f"    FORT_SHARED_CHECK({access_name}.export_bindings({prefix}_bindings, {capacity}, &{prefix}_binding_count));",

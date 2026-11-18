@@ -528,7 +528,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         return generate_graph_group((step,), units=units, arrays=arrays, capacity=capacity,
             bounds=bounds, descriptors=descriptors, array_argument=array_argument,
             root_views=root_views, group_key=key, fallback=(), enqueue=True,
-            accepted=accepted, condition="fort_gpu")
+            accepted=accepted, condition="fort_gpu", prepared_access="fort_access")
 
     def execution(current):
         result = []
