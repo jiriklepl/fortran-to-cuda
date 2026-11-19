@@ -17,6 +17,9 @@ class CompilerOptions:
     # The function is one leaf of a checked source graph: its tasks are ordered
     # along the dependency schedule, and automatic placement keeps fusion.
     source_graph: bool = False
+    # Arrays whose subscript tuple the caller checks, before the entry runs, to
+    # address a different element in every iteration of each nest that uses it.
+    injective_arrays: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.opt_level not in (0, 1):
@@ -37,6 +40,8 @@ class CompilerOptions:
             raise CompilationError("scope transfers must be direct, pinned, auto, or coalesced")
         if type(self.source_graph) is not bool:
             raise CompilationError("source_graph must be a boolean")
+        if any(not isinstance(name, str) or not name for name in self.injective_arrays):
+            raise CompilationError("injective arrays are named by their entry arguments")
 
     @property
     def resolved_schedule(self) -> str:

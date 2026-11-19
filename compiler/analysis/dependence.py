@@ -201,6 +201,7 @@ def _region_model(
     *,
     context=None,
     consume=None,
+    injective=frozenset(),
 ) -> _AffineRegionModel:
     context = isl.DEFAULT_CONTEXT if context is None else context
     tick = (lambda: None) if consume is None else consume
@@ -563,11 +564,35 @@ def _region_model(
                 entry[0][0]: candidate[0] for entry, candidate in zip(entries, candidates, strict=True)
             }
 
+    # A caller may check, before the region runs, that an array's subscript
+    # tuple addresses a different element in every iteration. When every access
+    # to that array in the region uses that one tuple at the same loop depth,
+    # two accesses touch the same element exactly when they are in the same
+    # iteration, whatever the index values are.
+    certified = {}
+    accesses_by_symbol = {}
+    for spec in specifications:
+        accesses_by_symbol.setdefault(spec[2], []).append(spec)
+    for symbol, entries in accesses_by_symbol.items():
+        first = entries[0]
+        if (symbol.name.lower() in injective and any(value is None for value in first[4])
+                and any(isinstance(node, ArrayAccess) for expression in first[3] for node in walk_expr(expression))
+                and events[first[0]].coordinates
+                and all(entry[3] == first[3] and events[entry[0]].coordinates == events[first[0]].coordinates
+                        for entry in entries)):
+            certified[symbol] = True
+
     def access_maps(kind):
         nonlocal conservative
         parts = []
         for index, access_kind, symbol, _, indices, _ in specifications:
             if kind != access_kind:
+                continue
+            if symbol in certified:
+                # The coordinates stand for the element; they are not its physical position.
+                conservative = True
+                parts.append(f"{instance(index)} -> A{symbol.id}[{','.join(events[index].coordinates)}]"
+                             f" : {event_domain(events[index])}")
                 continue
             outputs = []
             for dimension, value in enumerate(indices):
@@ -627,14 +652,18 @@ def _region_model(
                               tuple(conflicts.items()), physical_affine and not conservative)
 
 
-def _region(region_id, loop, environment, defined, later):
-    return _region_model(region_id, loop, environment, defined, later).require_unconditional()
+def _region(region_id, loop, environment, defined, later, injective=frozenset()):
+    return _region_model(region_id, loop, environment, defined, later, injective=injective).require_unconditional()
 
 
-def prove_region(region_id, loop, environment, defined, later):
-    """Query legality after semantic validation; carry failure evidence as data."""
+def prove_region(region_id, loop, environment, defined, later, *, injective=frozenset()):
+    """Query legality after semantic validation; carry failure evidence as data.
+
+    ``injective`` names arrays whose subscript tuple the caller guarantees to
+    address a different element in every iteration of a nest that uses it.
+    """
     try:
-        return ParallelProof(region=_region(region_id, loop, environment, defined, later))
+        return ParallelProof(region=_region(region_id, loop, environment, defined, later, injective))
     except ParallelizationError as error:
         return ParallelProof(failure=error.failure)
 

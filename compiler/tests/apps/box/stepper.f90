@@ -2,6 +2,7 @@
 module stepper
   use params
   use boundaries, only: periodic
+  use sources, only: inject, sense
   implicit none
 contains
   pure function laplacian(i, j, k, field, spacing) result(value)
@@ -48,5 +49,7 @@ contains
     call periodic(a)
     call diffuse(a, b)
     call store(a, b)
+    call inject(a)
+    call sense(a)
   end subroutine advance
 end module stepper

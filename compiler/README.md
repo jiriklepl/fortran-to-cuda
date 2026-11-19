@@ -489,6 +489,26 @@ entries then take by handle; the default domain is the runtime's
 `fort_resident_application` module. `rewrites` applies the compiler's loop
 rewrites, or the application's own functions, to a source before export.
 
+Two forms that depend on run-time values are supported in selected procedures.
+
+- **Fields of an array of derived type.** A nest may read and write
+  `points(i)%field` for a rank-one array of derived type and a scalar REAL or
+  default INTEGER field. Each field used is one array resource. Its values are
+  strided through the structures, so the domain keeps a contiguous copy
+  (`bind_field`), gathered when the field is first bound and written back to
+  the structures at the next publication or `!$fort observe(points(:)%field)`.
+  Nests over different lists get entries of their own, and when every nest of
+  an entry runs from one to `size(points)`, an empty list skips the entry.
+- **Writes through index values.** A nest such as
+  `a(idx(i)) = a(idx(i)) + v(i)`, or the same with index fields of a list, is
+  independent across iterations exactly when its subscripts name a different
+  element each time. The compiler cannot know that, so the call block checks
+  it on the host, once per publication: it walks the nest's loops and marks
+  each addressed element. If an element is named twice, the device values are
+  published and the original loop runs. The assumption covers one subscript
+  tuple per array and nest; a second tuple, or a subscript the nest computes
+  itself, is rejected as before.
+
 `prepare` also audits the selected procedures. A statement there that stays
 host code and names an array some entry binds may read values that are newer
 on the device, so it is reported in `prepared["audit"]` with its procedure,

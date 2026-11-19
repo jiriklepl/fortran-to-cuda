@@ -86,7 +86,8 @@ def build_execution_plan(function: FunctionIR, *, options: CompilerOptions | Non
             else:
                 region_id = next_region[0]
                 next_region[0] += 1
-                proof = prove_region(region_id, statement, environment, defined, later)
+                proof = prove_region(region_id, statement, environment, defined, later,
+                                     injective=frozenset(name.lower() for name in options.injective_arrays))
                 if proof.proven:
                     steps.append(proof.region)
                 elif options.fallback == "host":

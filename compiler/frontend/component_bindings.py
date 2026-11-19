@@ -208,6 +208,40 @@ def _field_binding(analysis, scope, parent, member, node, *, consumer_scope=None
     return binding, schema.scope
 
 
+def _element_field(analysis, scope, node):
+    """``objects(i)%field``: one numeric field of the elements of a rank-one array of derived type.
+
+    The field of all elements is one array resource, ``objects%field``, with the
+    shape and bounds of ``objects``. Its storage is strided through the array of
+    structures, which the ``element_field`` attribute tells consumers.
+    """
+    from dataclasses import replace
+
+    reference, member = node.items
+    root = analysis._binding(scope, reference.items[0])
+    if root is None:
+        raise CompilationError("source component object is unresolved: " + str(reference.items[0]))
+    indices = tuple(_children(reference.items[1]))
+    if root.rank != 1 or len(indices) != 1 or _kind(indices[0]) == "Subscript_Triplet":
+        raise ComponentAccessUnsupported("source component needs one element of a rank-one array of derived type: "
+                                         + str(node))
+    if root.attributes & {"pointer", "optional", "volatile", "asynchronous"}:
+        raise CompilationError("source component object association or lifetime is uncertain: " + root.root)
+    field_binding, _ = _field_binding(analysis, root.declaring_scope or scope, root, str(member).lower(), node,
+                                      consumer_scope=scope)
+    if field_binding.rank or (field_binding.dtype, field_binding.kind) not in {("real", 4), ("real", 8),
+                                                                                ("integer", 4)}:
+        raise ComponentStorageUnsupported("an element field needs a scalar REAL or default INTEGER component: "
+                                          + str(node))
+    binding = replace(field_binding, name=root.name + "%" + str(member).lower(), rank=root.rank,
+                      attributes=frozenset((field_binding.attributes | {"element_field"}) - {"allocatable"}),
+                      lower_bounds=root.lower_bounds, lower_bound_nodes=root.lower_bound_nodes,
+                      shape_nodes=root.shape_nodes)
+    binding.component_object = root
+    binding.component_selector = node
+    return ComponentAccess(binding, root, node, (str(member).lower(),), indices)
+
+
 def component_access(analysis, scope, node):
     if _kind(node) != "Data_Ref":
         return None
@@ -215,6 +249,10 @@ def component_access(analysis, scope, node):
     if (getattr(analysis, '_native_metadata', False) and parts and _kind(parts[0]) == 'Part_Ref'):
         from compiler.frontend.native_metadata import access
         return access(analysis, scope, node)
+    # Resident entries bind a field of every element as one array; other consumers keep the boundary.
+    if (getattr(analysis, "element_fields", False) and len(parts) == 2 and _kind(parts[0]) == "Part_Ref"
+            and _kind(parts[1]) == "Name"):
+        return _element_field(analysis, scope, node)
     if len(parts) < 2 or _kind(parts[0]) != "Name":
         raise ComponentAccessUnsupported("source component needs one scalar variable object: " + str(node))
     root = analysis._binding(scope, parts[0])

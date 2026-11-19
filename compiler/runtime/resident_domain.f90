@@ -32,10 +32,30 @@ module fort_resident_domain
     logical :: borrowed=.false.
   end type
 
+  ! One numeric field of the elements of an array of derived type. Its values
+  ! are strided through the structures, so the domain keeps a contiguous copy
+  ! that the runtime manages like any bound array, and writes the copy back to
+  ! the structures whenever the host needs them.
+  type :: field_mirror
+    integer(c_intptr_t) :: first=0
+    integer(c_size_t) :: stride=0, count=0, bytes=0
+    integer(c_int) :: element_type=0
+    integer(c_int64_t) :: handle=0
+    logical :: written=.false.
+    integer(c_int32_t), pointer :: integers(:)=>null()
+    real(c_float), pointer :: singles(:)=>null()
+    real(c_double), pointer :: doubles(:)=>null()
+  end type
+
   type :: resident_domain
     integer(c_int64_t) :: domain=0, context=0, generation=0
+    ! Advances whenever host code may have changed bound values: at every
+    ! publication and host access. A caller that checked something about index
+    ! values can keep its answer while generation and stamp are unchanged.
+    integer(c_int64_t) :: stamp=0
     logical :: active=.false.
     type(registered_storage), allocatable, private :: storage(:)
+    type(field_mirror), allocatable, private :: mirrors(:)
     type(work_real32_3_slot), allocatable, private :: work3_f32(:)
     type(work_real64_3_slot), allocatable, private :: work3(:)
   contains
@@ -46,6 +66,8 @@ module fort_resident_domain
     generic :: bind_real => bind_real32, bind_real64
     procedure :: bind_integer32
     generic :: bind => bind_real32, bind_real64, bind_integer32
+    procedure :: bind_field
+    procedure :: observe_field
     procedure :: observe
     procedure :: host_begin
     procedure :: host_end
@@ -254,14 +276,118 @@ contains
   subroutine observe(self, handles)
     class(resident_domain), intent(inout) :: self
     integer(c_int64_t), target, intent(in) :: handles(:)
+    integer :: i
     if (size(handles)==0) return
     call resident_require(fort_scope_observe_v1(self%context,c_loc(handles),size(handles,kind=c_size_t)))
+    if (.not. allocated(self%mirrors)) return
+    do i=1,size(self%mirrors)
+      ! A field the device wrote reaches its structures through the copy.
+      if (self%mirrors(i)%written .and. any(handles==self%mirrors(i)%handle)) &
+        call copy_field(self%mirrors(i),.false.)
+    enddo
   end subroutine
+
+  ! Bring one field of an array of derived type back into its structures and
+  ! keep its device copy. first is the address of the field in the first
+  ! element. A field that is not bound is already current on the host.
+  subroutine observe_field(self, first)
+    class(resident_domain), intent(inout) :: self
+    type(c_ptr), intent(in) :: first
+    integer :: i
+    if (.not. allocated(self%mirrors)) return
+    do i=1,size(self%mirrors)
+      if (self%mirrors(i)%first==transfer(first,self%mirrors(i)%first)) call self%observe([self%mirrors(i)%handle])
+    enddo
+  end subroutine
+
+  function mirror_address(mirror) result(address)
+    type(field_mirror), intent(in) :: mirror
+    type(c_ptr) :: address
+    select case(mirror%element_type)
+    case(FORT_SCOPE_INTEGER32)
+      address=c_loc(mirror%integers)
+    case(FORT_SCOPE_REAL32)
+      address=c_loc(mirror%singles)
+    case default
+      address=c_loc(mirror%doubles)
+    end select
+  end function
+
+  subroutine copy_field(mirror, gather)
+    type(field_mirror), intent(in) :: mirror
+    logical, intent(in) :: gather
+    integer(c_int8_t), pointer :: fields(:), values(:)
+    integer(c_size_t) :: i
+    call c_f_pointer(transfer(mirror%first,c_null_ptr),fields,[(mirror%count-1)*mirror%stride+mirror%bytes])
+    call c_f_pointer(mirror_address(mirror),values,[mirror%count*mirror%bytes])
+    do i=0,mirror%count-1
+      if (gather) then
+        values(i*mirror%bytes+1:(i+1)*mirror%bytes)=fields(i*mirror%stride+1:i*mirror%stride+mirror%bytes)
+      else
+        fields(i*mirror%stride+1:i*mirror%stride+mirror%bytes)=values(i*mirror%bytes+1:(i+1)*mirror%bytes)
+      endif
+    enddo
+  end subroutine
+
+  ! Bind one field of every element of a rank-one array of derived type.
+  ! first is the address of the field in the first element, stride the size of
+  ! one element in bytes. The values are copied from the structures when the
+  ! field is first bound and stay bound until the next publication.
+  function bind_field(self, first, stride, count, element_type, writing, origin) result(handle)
+    class(resident_domain), intent(inout) :: self
+    type(c_ptr), intent(in) :: first
+    integer(c_size_t), intent(in) :: stride, count
+    integer(c_int), intent(in) :: element_type
+    logical, intent(in) :: writing
+    character(*), optional, intent(in) :: origin
+    integer(c_int64_t) :: handle
+    type(field_mirror) :: item
+    integer :: i
+    if (.not. self%active) error stop 'field binding outside a storage epoch'
+    if (count==0 .or. .not. c_associated(first)) error stop 'invalid or empty resident field'
+    if (.not. allocated(self%mirrors)) allocate(self%mirrors(0))
+    item%first=transfer(first,item%first)
+    do i=1,size(self%mirrors)
+      if (self%mirrors(i)%first/=item%first) cycle
+      if (self%mirrors(i)%stride/=stride .or. self%mirrors(i)%count/=count .or. &
+          self%mirrors(i)%element_type/=element_type) error stop 'field layout changed inside an epoch'
+      self%mirrors(i)%written=self%mirrors(i)%written .or. writing
+      handle=self%mirrors(i)%handle
+      return
+    enddo
+    item%stride=stride; item%count=count; item%element_type=element_type; item%written=writing
+    select case(element_type)
+    case(FORT_SCOPE_INTEGER32)
+      item%bytes=4
+      allocate(item%integers(count))
+    case(FORT_SCOPE_REAL32)
+      item%bytes=4
+      allocate(item%singles(count))
+    case(FORT_SCOPE_REAL64)
+      item%bytes=8
+      allocate(item%doubles(count))
+    case default
+      error stop 'unsupported resident field type'
+    end select
+    if (stride<item%bytes) error stop 'invalid resident field stride'
+    call copy_field(item,.true.)
+    select case(element_type)
+    case(FORT_SCOPE_INTEGER32)
+      item%handle=self%bind_integer32(item%integers,[1],.true.,origin=origin)
+    case(FORT_SCOPE_REAL32)
+      item%handle=self%bind_real32(item%singles,[1],.true.,origin=origin)
+    case default
+      item%handle=self%bind_real64(item%doubles,[1],.true.,origin=origin)
+    end select
+    self%mirrors=[self%mirrors,item]
+    handle=item%handle
+  end function
 
   subroutine host_begin(self, handle, access)
     class(resident_domain), intent(inout) :: self
     integer(c_int64_t), intent(in) :: handle
     type(fort_scope_access), intent(in) :: access
+    self%stamp=self%stamp+1
     call resident_require(fort_scope_host_begin(self%context,handle,access))
   end subroutine
 
@@ -451,12 +577,22 @@ contains
     integer(c_int64_t), allocatable :: handles(:)
     integer :: i
     if (.not. allocated(self%storage)) return
+    self%stamp=self%stamp+1
     handles=pack(self%storage%handle,.not. self%storage%persistent)
     call self%observe(handles)
     do i=1,size(handles)
       call resident_require(fort_scope_unregister(self%context,handles(i)))
     enddo
     self%storage=pack(self%storage,self%storage%persistent)
+    if (allocated(self%mirrors)) then
+      ! The structures hold the fields again; host code may change them freely.
+      do i=1,size(self%mirrors)
+        if (associated(self%mirrors(i)%integers)) deallocate(self%mirrors(i)%integers)
+        if (associated(self%mirrors(i)%singles)) deallocate(self%mirrors(i)%singles)
+        if (associated(self%mirrors(i)%doubles)) deallocate(self%mirrors(i)%doubles)
+      enddo
+      deallocate(self%mirrors)
+    endif
   end subroutine
 
   subroutine end_epoch(self)

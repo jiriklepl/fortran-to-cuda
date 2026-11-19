@@ -1,6 +1,7 @@
 ! Host-side diagnostics. This code is not compiled for the device: it reads the field on the host.
 module diagnostics
   use params
+  use sources, only: points
   implicit none
 contains
   subroutine report(step, a)
@@ -8,7 +9,7 @@ contains
     real(rp), contiguous, intent(in) :: a(-1:,-1:,-1:)
     real(rp) :: energy
     integer :: i, j, k
-    !$fort observe(a)
+    !$fort observe(a, points(:)%seen)
     energy = 0
     do k = 1, nz
       do j = 1, ny
@@ -17,6 +18,6 @@ contains
         end do
       end do
     end do
-    print '(a,i0,a,es24.16)', 'step ', step, ' energy ', energy
+    print '(a,i0,a,es24.16,a,es24.16)', 'step ', step, ' energy ', energy, ' seen ', sum(points%seen)
   end subroutine report
 end module diagnostics

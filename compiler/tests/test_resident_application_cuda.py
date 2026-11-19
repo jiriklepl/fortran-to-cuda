@@ -50,14 +50,16 @@ def test_the_resident_run_matches_the_native_run_byte_for_byte(binaries, tmp_pat
     native_output, _, native_field = run(binaries["box-native"], tmp_path / "native", *arguments)
     output, trace, field = run(binaries["box"], tmp_path / "resident", *arguments, trace=True)
     assert field == native_field
-    assert len(field) == 52 * 44 * 36 * 8
+    # The file holds the field with its halos and what each of the five sources saw.
+    assert len(field) == (52 * 44 * 36 + 5) * 8
     # The host diagnostic saw the device's values at each report, digit for digit.
     assert output == native_output
     assert output.count("energy") == 3
     seen = events(trace)
-    # Each of the thirty steps queues five device tasks: the three ordered halo copies, the update and the store.
-    assert seen.count("queue_enqueue") == 150
-    assert seen.count("graph_kernel") + seen.count("launch") == 150
+    # Each of the thirty steps queues seven device tasks: the three ordered halo copies, the update, the
+    # store, the injection at the sources and their sensing.
+    assert seen.count("queue_enqueue") == 210
+    assert seen.count("graph_kernel") + seen.count("launch") == 210
     assert "implementation=" in trace
     assert "generated_cpu" not in trace
     # The native build has no residency code at all.
@@ -79,3 +81,26 @@ def test_below_the_guarded_extent_the_same_binary_runs_its_original_loops(binari
     assert field == native_field
     assert "queue_enqueue" not in events(trace)
     assert "launch" not in events(trace)
+
+
+def test_sources_that_share_a_cell_are_injected_on_the_host_with_the_same_result(binaries, tmp_path):
+    arguments = (24, 20, 16, 12, 4, -6)
+    native_output, _, native_field = run(binaries["box-native"], tmp_path / "native", *arguments)
+    output, trace, field = run(binaries["box"], tmp_path / "resident", *arguments, trace=True)
+    assert field == native_field
+    assert output == native_output
+    # Two sources per cell: the uniqueness check fails, so six of the seven tasks per step stay on the device.
+    assert events(trace).count("queue_enqueue") == 12 * 6
+    distinct = events(run(binaries["box"], tmp_path / "distinct", 24, 20, 16, 12, 4, 6, trace=True)[1])
+    assert distinct.count("queue_enqueue") == 12 * 7
+    # With distinct sources nothing is published during the run, so far fewer transfers happen.
+    assert distinct.count("upload") < events(trace).count("upload")
+
+
+def test_an_empty_source_list_leaves_its_entries_out(binaries, tmp_path):
+    arguments = (24, 20, 16, 12, 4, 0)
+    native_output, _, native_field = run(binaries["box-native"], tmp_path / "native", *arguments)
+    output, trace, field = run(binaries["box"], tmp_path / "resident", *arguments, trace=True)
+    assert field == native_field
+    assert output == native_output
+    assert events(trace).count("queue_enqueue") == 12 * 5

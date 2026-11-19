@@ -258,6 +258,14 @@ def _helper_actuals(analysis, routine, node, *, allow_omitted_optional=False):
     return helper, tuple(actuals[name] for name in helper.arguments)
 
 
+def _element_count(binding, reference):
+    """Whether ``reference`` names an array of derived type only to ask for its SIZE."""
+    parent = getattr(getattr(reference, "parent", None), "parent", None)
+    return (binding.rank == 1 and str(binding.dtype).lower().startswith("type") and _kind(reference) == "Name"
+            and _kind(parent) == "Intrinsic_Function_Reference" and str(parent.items[0]).lower() == "size"
+            and len(_children(parent.items[1])) == 1)
+
+
 def _helper_closure(analysis, routine, loops):
     """Borrow only reached, explicitly pure source helpers and their captures."""
     result, active = {}, []
@@ -884,6 +892,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             if (owner is not routine and "parameter" not in binding.attributes
                     and any(binding is own for own in owner.scope.bindings.values())):
                 continue  # Helper dummies/private storage belong to its worker.
+            if _element_count(binding, _reference):
+                continue  # SIZE of an array of derived type is read from one of its element fields.
             boundary = analysis.resource_identity_boundary(binding)
             if boundary:
                 raise CompilationError(boundary)
@@ -1213,6 +1223,15 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             arguments = _children(value.items[1])
             original_array = (analysis._binding(source_scope_for(analysis, arguments[0], owner.scope), arguments[0])
                               if arguments and _kind(arguments[0]) in {"Name", "Data_Ref"} else None)
+            if original_array is not None and _element_count(original_array, arguments[0]):
+                # Every element field has the extent of its array of derived type.
+                fields = sorted(name for root, name in capture_names.items()
+                                if getattr(captures[root], "component_object", None) is not None
+                                and captures[root].component_object.root == original_array.root
+                                and "element_field" in captures[root].attributes)
+                if not fields:
+                    raise CompilationError("SIZE of an array of derived type needs one of its fields in the region")
+                return F.Intrinsic_Function_Reference(f"SIZE({fields[0]})")
             if original_array is None or original_array.root not in captures or not original_array.rank:
                 raise CompilationError("inline array inquiry requires an original array descriptor")
             name = capture_names[original_array.root]

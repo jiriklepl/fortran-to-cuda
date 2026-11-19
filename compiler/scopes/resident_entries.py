@@ -10,10 +10,19 @@ from fnmatch import fnmatchcase
 from hashlib import sha256
 from pathlib import Path
 
-from fparser.two.Fortran2003 import Allocation, Call_Stmt, Intrinsic_Function_Reference, Name
+from fparser.two.Fortran2003 import (
+    Allocation,
+    Assignment_Stmt,
+    Call_Stmt,
+    Data_Ref,
+    Intrinsic_Function_Reference,
+    Name,
+    Part_Ref,
+)
 from fparser.two.utils import walk
 
 from compiler.frontend.call_bindings import resolve_original_call
+from compiler.frontend.component_bindings import component_access
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
 from compiler.scopes.region_context import original_region_context
@@ -69,6 +78,93 @@ def _entry_groups(sequence, acknowledged=None):
         yield mark(tuple(pending))
 
 
+def _text(node):
+    return " ".join(str(node).split())
+
+
+def _structure_fields(analysis, scope, node):
+    """The element fields of arrays of derived type that ``node`` reads or writes, by resource."""
+    fields = {}
+    for reference in walk(node, Data_Ref):
+        try:
+            access = component_access(analysis, scope, reference)
+        except CompilationError:
+            continue
+        if access is not None and "element_field" in access.binding.attributes:
+            fields[access.binding.root] = access
+    return fields
+
+
+def _structure_objects(analysis, scope, node):
+    return frozenset(access.root_binding.root for access in _structure_fields(analysis, scope, node).values())
+
+
+def _indirect_writes(analysis, routine, loops):
+    """Arrays written through index values, and what a caller must check before running the nests.
+
+    A nest such as ``a(idx(i)) = a(idx(i)) + v(i)`` is independent across
+    iterations exactly when its subscript tuple addresses a different element
+    each time. That depends on the index values, so it is left to a check the
+    caller makes: each requirement names the array, the DO statements around
+    the access and the subscripts, all in original source text. An array gets
+    requirements only when every nest that writes it is checkable: one
+    subscript tuple per nest, with no scalar the nest itself computes.
+    """
+    found, refused = {}, set()
+    for loop in loops:
+        computed = {str(statement.items[0]).lower() for statement in walk(loop, Assignment_Stmt)
+                    if _kind(statement.items[0]) == "Name"}
+        accesses = {}
+        for reference in walk(loop, Part_Ref):
+            if _kind(reference.parent) == "Data_Ref" and reference.parent.items[0] is reference:
+                continue  # objects(i)%field: the element, not an access to a numeric array
+            binding = analysis._binding(routine.scope, reference.items[0])
+            if binding is None or not binding.rank or str(binding.dtype).lower().startswith("type"):
+                continue
+            item = accesses.setdefault(binding.root, {"name": binding.name, "tuples": {}, "written": False})
+            item["tuples"].setdefault(_text(reference.items[1]).lower(), reference)
+        for statement in walk(loop, Assignment_Stmt):
+            target = statement.items[0]
+            binding = analysis._binding(routine.scope, target.items[0]) if _kind(target) == "Part_Ref" else None
+            if binding is not None and binding.root in accesses:
+                accesses[binding.root]["written"] = True
+        for root, item in accesses.items():
+            if not item["written"]:
+                continue
+            indexed, uses_computed = {}, False
+            for reference in item["tuples"].values():
+                subscripts = _children(reference.items[1])
+                uses_computed |= any(str(name).lower() in computed for part in subscripts for name in walk(part, Name))
+                for part in subscripts:
+                    indexed.update((root_, access.binding.name)
+                                   for root_, access in _structure_fields(analysis, routine.scope, part).items())
+                    for inner in walk(part, Part_Ref):
+                        index = analysis._binding(routine.scope, inner.items[0])
+                        if (index is not None and index.rank and not str(index.dtype).lower().startswith("type")
+                                and not (_kind(inner.parent) == "Data_Ref" and inner.parent.items[0] is inner)):
+                            indexed[index.root] = index.name
+            if not indexed and not uses_computed:
+                continue  # Subscripts of loop variables only: the ordinary dependence proof decides.
+            if len(item["tuples"]) != 1 or uses_computed:
+                refused.add(root)
+                continue
+            reference = next(iter(item["tuples"].values()))
+            enclosing, node = [], reference
+            while node is not None:
+                if _kind(node) == "Block_Nonlabel_Do_Construct":
+                    enclosing.append(_text(next(part for part in node.content if _kind(part) == "Nonlabel_Do_Stmt")))
+                if node is loop:
+                    break
+                node = getattr(node, "parent", None)
+            requirement = {"resource": root, "array": item["name"], "loops": enclosing[::-1],
+                           "indices": [_text(part) for part in _children(reference.items[1])],
+                           "index_resources": sorted(indexed)}
+            if requirement not in found.setdefault(root, []):
+                found[root].append(requirement)
+    return [requirement for root, requirements in sorted(found.items()) if root not in refused
+            for requirement in requirements]
+
+
 def _resolve_procedures(analysis, procedures, *, allow_patterns=False):
     available = sorted(analysis.routines)
     if procedures is None:
@@ -106,6 +202,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     host to hold current values.
     """
     analysis = SourceEffects(paths, analysis_sources=analysis_sources)
+    analysis.element_fields = True
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
     resolved_procedures = _resolve_procedures(analysis, procedures, allow_patterns=allow_patterns)
@@ -114,6 +211,16 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
         routine = analysis.routines[procedure]
 
         def emit(nodes, sequence):
+            if len(nodes) > 1:
+                # Nests over different arrays of derived type bind, and are skipped when empty, separately.
+                objects = [_structure_objects(analysis, routine.scope, node) for node in nodes]
+                if len(set(objects)) > 1:
+                    start = 0
+                    for index in range(1, len(nodes) + 1):
+                        if index == len(nodes) or objects[index] != objects[start]:
+                            emit(nodes[start:index], sequence)
+                            start = index
+                    return
             first = min(statement_span(node)[0] for node in nodes)
             last = max(statement_span(node)[1] for node in nodes)
             # Grouping can peel directive prefixes. Recover the actual
@@ -140,9 +247,17 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                                  "last_line": last, "reason": str(error)})
                 return
             path = extracted.write(directory)
+            structures = []
+            for root in sorted(_structure_objects(analysis, routine.scope, nodes)):
+                name = root.rsplit("::", 1)[-1]
+                # When every nest runs once per element, an empty array leaves the entry nothing to do.
+                counted = all(_text(next(part for part in node.content if _kind(part) == "Nonlabel_Do_Stmt")).lower()
+                              .replace(" ", "").endswith(f",size({name})") for node in loops)
+                structures.append({"name": name, "resource": root, "counted": bool(loops) and counted})
             entries.append({"procedure": procedure, "source": str(routine.scope.path),
                             "input_path": str(path.resolve()), **extracted.public(),
-                            "source_loop_spans": [list(statement_span(node)) for node in loops]})
+                            "source_loop_spans": [list(statement_span(node)) for node in loops],
+                            "structures": structures, "injective": _indirect_writes(analysis, routine, loops)})
 
         def host(nodes, acknowledged):
             """Record host code that names arrays: it runs beside entries that may hold newer values."""
@@ -289,7 +404,7 @@ def guard_entries(extracted, directory, condition):
     return {**extracted, "entries": entries}
 
 
-def compile_resident_entry(source, entry, directory, *, host_threads=4, collective=False):
+def compile_resident_entry(source, entry, directory, *, host_threads=4, collective=False, injective=()):
     """Compile one entry for forced device placement and write its sources.
 
     The directory receives the entry's sources, the runtime headers they
@@ -311,7 +426,8 @@ def compile_resident_entry(source, entry, directory, *, host_threads=4, collecti
         config = OffloadConfig("sections", None, host_threads, collective, None, "direct")
     except ValueError as error:
         raise CompilationError(str(error)) from error
-    options = CompilerOptions(opt_level=1, fallback="error", gpu_policy="sections", scope_transfers="direct")
+    options = CompilerOptions(opt_level=1, fallback="error", gpu_policy="sections", scope_transfers="direct",
+                              injective_arrays=tuple(injective))
     _function, plan, sources = compile_kernel_entry(Path(source).resolve(), entry, options=options,
                                                     offload_config=config, common_header="runtime.hpp")
     outputs = kernel_entry_outputs(sources, common_header="runtime.hpp")
@@ -337,8 +453,12 @@ def compile_resident_entries(extracted, directory, *, host_threads=4):
         target = directory / region["source_identity"][:16]
         span = {"procedure": region["procedure"], "first_line": region["first_line"],
                 "last_line": region["last_line"]}
+        checked = {requirement["resource"] for requirement in region.get("injective", ())}
         try:
-            report = compile_resident_entry(region["input_path"], region["entry"], target, host_threads=host_threads)
+            report = compile_resident_entry(
+                region["input_path"], region["entry"], target, host_threads=host_threads,
+                injective=[parameter["name"] for parameter in region["parameters"]
+                           if parameter["rank"] and parameter["resource"] in checked])
         except CompilationError as error:
             rejected.append({**span, "reason": str(error)})
             continue

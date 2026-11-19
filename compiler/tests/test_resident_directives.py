@@ -59,6 +59,25 @@ def test_observe_binds_the_named_arrays_and_keeps_their_device_copies():
     assert records[0]["arrays"] == ["U", "state%pressure"]
 
 
+def test_observe_brings_one_field_of_an_array_of_derived_type_back():
+    block, records = expand("!$fort observe(points(:)%seen, u) if(ready)")
+    assert block == ("block\n"
+                     "  use, intrinsic :: iso_c_binding\n"
+                     "  use my_state, only: flow\n"
+                     "  integer(c_int64_t) :: app_observed(1)\n"
+                     "  if (flow%active .and. (ready)) then\n"
+                     "    app_observed(1) = flow%bind(u, lbound(u), .true., origin='unit::u')\n"
+                     "    call flow%observe(app_observed)\n"
+                     "    if (size(points) > 0) call flow%observe_field(c_loc(points(lbound(points,1))%seen))\n"
+                     "  endif\n"
+                     "end block\n")
+    assert records[0]["arrays"] == ["points(:)%seen", "u"]
+    only_field, _ = expand("!$fort observe(points(:)%seen)")
+    assert "app_observed" not in only_field
+    with pytest.raises(ValueError, match="takes array names, not expressions"):
+        expand_directives("!$fort release(points(:)%seen)\n", DOMAIN)
+
+
 def test_release_retires_temporaries_without_bringing_them_back():
     block, _ = expand("!$fort release(tmp, work)")
     assert "if (flow%active) then\n    call flow%release_real(tmp)\n    call flow%release_real(work)\n  endif" in block

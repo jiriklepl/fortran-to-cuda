@@ -24,8 +24,8 @@ def test_the_box_is_prepared_from_its_description(box):
     directory, prepared = box
     assert json.loads((directory / "prepared.json").read_text()) == prepared
     assert [(row["label"], row["entries"], row["nests"], row["rejected"]) for row in prepared["selections"]] == [
-        ("step", 2, 2, []), ("halo", 1, 3, [])]
-    assert len(prepared["entries"]) == 3
+        ("step", 2, 2, []), ("halo", 1, 3, []), ("sources", 2, 2, [])]
+    assert len(prepared["entries"]) == 5
     assert all((Path(entry) / name).is_file() for entry in prepared["entries"] for name in ENTRY_SOURCES)
     assert prepared["domain"] == {"module": "fort_resident_application", "object": "resident", "default": True}
     assert prepared["directives"] == 4
@@ -70,7 +70,9 @@ def test_directives_in_the_source_place_the_epoch_and_the_host_reads(box):
     diagnostics = (directory / "sources/diagnostics.f90").read_text()
     observe = diagnostics.index("call resident%observe(fort_observed)")
     assert "fort_observed(1) = resident%bind(a, lbound(a), .true., origin='diagnostics::a')" in diagnostics[:observe]
-    assert observe < diagnostics.index("energy = energy + a(i,j,k)*a(i,j,k)")
+    # One field of the source list is brought back through the domain's copy of it.
+    field = diagnostics.index("if (size(points) > 0) call resident%observe_field(c_loc(points(lbound(points,1))%seen))")
+    assert observe < field < diagnostics.index("energy = energy + a(i,j,k)*a(i,j,k)")
     # The diagnostic loop was not selected: it stays host code and keeps no entry call.
     assert "fort_device_run" not in diagnostics
 
@@ -268,3 +270,36 @@ def test_known_findings_are_accepted_and_strict_mode_refuses_new_ones(tmp_path):
     with pytest.raises(ValueError, match=finding["id"] + r" audited::step line \d+: b\(1\) = a\(n\)"):
         audited(tmp_path / "strict", ("audited::step", "audited::finish"), strict_audit=True)
     assert not (tmp_path / "strict/prepared/sources").exists()
+
+
+def test_fields_of_an_array_of_derived_type_are_bound_through_the_domain(box):
+    directory, _prepared = box
+    text = (directory / "sources/sources.f90").read_text()
+    sense = text[text.index("subroutine sense(a)"):text.index("end subroutine sense")]
+    # Each field the nest uses is one resource; the one it writes is marked so, and the array needs TARGET.
+    assert ("resident%bind_field(c_loc(points(lbound(points,1))%seen), &\n"
+            "          int(storage_size(points)/8,c_size_t),size(points,kind=c_size_t),FORT_SCOPE_REAL64, &\n"
+            "          .true.,origin='sources::sense::points%seen')") in sense
+    assert "FORT_SCOPE_INTEGER32, &\n          .false.,origin='sources::sense::points%xi')" in sense
+    assert "TYPE(source), ALLOCATABLE, TARGET :: points(:)" in text
+    # Every nest runs once per source, so an empty list skips the block, also when not resident.
+    assert sense.index("      if (size(points) > 0) then\n") < sense.index("fort_resident = resident%active")
+    # Reading through indices needs no check; only the scatter in inject has one.
+    assert "fort_distinct" not in sense
+
+
+def test_a_write_through_indices_is_checked_once_per_publication_and_falls_back(box):
+    directory, _prepared = box
+    text = (directory / "sources/sources.f90").read_text()
+    inject = text[text.index("subroutine inject(a)"):text.index("end subroutine inject")]
+    check = inject.index("if (any(fort_checked /= [resident%generation, resident%stamp])) then")
+    # The index fields are made current on the host, then every source must name a cell of its own.
+    observe = inject.index("call resident%observe([", check)
+    loop = inject.index("DO q = 1, SIZE(points)", observe)
+    seen = inject.index("else if (fort_seen_1(points(q) % xi, points(q) % yj, points(q) % zk)) then", loop)
+    assert check < observe < loop < seen < inject.index("fort_resident = fort_distinct")
+    assert "any([points(q) % xi, points(q) % yj, points(q) % zk] < lbound(a))" in inject
+    # Sources that share a cell keep the original loop, after the device values are published.
+    call = inject.index("call resident_require(fort_device_run(")
+    publish = inject.index("if (resident%active) call resident%publish()")
+    assert call < publish < inject.index("a(points(q)%xi, points(q)%yj, points(q)%zk) = ", publish)

@@ -18,7 +18,7 @@ state and must run before the bound arrays are deallocated at program end.
 ``publish`` brings every value back to the host and forgets the device copies:
 put it before host code whose accesses are not known. ``observe`` brings back
 only the named arrays and keeps their device copies, for host code that reads
-them. ``release`` retires a temporary's device copy without bringing it back,
+them. One field of an array of derived type is named ``objects(:)%field``. ``release`` retires a temporary's device copy without bringing it back,
 before the temporary is deallocated. Every directive except ``enter`` and
 ``close`` does nothing while values are not on the device.
 """
@@ -26,6 +26,7 @@ import re
 
 _LINE = re.compile(r"^(?P<indent>[ \t]*)!\$fort\b[ \t]*(?P<body>.*?)[ \t]*$", re.IGNORECASE)
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*(?:%[A-Za-z][A-Za-z0-9_]*)*\Z")
+_FIELD = re.compile(r"([A-Za-z][A-Za-z0-9_]*)\s*\(\s*:\s*\)\s*%\s*([A-Za-z][A-Za-z0-9_]*)\Z")
 _CLAUSES = {"enter": {"budget", "if", "device"}, "leave": set(), "close": set(), "publish": {"if"},
             "observe": {"if"}, "release": set()}
 _ARGUMENTS = {"observe", "release"}
@@ -62,8 +63,8 @@ def _clauses(text, line):
                          + ("needs a list of arrays" if name in _ARGUMENTS else "takes no arguments"))
     names = []
     if arguments is not None:
-        names = [item.strip() for item in arguments.split(",")]
-        if not all(_NAME.match(item) for item in names):
+        names = [item.strip() for item in re.split(r",(?![^()]*\))", arguments)]
+        if not all(_NAME.match(item) or (name == "observe" and _FIELD.match(item)) for item in names):
             raise ValueError(f"The {name} directive on line {line} takes array names, not expressions")
     return name, names, clauses
 
@@ -98,10 +99,15 @@ def _generate(name, names, clauses, indent, domain, origin):
         return _block(indent, domain, [f"if ({this}%active) then",
                                        *(f"  call {this}%release_real({item})" for item in names), "endif"])
     handles = f"{domain.prefix}_observed"
+    arrays = [item for item in names if not _FIELD.match(item)]
     binds = [f"  {handles}({index}) = {this}%bind({item}, lbound({item}), .true., origin='{origin}::{item.lower()}')"
-             for index, item in enumerate(names, 1)]
-    return _block(indent, domain, [f"integer(c_int64_t) :: {handles}({len(names)})", f"if ({active}) then", *binds,
-                                   f"  call {this}%observe({handles})", "endif"], binding=True)
+             for index, item in enumerate(arrays, 1)]
+    if arrays:
+        binds.append(f"  call {this}%observe({handles})")
+    for objects, member in (_FIELD.match(item).groups() for item in names if _FIELD.match(item)):
+        binds.append(f"  if (size({objects}) > 0) call {this}%observe_field(c_loc({objects}(lbound({objects},1))%{member}))")
+    declaration = [f"integer(c_int64_t) :: {handles}({len(arrays)})"] if arrays else []
+    return _block(indent, domain, [*declaration, f"if ({active}) then", *binds, "endif"], binding=True)
 
 
 def expand_directives(text, domain, *, origin="source"):
