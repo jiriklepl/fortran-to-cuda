@@ -103,12 +103,15 @@ def _indirect_writes(analysis, routine, loops):
     """Arrays written through index values, and what a caller must check before running the nests.
 
     A nest such as ``a(idx(i)) = a(idx(i)) + v(i)`` is independent across
-    iterations exactly when its subscript tuple addresses a different element
-    each time. That depends on the index values, so it is left to a check the
+    iterations when its subscript tuple addresses a different element each
+    time. That depends on the index values, so it is left to a check the
     caller makes: each requirement names the array, the DO statements around
-    the access and the subscripts, all in original source text. An array gets
-    requirements only when every nest that writes it is checkable: one
-    subscript tuple per nest, with no scalar the nest itself computes.
+    one subscript tuple and its subscripts, all in original source text. The
+    caller checks all requirements of an array together: no two tuples, in
+    any iterations of any of the nests, may address the same element. Then the
+    nests are also independent of each other. An array gets requirements only
+    when every nest that writes it is checkable: all its subscript tuples go
+    through index values, with no scalar the nest itself computes.
     """
     found, refused = {}, set()
     for loop in loops:
@@ -131,9 +134,9 @@ def _indirect_writes(analysis, routine, loops):
         for root, item in accesses.items():
             if not item["written"]:
                 continue
-            indexed, uses_computed = {}, False
+            uses_computed, by_tuple = False, []
             for reference in item["tuples"].values():
-                subscripts = _children(reference.items[1])
+                subscripts, indexed = _children(reference.items[1]), {}
                 uses_computed |= any(str(name).lower() in computed for part in subscripts for name in walk(part, Name))
                 for part in subscripts:
                     indexed.update((root_, access.binding.name)
@@ -143,24 +146,26 @@ def _indirect_writes(analysis, routine, loops):
                         if (index is not None and index.rank and not str(index.dtype).lower().startswith("type")
                                 and not (_kind(inner.parent) == "Data_Ref" and inner.parent.items[0] is inner)):
                             indexed[index.root] = index.name
-            if not indexed and not uses_computed:
+                by_tuple.append((reference, indexed))
+            if not any(indexed for _, indexed in by_tuple) and not uses_computed:
                 continue  # Subscripts of loop variables only: the ordinary dependence proof decides.
-            if len(item["tuples"]) != 1 or uses_computed:
+            if uses_computed or not all(indexed for _, indexed in by_tuple):
                 refused.add(root)
                 continue
-            reference = next(iter(item["tuples"].values()))
-            enclosing, node = [], reference
-            while node is not None:
-                if _kind(node) == "Block_Nonlabel_Do_Construct":
-                    enclosing.append(_text(next(part for part in node.content if _kind(part) == "Nonlabel_Do_Stmt")))
-                if node is loop:
-                    break
-                node = getattr(node, "parent", None)
-            requirement = {"resource": root, "array": item["name"], "loops": enclosing[::-1],
-                           "indices": [_text(part) for part in _children(reference.items[1])],
-                           "index_resources": sorted(indexed)}
-            if requirement not in found.setdefault(root, []):
-                found[root].append(requirement)
+            for reference, indexed in by_tuple:
+                enclosing, node = [], reference
+                while node is not None:
+                    if _kind(node) == "Block_Nonlabel_Do_Construct":
+                        enclosing.append(_text(next(part for part in node.content
+                                                    if _kind(part) == "Nonlabel_Do_Stmt")))
+                    if node is loop:
+                        break
+                    node = getattr(node, "parent", None)
+                requirement = {"resource": root, "array": item["name"], "loops": enclosing[::-1],
+                               "indices": [_text(part) for part in _children(reference.items[1])],
+                               "index_resources": sorted(indexed)}
+                if requirement not in found.setdefault(root, []):
+                    found[root].append(requirement)
     return [requirement for root, requirements in sorted(found.items()) if root not in refused
             for requirement in requirements]
 

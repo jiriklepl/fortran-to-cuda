@@ -41,23 +41,30 @@ def _identity(path):
 _FIELD = {("real", 8): "FORT_SCOPE_REAL64", ("real", 4): "FORT_SCOPE_REAL32", ("integer", 4): "FORT_SCOPE_INTEGER32"}
 
 
-def _distinct_check(requirement, number, domain, indent):
-    """Fortran that clears the ``distinct`` flag unless a subscript tuple names each element once."""
-    array, indices = requirement["array"], requirement["indices"]
-    seen, rank = f"{domain.prefix}_seen_{number}", len(indices)
-    tuple_text = "[" + ", ".join(indices) + "]"
+def _distinct_check(requirements, number, domain, indent):
+    """Fortran that clears the ``distinct`` flag unless the subscript tuples of one array name each element once.
+
+    ``requirements`` are all those of the array: its tuples are marked in one
+    mask, so an element that two of them name, in any nests, is found too.
+    """
+    array, rank = requirements[0]["array"], len(requirements[0]["indices"])
+    seen = f"{domain.prefix}_seen_{number}"
     lines = [f"allocate({seen}(" + ",".join(f"lbound({array},{axis}):ubound({array},{axis})"
                                            for axis in range(1, rank + 1)) + "))",
              f"{seen} = .false."]
-    lines += requirement["loops"]
-    lines += [f"if (any({tuple_text} < lbound({array})) .or. any({tuple_text} > ubound({array}))) then",
-              f"  {domain.prefix}_distinct = .false.",
-              f"else if ({seen}({', '.join(indices)})) then",
-              f"  {domain.prefix}_distinct = .false.",
-              "else",
-              f"  {seen}({', '.join(indices)}) = .true.",
-              "endif"]
-    lines += ["END DO"] * len(requirement["loops"]) + [f"deallocate({seen})"]
+    for requirement in requirements:
+        indices = requirement["indices"]
+        tuple_text = "[" + ", ".join(indices) + "]"
+        lines += requirement["loops"]
+        lines += [f"if (any({tuple_text} < lbound({array})) .or. any({tuple_text} > ubound({array}))) then",
+                  f"  {domain.prefix}_distinct = .false.",
+                  f"else if ({seen}({', '.join(indices)})) then",
+                  f"  {domain.prefix}_distinct = .false.",
+                  "else",
+                  f"  {seen}({', '.join(indices)}) = .true.",
+                  "endif"]
+        lines += ["END DO"] * len(requirement["loops"])
+    lines.append(f"deallocate({seen})")
     return [indent + line for line in lines]
 
 
@@ -68,12 +75,17 @@ def entry_call_block(region, entry, domain, held=None):
     domain already holds; such an array is passed by that handle, not bound.
     A field of an array of derived type is bound through the domain's copy of
     it. Where the entry writes through index values, the block first checks,
-    once per publication, that the indices name each element once; if they do
-    not, the device values are published and the original statements run.
+    once per publication, that the subscript tuples of each such array name
+    every element at most once, across all its nests; if they do not, the
+    device values are published and the original statements run.
     """
     bindings = {binding["resource"]: binding for binding in region["resources"]}
     written = set(region.get("written_resources", ()))
     structures, checks = region.get("structures", ()), region.get("injective", ())
+    # One mask per array written through index values, shared by all its subscript tuples.
+    checked_arrays = {}
+    for check in checks:
+        checked_arrays.setdefault(check["resource"], []).append(check)
     actual, registration, handles, by_resource, kinds = {}, [], [], {}, set()
     for parameter in region["parameters"]:
         binding = bindings[parameter["resource"]]
@@ -128,8 +140,8 @@ def entry_call_block(region, entry, domain, held=None):
     if checks:
         code += [f"      logical, save :: {domain.prefix}_distinct = .false.",
                  f"      integer(c_int64_t), save :: {domain.prefix}_checked(2) = -1_c_int64_t"]
-        code += [f"      logical, allocatable :: {domain.prefix}_seen_{number}({','.join(':' * len(check['indices']))})"
-                 for number, check in enumerate(checks, 1)]
+        code += [f"      logical, allocatable :: {domain.prefix}_seen_{number}({','.join(':' * len(group[0]['indices']))})"
+                 for number, group in enumerate(checked_arrays.values(), 1)]
     # When every nest runs once per element of an array, an empty array leaves nothing to do.
     counted = [item["name"] for item in structures if item["counted"]]
     others = [item["name"] for item in structures if not item["counted"]]
@@ -145,8 +157,8 @@ def entry_call_block(region, entry, domain, held=None):
         if indices:
             code.append(f"          call {domain.object}%observe([" + ", ".join(indices) + "])")
         code.append(f"          {domain.prefix}_distinct = .true.")
-        for number, check in enumerate(checks, 1):
-            code += _distinct_check(check, number, domain, "          ")
+        for number, group in enumerate(checked_arrays.values(), 1):
+            code += _distinct_check(group, number, domain, "          ")
         code += [f"          {domain.prefix}_checked = [{domain.object}%generation, {domain.object}%stamp]",
                  "        endif", f"        {resident} = {domain.prefix}_distinct"]
     code += ["      endif", f"      if ({resident}) then", *call, "      else",

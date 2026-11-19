@@ -564,34 +564,40 @@ def _region_model(
                 entry[0][0]: candidate[0] for entry, candidate in zip(entries, candidates, strict=True)
             }
 
-    # A caller may check, before the region runs, that an array's subscript
-    # tuple addresses a different element in every iteration. When every access
-    # to that array in the region uses that one tuple at the same loop depth,
-    # two accesses touch the same element exactly when they are in the same
-    # iteration, whatever the index values are.
+    # A caller may check, before the region runs, that the subscript tuples of
+    # an array address a different element in every iteration, and different
+    # elements from one another. When every access to that array in the region
+    # goes through index values at the same loop depth, two accesses touch the
+    # same element exactly when they use the same tuple in the same iteration,
+    # whatever the index values are.
     certified = {}
     accesses_by_symbol = {}
     for spec in specifications:
         accesses_by_symbol.setdefault(spec[2], []).append(spec)
     for symbol, entries in accesses_by_symbol.items():
         first = entries[0]
-        if (symbol.name.lower() in injective and any(value is None for value in first[4])
-                and any(isinstance(node, ArrayAccess) for expression in first[3] for node in walk_expr(expression))
-                and events[first[0]].coordinates
-                and all(entry[3] == first[3] and events[entry[0]].coordinates == events[first[0]].coordinates
-                        for entry in entries)):
-            certified[symbol] = True
+        if (symbol.name.lower() in injective and events[first[0]].coordinates
+                and all(any(value is None for value in entry[4])
+                        and any(isinstance(node, ArrayAccess) for expression in entry[3]
+                                for node in walk_expr(expression))
+                        and events[entry[0]].coordinates == events[first[0]].coordinates for entry in entries)):
+            tuples = []
+            for entry in entries:
+                if entry[3] not in tuples:
+                    tuples.append(entry[3])
+            certified[symbol] = tuples
 
     def access_maps(kind):
         nonlocal conservative
         parts = []
-        for index, access_kind, symbol, _, indices, _ in specifications:
+        for position, (index, access_kind, symbol, _, indices, _) in enumerate(specifications):
             if kind != access_kind:
                 continue
             if symbol in certified:
-                # The coordinates stand for the element; they are not its physical position.
+                # The coordinates and the tuple stand for the element; they are not its physical position.
                 conservative = True
-                parts.append(f"{instance(index)} -> A{symbol.id}[{','.join(events[index].coordinates)}]"
+                which = certified[symbol].index(specifications[position][3])
+                parts.append(f"{instance(index)} -> A{symbol.id}[{','.join((*events[index].coordinates, str(which)))}]"
                              f" : {event_domain(events[index])}")
                 continue
             outputs = []

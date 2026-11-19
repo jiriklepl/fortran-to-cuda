@@ -67,6 +67,24 @@ do i = 1, n
   a(cell(i)) = a(cell(i) + 1)
 end do
 end subroutine
+subroutine pair(a, v)
+real(8), contiguous, intent(inout) :: a(:)
+real(8), contiguous, intent(in) :: v(:)
+integer :: i
+do i = 1, n
+  a(cell(i)) = a(cell(i)) + v(i)
+end do
+do i = 1, n
+  a(cell(i) + 1) = a(cell(i) + 1) - v(i)
+end do
+end subroutine
+subroutine mixed(a)
+real(8), contiguous, intent(inout) :: a(:)
+integer :: i
+do i = 1, n
+  a(cell(i)) = a(i)
+end do
+end subroutine
 subroutine computed(a)
 real(8), contiguous, intent(inout) :: a(:)
 integer :: i, k
@@ -150,8 +168,13 @@ def test_a_write_through_indices_names_what_the_caller_must_check(exported):
     plain, = entries(exported, "by_index")
     assert plain["injective"] == [{"resource": "argument::a", "array": "a", "loops": ["DO i = 1, n"],
                                    "indices": ["cell(i)"], "index_resources": ["walls::cell"]}]
-    # Two subscript tuples, or a subscript the nest computes itself, cannot be checked from outside.
-    assert entries(exported, "shifted")[0]["injective"] == []
+    # Every subscript tuple of the array is named, within a nest and across the nests of an entry.
+    assert [item["indices"] for item in entries(exported, "shifted")[0]["injective"]] == [["cell(i)"], ["cell(i) + 1"]]
+    both, = entries(exported, "pair")
+    assert [(item["loops"], item["indices"]) for item in both["injective"]] == [
+        (["DO i = 1, n"], ["cell(i)"]), (["DO i = 1, n"], ["cell(i) + 1"])]
+    # A tuple that does not go through index values, or a subscript the nest computes itself, cannot be checked.
+    assert entries(exported, "mixed")[0]["injective"] == []
     assert entries(exported, "computed")[0]["injective"] == []
 
 
@@ -165,17 +188,25 @@ def test_the_check_is_what_lets_the_scatter_run_on_the_device(exported, tmp_path
         compile_resident_entry(plain["input_path"], plain["entry"], tmp_path / "unchecked")
     report = compile_resident_entry(plain["input_path"], plain["entry"], tmp_path / "checked", injective=["a"])
     assert all(region["gpu_available"] for region in report["scoped"]["region_execution"])
-    # The assumption covers one shared tuple of index values: a second, shifted tuple still conflicts.
+    # The assumption covers every tuple that goes through index values, so a second, shifted tuple is fine.
     shifted = by_procedure["shifted"]
+    report = compile_resident_entry(shifted["input_path"], shifted["entry"], tmp_path / "shifted", injective=["a"])
+    assert all(region["gpu_available"] for region in report["scoped"]["region_execution"])
+    # It also makes two nests over the same iterations independent of each other: they become one region.
+    pair = by_procedure["pair"]
+    report = compile_resident_entry(pair["input_path"], pair["entry"], tmp_path / "pair", injective=["a"])
+    assert len(report["scoped"]["region_execution"]) == 1
+    # It says nothing about a subscript that is not an index value.
+    mixed = by_procedure["mixed"]
     with pytest.raises(CompilationError, match="Cannot parallelize"):
-        compile_resident_entry(shifted["input_path"], shifted["entry"], tmp_path / "shifted", injective=["a"])
+        compile_resident_entry(mixed["input_path"], mixed["entry"], tmp_path / "mixed", injective=["a"])
     # Compiling a whole export passes the assumption exactly where a requirement was recorded, so a
-    # nest whose subscript the caller cannot evaluate stays rejected.
+    # nest whose subscripts the caller cannot check stays rejected.
     package = compile_resident_entries(valued, tmp_path / "entries")
     compiled = {item["region"]["procedure"] for item in package["entries"]}
-    assert {"walls::correct", "walls::relax", "walls::by_index"} <= compiled
+    assert {"walls::correct", "walls::relax", "walls::by_index", "walls::shifted", "walls::pair"} <= compiled
     rejected = {item["procedure"] for item in package["rejected"]}
-    assert {"walls::shifted", "walls::computed"} <= rejected
+    assert {"walls::mixed", "walls::computed"} <= rejected
 
 
 def test_the_call_block_binds_fields_and_checks_before_it_runs(exported, tmp_path):
@@ -196,3 +227,16 @@ def test_the_call_block_binds_fields_and_checks_before_it_runs(exported, tmp_pat
         "if (flow%active) call flow%publish()", "@ORIGINAL@")]
     assert order == sorted(order)
     assert block.rstrip().endswith("      endif\n      endif\n    end block")
+
+
+def test_all_tuples_of_an_array_are_checked_in_one_mask(exported, tmp_path):
+    entry, = entries(exported, "pair")
+    package = compile_resident_entries({**exported[1], "entries": [entry], "rejected": []}, tmp_path / "entries")
+    item, = package["entries"]
+    block = entry_call_block(item["region"], item["entry"], ResidentDomain("state", "flow", "require"))
+    # An element that the two nests both name must be found, so their tuples share the mask.
+    assert block.count(" allocate(fort_seen_") == 1
+    assert block.count("deallocate(fort_seen_1)") == 1
+    first = block.index("else if (fort_seen_1(cell(i))) then")
+    second = block.index("else if (fort_seen_1(cell(i) + 1)) then")
+    assert block.index("allocate(fort_seen_1(") < first < second < block.index("deallocate(fort_seen_1)")
