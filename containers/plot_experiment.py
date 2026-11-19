@@ -77,7 +77,8 @@ def plot_resident(value, report, output):
                     f"{medians[position]:.3f}" + ("x" if relative else " s"), ha="center")
         ax.set(xticks=[0, 1], xticklabels=["Native", "Resident GPU"], ylim=(0, 1.18 * maximum),
                ylabel="Complete wall time / native" if relative else "Complete wall time (s)",
-               title=f"{value['case']} | {value['threads']} host threads | {summary['speedup']:.2f}x speedup")
+               title=(f"{value['case']} | native {value['threads']}, GPU run {value.get('gpu_threads', value['threads'])} "
+                      f"host threads | {summary['speedup']:.2f}x speedup"))
         ax.grid(axis="y", alpha=.2)
         ax.set_axisbelow(True)
         fig.text(.5, .08, f"{rules[policy]}; release qualification not established.\n"

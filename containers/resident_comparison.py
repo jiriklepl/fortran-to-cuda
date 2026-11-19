@@ -364,6 +364,8 @@ def run(args):
             precision=precision, overrides=configuration.get("overrides"),
         )
         fast_fp = bool(getattr(args, "fast_fp", False))
+        # The GPU run's host code is serial between kernels; a larger team only adds wake-up cost.
+        gpu_threads = getattr(args, "gpu_threads", 1)
         report.update(hardware=hardware, configuration=configuration, case=args.case, precision=precision,
                       strict_fp=not fast_fp,
                       dependencies={"application_root": str(app_root), "vkfft": str(vkfft)},
@@ -372,7 +374,7 @@ def run(args):
                                          "config": source_identity(work / "config"),
                                          "solver": solver_identity(args.solver),
                                          "runner_sha256": digest(__file__)},
-                      threads=args.threads, build_jobs=args.jobs, warmups=args.warmups, repeats=args.repeats,
+                      threads=args.threads, gpu_threads=gpu_threads, build_jobs=args.jobs, warmups=args.warmups, repeats=args.repeats,
                       cache_policy=("separate initially empty diagnostic and timing caches; "
                                     "warmups populate timing cache"),
                       timing_scope=("complete process including startup, cache lookup or compilation, "
@@ -437,8 +439,8 @@ def run(args):
             verify_binaries()
             print("Starting diagnostic:", name, flush=True)
             is_gpu = mode == "resident"
-            env = application_environment(args.threads, gpu["uuid"], caches["diagnostic"] if is_gpu else None,
-                                          traced=is_gpu)
+            env = application_environment(gpu_threads if is_gpu else args.threads, gpu["uuid"],
+                                          caches["diagnostic"] if is_gpu else None, traced=is_gpu)
             binary = binaries["ELMM-full20" if is_gpu else "ELMM-native-full20"]["path"]
             row, vtk, log = run_application(binary, work / "config", configuration, output / "diagnostics" / name,
                                             env, args.timeout, expected_steps)
@@ -494,8 +496,8 @@ def run(args):
             for mode in order:
                 verify_binaries()
                 is_gpu = mode == "resident"
-                env = application_environment(args.threads, gpu["uuid"], caches["timing"] if is_gpu else None,
-                                              traced=False)
+                env = application_environment(gpu_threads if is_gpu else args.threads, gpu["uuid"],
+                                              caches["timing"] if is_gpu else None, traced=False)
                 binary = binaries["ELMM" if is_gpu else "ELMM-native"]["path"]
                 directory = output / "runs" / f"round-{round_number:02}" / mode
                 print("Starting", mode, "round", round_number, flush=True)
@@ -560,7 +562,10 @@ def main(argv=None):
     parser.add_argument("--cfl", type=float, help="Override time_stepping.conf CFL")
     parser.add_argument("--advection", type=int, choices=(2, 4, 5, 6), help="Override main.conf advection method")
     parser.add_argument("--re", type=float, help="Override main.conf Reynolds number Re")
-    parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--threads", type=int, default=4, help="OpenMP threads of the native run")
+    parser.add_argument("--gpu-threads", type=int, default=1,
+                        help="OpenMP threads of the GPU run; its host code is serial between kernels, "
+                             "and a larger team only adds wake-up cost")
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--repeats", type=int, default=7)
     parser.add_argument("--warmups", type=int, default=1)
@@ -602,7 +607,8 @@ def main(argv=None):
         args.timeout = 3600 if uses_natural_channel_policy(
             args.case, args.config, args.steps, precision=args.precision, overrides=has_overrides
         ) else 900
-    if min(args.threads, args.jobs, args.repeats, args.timeout, args.build_timeout) < 1 or args.warmups < 0:
+    if min(args.threads, args.gpu_threads, args.jobs, args.repeats, args.timeout, args.build_timeout) < 1 \
+            or args.warmups < 0:
         parser.error("threads, jobs, repeats and timeouts must be positive; warmups must be nonnegative")
     if args.steps is not None and args.steps < 1:
         parser.error("steps must be positive")

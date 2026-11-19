@@ -8,7 +8,7 @@ node="" partition="" account="" config="" steps=""
 precision="" grid="" domain_size="" end_time="" cfl="" advection="" re_number="" timeout="" build_timeout=""
 deps="${DEPS_ROOT:-}" solver="${SOLVER_ROOT:-}"
 output="${OUTPUT_DIR:-}" work="${WORK_DIR:-}"
-case_name=channel-simple threads=4 jobs="" repeats=7 warmups=1 arch=auto
+case_name=channel-simple threads=4 gpu_threads=1 jobs="" repeats=7 warmups=1 arch=auto
 cpus=8 memory=32G time_limit="" gpus=1 runtime=auto
 sif="${SIF_FILE:-${workspace}/fortran-abomination.sif}"
 wait_job=1 dry_run=0 interactive=0 jobs_explicit=0 fast_fp=0
@@ -34,7 +34,8 @@ Submit a fresh resident comparison; no local fallback or headnode setup.
   --re VAL                        Override main.conf Reynolds number Re
   --timeout SEC                   Per-process application timeout in seconds
   --build-timeout SEC             Build timeout in seconds
-  --threads N --jobs N             Defaults: 4 runtime threads, build jobs = CPUs
+  --threads N --jobs N             Defaults: 4 threads for the native run, build jobs = CPUs
+  --gpu-threads N                 Threads for the GPU run (default: 1)
   --repeats N --warmups N          Defaults: 7 measured, 1 warmup
   --arch ARCH                     Default: auto, detected on the worker GPU
   -o, --output-dir DIR             Logs/results (default: results/runs/NODE-TIME)
@@ -75,6 +76,7 @@ while [[ $# -gt 0 ]]; do
         --timeout) value "$@"; timeout="$2"; shift 2 ;;
         --build-timeout) value "$@"; build_timeout="$2"; shift 2 ;;
         --threads) value "$@"; threads="$2"; shift 2 ;;
+        --gpu-threads) value "$@"; gpu_threads="$2"; shift 2 ;;
         --jobs) value "$@"; jobs="$2"; jobs_explicit=1; shift 2 ;;
         --repeats) value "$@"; repeats="$2"; shift 2 ;;
         --warmups) value "$@"; warmups="$2"; shift 2 ;;
@@ -100,7 +102,7 @@ while [[ $# -gt 0 ]]; do
 done
 for argument in "${extra[@]}"; do
     case "${argument%%=*}" in
-        --case|--config|--precision|--fast-fp|--grid|--domain-size|--steps|--end-time|--cfl|--advection|--re|--timeout|--build-timeout|--threads|--jobs|--repeats|--warmups|--arch|--output-dir|--output|-o|--work-dir|--app-root|--vkfft|--solver)
+        --case|--config|--precision|--fast-fp|--grid|--domain-size|--steps|--end-time|--cfl|--advection|--re|--timeout|--build-timeout|--threads|--gpu-threads|--jobs|--repeats|--warmups|--arch|--output-dir|--output|-o|--work-dir|--app-root|--vkfft|--solver)
             fail "use ${argument%%=*} before -- so resource and container paths can be checked" ;;
     esac
 done
@@ -125,10 +127,10 @@ solver="${solver:-$workspace/poisson-solver}"
 solver="$(cd -- "$solver" && pwd -P)"
 [[ "$runtime" == auto || "$runtime" == apptainer || "$runtime" == native ]] || fail "runtime must be auto, apptainer or native"
 jobs="${jobs:-$cpus}"
-for name in threads jobs repeats cpus gpus; do positive "$name" "${!name}"; done
+for name in threads gpu_threads jobs repeats cpus gpus; do positive "$name" "${!name}"; done
 [[ "$warmups" =~ ^(0|[1-9][0-9]*)$ ]] || fail "warmups must be a nonnegative integer"
 [[ -z "$steps" ]] || positive steps "$steps"
-(( cpus >= jobs && cpus >= threads )) || fail "cpus must cover both jobs and runtime threads"
+(( cpus >= jobs && cpus >= threads && cpus >= gpu_threads )) || fail "cpus must cover both jobs and runtime threads"
 [[ "$arch" =~ ^(auto|native|(sm_)?[0-9]+[af]?)$ ]] || fail "invalid CUDA architecture"
 [[ -n "$partition" ]] || case "$node" in
     hopper01) partition=gpu-ffa-gpulab ;;
@@ -167,7 +169,7 @@ job_script="$output/submit-$node.sh"
 [[ ! -e "$job_script" ]] || fail "existing job script must remain immutable: $job_script"
 workflow=(resident --case "$case_name" --threads "$threads")
 jobs_index=$((${#workflow[@]} + 1))
-workflow+=(--jobs "$jobs" --repeats "$repeats" --warmups "$warmups" --arch "$arch")
+workflow+=(--jobs "$jobs" --repeats "$repeats" --warmups "$warmups" --arch "$arch" --gpu-threads "$gpu_threads")
 config_index=-1
 if [[ -n "$config" ]]; then
     config_index=$((${#workflow[@]} + 1))

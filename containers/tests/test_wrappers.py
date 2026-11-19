@@ -121,6 +121,7 @@ def test_node_default_submission_and_full_case(sandbox):
     assert argv[0] == "resident"
     assert values(argv, "--case") == ["channel-simple"]
     assert values(argv, "--threads") == ["4"]
+    assert values(argv, "--gpu-threads") == ["1"]
     assert values(argv, "--jobs") == ["8"]
     assert values(argv, "--repeats") == ["7"]
     assert values(argv, "--warmups") == ["1"]
@@ -323,7 +324,7 @@ def test_node_dry_run_quotes_and_forwards_every_option(sandbox):
     literal = f"$(touch {marker})"
     result = invoke("run_node.sh", "bw01", "--dry-run", "--runtime", "native",
                     "--case", "channel", "--config", config, "--steps", "50",
-                    "--threads", "6", "--jobs", "10", "--cpus", "10",
+                    "--threads", "6", "--gpu-threads", "2", "--jobs", "10", "--cpus", "10",
                     "--repeats", "5", "--warmups", "0", "--arch", "sm_120",
                     "--", "--target-reduction", "0.20", "--label", literal)
     assert result.returncode == 0, result.stderr
@@ -331,7 +332,7 @@ def test_node_dry_run_quotes_and_forwards_every_option(sandbox):
     assert execute_payload(sandbox, "bw01").returncode == 0
     argv = json.loads(capture.read_text())["argv"]
     for option, expected in {"--case": "channel", "--config": str(config), "--steps": "50",
-                             "--threads": "6", "--jobs": "10", "--repeats": "5",
+                             "--threads": "6", "--gpu-threads": "2", "--jobs": "10", "--repeats": "5",
                              "--warmups": "0", "--arch": "sm_120", "--label": literal}.items():
         assert values(argv, option) == [expected]
     assert not marker.exists()
@@ -357,7 +358,7 @@ def test_node_job_script_is_immutable(sandbox):
 
 
 @pytest.mark.parametrize("args", [
-    ["--cpus", "3"], ["--threads", "9"], ["--jobs", "9"], ["--warmups", "-1"],
+    ["--cpus", "3"], ["--threads", "9"], ["--gpu-threads", "9"], ["--gpu-threads", "0"], ["--jobs", "9"], ["--warmups", "-1"],
     ["--repeats", "0"], ["--case", "wrong"], ["--case", "second-order"], ["--runtime", "wrong"], ["--steps"],
 ])
 def test_node_rejects_invalid_resources_before_dispatch(sandbox, args):
