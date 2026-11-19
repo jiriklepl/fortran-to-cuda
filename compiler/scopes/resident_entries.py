@@ -224,7 +224,7 @@ def compile_resident_entries(extracted, directory, *, host_threads=4):
                              "regions": unavailable})
             continue
         entries.append({"region": region, "directory": str(target), "entry": report["scoped"]})
-    record = {"version": 1, "kind": "resident_rk_device_entries", "source_inputs": extracted["source_inputs"],
+    record = {"version": 1, "kind": "resident_device_entries", "source_inputs": extracted["source_inputs"],
               "entries": entries, "rejected": rejected, "gpu_execution_established": False}
     (directory / "device-entries.json").write_text(json.dumps(record, indent=2) + "\n")
     return record

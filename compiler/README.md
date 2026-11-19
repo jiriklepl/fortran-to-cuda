@@ -435,6 +435,42 @@ Explicit entries and compiler-owned source scopes remain opt-in. The
 field validation and performance measurement against the original application
 and archived compiler.
 
+### Resident entries for a caller-owned domain
+
+An application that keeps its fields on the device across many calls owns a
+residency domain: a Fortran object that extends the runtime's
+`resident_domain`, binds arrays to handles and says whether it is active. The
+compiler supplies the numerical entries and the calls to them in four steps,
+all in `compiler.scopes`:
+
+- `resident_entries.export_resident_entries` extracts the loop nests of the
+  named procedures into small entry modules. It decides the entry boundaries
+  and records, for each entry, its source span, its parameters and the
+  original variables they stand for. Spans it cannot extract are listed as
+  rejections.
+- `resident_entries.pass_scalars_by_value` rewrites exported entries so that
+  lower-bound parameters, and scalars the caller names as defined before any
+  entry runs, are `VALUE` arguments.
+- `resident_entries.compile_resident_entries` compiles every exported entry
+  for forced device placement, in process, and writes its sources next to a
+  `compiler-report.json`. An entry the compiler rejects, or one that would
+  leave a region on the host, joins the rejections with its span.
+  `compile_resident_entry` does the same for one entry and is what the command
+  line runs for `--kernel` with `--gpu-policy sections`.
+- `resident_splice.splice_resident_entries` writes each source with its
+  compiled spans replaced by a block that binds the arrays through the domain
+  object and calls the entry while the domain is active, and runs the original
+  statements otherwise. A rejected span stays native after the domain
+  publishes its device values; the caller can supply its own text for such a
+  span instead. `resident_splice.addressable_arrays` adds `TARGET` to the
+  arrays a domain can bind.
+
+The caller names its domain with `ResidentDomain(module, object, check)`. It
+keeps everything the compiler cannot know: which procedures to export, when
+the domain is active, and the effects of native code. `compiler.runtime.
+RESIDENT_SOURCES` lists the runtime translation units such an application
+links, and `compiler.numerical_contract` the compile options they require.
+
 ### Compiler-owned source scopes
 
 ```bash
