@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "purpose": "Reviewed common ELMM comparison basis with approved deterministic TOP pressure reference; no inferred initializedness or lifetime facts.",
+  "schema_version": 2,
+  "purpose": "The ELMM and PoisFFT sources every comparison builds from: pinned upstream revisions, with the approved deterministic TOP/BOTTOM pressure reference applied to ELMM.",
   "repositories": {
     "elmm": {
       "url": "https://bitbucket.org/LadaF/elmm.git",
@@ -11,59 +11,6 @@
     "PoisFFT": {
       "url": "https://github.com/LadaF/PoisFFT.git",
       "revision": "256a2338254c08f611881b2df5e72bdfa73bc257"
-    }
-  },
-  "entry": "subgrid::sgs_sigma_uniform",
-  "source": "elmm/src/subgrid.f90",
-  "defines": [
-    "DPREC"
-  ],
-  "capture_facts": {
-    "schema_version": 1,
-    "participation": "serial",
-    "captures": {
-      "argument::u": {
-        "storage": "stable",
-        "initialized": "whole",
-        "escapes": false,
-        "allocation_changes": false
-      },
-      "argument::v": {
-        "storage": "stable",
-        "initialized": "whole",
-        "escapes": false,
-        "allocation_changes": false
-      },
-      "argument::w": {
-        "storage": "stable",
-        "initialized": "whole",
-        "escapes": false,
-        "allocation_changes": false
-      },
-      "tiling::tilenx": {
-        "storage": "stable",
-        "initialized": "whole",
-        "escapes": false,
-        "allocation_changes": false
-      },
-      "tiling::tileny": {
-        "storage": "stable",
-        "initialized": "whole",
-        "escapes": false,
-        "allocation_changes": false
-      },
-      "tiling::tilenz": {
-        "storage": "stable",
-        "initialized": "whole",
-        "escapes": false,
-        "allocation_changes": false
-      },
-      "parameters::viscosity": {
-        "storage": "stable",
-        "initialized": "none",
-        "escapes": false,
-        "allocation_changes": false
-      }
     }
   },
   "source_sha256": {
@@ -160,34 +107,5 @@
   "build_sha256": {
     "elmm/src/SConstruct": "ead490102759b7535800d9b30ee566ebee049f42f7db2e835de0bd449bc70a53",
     "PoisFFT/src/SConstruct": "2081ef8a39f561873727ef6529afcd0957a3c9c4346969133d79ff9a2e533e8d"
-  },
-  "reviewed_preconditions": [
-    "Serial SGS entry in the common approved ELMM basis derived from pinned upstream; only the non-PAR TOP/BOTTOM plane-average reduction is serialized, identically for native and both generated modes. These configurations retain TOP referencing. No collective participation facts are added.",
-    "U, V, W and tile extents retain the reviewed whole initialization and stable storage contracts.",
-    "Viscosity starts with initialized=none; the compiler must prove definitions before any read.",
-    "Every original analysis source and include is content pinned; a mismatch rejects this preset."
-  ],
-  "reviewed_source_updates": [
-    {
-      "source": "elmm/src/advection.f90",
-      "superseded_sha256": "e32b9a1d7bd1c39711ff0dbd5f93938217feed40b34b86f41d42dc2cc080658d",
-      "current_sha256": "6437b7e3a1e748eb39f4fcb8c865f23aafccfbfa0842838bd16c0c54b95c10ca",
-      "current_authority": "Unmodified file at the pinned upstream ELMM revision.",
-      "superseded_difference": "The superseded application changed only the first destination dummy in CDUdiv, CDVdiv, CDWdiv, CDUadv, CDVadv and CDWadv from intent(out) to intent(inout); all executable statements were identical.",
-      "review": "These six advection procedures are outside the selected SGS invocation and both numerical-region effect closures. SGS_Sigma_uniform calls only its unchanged internal GradientTensorUG, GradientTensorUG4, Sigmas and det3x3 helpers. The advection destinations are convection scratch Ustar/Vstar/Wstar, not SGS U/V/W. The unchanged timestep caller establishes/bounds U/V/W separately and calls SubgridStresses before Convection. No advection initializedness fact is admitted by this SGS contract.",
-      "capture_facts_changed": false,
-      "native_source_repair_applied": false,
-      "measurement_authority": "Fresh native and current builds/runs required; superseded application measurements are not reused."
-    },
-    {
-      "source": "elmm/src/pressure.f90",
-      "superseded_sha256": "0548a1a1b33284d5811335beff0051c60faf273f1f9535ef737b34be141bf9af",
-      "current_sha256": "65d6ee76dc4b63b4545a1bfd481dbf875cb168f55a484bac7d0a39b78f21f7d0",
-      "current_authority": "User-approved deterministic TOP source basis, applied identically to all three modes; reproducible local derivative of ddb426fca5b020216083f02a218292fea70c1df2",
-      "superseded_difference": "Replace the non-PAR TOP/BOTTOM plane-average OpenMP reduction/single with MASTER fixed-order sum/division and the required barrier; all other statements unchanged. The primary configurations retain TOP referencing.",
-      "capture_facts_changed": false,
-      "native_source_repair_applied": true,
-      "measurement_authority": "Fresh common-basis source proofs, production/fullfield builds and measurements required. Historical private pressure-only links and failed original TOP controls remain separately labelled."
-    }
-  ]
+  }
 }

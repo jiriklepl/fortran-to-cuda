@@ -53,8 +53,7 @@ def sources(tmp_path, monkeypatch):
                 "pressure_sha256": hashlib.sha256(approved).hexdigest(), "patch_sha256": basis.digest(patch)}
     monkeypatch.setattr(basis, "BASIS", identity)
     monkeypatch.setattr(basis, "PATCH", patch)
-    contract = {"schema_version": 1, "entry": "subgrid::sgs_sigma_uniform", "defines": ["DPREC"],
-                "source": "elmm/src/pressure.f90", "source_sha256": {"elmm/src/pressure.f90": identity["pressure_sha256"]},
+    contract = {"schema_version": 2, "source_sha256": {"elmm/src/pressure.f90": identity["pressure_sha256"]},
                 "include_sha256": {}, "build_sha256": {
                     name + "/src/SConstruct": basis.digest(upstream / name / "src/SConstruct") for name in ("elmm", "PoisFFT")},
                 "repositories": {"elmm": {"revision": revision},
@@ -119,13 +118,14 @@ def test_changed_include_rejects_contract_before_rebinding(tmp_path):
     include = tmp_path / "ELMM/src/kinds.inc"
     source.write_text("pinned source\n")
     include.write_text("pinned include\n")
-    contract = {"schema_version": 1, "entry": "subgrid::sgs_sigma_uniform", "defines": ["DPREC"],
-                "source": "elmm/src/subgrid.f90", "source_sha256": {"elmm/src/subgrid.f90": basis.digest(source)},
+    contract = {"schema_version": 2, "source_sha256": {"elmm/src/subgrid.f90": basis.digest(source)},
                 "include_sha256": {"elmm/src/kinds.inc": basis.digest(include)}, "build_sha256": {}}
     basis.verify_contract(tmp_path, contract)
     include.write_text("changed caller proof\n")
     with pytest.raises(ValueError, match="hash mismatch"):
         basis.verify_contract(tmp_path, contract)
+    with pytest.raises(ValueError, match="unsupported or incomplete source basis"):
+        basis.verify_contract(tmp_path, {**contract, "schema_version": 1})
 
 
 def test_contract_cannot_escape_application_copy(tmp_path):

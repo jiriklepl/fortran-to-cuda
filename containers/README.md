@@ -181,7 +181,7 @@ pressure SHA256 `65d6ee76dc4b63b4545a1bfd481dbf875cb168f55a484bac7d0a39b78f21f7d
 and deterministic local commit `be38bbbec88756ef0f32d67b44dc412a71e0e6e8`.
 PoisFFT is unchanged. This derivative is reconstructed locally; it is not
 advertised as a revision available from the upstream remote.
-`containers/sgs_contract.json` pins the repository revisions and the hashes of
+`containers/source_basis.json` pins the repository revisions and the hashes of
 the reviewed sources, includes and build files; drift in the sources or in that
 file fails before the build. The `channel-simple` input records its cloud
 repository revision and parser conversions in `cases/channel-simple/origin.json`.

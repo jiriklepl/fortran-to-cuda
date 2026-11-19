@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_CONTRACT = HERE / "sgs_contract.json"
+DEFAULT_CONTRACT = HERE / "source_basis.json"
 PATCH = HERE / "patches/elmm-deterministic-top.patch"
 BASIS = {
     "base": "ddb426fca5b020216083f02a218292fea70c1df2",
@@ -50,24 +50,22 @@ def contract_path(paths, name):
 
 
 def verify_contract(app_root, contract):
-    """Check all retained proof-source/include/build hashes before rebinding."""
+    """Check every pinned source, include and build file hash of the source basis."""
     paths = application_paths(app_root)
-    if (contract.get("schema_version") != 1 or contract.get("entry") != "subgrid::sgs_sigma_uniform"
-            or contract.get("defines") != ["DPREC"] or not contract.get("source_sha256")
-            or contract.get("source") not in contract["source_sha256"]):
-        raise ValueError("unsupported or incomplete reviewed SGS contract")
+    if contract.get("schema_version") != 2 or not contract.get("source_sha256"):
+        raise ValueError("unsupported or incomplete source basis")
     hashes = {}
     for table in ("source_sha256", "include_sha256", "build_sha256"):
         for name, expected in contract[table].items():
             path = contract_path(paths, name)
             if digest(path) != expected:
-                raise ValueError("reviewed SGS source hash mismatch: " + name)
+                raise ValueError("source basis hash mismatch: " + name)
             hashes[str(path)] = expected
     return paths, hashes
 
 
 def repository_provenance(paths, contract, command):
-    """Require pinned pristine checkouts, including inputs outside SGS effects."""
+    """Require pinned pristine checkouts, including files the basis does not hash."""
     repositories = {}
     for name, root in paths.items():
         def git(*arguments):

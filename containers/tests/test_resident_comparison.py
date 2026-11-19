@@ -262,6 +262,31 @@ def test_resident_timing_plots_keep_validation_policy(tmp_path):
         plot_experiment.plot_experiment(report, tmp_path / "invalid")
 
 
+def test_a_single_precision_report_is_plotted_under_its_own_policy(tmp_path):
+    import plot_experiment
+
+    fields = {"fields-U.bin": {"passed": True}}
+    diagnostics = [{"mode": "native"}, {"mode": "native", "fields": fields, "vtk": {"passed": True}},
+                   {"mode": "resident", "fields": fields, "vtk": {"passed": True},
+                    "gpu_activity": {"gpu_kernels_by_procedure": {"dynamics::convection": 1,
+                                                                  "subgrid::sgs_sigma_uniform": 1}}}]
+    runs = [{"mode": mode, "warmup": False, "traced": False, "wall_seconds": seconds, "vtk": {"passed": True}}
+            for mode, seconds in (("native", 10.0), ("resident", 4.0))]
+    value = {"status": "passed", "case": "channel", "release_qualified": False,
+             "validation_policy": "pointwise-sp-1.0-1e-2", "threads": 32, "warmups": 0,
+             "diagnostics": diagnostics, "runs": runs,
+             "summary": {"native": {"samples_seconds": [10.0], "median_seconds": 10.0},
+                         "resident": {"samples_seconds": [4.0], "median_seconds": 4.0}, "speedup": 2.5}}
+    report = tmp_path / "report.json"
+    report.write_text(json.dumps(value))
+    plot_experiment.plot_experiment(report, tmp_path / "figures")
+    assert "Single precision" in (tmp_path / "figures/complete-wall-relative.svg").read_text()
+    value["validation_policy"] = "pointwise-unknown"
+    report.write_text(json.dumps(value))
+    with pytest.raises(ValueError, match="unsupported resident validation policy"):
+        plot_experiment.plot_experiment(report, tmp_path / "unknown")
+
+
 def test_default_work_directory_follows_output(monkeypatch, tmp_path):
     monkeypatch.delenv("WORK_DIR", raising=False)
     monkeypatch.delenv("DEPS_ROOT", raising=False)

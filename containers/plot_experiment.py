@@ -22,7 +22,10 @@ def write(path, value):
 
 def plot_resident(value, report, output):
     policy = value["validation_policy"]
-    if policy not in {"natural-channel-componentwise-relative-l2-1-percent", "pointwise-1e-6-1e-5"}:
+    rules = {"natural-channel-componentwise-relative-l2-1-percent": "Natural channel: 1% componentwise L2",
+             "pointwise-1e-6-1e-5": "Pointwise field and VTK validation",
+             "pointwise-sp-1.0-1e-2": "Single precision: pointwise field and VTK validation, 1% relative"}
+    if policy not in rules:
         raise ValueError("unsupported resident validation policy")
     natural = policy == "natural-channel-componentwise-relative-l2-1-percent"
     diagnostics = value["diagnostics"]
@@ -77,8 +80,7 @@ def plot_resident(value, report, output):
                title=f"{value['case']} | {value['threads']} host threads | {summary['speedup']:.2f}x speedup")
         ax.grid(axis="y", alpha=.2)
         ax.set_axisbelow(True)
-        rule = "Natural channel: 1% componentwise L2" if natural else "Pointwise field and VTK validation"
-        fig.text(.5, .08, f"{rule}; release qualification not established.\n"
+        fig.text(.5, .08, f"{rules[policy]}; release qualification not established.\n"
                  f"Dots: samples; bars: medians; {value['warmups']} excluded warmup(s).",
                  ha="center", fontsize=10, linespacing=1.5)
         fig.subplots_adjust(bottom=.22, top=.90, left=.14, right=.97)

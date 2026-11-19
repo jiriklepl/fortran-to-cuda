@@ -23,7 +23,7 @@ Submit a fresh resident comparison; no local fallback or headnode setup.
   --deps DIR --solver DIR         Optional dependency and solver checkouts
   --case NAME                     channel-simple (default) or channel
   --config DIR                    Explicit application configuration
-  --precision dp|sp               Floating-point precision (default: dp; resident requires dp)
+  --precision dp|sp               Floating-point precision (default: dp)
   --grid NXxNYxNZ                 Override grid cell counts (e.g. 64x32x32 or 64,32,32)
   --domain-size LXxLYxLZ          Override domain lengths (e.g. 12x4x2 or 12,4,2)
   --steps N                       Optional timestep cap (smoke experiment)
