@@ -4,3 +4,5 @@
 # links, relative to this package. The headers beside them go on the include path.
 RESIDENT_SOURCES = ("scoped_memory.f90", "resident_domain.f90", "reductions.f90",
                     "scoped_runtime.cu", "reductions.cu", "snapshots.f90", "snapshots.cu")
+# The domain module of an application that brings none of its own; compiled after RESIDENT_SOURCES.
+DEFAULT_DOMAIN_SOURCE = "resident_application.f90"

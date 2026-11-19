@@ -45,6 +45,7 @@ module fort_resident_domain
     procedure :: bind_real64
     generic :: bind_real => bind_real32, bind_real64
     procedure :: bind_integer32
+    generic :: bind => bind_real32, bind_real64, bind_integer32
     procedure :: observe
     procedure :: host_begin
     procedure :: host_end

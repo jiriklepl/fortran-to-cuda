@@ -2,6 +2,7 @@
 import hashlib
 import re
 import subprocess
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 
@@ -15,7 +16,7 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
 
     Writes one preprocessed copy of every file into ``directory``; the originals
     are untouched. OpenMP directives are blanked only inside the procedures
-    named in ``procedures`` (``module::name``): their loop nests become entries
+    named in ``procedures`` (``module::name`` or globs): their loop nests become entries
     that one serial caller dispatches. Every statement, branch and expression
     stays. Returns the record of originals, prepared copies and removed
     directives.
@@ -28,7 +29,6 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
     directory.mkdir(parents=True, exist_ok=False)
     parser = ParserFactory().create(std="f2008")
     selected = {name.lower() for name in procedures}
-    selected_modules = {name.split("::", 1)[0] for name in selected if "::" in name}
     records = []
     for filename in paths:
         source = Path(filename).resolve(strict=True)
@@ -40,8 +40,8 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
             raise RuntimeError("Preprocessing failed: " + str(source) + "\n" + result.stderr)
         lines = result.stdout.splitlines(keepends=True)
         removed = []
-        modules_in_file = {m.group(1).lower() for m in re.finditer(r"(?im)^\s*module\s+([a-z_]\w*)\b", result.stdout)}
-        if modules_in_file & selected_modules:
+        modules = {m.group(1).lower() for m in re.finditer(r"(?im)^\s*module\s+([a-z_]\w*)\b", result.stdout)}
+        if any(fnmatchcase(module, name.split("::", 1)[0]) for module in modules for name in selected if "::" in name):
             tree = parser(FortranStringReader(result.stdout, ignore_comments=False))
             for module in (node for node in walk(tree) if type(node).__name__ == "Module"):
                 header = next(node for node in module.content if type(node).__name__ == "Module_Stmt")
@@ -49,7 +49,7 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
                 for routine in (node for node in walk(module) if type(node).__name__ == "Subroutine_Subprogram"):
                     statement = next(node for node in routine.content if type(node).__name__ == "Subroutine_Stmt")
                     name = module_name + "::" + str(statement.items[1]).lower()
-                    if name not in selected:
+                    if not any(fnmatchcase(name, pattern) for pattern in selected):
                         continue
                     ending = routine.content[-1]
                     first, last = statement.item.span[0], ending.item.span[1]

@@ -18,19 +18,28 @@ from compiler.scopes.regions import extract_region
 from compiler.scopes.segments import directive, grouped_nodes, statement_span
 
 
+def _residency_directive(node):
+    return str(node).lstrip().lower().startswith("!$fort")
+
+
 def _entry_groups(sequence):
     """Share an entry across adjacent serial nests in one control region.
 
-    Calls, assignments, branch boundaries and OpenMP constructs end the group.
+    Calls, assignments, branch boundaries, OpenMP constructs and residency
+    directives end the group; a nest with a directive inside it stays native.
     This only changes the numerical extraction boundary: ordinary dependence
     analysis still schedules every source pass and proves any later fusion.
     """
     pending = []
     for group in grouped_nodes(sequence):
         if not isinstance(group, tuple) and _kind(group) == "Comment" and directive(group) is None:
+            if _residency_directive(group) and pending:
+                yield tuple(pending)
+                pending = []
             continue
         if (not isinstance(group, tuple) and _kind(group) == "Block_Nonlabel_Do_Construct"
-                and not any(directive(node) is not None for node in walk(group) if _kind(node) == "Comment")):
+                and not any(directive(node) is not None or _residency_directive(node)
+                            for node in walk(group) if _kind(node) == "Comment")):
             pending.append(group)
             continue
         if pending:
@@ -113,7 +122,10 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                 nodes = tuple(group) if isinstance(group, tuple) else (group,)
                 if len(nodes) == 1 and _kind(nodes[0]) in {"If_Construct", "Associate_Construct", "Block_Construct"}:
                     scan(tuple(_children(nodes[0])))
-                elif any(_kind(node) == "Block_Nonlabel_Do_Construct" for node in nodes):
+                elif (any(_kind(node) == "Block_Nonlabel_Do_Construct" for node in nodes)
+                      # A nest that carries a residency directive is host code that manages its own access.
+                      and not any(_residency_directive(item) for node in nodes for item in walk(node)
+                                  if _kind(item) == "Comment")):
                     emit(nodes, sequence)
 
         scan(tuple(_children(routine.execution)))

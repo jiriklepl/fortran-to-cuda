@@ -122,6 +122,7 @@ compiler/
 ├── addressing/              Static integer ranges and proved subscript widths
 ├── scopes/                  Source task graphs, residency epochs, native hooks, helper composition
 ├── runtime/                 Coherence, budgeted residency, completion, CUDA graphs, numeric helpers
+├── resident/                Resident build of a whole application: preparation, directives, CMake
 ├── emission/
 │   ├── driver.py            Generate all sources from one shared ABI
 │   ├── common/              ABI, expressions, loops, runtime header
@@ -434,13 +435,69 @@ Explicit entries and compiler-owned source scopes remain opt-in. The
 field validation and performance measurement against the original application
 and archived compiler.
 
+### Resident build of an application
+
+`compiler.resident` builds a whole Fortran application so that the loop nests
+of selected procedures run on the device and their arrays stay there between
+calls. The application is described, not adapted by hand:
+
+```python
+from compiler.resident.project import ResidentProject, Selection, prepare
+from compiler.resident.build import build
+
+project = ResidentProject(
+    sources=(src / "params.f90", src / "fields.f90", src / "boundaries.f90",
+             src / "stepper.f90", src / "diagnostics.f90", src / "main.f90"),
+    selections=(Selection("step", ("stepper::diffuse", "stepper::store"), minimum_nests=2),
+                Selection("halo", ("boundaries::*",), guard="nx >= 2 .and. ny >= 2 .and. nz >= 2")),
+    defines=("DOUBLE",))
+prepared = prepare(project, out / "prepared", fortran="gfortran")
+build(prepared, out / "built", name="box", programs={"box": src / "main.f90"},
+      fortran="gfortran", cxx="g++-14", nvcc="nvcc", architecture="86")
+```
+
+`prepare` preprocesses the sources, removes OpenMP directives inside the
+selected procedures (one serial caller dispatches their nests), exports and
+compiles the entries, replaces each compiled nest by a call that runs while
+the domain is active and keeps the original loops for when it is not, and
+writes the changed sources. A nest the compiler rejects stays host code and
+gets the device values first. `minimum_nests` makes lost coverage an error.
+`build` generates a CMake project that compiles the application twice, from
+the original sources (`box-native`) and from the prepared ones with the entries
+and the runtime (`box`), both with the compiler's numerical options.
+
+What the loop nests cannot tell the compiler is said with residency
+directives. They are comments, so the same source still builds natively:
+
+| Directive | Effect |
+|---|---|
+| `!$fort enter budget(<bytes>) [if(<condition>)] [device(<n>)]` | Start keeping values on the device, unless that is already the case |
+| `!$fort leave` | Bring every value back to the host and stop |
+| `!$fort close` | Also free the device state; run it before the arrays are deallocated |
+| `!$fort publish [if(<condition>)]` | Bring every value back and forget the device copies, before host code whose accesses are not known |
+| `!$fort observe(<arrays>) [if(<condition>)]` | Bring the named arrays back and keep their device copies, for host code that reads them |
+| `!$fort release(<arrays>)` | Retire a temporary's device copy before the temporary is deallocated |
+
+A directive between two nests ends their shared entry, and a nest with a
+directive inside it is left to the host. An application that cannot carry
+directives in its own source passes `edit(name, text)` to the project and adds
+them there. An application with residency state of its own (a device solver,
+persistent work arrays) names its domain object with `ResidentDomain`; the
+default is the runtime's `fort_resident_application` module.
+
+`compiler/tests/apps/box` is a complete small application built this way. Its
+resident run writes the same bytes as its native run
+(`test_resident_application_cuda.py`).
+
+The lower-level pieces are usable on their own:
+
 ### Resident entries for a caller-owned domain
 
 An application that keeps its fields on the device across many calls owns a
-residency domain: a Fortran object that extends the runtime's
-`resident_domain`, binds arrays to handles and says whether it is active. The
-compiler supplies the numerical entries and the calls to them in four steps,
-all in `compiler.scopes`:
+residency domain: a Fortran object of the runtime's `resident_domain` type, or
+an extension of it, that binds arrays to handles and says whether it is active.
+The compiler supplies the numerical entries and the calls to them in these
+steps, all in `compiler.scopes`:
 
 - `resident_entries.export_resident_entries` extracts the loop nests of the
   named procedures into small entry modules. It decides the entry boundaries
@@ -456,6 +513,9 @@ all in `compiler.scopes`:
   leave a region on the host, joins the rejections with its span.
   `compile_resident_entry` does the same for one entry and is what the command
   line runs for `--kernel` with `--gpu-policy sections`.
+- `resident_entries.guard_entries` wraps a condition around the work of every
+  entry, for a property the caller's activation implies and the loop bounds do
+  not show.
 - `resident_splice.splice_resident_entries` writes each source with its
   compiled spans replaced by a block that binds the arrays through the domain
   object and calls the entry while the domain is active, and runs the original
