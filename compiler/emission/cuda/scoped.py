@@ -5,6 +5,7 @@ from contextlib import suppress
 from dataclasses import dataclass, replace
 from hashlib import sha256
 
+from compiler.analysis.sections import must_overlap
 from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import abi_arguments, dimension_name
 from compiler.emission.common.c_family import cpp_type, indent, render_assignment, render_expression
@@ -313,10 +314,12 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     def launch_groups(current):
         """Runs of adjacent regions that one launch can execute concurrently.
 
-        Members touch no array that another member writes, by symbol, and
-        write no shared scalar. Two arguments can still name one array, or a
-        footprint can be wider than the work; the runtime rechecks the actual
-        sections and the entry keeps its one-kernel-per-region path for that.
+        Members write no shared scalar, and where one writes an array that
+        another touches, their sections are not known to meet: the two ghost
+        layers of opposite faces, say. Sections that meet whatever the bounds
+        are keep their regions apart. Anything short of that is left to the
+        runtime, which rechecks the actual sections; the entry keeps its
+        one-kernel-per-region path for a launch the runtime refuses.
         """
         groups, run = [], []
 
@@ -332,10 +335,29 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                 for symbol in region.write_symbols))
 
         def independent(first, second):
+            if region_schedule(first).cuda_threads != region_schedule(second).cuda_threads:
+                return False
             first_reads, first_writes = arrays_of(first)
             second_reads, second_writes = arrays_of(second)
-            return (not first_writes & (second_reads | second_writes) and not second_writes & first_reads
-                    and region_schedule(first).cuda_threads == region_schedule(second).cuda_threads)
+            shared = (first_writes & (second_reads | second_writes)) | (second_writes & first_reads)
+            if not shared:
+                return True
+            # Both members run, so each of their loops has an iteration.
+            running = [(loop.lower, loop.upper) for region in (first, second) for loop in region.loops
+                       if loop.step == 1]
+            others = {footprint.symbol: footprint for footprint in units[second.id].footprints}
+            for mine in units[first.id].footprints:
+                if mine.symbol not in shared:
+                    continue
+                theirs = others[mine.symbol]
+                if (mine.full_read or mine.full_write or theirs.full_read or theirs.full_write
+                        or not mine.exact or not theirs.exact):
+                    return False
+                pairs = [(written, other) for written in mine.writes for other in (*theirs.reads, *theirs.writes)]
+                pairs += [(read, written) for read in mine.reads for written in theirs.writes]
+                if any(must_overlap(one, other, running) for one, other in pairs):
+                    return False
+            return True
 
         def close():
             if len(run) > 1:

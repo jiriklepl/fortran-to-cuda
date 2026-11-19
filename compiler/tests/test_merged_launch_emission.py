@@ -1,4 +1,4 @@
-"""Adjacent regions that touch no array another writes share one queued launch."""
+"""Adjacent regions that are not known to depend on each other share one queued launch."""
 
 import re
 
@@ -62,8 +62,8 @@ def test_independent_regions_of_different_extent_share_one_launch():
 @pytest.mark.parametrize("body", [
     # The second region reads what the first writes.
     "\n".join((loop("u", "x(i)", "n"), loop("v", "u(i)", "n-1"))),
-    # Both write the same array; only the actual sections could tell them apart.
-    "\n".join((loop("u", "x(i)", "n-2"), "do i=n-1,n\nu(i)=0\nenddo")),
+    # Both write the same array, and the second section lies inside the first whenever both loops run.
+    "\n".join((loop("u", "x(i)", "n"), "do i=2,n-1\nu(i)=0\nenddo")),
     # The second region writes what the first reads.
     "\n".join((loop("u", "v(i)", "n"), loop("v", "x(i)", "n-1"))),
 ])
@@ -73,6 +73,21 @@ def test_regions_that_may_depend_on_each_other_keep_their_own_launches(body):
     assert groups(emitted) == []
     assert "kernel_group_" not in emitted.cuda
     assert "fort_scope_graph_enqueue_members_v1" not in emitted.cuda
+    assert emitted.cuda.count("fort_scope_graph_enqueue_v1(") == 2
+
+
+@pytest.mark.parametrize("body", [
+    # The sections never meet: the ghost layers of two opposite faces are like this.
+    "\n".join((loop("u", "x(i)", "n-2"), "do i=n-1,n\nu(i)=0\nenddo")),
+    # Whether they meet depends on n; the runtime decides on the actual sections.
+    "\n".join((loop("u", "x(i)", "3"), "do i=n-1,n\nu(i)=0\nenddo")),
+])
+def test_regions_that_write_sections_of_one_array_not_known_to_meet_share_a_launch(body):
+    plan, emitted = emit(body)
+    assert len(plan.regions) == 2
+    assert groups(emitted) == [[0, 1]]
+    assert "kernel_group_0_1_device" in emitted.cuda
+    # The members' own tasks stay behind the group launch for the case that the runtime refuses it.
     assert emitted.cuda.count("fort_scope_graph_enqueue_v1(") == 2
 
 
