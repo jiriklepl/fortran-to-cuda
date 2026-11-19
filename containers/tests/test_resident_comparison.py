@@ -328,7 +328,7 @@ def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, mon
         "toolchain": {"cuda_host_cxx": sys.executable, "nvcc": sys.executable}})
     monkeypatch.setattr(runner, "prepare_application_basis", lambda *_args: tmp_path)
     monkeypatch.setattr(runner, "application_paths", lambda _root: {"elmm": tmp_path, "PoisFFT": tmp_path})
-    monkeypatch.setattr(runner, "select_configuration", lambda *_args: (tmp_path, None))
+    monkeypatch.setattr(runner, "select_configuration", lambda *_args: tmp_path)
     monkeypatch.setattr(runner, "source_identity", lambda _root: {"files": {}})
     monkeypatch.setattr(runner, "solver_identity", lambda _root: {"revision": "test"})
     provisioned = []

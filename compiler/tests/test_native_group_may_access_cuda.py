@@ -43,7 +43,7 @@ def binaries(tmp_path_factory, request):
     precise = request.param == "precise-regions"
 
     def emit(directory):
-        from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+        from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
         source, _, outputs, manifest = generate(directory, group_source(precise=precise,
             child=request.param == "child-formals"), capture_updates={

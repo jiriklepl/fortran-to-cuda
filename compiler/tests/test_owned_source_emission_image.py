@@ -57,8 +57,8 @@ end module
 
 
 def check_package(directory, outputs, report):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     scope, = report["scopes"]
     task, = scope["source_device_tasks"]
@@ -74,7 +74,7 @@ def check_package(directory, outputs, report):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
     manifest = json.loads(outputs["scope-manifest.json"])
-    _scope_package_build({"artifact_root": str(directory), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(directory), "scope_manifest": manifest})
 
 
 @pytest.mark.parametrize(("policy", "transfers", "mixed"), [

@@ -102,9 +102,8 @@ def module_helper_source():
 
 
 def test_discovered_native_only_companion_uses_complete_caller_transaction(tmp_path, monkeypatch):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-
     from compiler.scopes import module_owner
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     original = module_owner.ModuleOwner.__init__
     discoveries = []
@@ -133,7 +132,7 @@ def test_discovered_native_only_companion_uses_complete_caller_transaction(tmp_p
 
 
 def test_discovered_companion_with_gpu_descendant_keeps_checked_child(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     worker = """subroutine numerical(input)
 real(8),intent(in)::input(-1:,-1:,-1:)
@@ -161,7 +160,7 @@ end subroutine
 
 
 def test_discovered_companion_reusing_an_existing_child_keeps_shared_calls(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     text = module_helper_source().replace("call update(a)", "call shared()\ncall update(a)")
     text = text.replace("!$omp parallel do", "call shared()\n!$omp parallel do", 1)
@@ -269,7 +268,7 @@ def mesh_source():
 
 
 def test_complete_call_reserves_readonly_mesh_without_gpu_capture_fact(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     path, builder, outputs, report = generate(tmp_path, mesh_source())
     owner, = report["scopes"]

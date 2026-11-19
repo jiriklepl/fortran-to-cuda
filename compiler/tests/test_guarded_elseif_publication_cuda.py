@@ -156,8 +156,8 @@ end program
 
 
 def sealed_emission(directory, variant):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     directory.mkdir(parents=True, exist_ok=True)
     original = directory / "original.f90"
@@ -179,7 +179,7 @@ def sealed_emission(directory, variant):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
     manifest = json.loads((package / "scope-manifest.json").read_text())
-    _scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
     assert builder.finish()
     assert report["scopes"][0]["gpu_leaves"]
     transformed = outputs[report["sources"][str(original)]["replacement"]]

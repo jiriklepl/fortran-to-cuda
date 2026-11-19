@@ -162,8 +162,7 @@ end module
 def test_matrix_transform_retirement_emits_and_passes_strict_saved_package_reader(tmp_path):
     import json
 
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
     from compiler.tests.test_joined_boundary_lifecycle import JOINED, emit
 
     source = JOINED.replace('value=value+1', 'real(8)::matrix(2,2),product(2,2)\nmatrix=value\nproduct=matmul(transpose(matrix),matrix)\nvalue=product(1,1)')

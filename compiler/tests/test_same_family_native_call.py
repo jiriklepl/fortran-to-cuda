@@ -161,7 +161,7 @@ def emit(tmp_path, monkeypatch=None):
 
 
 def test_full_original_call_retires_once_and_uses_fresh_existing_admission(tmp_path, monkeypatch):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     path, builder, found, outputs, report = emit(tmp_path, monkeypatch)
     member, patch = next(
@@ -228,7 +228,7 @@ def test_consumer_cannot_change_capture_window_entry_source_or_completion_role(t
     ],
 )
 def test_reader_binds_new_distinct_route_to_admission_and_once_only_emission(tmp_path, mutation):
-    from elmm_pipeline.checked_execution_plan import _digest, validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import _digest, validate_checked_execution_plans
 
     _path, _builder, _found, _outputs, report = emit(tmp_path)
     bad = deepcopy(report)

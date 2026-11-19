@@ -16,9 +16,8 @@ import time
 
 import numpy as np
 
-from application_basis import prepare_application_basis
-from sgs_experiment import (application_paths, compare_outputs, digest, read_outputs,
-                            select_configuration)
+from application_basis import application_paths, digest, prepare_application_basis
+from elmm_cases import compare_outputs, read_outputs, select_configuration
 from workflow import COMPILER, PIPELINE, WORKSPACE, doctor, plot_experiment, require_pipeline, source_identity
 
 try:
@@ -26,9 +25,9 @@ try:
 except RuntimeError as error:
     raise SystemExit(f"error: {error}") from None
 
-from elmm_pipeline.campaigns.halos import compare_fields, fields
-from elmm_pipeline.campaigns.run import environment
 from elmm_pipeline.configuration import parse_domain_size_spec, parse_grid_spec, prepare_config
+from elmm_pipeline.fields import compare_fields, fields
+from elmm_pipeline.launch import environment
 from elmm_pipeline.resident_rk import verify_resident_execution
 from elmm_pipeline.validation import compare_vtk, read_vtk, validate_log
 
@@ -352,9 +351,8 @@ def run(args):
         vkfft = args.vkfft if args.vkfft is not None else dependencies / "VkFFT"
         basis = prepare_application_basis(app_root, work / "application-basis")
         application = application_paths(basis)
-        source, advection = select_configuration(application, args.case, args.config)
-        if getattr(args, "advection", None) is not None:
-            advection = args.advection
+        source = select_configuration(application, args.case, args.config)
+        advection = getattr(args, "advection", None)
         configuration = prepare_config(
             source, work / "config", steps=args.steps, advection=advection,
             grid=getattr(args, "grid", None), domain_size=getattr(args, "domain_size", None),

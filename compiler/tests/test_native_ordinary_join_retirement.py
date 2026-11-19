@@ -104,8 +104,8 @@ def test_ordinary_multido_retirement_keeps_host_scratch_and_raw_source(tmp_path,
     assert transformed.count('#include "divergence.inc"')==int(include)
     assert transformed.count('!$omp parallel private(i,j,k)')==1
     assert transformed.count('!$omp end parallel')==1
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
     package=tmp_path/'package'
     for name,text in outputs.items():
         target=package/name
@@ -113,7 +113,7 @@ def test_ordinary_multido_retirement_keeps_host_scratch_and_raw_source(tmp_path,
         target.write_text(text)
     manifest=json.loads((package/'scope-manifest.json').read_text())
     validate_checked_execution_plans(manifest)
-    _scope_package_build({'artifact_root':str(package),'scope_manifest':manifest})
+    scope_package_build({'artifact_root':str(package),'scope_manifest':manifest})
 
 
 @pytest.mark.parametrize('change',['remove','copy','foreign','record','template','graph','role'])

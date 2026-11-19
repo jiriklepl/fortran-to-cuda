@@ -121,7 +121,7 @@ def test_unqualified_gpu_protocol_is_explicit_native_only_and_never_a_zero_cost(
 
 @pytest.mark.parametrize("child", [False, True])
 def test_emitted_live_alternative_brackets_exact_original_team_and_keeps_canonical_registration(tmp_path, child):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     path, (outputs, report) = live_emitted(tmp_path, child)
     validate_checked_execution_plans(report)
@@ -153,7 +153,7 @@ def test_emitted_live_alternative_brackets_exact_original_team_and_keeps_canonic
 @pytest.mark.parametrize("child", [False, True])
 @pytest.mark.parametrize("transfers", ["direct", "auto"])
 def test_mixed_graph_keeps_priced_source_teams_with_automatic_transfers(tmp_path, child, transfers):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     path, (outputs, report) = live_emitted(tmp_path, child, transfers=transfers, with_worker=True)
     assert report["scope_count"] == 1, report.get("graph_owner_attempt")

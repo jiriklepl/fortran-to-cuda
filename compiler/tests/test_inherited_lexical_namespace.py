@@ -56,8 +56,8 @@ def test_nested_scalar_element_keeps_original_backing_reservation(tmp_path):
 
 
 def emit_package(tmp_path, source=None):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     path, builder = fixture(tmp_path, source or source_fixture())
     outputs, report = builder.run()
@@ -70,7 +70,7 @@ def emit_package(tmp_path, source=None):
         target.write_text(content)
     manifest = json.loads((package / "scope-manifest.json").read_text())
     validate_checked_execution_plans(manifest)
-    _scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
     assert builder.finish()
     return path, builder, outputs, report, manifest
 
@@ -154,9 +154,8 @@ def test_active_emission_admission_fences_lexical_receipt_attachments(tmp_path, 
 
 
 def test_varying_formal_associations_cross_original_lexical_namespace(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
-
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
     from compiler.tests.test_atomic_source_call_bindings import SOURCE, atomic_builder
 
     source = SOURCE.replace("call helper(a,p,n,flag)\nend subroutine\nsubroutine step", """call internal_helper
@@ -192,7 +191,7 @@ subroutine step""")
         target.write_text(content)
     manifest = json.loads((package / "scope-manifest.json").read_text())
     validate_checked_execution_plans(manifest)
-    _scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
     assert builder.finish()
 
 

@@ -212,8 +212,7 @@ sets it; plain `--kernel` entries leave it off.
 
 For the primary ELMM configurations, use the pipeline's `resident-build` command.
 It generates the hot path and builds the explicitly supplied local Poisson
-provider. The pipeline's old call-region adaptation path is retired as well.
-Native baseline runs remain available independently.
+provider, together with a native executable for comparison.
 
 `--opt-level 0`, `--schedule`, `--indexing`, `--tile-sizes`, `--fallback host`,
 `--list-candidates`, effect analysis and checked source-graph integration remain
@@ -647,10 +646,6 @@ establish an allocation's numerical bounds.
 An adapter verifies these artifacts, applies replacements to an application copy,
 and links the common runtime once. It does not inspect compiler IR or CUDA text.
 No accepted scopes is a successful unchanged/native result.
-The independent pipeline exposes this path through an explicit scope
-entry/source selection and a capture facts file. It exports configured and normalized source packages and consumes
-these public build roles; it does not infer initialization from argument intents.
-See [the pipeline interface](../elmm-pipeline/README.md) for its options.
 
 ### Qualified source callers on existing teams
 
@@ -2109,8 +2104,7 @@ and independent missing measurement, workload-stability, build and execution-out
 evidence. Candidates grant no permission to evaluate source expressions. This
 diagnostic retains the exact configuration identity; it neither attaches
 calibration nor supplies an automatic selector.
-The pipeline validates its linkage before edits and preserves it through
-composition. Missing interval estimates continue to select native execution.
+Missing interval estimates continue to select native execution.
 
 The compilation session shares one authenticated immutable original source
 graph across private lowering and generation transactions. Original syntax,
@@ -2710,10 +2704,12 @@ python -m pytest compiler/tests -n auto
 python -m ruff check compiler
 ```
 
-`compiler/tests/conftest.py` puts the repository and the `elmm-pipeline`
-submodule on the import path, so the suite runs from any directory without
-`PYTHONPATH`. Consumer-contract tests that need the submodule are skipped when
-it is not checked out. The complete suite builds and runs CUDA programs; with
+`compiler/tests/conftest.py` puts the repository on the import path, so the
+suite runs from any directory without `PYTHONPATH`. It needs no submodule.
+`compiler/tests/support/consumer` is a second, independent reader of what the
+compiler issues (the scope manifest, its build roles and the runtime's trace
+lines); the tests use it as an oracle for their own output. The complete suite
+builds and runs CUDA programs; with
 `-n auto` (pytest-xdist) it takes roughly an hour on a workstation, and the
 parser/analysis subset below a few minutes. The pipeline, container and
 benchmark suites run the same way:

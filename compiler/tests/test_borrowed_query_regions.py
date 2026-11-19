@@ -36,7 +36,7 @@ def emit(path, source=NESTED):
 
 
 def test_reached_child_groups_workers_using_only_existing_canonical_handles(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     report, text, proofs = emit(tmp_path)
     validate_checked_execution_plans(report)

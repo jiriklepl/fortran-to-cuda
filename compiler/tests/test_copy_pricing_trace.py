@@ -5,8 +5,8 @@ import os
 import subprocess
 
 import pytest
-from elmm_pipeline.gpu_validation import gpu_activity, scoped_modeled_evidence
 
+from compiler.tests.support.consumer.gpu_validation import gpu_activity, scoped_modeled_evidence
 from compiler.tests.test_copy_startup import startup_runtime_program  # noqa: F401
 
 

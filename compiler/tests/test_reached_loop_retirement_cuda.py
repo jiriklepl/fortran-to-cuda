@@ -28,7 +28,7 @@ def halo_source():
 
 
 def sealed_emission(directory):
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.package import scope_package_build
 
     original, builder = fixture(directory, halo_source())
     outputs, report = builder.run()
@@ -55,7 +55,7 @@ def sealed_emission(directory):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     manifest = json.loads((package / "scope-manifest.json").read_text())
-    _scope_package_build({"artifact_root": str(package), "scope_manifest": manifest,
+    scope_package_build({"artifact_root": str(package), "scope_manifest": manifest,
                           "tool": "local", "memory_model": "scoped"})
     (directory / "loop-entry-proof.json").write_text(json.dumps([
         {"entry": dict(p.counted_entry.authority), "storage": p.lifecycle.public()} for p in patches], indent=2) + "\n")

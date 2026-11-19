@@ -111,7 +111,7 @@ def binaries(tmp_path_factory, request):
                 "p%aux=2*p%flux", "p%aux=2*p%flux\ninput(i,1,1)=input(i,1,1)+i")
 
     def emit(directory):
-        from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+        from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
         source, _, outputs, manifest = generate(directory, source_text, capture_updates=capture_updates)
         assert len(manifest["scopes"]) == 1, manifest.get("graph_owner_attempt")

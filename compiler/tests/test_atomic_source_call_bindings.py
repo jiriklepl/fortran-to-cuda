@@ -99,7 +99,7 @@ def test_repeated_atomic_helper_projects_all_fields_and_exact_call_edges(tmp_pat
     assert projection["definition_authorized"] is projection["lifetime_authorized"] is False
     assert projection["alias_authorized"] is projection["value_specialization_authorized"] is False
     assert "fort_storage_identity_" in "\n".join(v for k, v in outputs.items() if k.endswith(".f90"))
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     validate_checked_execution_plans(json.loads(outputs["scope-manifest.json"]), capture_facts=builder.facts)
 
@@ -130,7 +130,7 @@ def test_atomic_projection_keeps_existing_team_and_predicate_authority(tmp_path,
         assert projection["field_roots"]["atomic_calls::mask"] == ["atomic_calls::mask"]
         assert "atomic_calls::mask" not in projection["conservative_effects"]["may_writes"]
         assert task["source_proof"]["predicates"][0]["host_point_reads"]
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     validate_checked_execution_plans(json.loads(outputs["scope-manifest.json"]), capture_facts=builder.facts)
 

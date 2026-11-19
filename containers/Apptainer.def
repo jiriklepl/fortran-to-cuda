@@ -26,8 +26,8 @@ From: nvidia/cuda:12.8.1-devel-ubuntu24.04
 
 %help
     doctor: inspect tools, selected GPU and effective memory/CPU budget.
-    prepare: fetch pinned application sources and private tools in writable work.
-    resident: fresh native versus current resident CUDA/Poisson comparison.
-    run-elmm --case channel-simple|channel: fresh native versus scoped SGS CUDA.
-    reproduce-plots --snapshot FILE: redraw explicit saved measurements.
+    resident --case channel-simple|channel: fresh native versus current
+        resident CUDA/Poisson comparison.
+    reproduce-plots --experiment FILE: redraw a saved comparison report.
+    run-benchmarks: bounded generic microbenchmark check and timing.
     Bind persistent output/work directories; see containers/README.md.

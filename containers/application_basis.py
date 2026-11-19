@@ -1,4 +1,4 @@
-"""Prepare the reviewed common ELMM source basis without changing upstream caches."""
+"""Prepare and check the reviewed common ELMM source basis without changing upstream checkouts."""
 from __future__ import annotations
 
 import argparse
@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+DEFAULT_CONTRACT = HERE / "sgs_contract.json"
 PATCH = HERE / "patches/elmm-deterministic-top.patch"
 BASIS = {
     "base": "ddb426fca5b020216083f02a218292fea70c1df2",
@@ -26,7 +27,78 @@ BASIS = {
 
 
 def digest(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    with Path(path).open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def application_paths(app_root):
+    root = Path(app_root).resolve(strict=True)
+    candidates = [root / name for name in ("elmm", "ELMM") if (root / name / "src/SConstruct").is_file()]
+    if len(candidates) != 1 or not (root / "PoisFFT/src/SConstruct").is_file():
+        raise ValueError("app_root must contain one ELMM (elmm/ or ELMM/) and sibling PoisFFT/")
+    return {"elmm": candidates[0], "PoisFFT": root / "PoisFFT"}
+
+
+def contract_path(paths, name):
+    relative = Path(name)
+    if relative.is_absolute() or ".." in relative.parts or len(relative.parts) < 2 or relative.parts[0] not in paths:
+        raise ValueError("invalid portable contract source: " + name)
+    path = (paths[relative.parts[0]] / Path(*relative.parts[1:])).resolve(strict=True)
+    if not path.is_relative_to(paths[relative.parts[0]].resolve()):
+        raise ValueError("contract source escapes its application tree: " + name)
+    return path
+
+
+def verify_contract(app_root, contract):
+    """Check all retained proof-source/include/build hashes before rebinding."""
+    paths = application_paths(app_root)
+    if (contract.get("schema_version") != 1 or contract.get("entry") != "subgrid::sgs_sigma_uniform"
+            or contract.get("defines") != ["DPREC"] or not contract.get("source_sha256")
+            or contract.get("source") not in contract["source_sha256"]):
+        raise ValueError("unsupported or incomplete reviewed SGS contract")
+    hashes = {}
+    for table in ("source_sha256", "include_sha256", "build_sha256"):
+        for name, expected in contract[table].items():
+            path = contract_path(paths, name)
+            if digest(path) != expected:
+                raise ValueError("reviewed SGS source hash mismatch: " + name)
+            hashes[str(path)] = expected
+    return paths, hashes
+
+
+def repository_provenance(paths, contract, command):
+    """Require pinned pristine checkouts, including inputs outside SGS effects."""
+    repositories = {}
+    for name, root in paths.items():
+        def git(*arguments):
+            text, _elapsed = command(["git", "-C", root, *arguments], timeout=30)
+            return text.rstrip("\n")
+
+        if Path(git("rev-parse", "--show-toplevel")).resolve() != root.resolve():
+            raise ValueError("application source must be its own Git checkout: " + name)
+        revision = git("rev-parse", "--verify", "HEAD")
+        if revision != contract["repositories"][name]["revision"]:
+            raise ValueError("application repository revision mismatch: " + name)
+        if git("status", "--porcelain=v1", "--untracked-files=no", "--ignore-submodules=none"):
+            raise ValueError("application repository has changed tracked inputs: " + name)
+        # Include ignored files in this query. An ignored Fortran/include/build
+        # input must not silently enter the copied application either.
+        omitted = []
+        for relative in filter(None, git("ls-files", "--others", "-z").split("\0")):
+            path = Path(relative)
+            if (path.suffix not in {".o", ".mod", ".pyc"}
+                    and "__pycache__" not in path.parts and not path.name.startswith(".sconsign")):
+                raise ValueError("application repository has untracked input: " + name + "/" + relative)
+            omitted.append(relative)
+        hashes = {}
+        for relative in filter(None, git("ls-files", "-z").split("\0")):
+            path = contract_path(paths, name + "/" + relative)
+            if not path.is_file():
+                raise ValueError("unsupported tracked application input: " + name + "/" + relative)
+            hashes[relative] = digest(path)
+        repositories[name] = {**contract["repositories"][name], "head": revision, "tracked_clean": True,
+                              "tracked_sha256": hashes, "omitted_untracked_artifacts": sorted(omitted)}
+    return {"schema_version": 1, "repositories": repositories}
 
 
 def preparation_receipt(root):
@@ -38,16 +110,8 @@ def prepare_application_basis(upstream_root, destination, *, contract_path=None)
     """Create a clean local derivative, or strictly validate an existing one.
 
     The derivative is reconstructed from a pinned upstream commit and the
-    supplied patch. It is not fetched as an alleged upstream revision. Explicit
-    --app-root callers bypass this function and retain the normal source checks.
+    supplied patch. It is not fetched as an alleged upstream revision.
     """
-    from sgs_experiment import (
-        DEFAULT_CONTRACT,
-        application_paths,
-        repository_provenance,
-        verify_contract,
-    )
-
     contract_path = Path(contract_path or DEFAULT_CONTRACT)
     contract = json.loads(contract_path.read_text())
     if (contract["repositories"]["elmm"]["revision"] != BASIS["revision"]

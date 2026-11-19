@@ -14,7 +14,7 @@ workflow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(workflow)
 
 
-@pytest.mark.parametrize("command", [["run-elmm", "--steps", "2"], ["doctor"]])
+@pytest.mark.parametrize("command", [["run-benchmarks"], ["doctor"]])
 def test_missing_pipeline_reports_checkout_and_submodule_fix(tmp_path, command):
     missing = tmp_path / "elmm-pipeline"
     env = {key: value for key, value in os.environ.items() if key != "PIPELINE_ROOT"}
@@ -53,7 +53,7 @@ def test_source_identity_does_not_visit_results_or_caches(tmp_path, monkeypatch)
 
 @pytest.mark.parametrize("exit_code", [1, 37])
 def test_guard_failure_prints_cuda_root_cause_and_preserves_status(tmp_path, monkeypatch, capsys, exit_code):
-    from elmm_pipeline.campaigns import guard
+    from elmm_pipeline import guard
     monkeypatch.setattr(guard, "available", lambda: 8 * 2**30)
     reason = ("error: CUDA runtime libcudart.so for host target 'x86_64-redhat-linux' was not found "
               "beneath /usr/local/cuda-13.4; supply cuda_runtime_dir explicitly")
@@ -77,7 +77,7 @@ def test_guard_failure_prints_cuda_root_cause_and_preserves_status(tmp_path, mon
 
 
 def test_guard_bootstrap_failure_reports_stderr_without_a_progress_log(tmp_path, monkeypatch, capsys):
-    from elmm_pipeline.campaigns import guard
+    from elmm_pipeline import guard
     monkeypatch.setattr(guard, "available", lambda: 8 * 2**30)
     reason = "another guarded campaign job is active; no process started"
     monkeypatch.setattr(workflow.subprocess, "run", lambda *args, **kwargs:
@@ -91,7 +91,7 @@ def test_guard_bootstrap_failure_reports_stderr_without_a_progress_log(tmp_path,
 
 
 def test_successful_guard_keeps_normal_return_and_log_announcements(tmp_path, monkeypatch, capsys):
-    from elmm_pipeline.campaigns import guard
+    from elmm_pipeline import guard
     monkeypatch.setattr(guard, "available", lambda: 8 * 2**30)
     monkeypatch.setattr(workflow.subprocess, "run", lambda *args, **kwargs:
                         SimpleNamespace(returncode=0, stderr=""))
@@ -122,220 +122,43 @@ def test_unmatched_cuda_device_fails_instead_of_picking_nvml_first(monkeypatch):
         workflow.selected_gpu()
 
 
-@pytest.mark.parametrize("unvalidated", [False, True])
-@pytest.mark.parametrize("transfers", ["direct", "coalesced"])
-def test_experiment_plots_preserve_validation_status(tmp_path, monkeypatch, unvalidated, transfers):
+def test_only_resident_reports_are_plotted(tmp_path, monkeypatch):
     monkeypatch.delenv("PLOT_PYTHON", raising=False)
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
-    from sgs_experiment import summarize
-    runs = [{"mode": mode, "warmup": False, "traced": False, "wall_seconds": seconds,
-             "validation": {"passed": not unvalidated}}
-            for mode, seconds in (("native", 10.), ("current", 7.))]
-    value = {"status": "completed_unvalidated" if unvalidated else "passed", "case": "channel",
-             "baseline_repeatability": not unvalidated, "correctness_qualified": not unvalidated,
-             "target_met": None if unvalidated else True, "summary": summarize(runs), "runs": runs,
-             "correctness": [], "gpu_evidence": {"verified": True}, "started_utc": "2026-10-12T00:00:00Z",
-             "protocol": {"threads": 4, "warmups": 1, "allow_native_variation": unvalidated},
-             "performance_eligible": True, "comparison_budget_eligible": True,
-             "selection": {"scope_transfers": transfers}}
     report = tmp_path / "report.json"
-    report.write_text(json.dumps(value))
-    output = tmp_path / "figures"
-    workflow.plot_experiment(report, output)
-    svg = (output / "complete-wall-relative.svg").read_text()
-    assert ("UNVALIDATED: native outputs are not repeatable" in svg) is unvalidated
-    assert ("no correctness or target claim" in svg) is unvalidated
-    assert "SGS " + transfers in svg
-    assert (output / "source.json").is_file()
-
-
-def test_unvalidated_plot_requires_explicit_variation_request(tmp_path, monkeypatch):
-    monkeypatch.delenv("PLOT_PYTHON", raising=False)
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
-    report = tmp_path / "report.json"
-    report.write_text(json.dumps({"status": "completed_unvalidated", "baseline_repeatability": False,
-                                 "correctness_qualified": False, "target_met": None,
-                                 "protocol": {"allow_native_variation": False}}))
+    report.write_text(json.dumps({"status": "passed", "summary": {}}))
     with pytest.raises(subprocess.CalledProcessError):
         workflow.plot_experiment(report, tmp_path / "figures")
+    assert not (tmp_path / "figures").exists()
 
 
-def test_run_elmm_dry_run_exposes_explicit_native_variation_option(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--case", "channel", "--dry-run",
-                                     "--allow-native-variation", "--output-dir", str(tmp_path / "results")])
-    workflow.main()
-    value = json.loads(capsys.readouterr().out)
-    assert value["allow_native_variation"] is True
-    assert value["case"] == "channel"
-    assert value["steps"] is None
-    assert not value["executes_work"]
-
-
-@pytest.mark.parametrize("case", workflow.CASE_NAMES)
-def test_run_elmm_dry_run_accepts_all_named_presets(tmp_path, monkeypatch, capsys, case):
-    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--case", case, "--dry-run",
-                                     "--output-dir", str(tmp_path / "results")])
-    workflow.main()
-    value = json.loads(capsys.readouterr().out)
-    assert value["case"] == value["requested_case"] == value["configuration_preset"] == case
-    assert value["steps"] is None
-    assert not value["executes_work"]
-
-
-def test_custom_configuration_dry_run_uses_actual_directory_label(tmp_path, monkeypatch, capsys):
-    config = tmp_path / "my custom & configuration"
-    config.mkdir()
-    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--case", "second-order", "--dry-run",
-                                     "--config", str(config), "--output-dir", str(tmp_path / "results")])
-    workflow.main()
-    value = json.loads(capsys.readouterr().out)
-    assert value["case"] == "my-custom-configuration"
-    assert value["requested_case"] == "second-order"
-    assert value["configuration_preset"] is None
-    assert value["config"] == str(config)
-
-
-@pytest.mark.parametrize("transfers", ["direct", "auto", "pinned"])
-def test_dry_run_describes_the_requested_transfer_control(tmp_path, monkeypatch, capsys, transfers):
-    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--dry-run", "--scope-transfers", transfers,
-                                     "--output-dir", str(tmp_path / "results")])
-    workflow.main()
-    value = json.loads(capsys.readouterr().out)
-    assert value["action"].endswith("SGS sections/" + transfers)
-    assert value["scope_transfers"] == transfers
-
-
-@pytest.mark.parametrize("transfers", ["pinned", "coalesced"])
-def test_source_analysis_runs_in_prepared_parser_python(tmp_path, monkeypatch, transfers):
-    output = tmp_path / "results with spaces"
-    parser_python = tmp_path / "prepared parser/bin/python"
-    source_root = tmp_path / "prepared sources"
+def test_reproduce_plots_redraws_only_an_explicit_saved_report(tmp_path, monkeypatch):
     calls = []
-    monkeypatch.setattr(workflow, "guarded", lambda args: True)
-    monkeypatch.setattr(workflow, "doctor", lambda *a, **kw: {
-        "memory_headroom_bytes": {"host": 8 * 2**30}, "cpu_affinity": list(range(8)),
-        "toolchain": {"nvcc": "/cuda/nvcc", "cuda_host_cxx": "/tools/g++", "architecture": "120"}})
-    monkeypatch.setattr(workflow, "plot_experiment", lambda *a: None)
-    monkeypatch.setattr(workflow, "prepare_application_basis", lambda *args:
-                        pytest.fail("Explicit app-root must not be reconstructed"))
-    def execute(command, **kwargs):
-        calls.append(command)
-        report = output / "experiment/report.json"
-        report.parent.mkdir()
-        report.write_text(json.dumps({"summary": {"native": {"median": 10.}, "current": {"median": 9.}}}))
-    monkeypatch.setattr(workflow.subprocess, "run", execute)
-    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--case", "channel",
-        "--output-dir", str(output), "--app-root", str(source_root),
-        "--compiler-python", str(parser_python), "--allow-native-variation", "--scope-transfers", transfers])
+    monkeypatch.setattr(workflow, "plot_experiment", lambda report, output: calls.append((report, output)))
+    monkeypatch.setattr(sys, "argv", ["workflow.py", "reproduce-plots", "--experiment", str(tmp_path / "report.json"),
+                                     "--output-dir", str(tmp_path / "plots")])
     workflow.main()
+    assert calls == [(tmp_path / "report.json", tmp_path / "plots/figures")]
+    for retired in ("--snapshot", "--campaign"):
+        monkeypatch.setattr(sys, "argv", ["workflow.py", "reproduce-plots", retired, str(tmp_path / "saved"),
+                                         "--output-dir", str(tmp_path / "plots")])
+        with pytest.raises(SystemExit):
+            workflow.main()
     assert len(calls) == 1
-    command = calls[0]
-    assert command[:2] == [str(parser_python), str(workflow.HERE / "sgs_experiment.py")]
-    assert command[command.index("--python") + 1] == str(parser_python)
-    assert command[command.index("--app-root") + 1] == str(source_root)
-    assert command[command.index("--gpu-arch") + 1] == "120"
-    assert command[command.index("--scope-transfers") + 1] == transfers
-    assert "--allow-native-variation" in command
-    assert "--steps" not in command
 
 
-def test_existing_prepared_pipeline_cache_is_reused(tmp_path, monkeypatch, capsys):
-    pipeline = tmp_path / "pipeline"
-    for name in ("setup.json", "repos/elmm/src/SConstruct", "repos/PoisFFT/src/SConstruct",
-                 "envs/local/bin/python", "envs/build/bin/python", "native/lib/ready"):
-        path = pipeline / ".cache" / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.touch()
-    output = tmp_path / "output"
-    monkeypatch.setattr(workflow, "PIPELINE", pipeline)
-    monkeypatch.setattr(workflow, "guarded", lambda args: True)
-    monkeypatch.setattr(workflow, "doctor", lambda *a, **kw: {
-        "memory_headroom_bytes": {"host": 8 * 2**30}, "cpu_affinity": list(range(8)),
-        "toolchain": {"nvcc": "/cuda/nvcc", "cuda_host_cxx": "/tools/g++", "architecture": "120"}})
-    def unexpected_prepare(args):
-        pytest.fail("A prepared cache must not be downloaded or rebuilt")
-    monkeypatch.setattr(workflow, "prepare", unexpected_prepare)
-    monkeypatch.setattr(workflow, "cached_python_usable", lambda path, modules: True)
-    basis_calls = []
-    def application_basis(upstream, destination):
-        basis_calls.append((upstream, destination))
-        return destination
-    monkeypatch.setattr(workflow, "prepare_application_basis", application_basis)
-    monkeypatch.setattr(workflow, "plot_experiment", lambda *a: None)
+def test_policy_report_figures_are_never_replaced(tmp_path, monkeypatch):
     calls = []
-    def execute(command, **kwargs):
-        calls.append(command)
-        path = output / "experiment/report.json"
-        path.parent.mkdir()
-        path.write_text(json.dumps({"summary": {}}))
-    monkeypatch.setattr(workflow.subprocess, "run", execute)
-    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--output-dir", str(output)])
+    monkeypatch.setattr(workflow.subprocess, "run", lambda command, **kwargs: calls.append(command))
+    report = tmp_path / "policies.json"
+    monkeypatch.setattr(sys, "argv", ["workflow.py", "reproduce-plots", "--policy-report", str(report),
+                                     "--output-dir", str(tmp_path)])
     workflow.main()
-    assert calls[0][0] == str(pipeline / ".cache/envs/local/bin/python")
-    assert calls[0][calls[0].index("--app-root") + 1] == str(output / "work/application-basis")
-    assert basis_calls == [(pipeline / ".cache/repos", output / "work/application-basis")]
-    assert "Using prepared pipeline cache:" in capsys.readouterr().out
-
-
-def test_cached_python_probe_checks_modules_and_ignores_python_path(tmp_path, monkeypatch):
-    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
-    monkeypatch.setenv("PYTHONHOME", str(tmp_path))
-    assert workflow.cached_python_usable(sys.executable, ("json",))
-    assert not workflow.cached_python_usable(sys.executable, ("module_that_does_not_exist_here",))
-    assert not workflow.cached_python_usable(tmp_path / "absent", ("json",))
-
-
-def test_unusable_cached_python_rebuilds_in_private_work_directory(tmp_path, monkeypatch, capsys):
-    pipeline = tmp_path / "pipeline"
-    for name in ("setup.json", "repos/elmm/src/SConstruct", "repos/PoisFFT/src/SConstruct",
-                 "envs/local/bin/python", "envs/build/bin/python", "native/lib/ready"):
-        path = pipeline / ".cache" / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.touch()
-    output = tmp_path / "output"
-    monkeypatch.setattr(workflow, "PIPELINE", pipeline)
-    monkeypatch.setattr(workflow, "guarded", lambda args: True)
-    monkeypatch.setattr(workflow, "doctor", lambda *a, **kw: {
-        "memory_headroom_bytes": {"host": 8 * 2**30}, "cpu_affinity": list(range(8)),
-        "toolchain": {"nvcc": "/cuda/nvcc", "cuda_host_cxx": "/tools/g++", "architecture": "120"}})
-    monkeypatch.setattr(workflow, "cached_python_usable", lambda path, modules: "local" not in str(path))
-    preparations = []
-    def prepare(args):
-        target = args.work_dir / "pipeline"
-        preparations.append(target)
-        return target
-    monkeypatch.setattr(workflow, "prepare", prepare)
-    monkeypatch.setattr(workflow, "prepare_application_basis", lambda upstream, destination: destination)
-    monkeypatch.setattr(workflow, "plot_experiment", lambda *a: None)
-    commands = []
-    def execute(command, **kwargs):
-        commands.append(command)
-        path = output / "experiment/report.json"
-        path.parent.mkdir()
-        path.write_text(json.dumps({"summary": {}}))
-    monkeypatch.setattr(workflow.subprocess, "run", execute)
-    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--output-dir", str(output)])
-    workflow.main()
-    assert preparations == [output / "work/pipeline"]
-    assert commands[0][0] == str(output / "work/pipeline/.cache/envs/local/bin/python")
-    assert (pipeline / ".cache/envs/local/bin/python").exists()
-    assert "unusable Python environments" in capsys.readouterr().out
-
-
-def test_prepare_reconstructs_common_basis_after_upstream_setup(tmp_path, monkeypatch):
-    pipeline = tmp_path / "source-pipeline"
-    pipeline.mkdir()
-    (pipeline / "pipeline.py").write_text("# source only\n")
-    monkeypatch.setattr(workflow, "PIPELINE", pipeline)
-    monkeypatch.setattr(workflow, "source_identity", lambda root: {"files": {}})
-    calls = []
-    monkeypatch.setattr(workflow.subprocess, "run", lambda argv, **kw: calls.append(("setup", argv)))
-    monkeypatch.setattr(workflow, "prepare_application_basis", lambda upstream, destination:
-                        calls.append(("basis", upstream, destination)))
-    work = tmp_path / "work"
-    assert workflow.prepare(SimpleNamespace(work_dir=work)) == work / "pipeline"
-    assert calls[0][0] == "setup"
-    assert calls[1] == ("basis", work / "pipeline/.cache/repos", work / "application-basis")
+    assert calls[0][1:4] == [str(workflow.WORKSPACE / "benchmarks/harness/plot_strategies.py"), str(report), "--output"]
+    assert calls[0][4] == str(tmp_path / "ordinary-figures")
+    (tmp_path / "ordinary-figures").mkdir()
+    with pytest.raises(ValueError, match="immutable"):
+        workflow.main()
+    assert len(calls) == 1
 
 
 def test_plotting_falls_back_without_changing_compiler_python(monkeypatch):

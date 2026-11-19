@@ -29,8 +29,8 @@ def empty_source(*, arity=1, nested=False):
 
 
 def emit_package(tmp_path, *, arity=1, nested=False, source=None):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     path, builder = fixture(tmp_path, source or empty_source(arity=arity, nested=nested))
     outputs, report = builder.run()
@@ -49,7 +49,7 @@ def emit_package(tmp_path, *, arity=1, nested=False, source=None):
         target.write_text(content)
     manifest = json.loads((package / "scope-manifest.json").read_text())
     validate_checked_execution_plans(manifest)
-    _scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
     assert builder.finish()
     return path, builder, owner, empty, outputs, manifest
 

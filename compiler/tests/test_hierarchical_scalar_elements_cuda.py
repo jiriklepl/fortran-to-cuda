@@ -4,9 +4,9 @@ import os
 import re
 
 import pytest
-from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
 
 from compiler.tests import test_graph_storage_epochs_cuda as base
+from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 from compiler.tests.test_hierarchical_child_regions_cuda import copy_bytes, events_in, procedure
 from compiler.tests.test_hierarchical_scalar_elements import SOURCE_ELEMENTS, emit
 

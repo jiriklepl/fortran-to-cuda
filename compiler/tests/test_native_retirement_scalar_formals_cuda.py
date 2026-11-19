@@ -67,10 +67,9 @@ end subroutine'''
 
 
 def sealed_emission(directory):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
-
     from compiler.scopes.lexical import LexicalBoundaryPatch
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     original, builder = fixture(directory, source())
     outputs, report = builder.run()
@@ -96,7 +95,7 @@ def sealed_emission(directory):
         path.write_text(text)
     manifest = json.loads((package / 'scope-manifest.json').read_text())
     validate_checked_execution_plans(manifest)
-    _scope_package_build({'artifact_root': str(package), 'scope_manifest': manifest})
+    scope_package_build({'artifact_root': str(package), 'scope_manifest': manifest})
     assert builder.finish()
     return original, outputs, manifest
 

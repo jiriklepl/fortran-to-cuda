@@ -38,7 +38,7 @@ def test_bound_reads_get_a_checked_phase_before_child_entry(tmp_path):
 
 
 def test_nested_bound_reads_publish_once_inside_the_managed_branch(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     _outputs, report, scope, proof = compile_fixture(tmp_path, NESTED_ENTRY_SOURCE)
     validate_checked_execution_plans(report)

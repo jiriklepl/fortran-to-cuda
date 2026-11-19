@@ -174,7 +174,7 @@ end subroutine
 def test_authentic_hierarchy_emission_and_strict_transport(tmp_path, monkeypatch, mode):
     import json
 
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     source = hierarchical_source()
     if mode == 'scalar_formal':

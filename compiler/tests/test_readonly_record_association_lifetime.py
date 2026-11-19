@@ -183,8 +183,8 @@ def test_actual_guarded_damping_owner_and_strict_package_reader(tmp_path, guard)
     assert boundary["reopen"]
     scope, = report["scopes"]
     assert all(row["resource"] != "forcing::profile" for row in scope["checked_execution_plan"]["storage_epoch"]["resources"])
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     manifest = json.loads(outputs["scope-manifest.json"])
     validate_checked_execution_plans(manifest)
@@ -193,7 +193,7 @@ def test_actual_guarded_damping_owner_and_strict_package_reader(tmp_path, guard)
         target = package / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)
-    _scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
 
 
 @pytest.mark.parametrize("change", ["selector", "declaration", "role", "source", "control"])

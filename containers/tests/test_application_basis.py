@@ -16,7 +16,6 @@ spec.loader.exec_module(basis)
 
 @pytest.fixture
 def sources(tmp_path, monkeypatch):
-    monkeypatch.syspath_prepend(str(CONTAINERS))
     environment = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null",
                    "GIT_AUTHOR_NAME": basis.BASIS["name"], "GIT_COMMITTER_NAME": basis.BASIS["name"],
                    "GIT_AUTHOR_EMAIL": basis.BASIS["email"], "GIT_COMMITTER_EMAIL": basis.BASIS["email"],
@@ -110,3 +109,55 @@ def test_changed_patch_fails_before_creating_output(sources):
     with pytest.raises(ValueError, match="source patch changed"):
         basis.prepare_application_basis(upstream, output, contract_path=contract)
     assert not output.exists()
+
+
+def test_changed_include_rejects_contract_before_rebinding(tmp_path):
+    for name in ("ELMM", "PoisFFT"):
+        (tmp_path / name / "src").mkdir(parents=True)
+        (tmp_path / name / "src/SConstruct").write_text("pinned build\n")
+    source = tmp_path / "ELMM/src/subgrid.f90"
+    include = tmp_path / "ELMM/src/kinds.inc"
+    source.write_text("pinned source\n")
+    include.write_text("pinned include\n")
+    contract = {"schema_version": 1, "entry": "subgrid::sgs_sigma_uniform", "defines": ["DPREC"],
+                "source": "elmm/src/subgrid.f90", "source_sha256": {"elmm/src/subgrid.f90": basis.digest(source)},
+                "include_sha256": {"elmm/src/kinds.inc": basis.digest(include)}, "build_sha256": {}}
+    basis.verify_contract(tmp_path, contract)
+    include.write_text("changed caller proof\n")
+    with pytest.raises(ValueError, match="hash mismatch"):
+        basis.verify_contract(tmp_path, contract)
+
+
+def test_contract_cannot_escape_application_copy(tmp_path):
+    with pytest.raises(ValueError, match="invalid portable"):
+        basis.contract_path({"elmm": tmp_path}, "elmm/../outside.f90")
+
+
+def test_whole_checkout_rejects_wrong_pin_dirty_or_untracked_inputs(tmp_path):
+    (tmp_path / "src").mkdir()
+    source = tmp_path / "src/native_only.f90"
+    source.write_text("outside the reviewed source closure\n")
+    contract = {"repositories": {"elmm": {"url": "example.invalid/elmm", "revision": "pinned"}}}
+    status_key = ("status", "--porcelain=v1", "--untracked-files=no", "--ignore-submodules=none")
+    answers = {("rev-parse", "--show-toplevel"): str(tmp_path),
+               ("rev-parse", "--verify", "HEAD"): "pinned",
+               status_key: "",
+               ("ls-files", "--others", "-z"): "scratch.o\0",
+               ("ls-files", "-z"): "src/native_only.f90\0"}
+
+    def command(argv, **_kwargs):
+        return answers[tuple(argv[3:])], 0.
+
+    provenance = basis.repository_provenance({"elmm": tmp_path}, contract, command)
+    assert provenance["repositories"]["elmm"]["tracked_sha256"] == {"src/native_only.f90": basis.digest(source)}
+    answers[("rev-parse", "--verify", "HEAD")] = "other"
+    with pytest.raises(ValueError, match="revision mismatch"):
+        basis.repository_provenance({"elmm": tmp_path}, contract, command)
+    answers[("rev-parse", "--verify", "HEAD")] = "pinned"
+    answers[status_key] = " M src/native_only.f90"
+    with pytest.raises(ValueError, match="changed tracked"):
+        basis.repository_provenance({"elmm": tmp_path}, contract, command)
+    answers[status_key] = ""
+    answers[("ls-files", "--others", "-z")] = "scratch.o\0src/ignored.f90\0"
+    with pytest.raises(ValueError, match="untracked input"):
+        basis.repository_provenance({"elmm": tmp_path}, contract, command)

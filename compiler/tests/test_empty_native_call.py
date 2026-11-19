@@ -118,7 +118,7 @@ type(record),allocatable::records(:)"""
 
 
 def test_existing_public_descriptor_can_be_imported_without_exposing_payload(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     builder, report, _member, patch = emitted(tmp_path, imported_source())
     descriptor, = patch.empty_call.public()["descriptors"]
@@ -144,7 +144,7 @@ def test_private_descriptor_keeps_whole_call_retirement(tmp_path):
 
 
 def test_normal_generation_and_strict_transport_keep_one_original_call(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     builder, report, _member, patch = emitted(tmp_path)
     returned = report["scopes"][0]["checked_execution_plan"]["storage_epoch"]["return_contract"]
@@ -181,7 +181,7 @@ def test_generated_descriptor_probe_compiles_with_original_module_abi(tmp_path, 
     ("if (size(records) /= 0)", "if (.false.)"),
 ])
 def test_transport_rejects_changed_probe_control(tmp_path, before, after):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     _builder, report, member, patch = emitted(tmp_path)
     changed = deepcopy(report)

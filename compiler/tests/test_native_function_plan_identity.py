@@ -79,7 +79,7 @@ def test_portable_fingerprint_cannot_replace_original_function_authority(tmp_pat
 
 
 def test_checked_mixed_graph_seals_original_native_function_closure(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     _path, builder, _outputs, report = generate(tmp_path, function_source())
     assert report["scopes"], report["graph_owner_attempt"]

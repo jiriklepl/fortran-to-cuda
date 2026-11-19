@@ -80,8 +80,8 @@ def test_unproved_group_or_storage_is_rejected(tmp_path, before, after):
 
 @pytest.mark.parametrize("write", [False, True])
 def test_normal_group_emission_uses_existing_coherence_and_strict_reader(tmp_path, write):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.original_host_access_record import validate_original_host_accesses
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.original_host_access_record import validate_original_host_accesses
 
     path, _builder, outputs, manifest = generate(tmp_path, source(write=write))
     owner, = manifest["scopes"]
@@ -106,8 +106,7 @@ def test_normal_group_emission_uses_existing_coherence_and_strict_reader(tmp_pat
 
 
 def test_group_retains_original_caller_handle_mapping_in_checked_child(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
     from compiler.tests.test_native_group_may_access_cuda import group_source
 
     _, _, _, manifest = generate(tmp_path, group_source(child=True), capture_updates={

@@ -60,7 +60,7 @@ def test_foreign_comment_is_not_an_original_selection(tmp_path):
 
 
 def test_normal_emission_keeps_commented_native_group_inside_domain(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     selected(tmp_path)
     emitted = tmp_path / "emitted"

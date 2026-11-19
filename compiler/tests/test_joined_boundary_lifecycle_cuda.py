@@ -27,7 +27,7 @@ def halo_source(fatal=False):
 
 
 def sealed_emission(directory, fatal=False):
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.package import scope_package_build
     original, builder, middle, patches, outputs, report = emit(directory, halo_source(fatal))
     patch, = patches
     assert patch.completion.public()['completion_scope'] == 'normal return only'
@@ -58,7 +58,7 @@ def sealed_emission(directory, fatal=False):
     manifest_path.write_text(json.dumps(report, indent=2) + '\n')
     # Validate emitted JSON transport, including typed bindings and exact edits.
     manifest = json.loads(manifest_path.read_text())
-    _scope_package_build({'artifact_root': str(package), 'scope_manifest': manifest,
+    scope_package_build({'artifact_root': str(package), 'scope_manifest': manifest,
                           'tool': 'local', 'memory_model': 'scoped'})
     (directory / 'native-boundary-proof.json').write_text(json.dumps({
         'completion': patch.completion.public(), 'storage': patch.lifecycle._joined_storage.public(),

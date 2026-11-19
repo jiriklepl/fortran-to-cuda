@@ -78,8 +78,8 @@ endif""")
 
 
 def emit(directory, monkeypatch, *, managed=False, nested=False, source=None):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "original.f90"
@@ -110,7 +110,7 @@ def emit(directory, monkeypatch, *, managed=False, nested=False, source=None):
         target = package / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
-    _scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
     assert builder.finish()
     return path, builder, owners, outputs, report, package
 

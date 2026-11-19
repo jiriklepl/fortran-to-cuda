@@ -29,7 +29,7 @@ def loop_binaries(tmp_path_factory):
     assert epoch["entry_preservation"]["version"] == 5
     assert set(epoch["entry_preservation"]["preserved_resources"]) == {
         "argument::a", "argument::b", "argument::c"}
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     validate_checked_execution_plans(manifest)
     return result

@@ -33,7 +33,7 @@ def test_apptainer_announces_paths_and_preserves_command_status(tmp_path, engine
     image.touch()
     output = tmp_path / "results with spaces"
     marker = tmp_path / "must-not-run"
-    argv = ["run-elmm", "--label", f"$(touch {marker}) & literal"]
+    argv = ["resident", "--label", f"$(touch {marker}) & literal"]
     env = {key: value for key, value in os.environ.items()
            if key not in {"WORKSPACE_ROOT", "PIPELINE_ROOT", "COMPILER_ROOT", "GPU_DEVICES",
                           "CUDA_VISIBLE_DEVICES"}

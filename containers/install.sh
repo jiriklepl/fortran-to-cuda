@@ -14,5 +14,5 @@ update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
 update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
 python3 -m venv /opt/venv
 /opt/venv/bin/python -m pip install --no-cache-dir -r /workspace/requirements.txt \
-    numpy==2.5.3 scons==4.11.1 cmake==4.0.3 pytest
+    numpy==2.5.3 cmake==4.0.3 pytest
 rm -rf /var/lib/apt/lists/*

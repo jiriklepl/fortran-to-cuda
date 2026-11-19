@@ -5,10 +5,10 @@ import re
 import shutil
 
 import pytest
-from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-from elmm_pipeline.local_adapter import _scope_package_build
 
 from compiler.tests import test_graph_storage_epochs_cuda as base
+from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+from compiler.tests.support.consumer.package import scope_package_build
 from compiler.tests.test_hierarchical_child_regions import fixture
 from compiler.tests.test_hierarchical_child_regions_cuda import copy_bytes, events_in, procedure
 from compiler.tests.test_joined_boundary_lifecycle_cuda import environment
@@ -40,7 +40,7 @@ def emit(directory):
         target = package / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(value)
-    _scope_package_build(
+    scope_package_build(
         {"artifact_root": str(package), "scope_manifest": manifest, "tool": "local", "memory_model": "scoped"}
     )
     assert builder.finish()

@@ -75,8 +75,8 @@ def test_final_typed_roles_need_facts_only_for_managed_fields(tmp_path, opaque):
 
 
 def test_real_emitted_package_strict_reader_keeps_opaque_roles(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     _path, builder, _owner, _member, _proof, outputs, _report = emit(tmp_path)
     package = tmp_path / 'package'
@@ -86,7 +86,7 @@ def test_real_emitted_package_strict_reader_keeps_opaque_roles(tmp_path):
         target.write_text(content)
     manifest = json.loads((package / 'scope-manifest.json').read_text())
     validate_checked_execution_plans(manifest)
-    _scope_package_build({'artifact_root': str(package), 'scope_manifest': manifest})
+    scope_package_build({'artifact_root': str(package), 'scope_manifest': manifest})
     assert builder.finish()
 
 

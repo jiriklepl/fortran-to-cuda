@@ -59,7 +59,7 @@ def with_entry(patch, entry):
 
 @pytest.mark.parametrize("header", ["do i=1,size(points)", "do i=1,n", "do i=size(points),1,-1", "do i=2,1"])
 def test_original_header_body_and_final_iterator_survive_first_entry_retirement(tmp_path, header):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     path, builder, middle, patch, outputs, report = emit(tmp_path, source(header))
     assert patch.counted_entry is not None
@@ -176,7 +176,7 @@ def test_changed_original_header_rejects_publication(tmp_path):
 
 @pytest.mark.parametrize("part", ["header", "body", "once", "context"])
 def test_strict_transport_checks_actual_generated_first_entry_cut(tmp_path, part):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     _path, _builder, _middle, patch, outputs, _report = emit(tmp_path)
     manifest = json.loads(outputs["scope-manifest.json"])

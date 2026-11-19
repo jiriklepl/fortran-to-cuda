@@ -115,7 +115,7 @@ def test_nowait_cannot_supply_synchronous_descriptor_stability(tmp_path):
 
 
 def test_original_joined_native_consumer_keeps_descriptor_scope_with_directives(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     _path, builder = fixture(tmp_path, ordinary_source())
     _outputs, report = builder.run()

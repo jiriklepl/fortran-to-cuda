@@ -89,9 +89,8 @@ def test_original_wrapper_with_exact_callback_is_source_native_only_without_any_
 
 @pytest.mark.parametrize("policy", ["sections", "auto"])
 def test_full_call_boundary_never_constructs_child_or_old_payload_retirement(tmp_path, monkeypatch, policy):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-
     from compiler.scopes import conditional_return, module_owner
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     text = source().replace(
         CALL + "\ncall consumer(left,right,n)\ncall relocate(left,right)\nenddo",

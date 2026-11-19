@@ -36,8 +36,8 @@ def original_source(kind):
 
 
 def emit(directory, parent, source, kind, monkeypatch, enabled, *, fault=None):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     builder = parent
     path = directory / "source.f90"
@@ -117,7 +117,7 @@ def emit(directory, parent, source, kind, monkeypatch, enabled, *, fault=None):
         target.write_text(content)
     manifest = json.loads(outputs["scope-manifest.json"])
     validate_checked_execution_plans(manifest, capture_facts=builder.facts)
-    _scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
     assert builder.finish()
     builder.analysis.inputs.verify_live()
     assert path.read_text() == source

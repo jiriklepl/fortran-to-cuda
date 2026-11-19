@@ -123,8 +123,7 @@ end module''')
 def test_hierarchy_retires_only_under_original_metadata_guard_and_preserves_reader(tmp_path):
     import json
 
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
     from compiler.tests.test_joined_boundary_lifecycle import GROUP, JOINED, emit
 
     worker = '''subroutine saved_worker(values,n)

@@ -108,9 +108,8 @@ def test_source_owner_emits_each_original_provider_once_and_reader_accepts(tmp_p
     import json
     from collections import Counter
 
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-
     from compiler.scopes import atomic_joined_team as scope
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
     from compiler.tests.test_atomic_source_call_bindings import atomic_builder
 
     original, calls = scope.emit_atomic_team_provider, []

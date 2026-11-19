@@ -36,8 +36,8 @@ def source_builder(directory, *, source=None):
 
 
 def check_package(directory, builder, outputs, report):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     assert report["scope_count"] == 1, report.get("graph_owner_attempt")
     manifest = json.loads(outputs["scope-manifest.json"])
@@ -52,7 +52,7 @@ def check_package(directory, builder, outputs, report):
         target = directory / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
-    _scope_package_build({"artifact_root": str(directory), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(directory), "scope_manifest": manifest})
     return manifest
 
 
@@ -514,8 +514,8 @@ def emit_member_branch(builder, kind):
 
 
 def check_member_package(directory, owner, outputs, report):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     assert report["scope_count"] == 1, report.get("graph_owner_attempt")
     manifest = json.loads(outputs["scope-manifest.json"])
@@ -524,7 +524,7 @@ def check_member_package(directory, owner, outputs, report):
         target = directory / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
-    _scope_package_build({"artifact_root": str(directory), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(directory), "scope_manifest": manifest})
     expected = {identity for units in owner.graph_unit_ids.values() for identity in units.values()}
     assert expected
     assert owner.emission.graph_emitted_units == expected

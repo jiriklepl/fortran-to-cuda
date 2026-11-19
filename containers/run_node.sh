@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workspace="${WORKSPACE_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 node="" partition="" account="" config="" steps=""
 precision="" grid="" domain_size="" end_time="" cfl="" advection="" re_number="" timeout="" build_timeout=""
-experiment=resident deps="${DEPS_ROOT:-}" solver="${SOLVER_ROOT:-}"
+deps="${DEPS_ROOT:-}" solver="${SOLVER_ROOT:-}"
 output="${OUTPUT_DIR:-}" work="${WORK_DIR:-}"
 case_name=channel-simple threads=4 jobs="" repeats=7 warmups=1 arch=auto
 cpus=8 memory=32G time_limit="" gpus=1 runtime=auto
@@ -16,13 +16,12 @@ extra=()
 
 usage() {
     cat <<'EOF'
-Usage: run_on_node.sh [OPTIONS] NODE [-- EXTRA_RUN_ELMM_ARGS...]
-Submit a fresh comparison; no local fallback or headnode setup.
+Usage: run_on_node.sh [OPTIONS] NODE [-- EXTRA_RESIDENT_ARGS...]
+Submit a fresh resident comparison; no local fallback or headnode setup.
 
-    --experiment resident|sgs       Default: resident; sgs is the older comparison
-    --deps DIR --solver DIR         Optional resident dependency and solver checkouts
-  --case NAME                     channel-simple (default), channel,
-                                  second-order or fourth-order
+  --experiment resident           Optional; resident is the only experiment
+  --deps DIR --solver DIR         Optional dependency and solver checkouts
+  --case NAME                     channel-simple (default) or channel
   --config DIR                    Explicit application configuration
   --precision dp|sp               Floating-point precision (default: dp; resident requires dp)
   --grid NXxNYxNZ                 Override grid cell counts (e.g. 64x32x32 or 64,32,32)
@@ -33,7 +32,7 @@ Submit a fresh comparison; no local fallback or headnode setup.
   --advection 2|4|5|6             Override main.conf advection method
   --re VAL                        Override main.conf Reynolds number Re
   --timeout SEC                   Per-process application timeout in seconds
-  --build-timeout SEC             Build timeout in seconds (resident only)
+  --build-timeout SEC             Build timeout in seconds
   --threads N --jobs N             Defaults: 4 runtime threads, build jobs = CPUs
   --repeats N --warmups N          Defaults: 7 measured, 1 warmup
   --arch ARCH                     Default: auto, detected on the worker GPU
@@ -44,7 +43,7 @@ Submit a fresh comparison; no local fallback or headnode setup.
   -p, --partition NAME            Presets: hopper01=gpu-ffa-gpulab, bw01=ffa-gpulab
   -A, --account NAME              Optional SLURM account
   -c, --cpus N --mem SIZE          Defaults: 8 CPUs, 32G; CPUs cover jobs/threads
-    -t, --time HH:MM:SS --gpus N     Defaults: 01:30:00 (natural channel: 02:00:00), 1 GPU
+  -t, --time HH:MM:SS --gpus N     Defaults: 01:30:00 (natural channel: 02:00:00), 1 GPU
   --no-wait                       Submit without sbatch --wait
   --interactive                   Run on the allocated node via srun
   --dry-run                       Create/print the quoted job script only
@@ -59,7 +58,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help) usage; exit 0 ;;
         --case) value "$@"; case_name="$2"; shift 2 ;;
-        --experiment) value "$@"; experiment="$2"; shift 2 ;;
+        --experiment) value "$@"; [[ "$2" == resident ]] || fail "experiment must be resident"; shift 2 ;;
         --deps) value "$@"; deps="$2"; shift 2 ;;
         --solver) value "$@"; solver="$2"; shift 2 ;;
         --config) value "$@"; config="$2"; shift 2 ;;
@@ -104,10 +103,9 @@ for argument in "${extra[@]}"; do
     esac
 done
 [[ -n "$node" && "$node" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "one valid SLURM node is required"
-[[ "$experiment" == sgs || "$experiment" == resident ]] || fail "experiment must be sgs or resident"
 if [[ -z "$time_limit" ]]; then
     time_limit=01:30:00
-    if [[ "$experiment" == resident && "$case_name" == channel && -z "$steps" && -z "$config" && \
+    if [[ "$case_name" == channel && -z "$steps" && -z "$config" && \
           ( -z "$precision" || "$precision" == dp ) && -z "$grid" && -z "$domain_size" && \
           -z "$end_time" && -z "$cfl" && -z "$advection" && -z "$re_number" ]]; then
         time_limit=02:00:00
@@ -118,18 +116,11 @@ fi
     fail "--advection must be 2, 4, 5 or 6"
 [[ -z "$timeout" ]] || positive timeout "$timeout"
 [[ -z "$build_timeout" ]] || positive build-timeout "$build_timeout"
-[[ -z "$build_timeout" || "$experiment" == resident ]] || fail "--build-timeout is only supported for --experiment resident"
-case "$case_name" in
-    channel-simple|channel|second-order|fourth-order) ;;
-    *) fail "case must be channel-simple, channel, second-order or fourth-order" ;;
-esac
-if [[ "$experiment" == resident ]]; then
-    [[ "$case_name" == channel-simple || "$case_name" == channel ]] || fail "resident supports channel-simple or channel"
-    [[ -z "$deps" ]] || deps="$(cd -- "$deps" && pwd -P)"
-    solver="${solver:-$workspace/poisson-solver}"
-    [[ -d "$solver" ]] || fail "Poisson solver checkout is missing: $solver; initialize the solver submodule or select --solver"
-    solver="$(cd -- "$solver" && pwd -P)"
-fi
+[[ "$case_name" == channel-simple || "$case_name" == channel ]] || fail "case must be channel-simple or channel"
+[[ -z "$deps" ]] || deps="$(cd -- "$deps" && pwd -P)"
+solver="${solver:-$workspace/poisson-solver}"
+[[ -d "$solver" ]] || fail "Poisson solver checkout is missing: $solver; initialize the solver submodule or select --solver"
+solver="$(cd -- "$solver" && pwd -P)"
 [[ "$runtime" == auto || "$runtime" == apptainer || "$runtime" == native ]] || fail "runtime must be auto, apptainer or native"
 jobs="${jobs:-$cpus}"
 for name in threads jobs repeats cpus gpus; do positive "$name" "${!name}"; done
@@ -152,20 +143,18 @@ if [[ ! -f "$pipeline/pipeline.py" || ! -f "$pipeline/elmm_pipeline/__init__.py"
     printf -v initialize '%q ' git -C "$workspace" submodule update --init -- elmm-pipeline
     fail "ELMM pipeline checkout is missing or incomplete: $pipeline; initialize it with: ${initialize% }"
 fi
-if [[ "$experiment" == resident ]]; then
-    if [[ -n "$deps" ]]; then
-        [[ -f "$deps/elmm/src/SConstruct" || -f "$deps/ELMM/src/SConstruct" ]] || \
-            fail "ELMM dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
-        [[ -f "$deps/PoisFFT/src/SConstruct" ]] || \
-            fail "PoisFFT dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
-        [[ -f "$deps/VkFFT/vkFFT/vkFFT.h" ]] || \
-            fail "VkFFT dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
-    fi
-    for source in CMakeLists.txt dependencies.lock.json src/device_api.cpp include/poisson-solver/device_api.h; do
-        [[ -f "$solver/$source" ]] || \
-            fail "Poisson solver checkout is incomplete: $solver/$source; initialize the solver submodule or select a complete --solver checkout"
-    done
+if [[ -n "$deps" ]]; then
+    [[ -f "$deps/elmm/src/SConstruct" || -f "$deps/ELMM/src/SConstruct" ]] || \
+        fail "ELMM dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
+    [[ -f "$deps/PoisFFT/src/SConstruct" ]] || \
+        fail "PoisFFT dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
+    [[ -f "$deps/VkFFT/vkFFT/vkFFT.h" ]] || \
+        fail "VkFFT dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
 fi
+for source in CMakeLists.txt dependencies.lock.json src/device_api.cpp include/poisson-solver/device_api.h; do
+    [[ -f "$solver/$source" ]] || \
+        fail "Poisson solver checkout is incomplete: $solver/$source; initialize the solver submodule or select a complete --solver checkout"
+done
 [[ -z "$config" ]] || config="$(cd -- "$config" && pwd -P)"
 [[ -n "$output" ]] || output="$workspace/results/runs/$node-$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p -- "$output"
@@ -174,8 +163,7 @@ work="$(realpath -m -- "${work:-$output/work}")"
 sif="$(realpath -m -- "$sif")"
 job_script="$output/submit-$node.sh"
 [[ ! -e "$job_script" ]] || fail "existing job script must remain immutable: $job_script"
-workflow=(run-elmm --case "$case_name" --threads "$threads")
-if [[ "$experiment" == resident ]]; then workflow[0]=resident; fi
+workflow=(resident --case "$case_name" --threads "$threads")
 jobs_index=$((${#workflow[@]} + 1))
 workflow+=(--jobs "$jobs" --repeats "$repeats" --warmups "$warmups" --arch "$arch")
 config_index=-1
@@ -223,18 +211,15 @@ slurm_directive() {
         printf '%s\n' 'set -euo pipefail'
         printf 'workspace=%q\noutput=%q\nwork=%q\nsif=%q\nruntime=%q\nconfig=%q\nconfig_index=%q\n' \
             "$workspace" "$output" "$work" "$sif" "$runtime" "$config" "$config_index"
-        printf 'experiment=%q\ndeps=%q\nsolver=%q\n' "$experiment" "$deps" "$solver"
+        printf 'deps=%q\nsolver=%q\n' "$deps" "$solver"
         printf 'jobs_index=%q\njobs_explicit=%q\n' "$jobs_index" "$jobs_explicit"
         printf 'workflow=('; printf ' %q' "${workflow[@]}"; printf ' )\n'
         cat <<'EOF'
 printf 'Worker: %s\nJob ID: %s\nOutput directory: %s\nWork directory: %s\n' \
     "${SLURMD_NODENAME:-${HOSTNAME:-unknown}}" "${SLURM_JOB_ID:-interactive}" "$output" "$work"
-report_path="$output/experiment/report.json"
-if [[ "$experiment" == resident ]]; then
-    report_path="$output/resident/report.json"
-    export SOLVER_ROOT="$solver"
-    if [[ -n "$deps" ]]; then export DEPS_ROOT="$deps"; else unset DEPS_ROOT; fi
-fi
+report_path="$output/resident/report.json"
+export SOLVER_ROOT="$solver"
+if [[ -n "$deps" ]]; then export DEPS_ROOT="$deps"; else unset DEPS_ROOT; fi
 trap 'printf "Job exit status: %s\nResults and logs: %s\nModule setup log: %s/modules.log\nReport: %s\n" "$?" "$output" "$output" "$report_path"' EXIT
 if [[ "$jobs_explicit" == 0 && "${SLURM_CPUS_PER_TASK:-}" =~ ^[1-9][0-9]*$ ]] && \
         (( SLURM_CPUS_PER_TASK < workflow[jobs_index] )); then
@@ -325,19 +310,14 @@ EOF
 )
 chmod +x "$job_script"
 printf 'Target node: %s\nPartition: %s\nAccount: %s\n' "$node" "$partition" "${account:-site default}"
-printf 'Experiment: %s\n' "$experiment"
-if [[ "$experiment" == resident && -z "$deps" ]]; then
+printf 'Experiment: resident\n'
+if [[ -z "$deps" ]]; then
     printf 'Pinned ELMM, PoisFFT and VkFFT sources will be prepared in the work directory on the worker.\n'
 fi
 printf 'Batch defaults: %s CPUs, %s memory, %s GPU(s), %s wall time\n' "$cpus" "$memory" "$gpus" "$time_limit"
 printf 'Output directory: %s\nWork directory: %s\nJob script: %s\n' "$output" "$work" "$job_script"
-if [[ "$experiment" == resident ]]; then
-    printf 'Report: %s/resident/report.json\nFigures: %s/resident/figures\nBuild log: %s/resident/build.log\n' \
-        "$output" "$output" "$output"
-else
-    printf 'Report: %s/experiment/report.json\nFigures: %s/experiment/figures\n' "$output" "$output"
-    printf 'Progress log: %s/run.log\n' "$output"
-fi
+printf 'Report: %s/resident/report.json\nFigures: %s/resident/figures\nBuild log: %s/resident/build.log\n' \
+    "$output" "$output" "$output"
 printf 'Module setup log: %s/modules.log\n' "$output"
 printf 'Slurm logs: %s/slurm-<job-id>.out and .err\n' "$output"
 if (( interactive )); then

@@ -122,7 +122,7 @@ def test_direct_cost_or_placement_cannot_select_whole_team(tmp_path):
 
 
 def test_genuine_checked_three_unit_owner_emits_closed_manifest_and_original_zero_guards(tmp_path, monkeypatch):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     monkeypatch.setattr(source_device_tasks, "admit_source_device_task",
                         lambda member, nodes: source_device_tasks._admit_source_device_task(

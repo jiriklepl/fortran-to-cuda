@@ -207,7 +207,7 @@ def test_missing_mask_fact_preserves_guarded_retirement_and_later_gpu_work(tmp_p
     assert "if (go) then" in changed.lower()
     assert "fort_child_retention_" in changed
     assert "parameters::utype" not in builder.facts["captures"]
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     validate_checked_execution_plans(json.loads(outputs["scope-manifest.json"]))
 

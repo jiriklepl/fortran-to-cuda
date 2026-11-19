@@ -161,7 +161,7 @@ def test_generated_order_retains_NONE_guards_create_admission_outkill_transactio
     assert text.index("int(fort_external_config%extent,c_int64_t) ==") < create
     assert "external provider unavailable at original call" in text or report["scopes"]
     assert "if (.not. fort_external_done) then" in text
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
     validate_checked_execution_plans(report)
 
 
@@ -175,7 +175,7 @@ def test_original_false_guard_remains_outside_admission(tmp_path):
 
 @pytest.mark.parametrize("change", ["record", "missing", "mapping", "authority"])
 def test_strict_reader_rejects_changed_entry_prerequisite_even_after_outer_rehash(tmp_path, change):
-    from elmm_pipeline.external_entry_read_record import validate_external_entry_reads
+    from compiler.tests.support.consumer.external_entry_read_record import validate_external_entry_reads
 
     _, analysis, routine, node, _, _, _, _ = qualified(tmp_path)
     task = external_device_task(analysis, routine, node).public()

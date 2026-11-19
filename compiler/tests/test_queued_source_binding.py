@@ -37,14 +37,14 @@ def issued(directory):
 
 
 def validate(values):
-    from elmm_pipeline.source_task_record import validate_source_task
+    from compiler.tests.support.consumer.source_task_record import validate_source_task
 
     record, member, procedure, inputs, resources, manifest = values
     validate_source_task(record, member, procedure, inputs, resources, owner=procedure["procedure"], manifest=manifest)
 
 
 def reseal(record):
-    from elmm_pipeline.checked_execution_plan import _digest
+    from compiler.tests.support.consumer.checked_execution_plan import _digest
 
     record["identity"] = _digest({key: value for key, value in record.items() if key != "identity"})
 
@@ -140,7 +140,7 @@ def emit(directory, monkeypatch, *, queued=True, source=SOURCE, entry="stencil::
 
 
 def test_genuine_checked_owner_manifest_and_new_report_compile(tmp_path, monkeypatch):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     outputs, manifest, facts = emit(tmp_path / "inputs", monkeypatch)
     assert manifest["scope_count"] == 1
@@ -322,7 +322,7 @@ def test_queued_patch_rejects_direct_pricing_or_placement():
 
 
 def test_checked_child_maps_original_fields_to_one_parent_epoch(tmp_path, monkeypatch):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     source = SOURCE.rsplit("end module", 1)[0] + """subroutine outer(left,right,n,t)
 integer,intent(in)::n,t

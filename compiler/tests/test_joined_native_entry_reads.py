@@ -44,7 +44,7 @@ end module
 
 
 def emit(directory, source=SOURCE):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     none = {'storage': 'stable', 'initialized': 'none', 'escapes': False, 'allocation_changes': False}
     path, builder, outputs, manifest = generate(directory, source, capture_updates={

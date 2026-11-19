@@ -26,7 +26,7 @@ def source():
 
 
 def test_caller_allocation_read_reservation_keeps_native_and_gpu_child(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     _path, builder, _outputs, report = generate(tmp_path, source())
     owner, = report["scopes"]
@@ -49,7 +49,7 @@ def test_caller_allocation_read_reservation_keeps_native_and_gpu_child(tmp_path)
 
 @pytest.mark.parametrize("intent", ["in", "inout"])
 def test_original_allocatable_formal_uses_read_effects_without_definition_credit(tmp_path, intent):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     _path, builder, _outputs, report = generate(tmp_path, direct_source(intent))
     owner, = report["scopes"]

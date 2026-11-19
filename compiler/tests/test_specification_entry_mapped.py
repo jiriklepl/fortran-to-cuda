@@ -13,7 +13,7 @@ MAPPED_SOURCE = SOURCE.replace("real(8)::observed", "real(8)::observed\ninteger:
 
 
 def test_original_metadata_mapping_selects_only_its_forwarded_canonical_handle(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     _outputs, report, scope, proof = compile_fixture(tmp_path, MAPPED_SOURCE)
     validate_checked_execution_plans(report)
@@ -38,7 +38,7 @@ def test_original_metadata_mapping_selects_only_its_forwarded_canonical_handle(t
 
 @pytest.mark.parametrize("unmapped", [False, True])
 def test_multiple_bound_arrays_are_all_observed_or_use_the_domain_fallback(tmp_path, unmapped):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     source = MAPPED_SOURCE.replace("integer::tile(1)=[8]",
         "integer::tile(1)=[8], tile_y(1)=[8], tile_z(1)=[8]").replace(

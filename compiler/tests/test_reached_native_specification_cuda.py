@@ -51,13 +51,13 @@ def binaries(tmp_path_factory):
 
 
 def validate_package(build):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     original = (build / "scope-manifest.json").read_bytes()
     manifest = json.loads(original)
     validate_checked_execution_plans(manifest)
-    _scope_package_build({"artifact_root": str(build), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(build), "scope_manifest": manifest})
     assert manifest == json.loads(original)
     assert (build / "scope-manifest.json").read_bytes() == original
 

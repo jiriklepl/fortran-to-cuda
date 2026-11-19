@@ -174,9 +174,8 @@ def test_source_publication_and_policy_changes_invalidate_the_existing_fact(tmp_
 
 
 def test_authentic_hierarchical_retirement_emits_and_survives_strict_transport(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-
     from compiler.scopes.lexical import LexicalBoundaryPatch
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
     from compiler.tests.test_hierarchical_child_regions import SOURCE
     from compiler.tests.test_hierarchical_child_regions import fixture as hierarchy
 

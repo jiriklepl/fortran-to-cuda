@@ -137,9 +137,8 @@ def emit_record_fixture(tmp_path):
 
 def emitted_record_retirement(path, builder, outputs, report):
     """Follow the adopted owner receipt, not a speculative descriptor registry."""
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-
     from compiler.scopes.lexical import LexicalBoundaryPatch
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     assert report["scope_count"] == 1, report.get("graph_owner_attempt", report.get("boundaries"))
     owner = builder._conditional_return_draft.validate().owner
@@ -210,9 +209,8 @@ def decline_complete_record_call(monkeypatch):
 
 def emitted_record_retention(path, builder, outputs, report):
     """A stable complete CALL synchronizes payload without retiring storage."""
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-
     from compiler.scopes.lexical import LexicalBoundaryPatch
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     assert report["scope_count"] == 1
     owner = builder._conditional_return_draft.validate().owner

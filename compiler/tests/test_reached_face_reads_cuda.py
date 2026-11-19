@@ -57,7 +57,7 @@ end program
 
 
 def emit(directory):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     path = directory / "source.f90"
     path.write_text(SOURCE)

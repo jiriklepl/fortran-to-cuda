@@ -101,8 +101,8 @@ def test_target_owner_retires_whole_raw_include_before_reentry(tmp_path):
     assert text.count('!$omp end parallel')==1
     import json
 
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
     package=tmp_path/'package'
     for name,content in outputs.items():
         target=package/name
@@ -110,7 +110,7 @@ def test_target_owner_retires_whole_raw_include_before_reentry(tmp_path):
         target.write_text(content)
     manifest=json.loads((package/'scope-manifest.json').read_text())
     validate_checked_execution_plans(manifest)
-    _scope_package_build({'artifact_root':str(package),'scope_manifest':manifest})
+    scope_package_build({'artifact_root':str(package),'scope_manifest':manifest})
 
 
 @pytest.mark.parametrize('change',['missing_completion','copied_team','foreign_graph','mutated_team'])

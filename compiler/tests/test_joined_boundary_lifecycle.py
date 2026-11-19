@@ -127,7 +127,7 @@ def test_unknown_or_asynchronous_native_group_keeps_conditional_owner_closed(tmp
 
 
 def test_authentic_existing_v2_transport_is_accepted_without_new_authority_fields(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
     _path, _builder, _middle, _patches, _outputs, report = emit(tmp_path)
     original = deepcopy(report)
     validate_checked_execution_plans(report)
@@ -183,8 +183,9 @@ def force_ordinary_retirement(monkeypatch):
 
 def test_ordinary_joined_no_call_group_is_retained_through_authentic_child_emission(tmp_path, monkeypatch):
     reached = force_ordinary_retirement(monkeypatch)
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
     from fparser.two.utils import walk
+
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
     _path, _builder, middle, patches, _outputs, report = emit(tmp_path, ordinary_source())
     patch, = patches
     assert reached

@@ -211,14 +211,14 @@ def test_node_resident_mode_forwards_sources_and_resources(sandbox):
     assert "/resident/build.log" in result.stdout
 
 
-def test_node_explicit_sgs_mode_preserves_earlier_workflow(sandbox):
-    _, _, capture, _, invoke = sandbox
+def test_node_rejects_any_other_experiment_before_submission(sandbox):
+    _, env, capture, stub, invoke = sandbox
     fake_workspace(sandbox)
-    result = invoke("run_node.sh", "hopper01", "--dry-run", "--runtime", "native", "--experiment", "sgs")
-    assert result.returncode == 0, result.stderr
-    assert execute_payload(sandbox).returncode == 0
-    assert json.loads(capture.read_text())["argv"][0] == "run-elmm"
-    assert "/experiment/report.json" in result.stdout
+    stub("sbatch")
+    result = invoke("run_node.sh", "hopper01", "--experiment", "sgs")
+    assert result.returncode != 0 and "experiment must be resident" in result.stderr
+    assert not capture.exists()
+    assert not Path(env["OUTPUT_DIR"]).exists()
 
 
 def test_native_resident_bootstraps_missing_tools_in_work_directory(sandbox):
@@ -291,12 +291,12 @@ def test_node_resident_missing_solver_source_fails_before_submission(sandbox):
     assert not capture.exists()
 
 
-@pytest.mark.parametrize("case_name", ["channel-simple", "channel", "second-order", "fourth-order"])
+@pytest.mark.parametrize("case_name", ["channel-simple", "channel"])
 def test_root_launcher_forwards_each_named_preset_without_a_step_cap(sandbox, case_name):
     _, _, capture, _, invoke = sandbox
     fake_workspace(sandbox)
     result = invoke("../run_on_node.sh", "-p", "gpu-short", "-A", "kdss", "bw01",
-                    "--dry-run", "--case", case_name, "--runtime", "native", "--experiment", "sgs")
+                    "--dry-run", "--case", case_name, "--runtime", "native")
     assert result.returncode == 0, result.stderr
     assert execute_payload(sandbox, "bw01").returncode == 0
     argv = json.loads(capture.read_text())["argv"]
@@ -348,7 +348,7 @@ def test_node_job_script_is_immutable(sandbox):
 
 @pytest.mark.parametrize("args", [
     ["--cpus", "3"], ["--threads", "9"], ["--jobs", "9"], ["--warmups", "-1"],
-    ["--repeats", "0"], ["--case", "wrong"], ["--runtime", "wrong"], ["--steps"],
+    ["--repeats", "0"], ["--case", "wrong"], ["--case", "second-order"], ["--runtime", "wrong"], ["--steps"],
 ])
 def test_node_rejects_invalid_resources_before_dispatch(sandbox, args):
     _, _, capture, _, invoke = sandbox
@@ -606,7 +606,7 @@ def test_docker_sources_are_explicit_read_only_overrides(sandbox):
         path = tmp / f"{name} & spaces"
         path.mkdir()
         overrides[name] = str(path)
-    result = invoke("run-docker.sh", "prepare", "--label", "literal & value", overrides=overrides)
+    result = invoke("run-docker.sh", "doctor", "--label", "literal & value", overrides=overrides)
     assert result.returncode == 0, result.stderr
     argv = json.loads(capture.read_text())["argv"]
     mounts = values(argv, "--volume")
@@ -614,14 +614,14 @@ def test_docker_sources_are_explicit_read_only_overrides(sandbox):
                          "COMPILER_ROOT": "/compiler-source"}.items():
         assert f"{overrides[name]}:{target}:ro" in mounts
     assert "--gpus" not in argv
-    assert argv[-3:] == ["prepare", "--label", "literal & value"]
+    assert argv[-3:] == ["doctor", "--label", "literal & value"]
 
 
 @pytest.mark.parametrize("selection,expected", [("2,4", '"device=2,4"'), ("GPU-selected", '"device=GPU-selected"')])
 def test_docker_preserves_scheduler_gpu_selection(sandbox, selection, expected):
     _, _, capture, stub, invoke = sandbox
     stub("docker")
-    result = invoke("run-docker.sh", "run-elmm", overrides={"CUDA_VISIBLE_DEVICES": selection})
+    result = invoke("run-docker.sh", "resident", overrides={"CUDA_VISIBLE_DEVICES": selection})
     assert result.returncode == 0, result.stderr
     argv = json.loads(capture.read_text())["argv"]
     assert values(argv, "--gpus") == [expected]
@@ -633,10 +633,10 @@ def test_docker_explicit_gpu_override_and_disable(sandbox):
     _, _, capture, stub, invoke = sandbox
     stub("docker")
     overrides = {"CUDA_VISIBLE_DEVICES": "1", "GPU_DEVICES": "GPU-selected"}
-    assert invoke("run-docker.sh", "run-elmm", overrides=overrides).returncode == 0
+    assert invoke("run-docker.sh", "resident", overrides=overrides).returncode == 0
     assert values(json.loads(capture.read_text())["argv"], "--gpus") == ['"device=GPU-selected"']
     overrides["GPU_DEVICES"] = ""
-    assert invoke("run-docker.sh", "run-elmm", overrides=overrides).returncode == 0
+    assert invoke("run-docker.sh", "resident", overrides=overrides).returncode == 0
     argv = json.loads(capture.read_text())["argv"]
     assert "--gpus" not in argv and "CUDA_VISIBLE_DEVICES=" in values(argv, "--env")
 
@@ -644,7 +644,7 @@ def test_docker_explicit_gpu_override_and_disable(sandbox):
 def test_podman_uses_cdi_selected_devices(sandbox):
     _, _, capture, stub, invoke = sandbox
     stub("podman")
-    result = invoke("run-docker.sh", "run-elmm", overrides={"GPU_DEVICES": "0,2"})
+    result = invoke("run-docker.sh", "resident", overrides={"GPU_DEVICES": "0,2"})
     assert result.returncode == 0, result.stderr
     argv = json.loads(capture.read_text())["argv"]
     assert values(argv, "--device") == ["nvidia.com/gpu=0", "nvidia.com/gpu=2"]
@@ -667,7 +667,7 @@ def test_docker_compatibility_command_uses_podman_flags(sandbox):
     _, _, capture, stub, invoke = sandbox
     stub("docker")
     stub("podman")
-    result = invoke("run-docker.sh", "run-elmm", overrides={
+    result = invoke("run-docker.sh", "resident", overrides={
         "STUB_VERSION": "podman version 5.4.0", "CUDA_VISIBLE_DEVICES": "GPU-one,GPU-two", "SLURM_JOB_ID": "123",
     })
     assert result.returncode == 0, result.stderr
@@ -729,7 +729,7 @@ def test_rootful_podman_keeps_existing_user_namespace_behavior(sandbox):
 def test_container_engine_rejects_ambiguous_slurm_gpu_ordinals(sandbox, engine, version, job_variable, selection):
     _, _, capture, stub, invoke = sandbox
     stub(engine)
-    result = invoke("run-docker.sh", "run-elmm", overrides={
+    result = invoke("run-docker.sh", "resident", overrides={
         job_variable: "123", "CUDA_VISIBLE_DEVICES": selection, "STUB_VERSION": version,
     })
     assert result.returncode != 0 and "GPU_DEVICES=GPU-UUID" in result.stderr
@@ -743,7 +743,7 @@ def test_container_engine_rejects_ambiguous_slurm_gpu_ordinals(sandbox, engine, 
 def test_container_engine_slurm_accepts_explicit_gpu_uuid(sandbox, engine, version):
     _, _, capture, stub, invoke = sandbox
     stub(engine)
-    result = invoke("run-docker.sh", "run-elmm", overrides={
+    result = invoke("run-docker.sh", "resident", overrides={
         "SLURM_JOB_ID": "123", "CUDA_VISIBLE_DEVICES": "0", "GPU_DEVICES": "GPU-selected",
         "STUB_VERSION": version,
     })
@@ -781,31 +781,31 @@ def sif_env(sandbox):
     return path
 
 
-def test_apptainer_cpu_preparation_and_environment_isolation(sandbox, sif_env):
+def test_apptainer_cpu_command_and_environment_isolation(sandbox, sif_env):
     _, env, capture, stub, invoke = sandbox
     stub("apptainer")
-    result = invoke("run-apptainer.sh", "prepare", overrides={"APPTAINERENV_LD_PRELOAD": "/bad",
-                                                              "SINGULARITYENV_WORK_DIR": "/bad"})
+    result = invoke("run-apptainer.sh", "doctor", overrides={"APPTAINERENV_LD_PRELOAD": "/bad",
+                                                             "SINGULARITYENV_WORK_DIR": "/bad"})
     assert result.returncode == 0, result.stderr
     record = json.loads(capture.read_text())
     argv = record["argv"]
     assert all(flag in argv for flag in ("--cleanenv", "--no-home")) and "--nv" not in argv
     assert f"{env['OUTPUT_DIR']}:/output" in values(argv, "--bind")
-    assert argv[-2:] == [str(sif_env), "prepare"]
+    assert argv[-2:] == [str(sif_env), "doctor"]
     assert not any(name.startswith(("APPTAINERENV_", "SINGULARITYENV_")) for name in record["env"])
 
 
 def test_apptainer_gpu_visibility_and_existing_bind_plan(sandbox, sif_env):
     _, _, capture, stub, invoke = sandbox
     stub("apptainer")
-    result = invoke("run-apptainer.sh", "run-elmm", "--arch", "120",
+    result = invoke("run-apptainer.sh", "resident", "--arch", "120",
                     overrides={"CUDA_VISIBLE_DEVICES": "GPU-selected", "APPTAINER_BINDPATH": "/scratch:/work"})
     assert result.returncode == 0, result.stderr
     record = json.loads(capture.read_text())
     assert "--nv" in record["argv"]
     assert "CUDA_VISIBLE_DEVICES=GPU-selected" in values(record["argv"], "--env")
     assert record["env"]["APPTAINER_BINDPATH"] == "/scratch:/work"
-    assert record["argv"][-3:] == ["run-elmm", "--arch", "120"]
+    assert record["argv"][-3:] == ["resident", "--arch", "120"]
 
 
 def test_apptainer_binds_explicit_solver_checkout_read_only(sandbox, sif_env):
@@ -852,29 +852,29 @@ def test_apptainer_resident_binds_dependencies_and_enables_gpu(sandbox, sif_env)
 def test_container_failure_status_is_preserved(sandbox, sif_env, script, engine):
     _, _, _, stub, invoke = sandbox
     stub(engine)
-    result = invoke(script, "run-elmm", overrides={"STUB_EXIT": "41"})
+    result = invoke(script, "run-benchmarks", overrides={"STUB_EXIT": "41"})
     assert result.returncode == 41
 
 
-@pytest.mark.parametrize('command', ['e2e', 'benchmark-e2e', 'run-e2e'])
-def test_three_way_docker_commands_request_gpu_by_default(sandbox, command):
+@pytest.mark.parametrize("command", ["run-benchmarks", "benchmark"])
+def test_docker_gpu_commands_request_gpu_by_default(sandbox, command):
     _, _, capture, stub, invoke = sandbox
-    stub('docker')
-    result = invoke('run-docker.sh', command, '--output-dir', '/output/fresh')
+    stub("docker")
+    result = invoke("run-docker.sh", command, "--output-dir", "/output/fresh")
     assert result.returncode == 0, result.stderr
-    argv = json.loads(capture.read_text())['argv']
-    assert values(argv, '--gpus') == ['all']
-    assert argv[-3:] == [command, '--output-dir', '/output/fresh']
+    argv = json.loads(capture.read_text())["argv"]
+    assert values(argv, "--gpus") == ["all"]
+    assert argv[-3:] == [command, "--output-dir", "/output/fresh"]
 
 
-@pytest.mark.parametrize('command', ['e2e', 'benchmark-e2e', 'run-e2e'])
-def test_three_way_apptainer_commands_request_gpu_by_default(sandbox, command):
+@pytest.mark.parametrize("command", ["resident", "run-benchmarks", "benchmark"])
+def test_apptainer_gpu_commands_request_gpu_by_default(sandbox, command):
     tmp, _, capture, stub, invoke = sandbox
-    stub('apptainer')
-    sif = tmp / 'compiler.sif'
-    sif.write_text('fake image\n')
-    result = invoke('run-apptainer.sh', command, overrides={'SIF_FILE':str(sif)})
+    stub("apptainer")
+    sif = tmp / "compiler.sif"
+    sif.write_text("fake image\n")
+    result = invoke("run-apptainer.sh", command, overrides={"SIF_FILE": str(sif)})
     assert result.returncode == 0, result.stderr
-    argv = json.loads(capture.read_text())['argv']
-    assert '--nv' in argv
+    argv = json.loads(capture.read_text())["argv"]
+    assert "--nv" in argv
     assert argv[-1] == command

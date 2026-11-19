@@ -25,7 +25,7 @@ end subroutine
 
 
 def emit(directory):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     original, builder = fixture(directory, source())
     outputs, report = builder.run()

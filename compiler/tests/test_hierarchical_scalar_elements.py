@@ -45,7 +45,7 @@ def test_original_table_argument_uses_registered_coordinates_and_existing_reserv
 
 
 def test_unchanged_strict_reader_accepts_real_element_call_package(tmp_path):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
     _path, _builder, _middle, _calls, _outputs, report = emit(tmp_path)
     original = deepcopy(report)
     validate_checked_execution_plans(report)

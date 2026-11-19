@@ -19,17 +19,6 @@ WORKSPACE = Path(os.environ.get("WORKSPACE_ROOT", HERE.parent)).resolve()
 PIPELINE = Path(os.environ.get("PIPELINE_ROOT", WORKSPACE / "elmm-pipeline")).resolve()
 COMPILER = Path(os.environ.get("COMPILER_ROOT", WORKSPACE)).resolve()
 sys.path.insert(0, str(PIPELINE))
-sys.path.insert(0, str(HERE))
-
-from application_basis import prepare_application_basis
-from sgs_experiment import CASE_NAMES, configuration_label
-
-
-def write(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("x") as stream:
-        json.dump(value, stream, indent=2, allow_nan=False)
-        stream.write("\n")
 
 
 def source_identity(root):
@@ -92,7 +81,7 @@ def selected_gpu(requested=None):
 
 def doctor(args, *, require_gpu=False, fortran=None):
     require_pipeline()
-    from elmm_pipeline.campaigns.guard import memory_headroom
+    from elmm_pipeline.guard import memory_headroom
     fortran = fortran or os.environ.get("FC", "gfortran")
     result = {"python": sys.version, "cpu_affinity": sorted(os.sched_getaffinity(0)),
               "memory_headroom_bytes": memory_headroom(), "tools": {},
@@ -129,26 +118,6 @@ def doctor(args, *, require_gpu=False, fortran=None):
     return result
 
 
-def prepare(args):
-    """Copy only maintained pipeline code into writable storage before setup."""
-    target = args.work_dir / "pipeline"
-    identity = source_identity(PIPELINE)
-    marker = target / "container-source.json"
-    if target.exists():
-        if not marker.is_file() or json.loads(marker.read_text())["files"] != identity["files"]:
-            raise ValueError("prepared pipeline differs; select a new --work-dir")
-    else:
-        shutil.copytree(PIPELINE, target, ignore=shutil.ignore_patterns(
-            ".git", ".cache", "work", "results", ".venv", "__pycache__", ".pytest_cache"))
-        write(marker, identity)
-    command = [sys.executable, str(target / "pipeline.py"), "setup", "--tools", "baseline,local",
-               "--local-compiler", str(COMPILER)]
-    # Setup is explicit and repeatable; a prepared cache avoids worker-node downloads.
-    subprocess.run(command, check=True, cwd=target)
-    prepare_application_basis(target / ".cache/repos", args.work_dir / "application-basis")
-    return target
-
-
 def require_pipeline():
     if not (PIPELINE / "pipeline.py").is_file() or not (PIPELINE / "elmm_pipeline/__init__.py").is_file():
         if PIPELINE != (WORKSPACE / "elmm-pipeline").resolve():
@@ -159,30 +128,17 @@ def require_pipeline():
         raise RuntimeError(f"ELMM pipeline checkout is missing or incomplete: {PIPELINE}. {hint}")
 
 
-def cached_python_usable(path, modules):
-    env = dict(os.environ)
-    env.pop("PYTHONHOME", None)
-    env.pop("PYTHONPATH", None)
-    env["PYTHONNOUSERSITE"] = "1"
-    try:
-        result = subprocess.run([str(path), "-c", "import " + ", ".join(modules)],
-                                env=env, capture_output=True, text=True, timeout=30, check=False)
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return result.returncode == 0
-
-
 def guarded(args):
     """Return True only in the guarded worker, never silently run locally."""
     require_pipeline()
     if args.worker:
         return True
-    from elmm_pipeline.campaigns.guard import available
+    from elmm_pipeline.guard import available
     if available() < 3 * 2**30:
         raise RuntimeError("less than 3 GiB effective available memory; no job started")
     print("Output directory:", args.output_dir, flush=True)
     print("Progress log:", args.output_dir / "run.log", flush=True)
-    command = [sys.executable, "-m", "elmm_pipeline.campaigns.guard",
+    command = [sys.executable, "-m", "elmm_pipeline.guard",
                "--record", str(args.output_dir / "guard.json"),
                "--log", str(args.output_dir / "run.log"), "--",
                sys.executable, str(HERE / "workflow.py"), *sys.argv[1:], "--worker"]
@@ -206,93 +162,6 @@ def guarded(args):
         print("Guard receipt:", args.output_dir / "guard.json", file=sys.stderr)
         raise SystemExit(result.returncode if result.returncode > 0 else 128 - result.returncode)
     return False
-
-
-def run_elmm(args):
-    if args.dry_run:
-        print(json.dumps({"action": "fresh original native versus SGS sections/" + args.scope_transfers,
-                          "case": configuration_label(args.case, args.config), "requested_case": args.case,
-                          "configuration_preset": args.case if args.config is None else None,
-                          "config": str(args.config) if args.config else None, "steps": args.steps,
-                          "precision": args.precision, "grid": args.grid,
-                          "domain_size": args.domain_size, "end_time": args.end_time,
-                          "cfl": args.cfl, "advection": args.advection, "re": args.re,
-                          "threads": args.threads, "jobs": args.jobs, "repeats": args.repeats,
-                          "warmups": args.warmups, "architecture": args.arch,
-                          "allow_native_variation": args.allow_native_variation,
-                          "scope_transfers": args.scope_transfers,
-                          "output": str(args.output_dir / "experiment"), "work": str(args.work_dir),
-                          "target_wall_ratio_to_original_native": .80, "executes_work": False}, indent=2))
-        return
-    if (args.output_dir / "experiment").exists():
-        raise ValueError("existing experiment is immutable; choose a new --output-dir")
-    if not guarded(args):
-        print(f"Results: {args.output_dir / 'experiment/report.json'}")
-        return
-    machine = doctor(args, require_gpu=True)
-    if min(machine["memory_headroom_bytes"].values()) < 3 * 2**30:
-        raise RuntimeError("less than 3 GiB effective available memory")
-    if max(args.threads, args.jobs) > len(machine["cpu_affinity"]):
-        raise ValueError("jobs/threads exceed the allocated CPU affinity")
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    write(args.output_dir / "machine.json", machine)
-    target = PIPELINE
-    application_root = args.app_root
-    if args.app_root is None:
-        cache = PIPELINE / ".cache"
-        prepared = all((cache / path).exists() for path in (
-            "setup.json", "repos/elmm/src/SConstruct", "repos/PoisFFT/src/SConstruct",
-            "envs/local/bin/python", "envs/build/bin/python", "native/lib"))
-        if prepared:
-            interpreters = ((args.compiler_python, cache / "envs/local/bin/python", ("fparser", "islpy")),
-                            (args.scons_python, cache / "envs/build/bin/python", ("SCons",)))
-            unusable = [path for override, path, modules in interpreters
-                        if override is None and not cached_python_usable(path, modules)]
-            if unusable:
-                print("Prepared pipeline cache has unusable Python environments:",
-                      ", ".join(map(str, unusable)), "; preparing a fresh cache in", args.work_dir, flush=True)
-                prepared = False
-        if prepared:
-            print("Using prepared pipeline cache:", cache, flush=True)
-        else:
-            target = prepare(args)
-        application_root = prepare_application_basis(target / ".cache/repos", args.work_dir / "application-basis")
-    native = target / ".cache/native/lib"
-    compiler_python = args.compiler_python or target / ".cache/envs/local/bin/python"
-    # Source analysis needs the prepared parser environment, even when the
-    # node's newer system Python has no third-party packages installed.
-    command = [str(compiler_python), str(HERE / "sgs_experiment.py")]
-    for flag, value in {
-        "app-root": application_root, "compiler-root": COMPILER,
-        "pipeline-root": PIPELINE, "python": compiler_python,
-        "scons-python": args.scons_python or target / ".cache/envs/build/bin/python",
-        "native-library-dir": args.native_library_dir or native,
-        "output": args.output_dir / "experiment", "work-dir": args.work_dir / "experiment",
-        "case": args.case, "jobs": args.jobs, "threads": args.threads,
-        "repeats": args.repeats, "warmups": args.warmups, "timeout": args.timeout,
-        "scope-transfers": args.scope_transfers,
-        "nvcc": machine["toolchain"]["nvcc"], "cuda-host": machine["toolchain"]["cuda_host_cxx"],
-        "gpu-arch": machine["toolchain"]["architecture"],
-    }.items():
-        command.extend(["--" + flag, str(value)])
-    if args.config is not None:
-        command.extend(["--config", str(args.config)])
-    if args.steps is not None:
-        command.extend(["--steps", str(args.steps)])
-    command.extend(["--precision", str(args.precision)])
-    for flag, value in (("grid", args.grid), ("domain-size", args.domain_size),
-                        ("end-time", args.end_time), ("cfl", args.cfl),
-                        ("advection", args.advection), ("re", args.re)):
-        if value is not None:
-            command.extend(["--" + flag, str(value)])
-    if args.allow_native_variation:
-        command.append("--allow-native-variation")
-    print("Source-analysis interpreter:", compiler_python, flush=True)
-    subprocess.run(command, check=True)
-    result = json.loads((args.output_dir / "experiment/report.json").read_text())
-    print(json.dumps(result.get("summary", result), indent=2))
-    print("Results:", args.output_dir / "experiment/report.json", flush=True)
-    plot_experiment(args.output_dir / "experiment/report.json", args.output_dir / "experiment/figures")
 
 
 def plotting_python():
@@ -337,12 +206,6 @@ def plot_experiment(report, output):
 def reproduce(args):
     if args.experiment:
         plot_experiment(args.experiment, args.output_dir / "figures")
-    elif args.snapshot:
-        from elmm_pipeline.campaigns.report import plot_snapshot
-        plot_snapshot(args.snapshot, args.output_dir / "figures", gpu_label="SGS direct")
-    elif args.campaign:
-        from elmm_pipeline.campaigns.report import plot
-        plot(args.campaign, args.output_dir / "figures", historical=True)
     else:
         if (args.output_dir / "ordinary-figures").exists():
             raise ValueError("existing figures are immutable; choose a new --output-dir")
@@ -386,8 +249,8 @@ def benchmarks(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name, aliases in (("doctor", []), ("prepare", []), ("run-elmm", ["elmm"]),
-                          ("reproduce-plots", ["reproduce"]), ("run-benchmarks", ["benchmark"])):
+    for name, aliases in (("doctor", []), ("reproduce-plots", ["reproduce"]),
+                          ("run-benchmarks", ["benchmark"])):
         child = sub.add_parser(name, aliases=aliases)
         child.add_argument("--output-dir", "--output", "-o", type=Path,
                            default=Path(os.environ.get("OUTPUT_DIR", "/output" if Path("/output").exists() else WORKSPACE / "out")))
@@ -397,60 +260,18 @@ def main():
             child.add_argument("--gpu", help="Visible CUDA ordinal or GPU UUID; defaults to first visible GPU")
             child.add_argument("--nvcc", default=os.environ.get("NVCC"))
             child.add_argument("--cuda-host", default=os.environ.get("CUDAHOSTCXX", os.environ.get("CUDA_HOST_CXX")))
-        if name == "run-elmm":
-            child.add_argument("--case", choices=CASE_NAMES, default="channel-simple")
-            child.add_argument("--config", type=Path)
-            child.add_argument("--steps", type=int, help="Explicit smoke-run cap; default preserves original duration")
-            child.add_argument("--precision", choices=("dp", "sp"), default="dp",
-                               help="Floating-point precision: dp (double, default) or sp (single)")
-            child.add_argument("--grid", help="Override grid cell counts as NXxNYxNZ or NX,NY,NZ")
-            child.add_argument("--domain-size", help="Override domain lengths as LXxLYxLZ or LX,LY,LZ")
-            child.add_argument("--end-time", type=float, help="Override time_stepping.conf end_time")
-            child.add_argument("--cfl", type=float, help="Override time_stepping.conf CFL")
-            child.add_argument("--advection", type=int, choices=(2, 4, 5, 6), help="Override main.conf advection method")
-            child.add_argument("--re", type=float, help="Override main.conf Reynolds number Re")
-            child.add_argument("--scope-transfers", choices=("direct", "pinned", "auto", "coalesced"), default="direct")
-            child.add_argument("--threads", type=int, default=4)
-            child.add_argument("--jobs", type=int, default=8)
-            child.add_argument("--repeats", type=int, default=7)
-            child.add_argument("--warmups", type=int, default=1)
-            child.add_argument("--timeout", type=int, default=900)
-            child.add_argument("--allow-native-variation", action="store_true",
-                               help="Complete unvalidated timings if native output varies; no target or promotion claim")
-            child.add_argument("--app-root", type=Path, help="Explicit prepared source root with elmm/PoisFFT siblings")
-            child.add_argument("--compiler-python", type=Path)
-            child.add_argument("--scons-python", type=Path)
-            child.add_argument("--native-library-dir", type=Path)
-            child.add_argument("--dry-run", action="store_true")
-            child.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
-        if name in {"run-benchmarks", "prepare"}:
-            child.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
         if name == "run-benchmarks":
+            child.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
             child.add_argument("--threads", type=int, default=4)
         if name == "reproduce-plots":
             select = child.add_mutually_exclusive_group(required=True)
-            select.add_argument("--snapshot", type=Path)
             select.add_argument("--experiment", type=Path)
-            select.add_argument("--campaign", type=Path)
             select.add_argument("--policy-report", type=Path)
     args = parser.parse_args()
     args.output_dir = args.output_dir.resolve()
     args.work_dir = (args.work_dir or args.output_dir / "work").resolve()
-    if args.command in {"run-elmm", "elmm"}:
-        if (min(args.threads, args.jobs, args.repeats, args.timeout) <= 0 or args.warmups < 0
-                or args.steps is not None and args.steps <= 0):
-            parser.error("budgets/repetitions/steps must be positive; warmups may be zero")
-        for flag, value in (("--end-time", args.end_time), ("--cfl", args.cfl), ("--re", args.re)):
-            if value is not None and value <= 0:
-                parser.error(f"{flag} must be positive")
-        run_elmm(args)
-    elif args.command == "doctor":
+    if args.command == "doctor":
         print(json.dumps(doctor(args), indent=2))
-    elif args.command == "prepare":
-        if guarded(args):
-            print(prepare(args))
-        else:
-            print(f"Prepared pipeline: {args.work_dir / 'pipeline'}")
     elif args.command in {"reproduce-plots", "reproduce"}:
         reproduce(args)
     else:

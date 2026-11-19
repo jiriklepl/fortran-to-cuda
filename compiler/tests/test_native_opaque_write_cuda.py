@@ -93,8 +93,8 @@ end module
 
 
 def sealed_emission(directory):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     directory.mkdir(parents=True, exist_ok=True)
     original = directory / 'original.f90'
@@ -132,7 +132,7 @@ def sealed_emission(directory):
         path.write_text(data)
     manifest = json.loads((package / 'scope-manifest.json').read_text())
     validate_checked_execution_plans(manifest)
-    _scope_package_build({'artifact_root': str(package), 'scope_manifest': manifest, 'tool': 'local', 'memory_model': 'scoped'})
+    scope_package_build({'artifact_root': str(package), 'scope_manifest': manifest, 'tool': 'local', 'memory_model': 'scoped'})
     return original, outputs, manifest
 
 
@@ -400,7 +400,7 @@ def hidden_cpu_completions(events, provenance, manifest):
 def retained_ledger(result, mode, directory, provenance, mean):
     manifest = None
     if mode == 'hidden':
-        from elmm_pipeline.scoped_provenance import scoped_provenance
+        from compiler.tests.support.consumer.scoped_provenance import scoped_provenance
 
         manifest = json.loads((directory / 'scope-manifest.json').read_text())
         assert provenance == {row['id']: row for row in manifest['runtime_provenance']['records']}

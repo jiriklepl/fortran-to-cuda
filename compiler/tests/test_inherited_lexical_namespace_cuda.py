@@ -58,8 +58,8 @@ if(any(weights/=[3.0_8+record_mode,7.0_8+2*record_mode]))error stop 'readonly we
 
 
 def sealed_emission(directory, native_call):
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.package import scope_package_build
 
     original, builder = fixture(directory, source(native_call))
     outputs, report = builder.run()
@@ -89,7 +89,7 @@ def sealed_emission(directory, native_call):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     manifest = json.loads((package / "scope-manifest.json").read_text())
-    _scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
     assert builder.finish()
     return original, outputs, manifest
 

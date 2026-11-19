@@ -144,7 +144,7 @@ enddo""",
     assert any(item["kind"] == "original_atomic_conditional_joined_team" for item in tasks)
     if tile:
         assert len(tasks) == 2
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     validate_checked_execution_plans(json.loads(outputs["scope-manifest.json"]), capture_facts=builder.facts)
 

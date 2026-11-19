@@ -235,8 +235,7 @@ def test_rolled_back_native_retirement_cannot_survive_its_generation(tmp_path):
 def test_authentic_hierarchy_keeps_original_saved_native_callee_and_strict_transport(tmp_path, plain):
     import json
 
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
-
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
     from compiler.tests.test_joined_boundary_lifecycle import GROUP, JOINED, emit
 
     worker = '''subroutine saved_worker(values,n)

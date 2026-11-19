@@ -143,7 +143,7 @@ def emit(tmp_path):
     )
     outputs, report = builder.run()
     assert report["scope_count"] == 1, report["graph_owner_attempt"]
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     validate_checked_execution_plans(json.loads(outputs["scope-manifest.json"]), capture_facts=builder.facts)
     return outputs, report, path

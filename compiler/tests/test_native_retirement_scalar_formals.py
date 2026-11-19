@@ -186,18 +186,18 @@ def test_mean_tke_owner_preserves_original_guard_and_rearms_checked_consumer(tmp
     with pytest.raises(CompilationError, match="missing stable storage/definition facts"):
         builder.capture_fact(binding)
     assert "parameters::prtype" not in builder.facts["captures"]
-    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+    from compiler.tests.support.consumer.checked_execution_plan import validate_checked_execution_plans
 
     manifest = json.loads(outputs["scope-manifest.json"])
     validate_checked_execution_plans(manifest)
-    from elmm_pipeline.local_adapter import _scope_package_build
+    from compiler.tests.support.consumer.package import scope_package_build
 
     package = tmp_path / "package"
     for name, text in outputs.items():
         path = package / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
-    _scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
+    scope_package_build({"artifact_root": str(package), "scope_manifest": manifest})
 
 
 def test_same_issued_scalar_team_cannot_authorize_strong_graph_or_payload_completion(tmp_path):
