@@ -176,13 +176,23 @@ def test_an_edit_can_add_directives_to_sources_the_application_does_not_own(tmp_
     source = tmp_path / "pair.f90"
     source.write_text(PAIR.format(between="", inside=""))
 
-    def edit(name, text):
-        assert name == "pair.f90"
-        return text.replace("do i = 2, n\n", "!$fort observe(a, b)\ndo i = 2, n\n")
+    def edit(texts):
+        (path, text), = texts.items()
+        assert path == source
+        return {path: text.replace("do i = 2, n\n", "!$fort observe(a, b)\ndo i = 2, n\n"),
+                "extra.f90": "module extra\ncontains\nsubroutine stop_here()\n!$fort leave\nend subroutine\nend module\n"}
 
     project = ResidentProject((source,), (Selection("all", ("pair::both",), native_rejections=False),), edit=edit)
     prepared = prepare(project, tmp_path / "prepared", fortran=fortran_compiler())
     text = Path(prepared["sources"][0]["resident"]).read_text()
-    assert prepared["directives"] == 1
+    assert prepared["directives"] == 2
     assert "fort_observed(2) = resident%bind(b, lbound(b), .true., origin='pair::b')" in text
     assert source.read_text() == PAIR.format(between="", inside="")
+    # A source the edit adds is written next to the others, with its directives expanded.
+    extra = prepared["sources"][1]
+    assert extra["original"] is None
+    assert Path(extra["resident"]).name == "extra.f90"
+    assert "call resident%end_epoch()" in Path(extra["resident"]).read_text()
+    with pytest.raises(ValueError, match="plain file name"):
+        prepare(ResidentProject((source,), project.selections, edit=lambda texts: {"sub/extra.f90": ""}),
+                tmp_path / "nested", fortran=fortran_compiler())

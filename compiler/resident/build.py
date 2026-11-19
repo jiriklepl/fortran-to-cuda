@@ -160,7 +160,7 @@ def resident_sources(prepared, runtime, *, programs=()):
     """The sources of the resident object library: prepared sources, runtime and compiled entries."""
     programs = {str(Path(path).resolve()) for path in programs}
     sources = [Path(item["resident"]) for item in prepared["sources"]
-               if str(Path(item["original"]).resolve()) not in programs]
+               if item["original"] is None or str(Path(item["original"]).resolve()) not in programs]
     sources += [Path(runtime) / name for name in RESIDENT_SOURCES]
     if prepared["domain"]["default"]:
         sources.append(Path(runtime) / DEFAULT_DOMAIN_SOURCE)
@@ -181,7 +181,8 @@ def build(prepared, directory, *, name, programs, fortran, cxx, nvcc, architectu
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=True)
     runtime = snapshot_directory(Path(__file__).resolve().parents[1] / "runtime", directory / "runtime")
-    known = {str(Path(item["original"]).resolve()): Path(item["resident"]) for item in prepared["sources"]}
+    known = {str(Path(item["original"]).resolve()): Path(item["resident"]) for item in prepared["sources"]
+             if item["original"] is not None}
     mains = {target: str(Path(source).resolve()) for target, source in programs.items()}
     missing = [source for source in mains.values() if source not in known]
     if missing:

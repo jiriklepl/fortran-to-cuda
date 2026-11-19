@@ -57,24 +57,30 @@ class ResidentProject:
     """An application and what of it stays on the device.
 
     ``sources`` are all Fortran sources that the selected procedures and the
-    modules they use live in. ``rewrites`` maps a source file name to the loop
-    rewrites applied to it before export (``tile_scratch``, ``line_snapshot``).
-    ``edit(name, text)`` may change a source after the entry calls are in
-    place and before directives are expanded, so it can add directives to
-    sources the application does not own. ``native(region, original)`` may
-    return the replacement for a rejected nest instead of the default, which
-    publishes the device values first. ``addressable`` names the files whose
-    arrays get the TARGET attribute a binding needs; None means every source.
+    modules they use live in. ``rewrites`` maps a source file name to the
+    rewrites applied to it before export: the names of the compiler's loop
+    rewrites (``tile_scratch``, ``line_snapshot``) or functions from text to
+    text. ``edit(texts)`` gets the text of every source, by original path,
+    after the entry calls are in place and before directives are expanded; it
+    returns the texts it changed, and may add new sources under a plain file
+    name. It is how directives and residency code reach sources the
+    application does not own. ``native(region, original)`` may return the
+    replacement for a rejected nest instead of the default, which publishes
+    the device values first. ``held`` maps ``(procedure, array name)`` to a
+    handle expression for arrays the domain binds itself. ``addressable`` lists
+    the sources whose arrays get the TARGET attribute a binding needs, as
+    paths or, where a file name is unique, as names; None means every source.
     """
 
     sources: tuple[Path, ...]
     selections: tuple[Selection, ...]
     defines: tuple[str, ...] = ()
     domain: ResidentDomain = DEFAULT_DOMAIN
-    rewrites: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
-    edit: Callable[[str, str], str] | None = None
+    rewrites: Mapping[str, tuple[str | Callable[[str], str], ...]] = field(default_factory=dict)
+    edit: Callable[[dict], dict] | None = None
     native: Callable[[dict, str], str | None] | None = None
-    addressable: tuple[str, ...] | None = None
+    held: Mapping[tuple[str, str], str] = field(default_factory=dict)
+    addressable: tuple[str | Path, ...] | None = None
 
 
 def _identity(path):
@@ -83,6 +89,8 @@ def _identity(path):
 
 
 def _rewrite(name, text, domain):
+    if callable(name):
+        return name(text)
     if name == "tile_scratch":
         text, changes = inline_tile_scratch_nests(text)
     elif name == "line_snapshot":
@@ -100,7 +108,8 @@ def prepare(project, directory, *, fortran, host_threads=4):
     Returns, and writes as ``prepared.json``: ``sources``, one record per
     project source with the ``original`` file and the ``resident`` file the
     resident build compiles in its place (the original itself when nothing
-    changed); ``entries``, the directories of the compiled entries; and one
+    changed), followed by the sources an edit added, whose ``original`` is
+    None; ``entries``, the directories of the compiled entries; and one
     summary per selection. The directory must not exist.
     """
     directory = Path(directory).resolve()
@@ -155,32 +164,52 @@ def prepare(project, directory, *, fortran, host_threads=4):
         packages.append(package)
         summaries.append(summary)
 
-    spliced = splice_resident_entries(packages, directory / "spliced", domain=project.domain, native=project.native)
+    spliced = splice_resident_entries(packages, directory / "spliced", domain=project.domain, native=project.native,
+                                      held=project.held)
     replaced = {item["original"]["path"]: Path(item["replacement"]["path"]) for item in spliced["sources"]}
+    texts, touched = {}, set()
+    for original in originals:
+        before = str(current[original].resolve())
+        texts[original] = replaced.get(before, current[original]).read_text()
+        if before in replaced or project.rewrites.get(original.name):
+            touched.add(original)
+    added = {}
+    if project.edit is not None:
+        for key, text in project.edit(dict(texts)).items():
+            if key in texts:
+                if text != texts[key]:
+                    texts[key] = text
+                    touched.add(key)
+            elif Path(key).name != str(key):
+                raise ValueError("An edit may add sources only under a plain file name: " + str(key))
+            else:
+                added[str(key)] = text
+    bindable_sources = None if project.addressable is None else {
+        item if isinstance(item, str) else Path(item).resolve() for item in project.addressable}
     output = directory / "sources"
     output.mkdir()
-    records, directives, names = [], 0, set()
+    records, directives, names = [], 0, set(added)
     for original in originals:
-        before = current[original]
-        text = replaced.get(str(before.resolve()), before).read_text()
-        changed = str(before.resolve()) in replaced or bool(project.rewrites.get(original.name))
-        if project.edit is not None:
-            edited = project.edit(original.name, text)
-            changed, text = changed or edited != text, edited
-        text, expanded = expand_directives(text, project.domain, origin=original.stem.lower())
+        text, expanded = expand_directives(texts[original], project.domain, origin=original.stem.lower())
         directives += len(expanded)
-        changed = changed or bool(expanded)
-        if project.addressable is None or original.name in project.addressable:
+        changed = original in touched or bool(expanded)
+        if bindable_sources is None or original in bindable_sources or original.name in bindable_sources:
             bindable = addressable_arrays(text)
             changed, text = changed or bindable != text, bindable
         resident = original
         if changed:
-            name = original.name if original.name not in names else sha256(str(original).encode()).hexdigest()[:12] \
-                + "_" + original.name
+            name = original.name
+            if name in names:
+                name = sha256(str(original).encode()).hexdigest()[:12] + "_" + name
             names.add(name)
             resident = output / name
             resident.write_text(text)
         records.append({"original": str(original), "resident": str(resident), "changed": changed})
+    for name, text in added.items():
+        text, expanded = expand_directives(text, project.domain, origin=Path(name).stem.lower())
+        directives += len(expanded)
+        (output / name).write_text(text)
+        records.append({"original": None, "resident": str(output / name), "changed": True})
 
     result = {"version": 1, "kind": "resident_application", "defines": list(project.defines),
               "domain": {"module": project.domain.module, "object": project.domain.object,

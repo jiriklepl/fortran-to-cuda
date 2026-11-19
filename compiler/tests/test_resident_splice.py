@@ -130,3 +130,23 @@ end module
                       "    integer, intent(in) :: n\n", "    real(8) :: local(3)\n"):
         assert untouched in changed, untouched
     assert addressable_arrays(changed) == changed
+
+
+def test_an_array_the_domain_already_holds_is_passed_by_its_handle(tmp_path):
+    from compiler.scopes.resident_splice import entry_call_block
+
+    region = {"procedure": "example::update", "runtime_guards": [],
+              "resources": [{"resource": "r_u", "name": "u", "type": "real", "kind": 8},
+                            {"resource": "r_w", "name": "Work", "type": "real", "kind": 8}],
+              "parameters": [{"name": "u", "resource": "r_u", "rank": 1, "lower_bound_dimension": None},
+                             {"name": "work", "resource": "r_w", "rank": 1, "lower_bound_dimension": None}]}
+    entry = {"fortran_module": "fort_shared_x", "argument_order": ["context", "mode", "u", "work"]}
+    domain = ResidentDomain("state", "flow", "require")
+    block = entry_call_block(region, entry, domain, {("example::update", "work"): "flow%scratch"})
+    assert "bind_real64(u,lbound(u)" in block
+    assert "bind_real64(Work" not in block
+    assert "      integer(c_int64_t) :: fort_handle_u\n" in block
+    assert "          fort_handle_u, &\n          flow%scratch))" in block
+    # With every array held, nothing is bound and no handle variable is declared.
+    held = {("example::update", "work"): "flow%scratch", ("example::update", "u"): "flow%field"}
+    assert "integer(c_int64_t)" not in entry_call_block(region, entry, domain, held)

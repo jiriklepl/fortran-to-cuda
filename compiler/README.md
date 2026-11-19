@@ -480,10 +480,14 @@ directives. They are comments, so the same source still builds natively:
 
 A directive between two nests ends their shared entry, and a nest with a
 directive inside it is left to the host. An application that cannot carry
-directives in its own source passes `edit(name, text)` to the project and adds
-them there. An application with residency state of its own (a device solver,
-persistent work arrays) names its domain object with `ResidentDomain`; the
-default is the runtime's `fort_resident_application` module.
+directives in its own source passes `edit(texts)` to the project: it gets
+every source after the entry calls are in place, returns the ones it changed
+and may add new ones. An application with residency state of its own (a
+device solver, persistent work arrays) names its domain object with
+`ResidentDomain`, and lists in `held` the arrays its domain binds itself, which
+entries then take by handle; the default domain is the runtime's
+`fort_resident_application` module. `rewrites` applies the compiler's loop
+rewrites, or the application's own functions, to a source before export.
 
 `compiler/tests/apps/box` is a complete small application built this way. Its
 resident run writes the same bytes as its native run

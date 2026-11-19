@@ -38,8 +38,12 @@ def _identity(path):
     return {"path": str(path), "sha256": sha256(path.read_bytes()).hexdigest()}
 
 
-def entry_call_block(region, entry, domain):
-    """The block that replaces one compiled span; ``@ORIGINAL@`` marks the native statements."""
+def entry_call_block(region, entry, domain, held=None):
+    """The block that replaces one compiled span; ``@ORIGINAL@`` marks the native statements.
+
+    ``held`` maps ``(procedure, array name)`` to an expression for a handle the
+    domain already holds; such an array is passed by that handle, not bound.
+    """
     bindings = {binding["resource"]: binding for binding in region["resources"]}
     actual, registration, handles = {}, [], []
     for parameter in region["parameters"]:
@@ -47,6 +51,8 @@ def entry_call_block(region, entry, domain):
         name = binding["name"]
         if parameter["lower_bound_dimension"] is not None:
             actual[parameter["name"]] = f"lbound({name},{parameter['lower_bound_dimension']})"
+        elif parameter["rank"] and (region["procedure"], name.lower()) in (held or {}):
+            actual[parameter["name"]] = held[region["procedure"], name.lower()]
         elif parameter["rank"]:
             handle = f"{domain.prefix}_handle_{parameter['name']}"
             actual[parameter["name"]] = handle
@@ -65,7 +71,7 @@ def entry_call_block(region, entry, domain):
             "      use fort_scoped_memory, only: FORT_SCOPE_GPU",
             f"      use {domain.module}, only: {domain.object}, {domain.check}",
             "      use " + entry["fortran_module"] + f", only: {run} => run",
-            "      integer(c_int64_t) :: " + ",".join(handles),
+            *(["      integer(c_int64_t) :: " + ",".join(handles)] if handles else []),
             f"      if ({domain.object}%active) then"]
     for guard in region["runtime_guards"]:
         code.append("        if (.not. (" + guard + ")) error stop 'resident numerical geometry changed'")
@@ -80,15 +86,16 @@ def published_native_block(domain):
             f"      if ({domain.object}%active) call {domain.object}%publish()\n@ORIGINAL@\n    end block\n")
 
 
-def splice_resident_entries(packages, directory, *, domain, native=None):
+def splice_resident_entries(packages, directory, *, domain, native=None, held=None):
     """Write each source with its compiled spans replaced by entry calls.
 
     ``packages`` are records from ``compile_resident_entries``. A rejected span
     is edited only when another span of the same procedure compiled; a
     procedure with no entry at all is left to its caller. ``native(region,
     original)`` may return the complete replacement for a rejected span, or
-    None for the default. Sources are checked against the hashes the export
-    recorded. Writes and returns ``source-edits.json``.
+    None for the default. ``held`` names arrays the domain already holds a
+    handle for (see ``entry_call_block``). Sources are checked against the
+    hashes the export recorded. Writes and returns ``source-edits.json``.
     """
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
@@ -98,7 +105,7 @@ def splice_resident_entries(packages, directory, *, domain, native=None):
         for item in package["entries"]:
             region = item["region"]
             edits.setdefault(region["source"], []).append(
-                (region["first_line"], region["last_line"], entry_call_block(region, item["entry"], domain), None))
+                (region["first_line"], region["last_line"], entry_call_block(region, item["entry"], domain, held), None))
         for region in package["rejected"]:
             sources = {entry["region"]["source"] for entry in package["entries"]
                        if entry["region"]["procedure"] == region["procedure"]}
