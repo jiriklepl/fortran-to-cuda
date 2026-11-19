@@ -4,6 +4,7 @@ module fort_resident_domain
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: error_unit
   use fort_scoped_memory
+  !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
   implicit none
   private
   public :: resident_domain, resident_require
@@ -54,6 +55,8 @@ module fort_resident_domain
     ! values can keep its answer while generation and stamp are unchanged.
     integer(c_int64_t) :: stamp=0
     logical :: active=.false.
+    ! The team size to give back when the epoch ends, if the epoch narrowed it.
+    integer, private :: outer_threads=0
     type(registered_storage), allocatable, private :: storage(:)
     type(field_mirror), allocatable, private :: mirrors(:)
     ! Blocks a field copy could not use because the memory is still registered
@@ -139,6 +142,27 @@ contains
     if (self%generation == huge(self%generation)) error stop 'storage generation overflow'
     self%generation = self%generation + 1
     self%active = .true.
+    call narrow_team(self)
+  end subroutine
+
+  ! While values stay on the device the host runs serial code between kernels,
+  ! and each parallel region it still enters wakes the whole team. The epoch
+  ! therefore narrows the team to FORT_RESIDENT_HOST_THREADS, when that is set,
+  ! and gives the application its own count back when it ends. The count the
+  ! application starts with is not the place to save: it can decide results,
+  ! as a parallel random initialization does.
+  subroutine narrow_team(self)
+    class(resident_domain), intent(inout) :: self
+    character(len=16) :: text
+    integer :: wanted, status
+    call get_environment_variable('FORT_RESIDENT_HOST_THREADS', text, status=status)
+    if (status /= 0) return
+    read(text, *, iostat=status) wanted
+    if (status /= 0 .or. wanted < 1) error stop 'FORT_RESIDENT_HOST_THREADS must be a positive integer'
+    !$ if (wanted < omp_get_max_threads()) then
+    !$   self%outer_threads = omp_get_max_threads()
+    !$   call omp_set_num_threads(wanted)
+    !$ endif
   end subroutine
 
   function storage_type_name(element_type) result(name)
@@ -685,6 +709,8 @@ contains
     endif
     call self%publish()
     self%active=.false.
+    !$ if (self%outer_threads > 0) call omp_set_num_threads(self%outer_threads)
+    self%outer_threads = 0
   end subroutine
 
   subroutine close(self)
