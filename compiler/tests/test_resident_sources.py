@@ -22,7 +22,6 @@ from compiler.scopes.resident_entries import (
     guard_entries,
     pass_scalars_by_value,
 )
-from compiler.scopes.resident_splice import ResidentDomain
 
 STEP = """module stepping
   implicit none
@@ -211,9 +210,8 @@ end module filters_mod
 """
 
 
-def test_a_line_snapshot_becomes_a_whole_snapshot_released_through_the_callers_domain():
-    domain = ResidentDomain("my_state", "flow", "require")
-    rewritten, edits = promote_line_snapshots(LINES, domain=domain)
+def test_a_line_snapshot_becomes_a_whole_snapshot_that_a_directive_releases():
+    rewritten, edits = promote_line_snapshots(LINES)
     assert [(edit["routine"], edit["snapshot"], edit["source_array"]) for edit in edits] == [("smooth", "tmp", "U")]
     compact = rewritten.replace(" ", "").lower()
     assert "allocatable::tmp(:,:,:)" in compact
@@ -221,10 +219,8 @@ def test_a_line_snapshot_becomes_a_whole_snapshot_released_through_the_callers_d
     # Each read of the copied line now reads the same element of the snapshot.
     assert "tmp((i+ii),j,k)" in compact or "tmp(ii,j,k)" in compact
     assert "tmp=u(:,j,k)" not in compact
-    # The snapshot is retired through the domain the caller named, before the procedure returns.
-    release = rewritten.index("call flow%release_real(tmp)")
-    assert "use my_state, only: flow" in rewritten[:release]
-    assert release < rewritten.lower().rindex("end subroutine smooth")
+    # The snapshot's device copy is retired before the procedure returns and deallocates it.
+    assert rewritten.index("    !$fort release(tmp)\n") < rewritten.lower().rindex("end subroutine smooth")
 
 
 CONFIGURED = """module numerics

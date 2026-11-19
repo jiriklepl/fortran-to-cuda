@@ -70,6 +70,9 @@ class ResidentProject:
     handle expression for arrays the domain binds itself. ``addressable`` lists
     the sources whose arrays get the TARGET attribute a binding needs, as
     paths or, where a file name is unique, as names; None means every source.
+    ``known_host_accesses`` holds the ids of audit findings (see ``audit``)
+    the application has accepted; with ``strict_audit`` any other finding is
+    an error instead of a line in the report.
     """
 
     sources: tuple[Path, ...]
@@ -81,6 +84,8 @@ class ResidentProject:
     native: Callable[[dict, str], str | None] | None = None
     held: Mapping[tuple[str, str], str] = field(default_factory=dict)
     addressable: tuple[str | Path, ...] | None = None
+    known_host_accesses: frozenset[str] = frozenset()
+    strict_audit: bool = False
 
 
 def _identity(path):
@@ -88,18 +93,51 @@ def _identity(path):
     return {"path": str(path), "sha256": sha256(path.read_bytes()).hexdigest()}
 
 
-def _rewrite(name, text, domain):
+def _rewrite(name, text):
     if callable(name):
         return name(text)
     if name == "tile_scratch":
         text, changes = inline_tile_scratch_nests(text)
     elif name == "line_snapshot":
-        text, changes = promote_line_snapshots(text, domain=domain)
+        text, changes = promote_line_snapshots(text)
     else:
         raise ValueError("Unknown source rewrite: " + name)
     if not changes:
         raise ValueError(f"The {name} rewrite found nothing to change")
     return text
+
+
+def audit(extracted, packages, selected, known=frozenset()):
+    """Host statements of the selected procedures that touch an array an entry binds.
+
+    Compiled entries keep such an array's newest values on the device, so a
+    host statement in the same procedure that names it may see stale values
+    unless the host copy was brought up to date first. A statement is not
+    reported when a residency directive directly precedes it or sits inside
+    it, or when it only calls procedures that are selected themselves. Each
+    finding carries ``known``: whether its id is in the accepted set.
+
+    The audit looks inside the selected procedures only. It does not follow an
+    array into a host procedure that receives it as an argument, and it cannot
+    see directives that an edit adds later; both show up as findings to accept.
+    """
+    bound = {resource["resource"] for package in packages for item in package["entries"]
+             for resource in item["region"]["resources"] if resource["rank"]}
+    findings = []
+    for statement in extracted["host_statements"]:
+        arrays = [item["name"] for item in statement["arrays"] if item["resource"] in bound]
+        if not arrays or statement["acknowledged"]:
+            continue
+        if statement["only_calls"] and statement["calls"] and all(
+                any(fnmatchcase(call, pattern) for pattern in selected) for call in statement["calls"]):
+            continue
+        findings.append({"id": statement["id"], "procedure": statement["procedure"],
+                         # Lines of the preprocessed source the entries were exported from.
+                         "source": statement["source"],
+                         "first_line": statement["first_line"], "last_line": statement["last_line"],
+                         "arrays": arrays, "calls": statement["calls"], "text": statement["text"],
+                         "known": statement["id"] in known})
+    return findings
 
 
 def prepare(project, directory, *, fortran, host_threads=4):
@@ -110,7 +148,8 @@ def prepare(project, directory, *, fortran, host_threads=4):
     resident build compiles in its place (the original itself when nothing
     changed), followed by the sources an edit added, whose ``original`` is
     None; ``entries``, the directories of the compiled entries; and one
-    summary per selection. The directory must not exist.
+    summary per selection; and ``audit``, the host statements that touch
+    bound arrays (see ``audit``). The directory must not exist.
     """
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
@@ -131,7 +170,7 @@ def prepare(project, directory, *, fortran, host_threads=4):
         if passes:
             text = path.read_text()
             for name in passes:
-                text = _rewrite(name, text, project.domain)
+                text = _rewrite(name, text)
             path = directory / "rewritten" / path.name
             path.parent.mkdir(exist_ok=True)
             path.write_text(text)
@@ -164,6 +203,13 @@ def prepare(project, directory, *, fortran, host_threads=4):
         packages.append(package)
         summaries.append(summary)
 
+    findings = audit(extracted, packages, patterns, project.known_host_accesses)
+    unknown = [item for item in findings if not item["known"]]
+    if unknown and project.strict_audit:
+        raise ValueError("Host statements touch arrays that entries keep on the device, with no residency "
+                         "directive before them:\n" + "\n".join(
+                             f"  {item['id']} {item['procedure']} line {item['first_line']}: {item['text']}"
+                             for item in unknown))
     spliced = splice_resident_entries(packages, directory / "spliced", domain=project.domain, native=project.native,
                                       held=project.held)
     replaced = {item["original"]["path"]: Path(item["replacement"]["path"]) for item in spliced["sources"]}
@@ -215,6 +261,6 @@ def prepare(project, directory, *, fortran, host_threads=4):
               "domain": {"module": project.domain.module, "object": project.domain.object,
                          "default": project.domain == DEFAULT_DOMAIN},
               "sources": records, "entries": [item["directory"] for package in packages for item in package["entries"]],
-              "selections": summaries, "directives": directives}
+              "selections": summaries, "directives": directives, "audit": findings}
     (directory / "prepared.json").write_text(json.dumps(result, indent=2) + "\n")
     return result

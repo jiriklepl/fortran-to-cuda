@@ -7,35 +7,54 @@ allocation epochs. Every exported entry still goes through ordinary numerical
 lowering and dependence analysis before it can execute on a device.
 """
 from fnmatch import fnmatchcase
+from hashlib import sha256
 from pathlib import Path
 
+from fparser.two.Fortran2003 import Allocation, Call_Stmt, Intrinsic_Function_Reference, Name
 from fparser.two.utils import walk
 
+from compiler.frontend.call_bindings import resolve_original_call
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
 from compiler.scopes.region_context import original_region_context
 from compiler.scopes.regions import extract_region
 from compiler.scopes.segments import directive, grouped_nodes, statement_span
 
+_INQUIRIES = {"lbound", "ubound", "size", "shape", "allocated", "associated", "present", "kind", "rank",
+              "storage_size", "is_contiguous"}
+_CONSTRUCT_HEADERS = {"If_Then_Stmt", "Else_If_Stmt", "Associate_Stmt"}
+
 
 def _residency_directive(node):
     return str(node).lstrip().lower().startswith("!$fort")
 
 
-def _entry_groups(sequence):
+def _entry_groups(sequence, acknowledged=None):
     """Share an entry across adjacent serial nests in one control region.
 
     Calls, assignments, branch boundaries, OpenMP constructs and residency
     directives end the group; a nest with a directive inside it stays native.
     This only changes the numerical extraction boundary: ordinary dependence
     analysis still schedules every source pass and proves any later fusion.
+    ``acknowledged`` collects the identities of the groups that directly follow
+    a residency directive.
     """
-    pending = []
+    pending, follows_directive = [], False
+
+    def mark(group):
+        nonlocal follows_directive
+        if follows_directive and acknowledged is not None:
+            acknowledged.add(id(group[0] if isinstance(group, tuple) else group))
+        follows_directive = False
+        return group
+
     for group in grouped_nodes(sequence):
         if not isinstance(group, tuple) and _kind(group) == "Comment" and directive(group) is None:
-            if _residency_directive(group) and pending:
-                yield tuple(pending)
-                pending = []
+            if _residency_directive(group):
+                if pending:
+                    yield mark(tuple(pending))
+                    pending = []
+                follows_directive = True
             continue
         if (not isinstance(group, tuple) and _kind(group) == "Block_Nonlabel_Do_Construct"
                 and not any(directive(node) is not None or _residency_directive(node)
@@ -43,11 +62,11 @@ def _entry_groups(sequence):
             pending.append(group)
             continue
         if pending:
-            yield tuple(pending)
+            yield mark(tuple(pending))
             pending = []
-        yield group
+        yield mark(group)
     if pending:
-        yield tuple(pending)
+        yield mark(tuple(pending))
 
 
 def _resolve_procedures(analysis, procedures, *, allow_patterns=False):
@@ -77,12 +96,20 @@ def _resolve_procedures(analysis, procedures, *, allow_patterns=False):
 
 
 def export_resident_entries(paths, procedures, directory, *, analysis_sources=None, allow_patterns=False):
-    """Export resident numerical entries for explicit procedures or glob patterns."""
+    """Export resident numerical entries for explicit procedures or glob patterns.
+
+    Besides ``entries`` and ``rejected``, the result lists ``host_statements``:
+    the statements of the selected procedures that stay host code and name
+    arrays, each with its span, the arrays and whether a residency directive
+    directly precedes it or sits inside it (``acknowledged``). They run beside
+    the entries, so each one that touches an array an entry binds needs the
+    host to hold current values.
+    """
     analysis = SourceEffects(paths, analysis_sources=analysis_sources)
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
     resolved_procedures = _resolve_procedures(analysis, procedures, allow_patterns=allow_patterns)
-    entries, rejected, grouping_rejections = [], [], []
+    entries, rejected, grouping_rejections, host_statements = [], [], [], []
     for procedure in resolved_procedures:
         routine = analysis.routines[procedure]
 
@@ -117,21 +144,60 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                             "input_path": str(path.resolve()), **extracted.public(),
                             "source_loop_spans": [list(statement_span(node)) for node in loops]})
 
+        def host(nodes, acknowledged):
+            """Record host code that names arrays: it runs beside entries that may hold newer values."""
+            arrays, calls = {}, set()
+            for node in nodes:
+                # Asking for an array's bounds or allocation, or allocating it, reads none of its values.
+                inquired = {id(reference.items[1].items[0]) for reference in walk(node, Intrinsic_Function_Reference)
+                            if str(reference.items[0]).lower() in _INQUIRIES and reference.items[1] is not None
+                            and reference.items[1].items}
+                inquired |= {id(allocation.items[0]) for allocation in walk(node, Allocation)}
+                for name in walk(node, Name):
+                    binding = analysis._binding(routine.scope, name)
+                    if binding is not None and binding.rank and id(name) not in inquired:
+                        arrays[binding.root] = binding.name
+                for call in walk(node, Call_Stmt):
+                    try:
+                        calls.add(resolve_original_call(analysis, routine.scope, call).procedure)
+                    except CompilationError:
+                        calls.update(analysis._candidates(routine.scope, call.items[0]) or ("$unresolved",))
+            if arrays:
+                first = min(statement_span(node)[0] for node in nodes)
+                last = max(statement_span(node)[1] for node in nodes)
+                text = " ".join(" ".join(str(node).split()) for node in nodes)
+                host_statements.append({"procedure": procedure, "source": str(routine.scope.path),
+                                        "first_line": first, "last_line": last,
+                                        "text": text if len(text) <= 240 else text[:237] + "...",
+                                        # Stable while the statement and its procedure keep their text.
+                                        "id": sha256((procedure + "\n" + text).encode()).hexdigest()[:16],
+                                        "arrays": [{"name": name, "resource": root}
+                                                   for root, name in sorted(arrays.items())],
+                                        "calls": sorted(calls), "acknowledged": acknowledged,
+                                        "only_calls": all(_kind(node) == "Call_Stmt" for node in nodes)})
+
         def scan(sequence):
-            for group in _entry_groups(sequence):
+            follows = set()
+            for group in _entry_groups(sequence, follows):
                 nodes = tuple(group) if isinstance(group, tuple) else (group,)
+                carries = any(_residency_directive(item) for node in nodes for item in walk(node)
+                              if _kind(item) == "Comment")
                 if len(nodes) == 1 and _kind(nodes[0]) in {"If_Construct", "Associate_Construct", "Block_Construct"}:
+                    # The construct's own statements (its conditions, selectors) are host code as well.
+                    host(tuple(item for item in nodes[0].content if _kind(item) in _CONSTRUCT_HEADERS),
+                         id(nodes[0]) in follows or carries)
                     scan(tuple(_children(nodes[0])))
-                elif (any(_kind(node) == "Block_Nonlabel_Do_Construct" for node in nodes)
-                      # A nest that carries a residency directive is host code that manages its own access.
-                      and not any(_residency_directive(item) for node in nodes for item in walk(node)
-                                  if _kind(item) == "Comment")):
+                elif any(_kind(node) == "Block_Nonlabel_Do_Construct" for node in nodes) and not carries:
                     emit(nodes, sequence)
+                else:
+                    # A nest that carries a residency directive is host code that manages its own access.
+                    host(nodes, id(nodes[0]) in follows or carries)
 
         scan(tuple(_children(routine.execution)))
     analysis.verify_source()
     return {"version": 2, "kind": "caller_owned_resident_entries", "source_inputs": analysis.sources,
             "entries": entries, "rejected": rejected, "grouping_rejections": grouping_rejections,
+            "host_statements": host_statements,
             "lifetime_authority": "caller storage epoch; numerical export grants no native-effect authority"}
 
 

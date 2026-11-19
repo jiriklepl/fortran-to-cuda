@@ -29,6 +29,8 @@ def test_the_box_is_prepared_from_its_description(box):
     assert all((Path(entry) / name).is_file() for entry in prepared["entries"] for name in ENTRY_SOURCES)
     assert prepared["domain"] == {"module": "fort_resident_application", "object": "resident", "default": True}
     assert prepared["directives"] == 4
+    # Its selected procedures hold nothing but loop nests, so no host statement touches a bound array.
+    assert prepared["audit"] == []
     sources = {Path(row["original"]).name: row for row in prepared["sources"]}
     assert list(sources) == [name + ".f90" for name in UNITS]
     # A source nothing touched is compiled from the original file; the others from prepared copies.
@@ -196,3 +198,73 @@ def test_an_edit_can_add_directives_to_sources_the_application_does_not_own(tmp_
     with pytest.raises(ValueError, match="plain file name"):
         prepare(ResidentProject((source,), project.selections, edit=lambda texts: {"sub/extra.f90": ""}),
                 tmp_path / "nested", fortran=fortran_compiler())
+
+
+AUDITED = """module audited
+integer :: n
+contains
+subroutine step(a, b)
+real(8), contiguous, intent(inout) :: a(:), b(:)
+integer :: i
+do i = 1, n
+a(i) = a(i) + 1
+enddo
+{before}
+b(1) = a(n)
+call finish(a)
+n = n + 1
+end subroutine
+subroutine finish(a)
+real(8), contiguous, intent(inout) :: a(:)
+integer :: i
+do i = 1, n
+a(i) = 2*a(i)
+enddo
+end subroutine
+subroutine untouched(c)
+real(8), contiguous, intent(inout) :: c(:)
+c(1) = 0
+end subroutine
+end module
+"""
+
+
+def audited(tmp_path, procedures, *, before="", **options):
+    tmp_path.mkdir(exist_ok=True)
+    source = tmp_path / "audited.f90"
+    source.write_text(AUDITED.format(before=before))
+    project = ResidentProject((source,), (Selection("all", procedures),), **options)
+    return prepare(project, tmp_path / "prepared", fortran=fortran_compiler())["audit"]
+
+
+def test_the_audit_reports_host_statements_that_touch_arrays_an_entry_binds(tmp_path):
+    first, second = audited(tmp_path, ("audited::step",))
+    # The element copy reads a on the host right after an entry updated it on the device.
+    assert (first["procedure"], first["arrays"], first["text"], first["known"]) == (
+        "audited::step", ["a"], "b(1) = a(n)", False)
+    # The array then goes to a procedure that is not selected and so runs on the host.
+    assert (second["arrays"], second["calls"], second["text"]) == (["a"], ["audited::finish"], "CALL finish(a)")
+    # The line is that of the preprocessed source the entries were exported from.
+    assert Path(first["source"]).read_text().splitlines()[first["first_line"] - 1] == "b(1) = a(n)"
+    assert first["id"] != second["id"]
+    # Statements that name no bound array, and procedures without entries, are not reported.
+    assert not any("n = n + 1" in item["text"] or item["procedure"] == "audited::untouched"
+                   for item in audited(tmp_path / "all", ("audited::*",)))
+
+
+def test_a_directive_or_a_selected_callee_answers_a_finding(tmp_path):
+    # With finish selected, the call hands the array to code that manages it; the copy remains.
+    finding, = audited(tmp_path / "callee", ("audited::step", "audited::finish"))
+    assert finding["text"] == "b(1) = a(n)"
+    # A directive directly before the statement says the host values are current there.
+    assert audited(tmp_path / "directive", ("audited::step", "audited::finish"), before="!$fort observe(a)") == []
+
+
+def test_known_findings_are_accepted_and_strict_mode_refuses_new_ones(tmp_path):
+    finding, = audited(tmp_path / "report", ("audited::step", "audited::finish"))
+    accepted, = audited(tmp_path / "known", ("audited::step", "audited::finish"),
+                        known_host_accesses=frozenset({finding["id"]}), strict_audit=True)
+    assert accepted["known"]
+    with pytest.raises(ValueError, match=finding["id"] + r" audited::step line \d+: b\(1\) = a\(n\)"):
+        audited(tmp_path / "strict", ("audited::step", "audited::finish"), strict_audit=True)
+    assert not (tmp_path / "strict/prepared/sources").exists()

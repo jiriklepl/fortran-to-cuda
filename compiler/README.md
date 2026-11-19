@@ -489,6 +489,16 @@ entries then take by handle; the default domain is the runtime's
 `fort_resident_application` module. `rewrites` applies the compiler's loop
 rewrites, or the application's own functions, to a source before export.
 
+`prepare` also audits the selected procedures. A statement there that stays
+host code and names an array some entry binds may read values that are newer
+on the device, so it is reported in `prepared["audit"]` with its procedure,
+line and text, unless a residency directive directly precedes it or it only
+calls procedures that are selected themselves. Asking for an array's bounds or
+allocation is not a read. The audit does not follow an array into a host
+procedure that receives it as an argument. A project lists the findings it
+accepts in `known_host_accesses`; with `strict_audit` any other finding stops
+the preparation.
+
 `compiler/tests/apps/box` is a complete small application built this way. Its
 resident run writes the same bytes as its native run
 (`test_resident_application_cuda.py`).
