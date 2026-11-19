@@ -8,6 +8,7 @@ resident build compiles for each original source and which entry directories
 to add; ``compiler.resident.build`` turns that into executables.
 """
 import json
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
@@ -17,6 +18,7 @@ from pathlib import Path
 from compiler.resident.configure import configure_sources
 from compiler.resident.directives import expand_directives
 from compiler.resident.rewrites import inline_tile_scratch_nests, promote_line_snapshots
+from compiler.resident.specialize import integer_parameters, specialize
 from compiler.scopes.resident_entries import (
     compile_resident_entries,
     export_resident_entries,
@@ -41,7 +43,12 @@ class Selection:
     passed by value. ``minimum_nests`` is the number of source loop nests that
     must end up compiled; fewer is an error, so lost coverage is not silent.
     With ``native_rejections`` off, a nest the compiler rejects is left exactly
-    as it is, for code the activation condition makes unreachable.
+    as it is, for code the activation condition makes unreachable. ``assume``
+    lists comparisons ``<expression> == <integer constant>`` that usually hold
+    when the procedures run: each procedure gets a second version of its body
+    with the branches they decide folded away, used while they hold, so that
+    loop nests the branches kept apart can share an entry and a launch (see
+    ``compiler.resident.specialize``). The procedures are then exact names.
     """
 
     label: str
@@ -50,6 +57,7 @@ class Selection:
     value_scalars: tuple[str, ...] = ()
     minimum_nests: int = 0
     native_rejections: bool = True
+    assume: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -176,6 +184,28 @@ def prepare(project, directory, *, fortran, host_threads=4):
             path.write_text(text)
         current[original] = path
 
+    assumed = [selection for selection in project.selections if selection.assume]
+    specialized = set()
+    if assumed:
+        texts = {original: path.read_text() for original, path in current.items()}
+        constants = integer_parameters(texts.values())
+        for selection in assumed:
+            for name in selection.procedures:
+                routine = name.rsplit("::", 1)[-1]
+                if any(character in name for character in "*?["):
+                    raise ValueError("Assumed conditions need exact procedure names: " + name)
+                # The declaration, not a reference: a procedure statement or its END.
+                holders = [original for original, text in texts.items()
+                           if re.search(rf"(?im)^\s*(?:\w+\s+)*(?:subroutine|function)\s+{re.escape(routine)}\b", text)]
+                if len(holders) != 1:
+                    raise ValueError(f"Expected one source that defines {name}, found {len(holders)}")
+                texts[holders[0]] = specialize(texts[holders[0]], routine, selection.assume, constants)
+                path = directory / "rewritten" / current[holders[0]].name
+                path.parent.mkdir(exist_ok=True)
+                path.write_text(texts[holders[0]])
+                current[holders[0]] = path
+                specialized.add(holders[0])
+
     extracted = export_resident_entries(list(current.values()), patterns, directory / "extracted")
     packages, summaries = [], []
     for selection in project.selections:
@@ -217,7 +247,7 @@ def prepare(project, directory, *, fortran, host_threads=4):
     for original in originals:
         before = str(current[original].resolve())
         texts[original] = replaced.get(before, current[original]).read_text()
-        if before in replaced or project.rewrites.get(original.name):
+        if before in replaced or project.rewrites.get(original.name) or original in specialized:
             touched.add(original)
     added = {}
     if project.edit is not None:
