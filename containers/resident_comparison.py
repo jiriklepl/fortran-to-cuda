@@ -363,7 +363,9 @@ def run(args):
             args.case, args.config, args.steps,
             precision=precision, overrides=configuration.get("overrides"),
         )
+        fast_fp = bool(getattr(args, "fast_fp", False))
         report.update(hardware=hardware, configuration=configuration, case=args.case, precision=precision,
+                      strict_fp=not fast_fp,
                       dependencies={"application_root": str(app_root), "vkfft": str(vkfft)},
                       source_identities={"compiler": source_identity(COMPILER / "compiler"),
                                          "pipeline": source_identity(PIPELINE),
@@ -390,6 +392,8 @@ def run(args):
                          "--output", build, "--fortran", fortran, "--cxx", cxx, "--nvcc", nvcc,
                          "--architecture", architecture, "--jobs", str(args.jobs),
                          "--precision", precision]
+        if fast_fp:
+            build_command.append("--fast-fp")
         report["build_command"] = list(map(str, build_command))
         write(report_path, report)
         build_env = dict(os.environ)
@@ -548,6 +552,8 @@ def main(argv=None):
     parser.add_argument("--steps", type=int)
     parser.add_argument("--precision", choices=("dp", "sp"), default="dp",
                         help="Floating-point precision: dp (double, default) or sp (single)")
+    parser.add_argument("--fast-fp", action="store_true",
+                        help="Opt in to FMA contraction and fast CUDA div/sqrt instead of strict no-FMA flags")
     parser.add_argument("--grid", help="Override grid cell counts as NXxNYxNZ or NX,NY,NZ")
     parser.add_argument("--domain-size", help="Override domain lengths as LXxLYxLZ or LX,LY,LZ")
     parser.add_argument("--end-time", type=float, help="Override time_stepping.conf end_time")

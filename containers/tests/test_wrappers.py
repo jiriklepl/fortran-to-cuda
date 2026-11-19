@@ -163,6 +163,16 @@ def test_node_forwards_simple_config_overrides(sandbox):
     assert values(argv, "--re") == ["10000"]
     assert values(argv, "--timeout") == ["1200"]
     assert values(argv, "--build-timeout") == ["1800"]
+    assert "--fast-fp" not in argv
+
+
+def test_node_forwards_opt_in_fast_fp(sandbox):
+    fake_workspace(sandbox)
+    result = sandbox[4]("run_node.sh", "hopper01", "--dry-run", "--fast-fp")
+    assert result.returncode == 0, result.stderr
+    assert execute_payload(sandbox).returncode == 0
+    argv = json.loads(sandbox[2].read_text())["argv"]
+    assert "--fast-fp" in argv
 
 
 def test_node_missing_pipeline_fails_before_submission(sandbox):
@@ -360,7 +370,7 @@ def test_node_rejects_invalid_resources_before_dispatch(sandbox, args):
 @pytest.mark.parametrize("args", [
     ["--threads", "99"], ["--jobs=99"], ["--config", "/host/config"],
     ["--output-dir=/host/results"], ["--work-dir", "/host/work"],
-    ["--arch", "100"], ["--case", "channel"], ["--steps", "10"],
+    ["--arch", "100"], ["--case", "channel"], ["--steps", "10"], ["--fast-fp"],
 ])
 def test_node_extra_arguments_cannot_override_checked_options(sandbox, args):
     _, _, capture, _, invoke = sandbox

@@ -11,7 +11,7 @@ output="${OUTPUT_DIR:-}" work="${WORK_DIR:-}"
 case_name=channel-simple threads=4 jobs="" repeats=7 warmups=1 arch=auto
 cpus=8 memory=32G time_limit="" gpus=1 runtime=auto
 sif="${SIF_FILE:-${workspace}/fortran-abomination.sif}"
-wait_job=1 dry_run=0 interactive=0 jobs_explicit=0
+wait_job=1 dry_run=0 interactive=0 jobs_explicit=0 fast_fp=0
 extra=()
 
 usage() {
@@ -24,6 +24,7 @@ Submit a fresh resident comparison; no local fallback or headnode setup.
   --case NAME                     channel-simple (default) or channel
   --config DIR                    Explicit application configuration
   --precision dp|sp               Floating-point precision (default: dp)
+  --fast-fp                       Opt in to FMA contraction and fast CUDA div/sqrt
   --grid NXxNYxNZ                 Override grid cell counts (e.g. 64x32x32 or 64,32,32)
   --domain-size LXxLYxLZ          Override domain lengths (e.g. 12x4x2 or 12,4,2)
   --steps N                       Optional timestep cap (smoke experiment)
@@ -63,6 +64,7 @@ while [[ $# -gt 0 ]]; do
         --solver) value "$@"; solver="$2"; shift 2 ;;
         --config) value "$@"; config="$2"; shift 2 ;;
         --precision) value "$@"; precision="$2"; shift 2 ;;
+        --fast-fp) fast_fp=1; shift ;;
         --grid) value "$@"; grid="$2"; shift 2 ;;
         --domain-size) value "$@"; domain_size="$2"; shift 2 ;;
         --steps) value "$@"; steps="$2"; shift 2 ;;
@@ -98,7 +100,7 @@ while [[ $# -gt 0 ]]; do
 done
 for argument in "${extra[@]}"; do
     case "${argument%%=*}" in
-        --case|--config|--precision|--grid|--domain-size|--steps|--end-time|--cfl|--advection|--re|--timeout|--build-timeout|--threads|--jobs|--repeats|--warmups|--arch|--output-dir|--output|-o|--work-dir|--app-root|--vkfft|--solver)
+        --case|--config|--precision|--fast-fp|--grid|--domain-size|--steps|--end-time|--cfl|--advection|--re|--timeout|--build-timeout|--threads|--jobs|--repeats|--warmups|--arch|--output-dir|--output|-o|--work-dir|--app-root|--vkfft|--solver)
             fail "use ${argument%%=*} before -- so resource and container paths can be checked" ;;
     esac
 done
@@ -173,6 +175,7 @@ if [[ -n "$config" ]]; then
 fi
 [[ -z "$steps" ]] || workflow+=(--steps "$steps")
 [[ -z "$precision" ]] || workflow+=(--precision "$precision")
+(( ! fast_fp )) || workflow+=(--fast-fp)
 [[ -z "$grid" ]] || workflow+=(--grid "$grid")
 [[ -z "$domain_size" ]] || workflow+=(--domain-size "$domain_size")
 [[ -z "$end_time" ]] || workflow+=(--end-time "$end_time")

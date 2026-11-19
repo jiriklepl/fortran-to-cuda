@@ -452,3 +452,90 @@ def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, mon
     assert calls[2][2] != calls[4][2]
     with pytest.raises(FileExistsError):
         runner.run(args)
+
+
+def test_fast_fp_is_opt_in_across_cli_cmake_and_resident_build(tmp_path, monkeypatch):
+    from compiler.resident import build as resident_build_cmake
+
+    # Default CLI keeps strict FP enabled.
+    parsed = []
+    with monkeypatch.context() as cli_patch:
+        cli_patch.setattr(runner, "run", parsed.append)
+        runner.main(["--output-dir", str(tmp_path)])
+        runner.main(["--output-dir", str(tmp_path), "--fast-fp"])
+    assert parsed[0].fast_fp is False
+    assert parsed[1].fast_fp is True
+
+    # CMake generation keeps strict FP by default and relaxes only when strict_fp=False.
+    lib = (resident_build_cmake.ObjectLibrary("app", (tmp_path / "a.f90",)),)
+    default_cmake = resident_build_cmake.cmake_lists("app", lib, ())
+    assert "-ffp-contract=off" in default_cmake
+    assert "--fmad=false" in default_cmake
+    assert "--prec-div=true" in default_cmake
+    assert "--prec-sqrt=true" in default_cmake
+
+    fast_cmake = resident_build_cmake.cmake_lists("app", lib, (), strict_fp=False)
+    assert "-ffp-contract=off" not in fast_cmake
+    assert "--fmad=false" not in fast_cmake
+    assert "--fmad=true" in fast_cmake
+    assert "--prec-div=false" in fast_cmake
+    assert "--prec-sqrt=false" in fast_cmake
+
+    # resident_comparison.run forwards --fast-fp to resident-build only when opted in.
+    for fast_fp in (False, True):
+        out = tmp_path / f"out-{fast_fp}"
+        args = SimpleNamespace(
+            output_dir=out, work_dir=tmp_path / f"work-{fast_fp}",
+            app_root=tmp_path, solver=tmp_path, vkfft=tmp_path,
+            case="channel-simple", config=None, steps=2, threads=4,
+            jobs=2, repeats=1, warmups=0, timeout=30, build_timeout=30,
+            fortran=sys.executable, cuda_host=None, nvcc=None,
+            fast_fp=fast_fp,
+        )
+        monkeypatch.setattr(runner, "doctor", lambda *_args, **_kwargs: {
+            "gpu": {"uuid": "GPU-id", "compute_capability": "8.6"},
+            "toolchain": {"cuda_host_cxx": sys.executable, "nvcc": sys.executable}})
+        monkeypatch.setattr(runner, "prepare_application_basis", lambda *_args: tmp_path)
+        monkeypatch.setattr(runner, "application_paths", lambda _root: {"elmm": tmp_path, "PoisFFT": tmp_path})
+        monkeypatch.setattr(runner, "select_configuration", lambda *_args: tmp_path)
+        monkeypatch.setattr(runner, "source_identity", lambda _root: {"files": {}})
+        monkeypatch.setattr(runner, "solver_identity", lambda _root: {"revision": "test"})
+        monkeypatch.setattr(runner, "prepare_config", lambda _src, dst, **_kw: (
+            dst.mkdir(), {"runtime_arguments": [], "expected_max_steps": 2})[1])
+        build_argvs = []
+
+        def fake_build(argv, *, cwd, env, log, timeout):
+            build_argvs.append(list(argv))
+            directory = Path(argv[argv.index("--output") + 1])
+            directory.mkdir()
+            binaries = {}
+            for name in ("ELMM", "ELMM-native", "ELMM-full20", "ELMM-native-full20"):
+                path = directory / name
+                path.write_text(name)
+                binaries[name] = {"path": str(path), "sha256": runner.digest(path)}
+            provider = directory / "provider"
+            provider.write_text("provider")
+            (directory / "built.json").write_text(json.dumps({
+                "status": "PASS", "strict_fp": not fast_fp, "binaries": binaries,
+                "provider": {"path": str(provider), "sha256": runner.digest(provider)}}))
+            (directory / "packages.json").write_text("[]")
+            return 1.0
+
+        def fake_app(binary, config, configuration, directory, env, timeout, expected_steps=None):
+            directory.mkdir(parents=True)
+            return {"directory": str(directory), "wall_seconds": 1.0,
+                    "application_timing": {"completed_steps": 2}}, "vtk", "Time limit reached."
+
+        monkeypatch.setattr(runner, "command", fake_build)
+        monkeypatch.setattr(runner, "run_application", fake_app)
+        monkeypatch.setattr(runner, "read_fields", lambda *_args: {"fields-U.bin": "values"})
+        monkeypatch.setattr(runner, "checked_fields", lambda *_args: {"passed": True})
+        monkeypatch.setattr(runner, "compare_vtks", lambda *_args: {"passed": True})
+        monkeypatch.setattr(runner, "compare_outputs", lambda *_args: {"passed": True})
+        monkeypatch.setattr(runner, "verify_resident_execution", lambda *_args: {"verified": True})
+        monkeypatch.setattr(runner, "plot_experiment", lambda *_args: None)
+
+        runner.run(args)
+        assert ("--fast-fp" in build_argvs[0]) is fast_fp
+        report = json.loads((out / "resident/report.json").read_text())
+        assert report["strict_fp"] is (not fast_fp)

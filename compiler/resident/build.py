@@ -19,6 +19,7 @@ from pathlib import Path
 from compiler.numerical_contract import CUDA_OPTIONS, HOST_OPTIONS
 from compiler.runtime import DEFAULT_DOMAIN_SOURCE, RESIDENT_SOURCES
 
+FAST_CUDA_OPTIONS = ("--fmad=true", "--ftz=false", "--prec-div=false", "--prec-sqrt=false")
 HIDDEN_OPTIONS = ("CFLAGS", "CXXFLAGS", "CUDAFLAGS", "FFLAGS", "FCFLAGS", "F90FLAGS", "LDFLAGS",
                   "NVCC_PREPEND_FLAGS", "NVCC_APPEND_FLAGS")
 ENTRY_SOURCES = ("shared_interface.f90", "shared_entry.cu")
@@ -51,16 +52,22 @@ def cmake_path(path):
 
 def cmake_lists(name, libraries, executables, *, include_directories=(), definitions=(),
                 fortran_options=("-O3", "-fopenmp", "-ffree-line-length-none", "-g"),
-                c_options=("-O3", "-fopenmp", "-g"), prologue=(), source_options=None):
+                c_options=("-O3", "-fopenmp", "-g"), prologue=(), source_options=None,
+                strict_fp=True):
     """The text of a CMake project for the given object libraries and executables.
 
     ``prologue`` lines come before the targets, for dependencies the
     application brings (``find_library``, ``add_subdirectory``, interface
     targets named in a library's ``link``). ``source_options`` maps a source to
     compile options that apply to that file only. Fortran sources are
-    preprocessed; every language gets the compiler's numerical options.
+    preprocessed; when ``strict_fp`` is true (default), every language gets the
+    compiler's strict numerical options.
     """
-    host = ";".join(HOST_OPTIONS)
+    host_options = HOST_OPTIONS if strict_fp else ()
+    cuda_options = CUDA_OPTIONS if strict_fp else FAST_CUDA_OPTIONS
+    host_cmake = (";" + ";".join(host_options)) if host_options else ""
+    host_xcompiler = ("," + ",".join(host_options)) if host_options else ""
+    host_space = (" " + " ".join(host_options)) if host_options else ""
     lines = ["cmake_minimum_required(VERSION 3.24)", f"project({name} LANGUAGES C CXX Fortran CUDA)",
              "set(CMAKE_EXPORT_COMPILE_COMMANDS ON)", "find_package(CUDAToolkit REQUIRED)",
              "find_package(OpenMP REQUIRED)", *prologue]
@@ -75,10 +82,10 @@ def cmake_lists(name, libraries, executables, *, include_directories=(), definit
         if definitions:
             lines.append(f"target_compile_definitions({target} PRIVATE {' '.join(definitions)})")
         lines += [f"target_compile_options({target} PRIVATE "
-                  f'"$<$<COMPILE_LANGUAGE:Fortran>:-cpp;{";".join(fortran_options)};{host}>" '
-                  f'"$<$<COMPILE_LANGUAGE:C,CXX>:{";".join(c_options)};{host}>" '
-                  f'"$<$<COMPILE_LANGUAGE:CUDA>:-O3;-std=c++17;{";".join(CUDA_OPTIONS)};'
-                  f'-Xcompiler=-fPIC,-fopenmp,{",".join(HOST_OPTIONS)}>" )',
+                  f'"$<$<COMPILE_LANGUAGE:Fortran>:-cpp;{";".join(fortran_options)}{host_cmake}>" '
+                  f'"$<$<COMPILE_LANGUAGE:C,CXX>:{";".join(c_options)}{host_cmake}>" '
+                  f'"$<$<COMPILE_LANGUAGE:CUDA>:-O3;-std=c++17;{";".join(cuda_options)};'
+                  f'-Xcompiler=-fPIC,-fopenmp{host_xcompiler}>" )',
                   f"target_link_libraries({target} PUBLIC OpenMP::OpenMP_Fortran {' '.join(library.link)})"]
     for source, options in (source_options or {}).items():
         lines.append(f"set_source_files_properties({cmake_path(source)} PROPERTIES COMPILE_OPTIONS "
@@ -86,8 +93,7 @@ def cmake_lists(name, libraries, executables, *, include_directories=(), definit
     for executable in executables:
         lines += [f"add_executable({executable.name} {cmake_path(executable.source)})",
                   f"target_link_libraries({executable.name} PRIVATE {executable.library}_objects)",
-                  f"target_compile_options({executable.name} PRIVATE -cpp {' '.join(fortran_options)} "
-                  f"{' '.join(HOST_OPTIONS)})"]
+                  f"target_compile_options({executable.name} PRIVATE -cpp {' '.join(fortran_options)}{host_space})"]
         if definitions:
             lines.append(f"target_compile_definitions({executable.name} PRIVATE {' '.join(definitions)})")
         lines.append(f"set_target_properties({executable.name} PROPERTIES LINKER_LANGUAGE Fortran)")
@@ -170,7 +176,7 @@ def resident_sources(prepared, runtime, *, programs=()):
 
 
 def build(prepared, directory, *, name, programs, fortran, cxx, nvcc, architecture, jobs=2, native=True,
-          fortran_options=("-O3", "-fopenmp", "-ffree-line-length-none", "-g")):
+          fortran_options=("-O3", "-fopenmp", "-ffree-line-length-none", "-g"), strict_fp=True):
     """Build the prepared application into ``directory/build``.
 
     ``programs`` maps an executable name to the original source of its main
@@ -196,6 +202,6 @@ def build(prepared, directory, *, name, programs, fortran, cxx, nvcc, architectu
     include = sorted({Path(path).parent for path in known}) + [runtime]
     (directory / "CMakeLists.txt").write_text(cmake_lists(
         name, libraries, executables, include_directories=include,
-        definitions=tuple(prepared["defines"]), fortran_options=fortran_options))
+        definitions=tuple(prepared["defines"]), fortran_options=fortran_options, strict_fp=strict_fp))
     output = configure_and_compile(directory, fortran=fortran, cxx=cxx, nvcc=nvcc, architecture=architecture, jobs=jobs)
     return {executable.name: output / executable.name for executable in executables}
