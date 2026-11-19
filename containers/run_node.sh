@@ -34,8 +34,8 @@ Submit a fresh resident comparison; no local fallback or headnode setup.
   --re VAL                        Override main.conf Reynolds number Re
   --timeout SEC                   Per-process application timeout in seconds
   --build-timeout SEC             Build timeout in seconds
-  --threads N --jobs N             Defaults: 4 threads for the native run, build jobs = CPUs
-  --gpu-threads N                 Threads for the GPU run (default: 1)
+  --threads N --jobs N             Defaults: 4 threads both runs start with, build jobs = CPUs
+  --gpu-threads N                 Threads of the GPU run while its fields are on the device (default: 1)
   --repeats N --warmups N          Defaults: 7 measured, 1 warmup
   --arch ARCH                     Default: auto, detected on the worker GPU
   -o, --output-dir DIR             Logs/results (default: results/runs/NODE-TIME)

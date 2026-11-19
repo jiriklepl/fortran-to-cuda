@@ -96,13 +96,21 @@ def command(argv, *, cwd, env, log, timeout):
             process.wait()
 
 
-def application_environment(threads, gpu, cache, *, traced):
+def application_environment(threads, gpu, cache, *, traced, resident_threads=None):
+    """The environment of one application run.
+
+    ``threads`` is the OpenMP count the application starts with, the same for the native and the GPU
+    run: ELMM's initial state depends on it. ``resident_threads`` narrows the GPU run's team for
+    the time its fields are on the device.
+    """
     env = environment(threads, traced=traced)
     for key in list(env):
         if key.startswith(("FORT_", "POISSON_", "VKFFT_")) or key == "LD_PRELOAD":
             env.pop(key)
     if traced:
         env.update(FORT_RUNTIME_TRACE="1", FORT_OFFLOAD_TRACE="1")
+    if resident_threads is not None:
+        env["FORT_RESIDENT_HOST_THREADS"] = str(resident_threads)
     env["CUDA_VISIBLE_DEVICES"] = gpu
     if cache is not None:
         env["POISSON_SOLVER_KERNEL_CACHE_DIR"] = str(cache)
@@ -364,8 +372,9 @@ def run(args):
             precision=precision, overrides=configuration.get("overrides"),
         )
         fast_fp = bool(getattr(args, "fast_fp", False))
-        # The GPU run's host code is serial between kernels; a larger team only adds wake-up cost.
-        gpu_threads = getattr(args, "gpu_threads", 1)
+        # Between kernels the GPU run's host code is serial; a larger team only adds wake-up cost.
+        # The run still starts with args.threads, like the native one, and narrows its team later.
+        gpu_threads = min(getattr(args, "gpu_threads", 1), args.threads)
         report.update(hardware=hardware, configuration=configuration, case=args.case, precision=precision,
                       strict_fp=not fast_fp,
                       dependencies={"application_root": str(app_root), "vkfft": str(vkfft)},
@@ -439,8 +448,8 @@ def run(args):
             verify_binaries()
             print("Starting diagnostic:", name, flush=True)
             is_gpu = mode == "resident"
-            env = application_environment(gpu_threads if is_gpu else args.threads, gpu["uuid"],
-                                          caches["diagnostic"] if is_gpu else None, traced=is_gpu)
+            env = application_environment(args.threads, gpu["uuid"], caches["diagnostic"] if is_gpu else None,
+                                          traced=is_gpu, resident_threads=gpu_threads if is_gpu else None)
             binary = binaries["ELMM-full20" if is_gpu else "ELMM-native-full20"]["path"]
             row, vtk, log = run_application(binary, work / "config", configuration, output / "diagnostics" / name,
                                             env, args.timeout, expected_steps)
@@ -496,8 +505,8 @@ def run(args):
             for mode in order:
                 verify_binaries()
                 is_gpu = mode == "resident"
-                env = application_environment(gpu_threads if is_gpu else args.threads, gpu["uuid"],
-                                              caches["timing"] if is_gpu else None, traced=False)
+                env = application_environment(args.threads, gpu["uuid"], caches["timing"] if is_gpu else None,
+                                              traced=False, resident_threads=gpu_threads if is_gpu else None)
                 binary = binaries["ELMM" if is_gpu else "ELMM-native"]["path"]
                 directory = output / "runs" / f"round-{round_number:02}" / mode
                 print("Starting", mode, "round", round_number, flush=True)
@@ -562,10 +571,11 @@ def main(argv=None):
     parser.add_argument("--cfl", type=float, help="Override time_stepping.conf CFL")
     parser.add_argument("--advection", type=int, choices=(2, 4, 5, 6), help="Override main.conf advection method")
     parser.add_argument("--re", type=float, help="Override main.conf Reynolds number Re")
-    parser.add_argument("--threads", type=int, default=4, help="OpenMP threads of the native run")
+    parser.add_argument("--threads", type=int, default=4,
+                        help="OpenMP threads both runs start with (the initial state depends on the count)")
     parser.add_argument("--gpu-threads", type=int, default=1,
-                        help="OpenMP threads of the GPU run; its host code is serial between kernels, "
-                             "and a larger team only adds wake-up cost")
+                        help="OpenMP threads of the GPU run while its fields are on the device; its host code "
+                             "is serial between kernels, and a larger team only adds wake-up cost")
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--repeats", type=int, default=7)
     parser.add_argument("--warmups", type=int, default=1)

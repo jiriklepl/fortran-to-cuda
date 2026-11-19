@@ -386,7 +386,8 @@ def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, mon
 
     def application(binary, config, configuration, directory, env, timeout, expected_steps=None):
         calls.append((Path(binary).name, env.get("FORT_RUNTIME_TRACE"),
-                      env.get("POISSON_SOLVER_KERNEL_CACHE_DIR"), env["OMP_NUM_THREADS"]))
+                      env.get("POISSON_SOLVER_KERNEL_CACHE_DIR"), env["OMP_NUM_THREADS"],
+                      env.get("FORT_RESIDENT_HOST_THREADS")))
         directory.mkdir(parents=True)
         return {"directory": str(directory), "wall_seconds": 2.0 if "native" in binary else 1.0,
             "application_timing": {"completed_steps": natural_steps if natural else 2}}, "vtk", "Time limit reached."
@@ -450,9 +451,11 @@ def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, mon
     assert [row["mode"] for row in report["runs"]] == ["native", "resident", "resident", "native", "native", "resident"]
     assert calls[2][1] == "1" and all(call[1] is None for call in calls[3:])
     assert calls[2][2] != calls[4][2]
-    # The native run gets --threads; the GPU run has its own budget, one thread unless asked otherwise.
+    # Both runs start with --threads, because the initial state depends on the count. The GPU run
+    # narrows its team, to one thread unless asked otherwise, only while its fields are on the device.
     assert report["threads"] == 4 and report["gpu_threads"] == 1
-    assert all(call[3] == ("4" if "native" in call[0] else "1") for call in calls)
+    assert all(call[3] == "4" for call in calls)
+    assert all(call[4] == (None if "native" in call[0] else "1") for call in calls)
     with pytest.raises(FileExistsError):
         runner.run(args)
 

@@ -88,9 +88,11 @@ Each invocation runs one case:
 `--config DIR` selects a custom configuration directory instead of the case's
 input. `--grid`, `--domain-size`, `--end-time`, `--cfl`, `--advection` and
 `--re` override single settings of the selected configuration.
-`--threads` sets the thread budget of the native run and `--jobs` the build's.
-`--gpu-threads` (default 1) sets it for the GPU run, whose host code runs serially
-between kernels: a larger team only adds the cost of waking it.
+`--threads` sets the thread count both runs start with and `--jobs` the build's.
+ELMM's initial state depends on the count, so the two runs must share it.
+`--gpu-threads` (default 1) is the GPU run's team while its fields are on the
+device, where its host code runs serially between kernels and a larger team
+only adds the cost of waking it.
 `--repeats`, `--warmups`, `--timeout`, `--build-timeout`, `--gpu` (visible CUDA
 ordinal or UUID), `--fortran`, `--nvcc` and `--cuda-host` are also available;
 run `entrypoint.sh resident --help` or `run_on_node.sh --help` for all options.
