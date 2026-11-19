@@ -4,10 +4,13 @@ module stepper
   use boundaries, only: periodic
   implicit none
 contains
-  pure function laplacian(centre, west, east, south, north, bottom, top, spacing) result(value)
-    real(rp), intent(in) :: centre, west, east, south, north, bottom, top, spacing
+  pure function laplacian(i, j, k, field, spacing) result(value)
+    integer, intent(in) :: i, j, k
+    real(rp), contiguous, intent(in) :: field(-1:,-1:,-1:)
+    real(rp), intent(in) :: spacing
     real(rp) :: value
-    value = (west + east + south + north + bottom + top - 6*centre) / (spacing*spacing)
+    value = (field(i-1,j,k) + field(i+1,j,k) + field(i,j-1,k) + field(i,j+1,k) + field(i,j,k-1) + field(i,j,k+1) &
+             - 6*field(i,j,k)) / (spacing*spacing)
   end function laplacian
 
   subroutine diffuse(a, b)
@@ -18,8 +21,7 @@ contains
     do k = 1, nz
       do j = 1, ny
         do i = 1, nx
-          b(i,j,k) = a(i,j,k) + dt*nu*laplacian(a(i,j,k), a(i-1,j,k), a(i+1,j,k), a(i,j-1,k), a(i,j+1,k), &
-                                                a(i,j,k-1), a(i,j,k+1), dx)
+          b(i,j,k) = a(i,j,k) + dt*nu*laplacian(i, j, k, a, dx)
         end do
       end do
     end do

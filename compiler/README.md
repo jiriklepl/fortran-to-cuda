@@ -2437,6 +2437,10 @@ end module example
   expressions; pure function arguments require `INTENT(IN)`. Helper work remains
   at its original expression evaluation point, including guarded `ELSEIF` paths.
   Recursion rejects; numerical inlining is bounded to depth eight and 128 calls.
+  In exported resident entries a helper's array arguments may declare constant
+  lower bounds (`a(-2:,-2:,-2:)`) when the helper uses them by element; the
+  copied helper addresses them from one, which is the same element of the
+  actual argument.
 - Fixed-size private numerical arrays with constant explicit bounds, including
   negative bounds, scalarize to independently defined scalar storage. Each array
   has at most 256 elements. Constant indexing loops are unrolled with a shared

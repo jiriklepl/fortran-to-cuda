@@ -1082,6 +1082,26 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     helper_names = {name: "fort_helper_" + str(index) for index, name in enumerate(helpers)}
     if any(name in occupied for name in helper_names.values()):
         raise CompilationError("inline helper entry namespace conflicts with original source")
+    # A helper may declare its array dummies with constant lower bounds. The
+    # copied helper declares them from one and shifts each element reference,
+    # which addresses the same element of the actual argument.
+    helper_lowers = {}
+    for helper in helpers.values():
+        for argument in helper.arguments:
+            binding = helper.scope.bindings.get(argument)
+            if binding is None or not binding.rank or all(node is None for node in binding.lower_bound_nodes):
+                continue
+            from compiler.ir import SourceLocation
+            try:
+                helper_lowers[id(binding)] = tuple(
+                    1 if node is None else helper.scope.kinds.integer(node, SourceLocation(str(helper.scope.path)))
+                    for node in binding.lower_bound_nodes)
+            except CompilationError as error:
+                raise CompilationError("inline helper array lower bounds must be constant") from error
+            for name in walk(helper.execution, F.Name):
+                if (analysis._binding(helper.scope, name) is binding
+                        and not (_kind(name.parent) == "Part_Ref" and name.parent.items[0] is name)):
+                    raise CompilationError("inline helper arrays with lower bounds require element references")
     occupied.update(helper_names.values())
     section_variables, section_guards = [], []
 
@@ -1179,6 +1199,13 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             indices = _children(value.items[1])
             rendered = normalized_indices(name, indices, owner)
             return F.Part_Ref(name + "(" + ",".join(rendered) + ")")
+        if kind == "Part_Ref" and binding is not None and id(binding) in helper_lowers:
+            indices = _children(value.items[1])
+            if len(indices) != binding.rank or any(_kind(index) == "Subscript_Triplet" for index in indices):
+                raise CompilationError("inline helper arrays with lower bounds require element references")
+            rendered = [f"({transformed(index, owner)}) - ({lower}) + 1"
+                        for index, lower in zip(indices, helper_lowers[id(binding)], strict=True)]
+            return F.Part_Ref(str(value.items[0]) + "(" + ",".join(rendered) + ")")
         if kind == "Intrinsic_Function_Reference" and str(value.items[0]).lower() in {"lbound", "ubound", "size"}:
             intrinsic = str(value.items[0]).lower()
             if _intrinsic_shadowed(analysis, owner, intrinsic):
@@ -1304,6 +1331,17 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             entities = copy.copy(entities)
             entities.items = tuple(retained)
             own = [helper.scope.bindings[str(entity.items[0]).lower()] for entity in _children(entities)]
+            if any(id(binding) in helper_lowers for binding in own):
+                if any(entity.items[1] is None for entity, binding in zip(retained, own, strict=True)
+                       if id(binding) in helper_lowers):
+                    raise CompilationError("inline helper array lower bounds in a DIMENSION attribute are unsupported")
+                rebased = []
+                for entity, binding in zip(retained, own, strict=True):
+                    if id(binding) in helper_lowers:
+                        entity = copy.copy(entity)
+                        entity.items = (entity.items[0], F.Array_Spec(",".join(":" * binding.rank)), *entity.items[2:])
+                    rebased.append(entity)
+                entities.items = tuple(rebased)
             if any(binding.attributes & {"save", "allocatable", "pointer", "optional", "target", "volatile", "asynchronous"} for binding in own):
                 raise CompilationError("inline numerical helper storage association is unsupported")
             if any((binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1)} for binding in own):

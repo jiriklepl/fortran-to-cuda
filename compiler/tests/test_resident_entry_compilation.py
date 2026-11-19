@@ -121,3 +121,58 @@ def test_lower_bounds_and_named_scalars_become_value_arguments(tmp_path):
     report = compile_resident_entry(entry["input_path"], entry["entry"], tmp_path / "entry")
     passing = {item["name"]: item["passing"] for item in report["scoped"]["scalar_parameters"]}
     assert passing == {"fort_region_lb_a_1": "value", "dx": "reference", "nx": "value"}
+
+
+LOWERED = """module stencil
+integer :: n
+contains
+pure real(8) function centred(i, a, h)
+integer, intent(in) :: i
+real(8), contiguous, intent(in) :: a(-2:)
+real(8), intent(in) :: h
+centred = (a(i+1) - a(i-1)) / (2*h)
+end function
+pure real(8) function total(a)
+real(8), contiguous, intent(in) :: a(-2:)
+total = sum(a)
+end function
+subroutine slope(u, du, h)
+real(8), contiguous, intent(in) :: u(0:)
+real(8), contiguous, intent(inout) :: du(0:)
+real(8), intent(in) :: h
+integer :: i
+do i = 1, n
+du(i) = centred(i - 2, u, h)
+enddo
+end subroutine
+subroutine scaled(u, du)
+real(8), contiguous, intent(in) :: u(0:)
+real(8), contiguous, intent(inout) :: du(0:)
+integer :: i
+do i = 1, n
+du(i) = total(u)
+enddo
+end subroutine
+end module
+"""
+
+
+def test_a_helper_whose_array_argument_has_a_lower_bound_is_copied_from_position_one(tmp_path):
+    source = tmp_path / "stencil.f90"
+    source.write_text(LOWERED)
+    exported = export_resident_entries([source], ["stencil::slope"], tmp_path / "exported")
+    assert not exported["rejected"]
+    entry, = exported["entries"]
+    text = Path(entry["input_path"]).read_text()
+    helper = text[text.index("contains", text.index("contains") + 1):]
+    # The copied helper declares the array from one and shifts every element by the original lower bound.
+    assert "a(:)" in helper.replace(" ", "").lower()
+    assert "-2:" not in helper.replace(" ", "")
+    compact = helper.replace(" ", "")
+    assert "a((i+1)-(-2)+1)" in compact
+    assert "a((i-1)-(-2)+1)" in compact
+    report = compile_resident_entry(entry["input_path"], entry["entry"], tmp_path / "entry")
+    assert report["supported"]
+    # A helper that uses such an array as a whole is not copied: its bounds would differ.
+    rejection, = export_resident_entries([source], ["stencil::scaled"], tmp_path / "whole")["rejected"]
+    assert "require element references" in rejection["reason"]
