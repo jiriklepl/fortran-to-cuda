@@ -56,6 +56,11 @@ module fort_resident_domain
     logical :: active=.false.
     type(registered_storage), allocatable, private :: storage(:)
     type(field_mirror), allocatable, private :: mirrors(:)
+    ! Blocks a field copy could not use because the memory is still registered
+    ! for an array its owner has freed. They stay allocated until the next
+    ! publication so that neither the allocator nor that registration's
+    ! download can reach anything else through them.
+    type(field_mirror), allocatable, private :: avoided(:)
     type(work_real32_3_slot), allocatable, private :: work3_f32(:)
     type(work_real64_3_slot), allocatable, private :: work3(:)
   contains
@@ -173,8 +178,12 @@ contains
                         ' bytes=',element_bytes,' persistent=',persistent,' extents=',extents
   end subroutine
 
-  function register_storage(self, host, extents, lower, element_type, element_bytes, initialized, persistent, origin) &
-      result(handle)
+  ! With collision present, host is a block the caller has just allocated for
+  ! itself: storage already registered at or across it belongs to an array that
+  ! no longer exists. The function then returns no handle and sets collision,
+  ! so that the caller can take another block.
+  function register_storage(self, host, extents, lower, element_type, element_bytes, initialized, persistent, origin, &
+                            collision) result(handle)
     class(resident_domain), intent(inout) :: self
     type(c_ptr), intent(in) :: host
     integer(c_size_t), target, intent(in) :: extents(:)
@@ -183,16 +192,24 @@ contains
     integer(c_size_t), intent(in) :: element_bytes
     logical, intent(in) :: initialized, persistent
     character(*), optional, intent(in) :: origin
+    logical, optional, intent(out) :: collision
     integer(c_int64_t) :: handle, allocation_id, generation
     type(fort_scope_layout) :: layout
     type(registered_storage) :: item
+    integer(c_int) :: status
     integer :: i
+    handle=0
+    if (present(collision)) collision=.false.
     if (.not. self%active) error stop 'registration outside a storage epoch'
     if (size(extents) /= size(lower) .or. any(extents == 0) .or. .not. c_associated(host)) &
       error stop 'invalid or empty resident allocation'
     allocation_id = transfer(host,allocation_id)
     do i=1,size(self%storage)
       if (self%storage(i)%identity /= allocation_id) cycle
+      if (present(collision)) then
+        collision=.true.
+        return
+      endif
       if (self%storage(i)%element_type /= element_type .or. self%storage(i)%element_bytes /= element_bytes .or. &
           (self%storage(i)%persistent .neqv. persistent)) then
         call report_storage_conflict(self,self%storage(i),extents,element_type,element_bytes,persistent,origin)
@@ -219,14 +236,50 @@ contains
     layout%host=host; layout%extents=c_loc(extents); layout%lower_bounds=c_loc(lower)
     generation=self%generation
     if (persistent) generation=1
-    call resident_require(fort_scope_register(self%context,allocation_id,generation,layout, &
-                                             merge(1_c_int,0_c_int,initialized),handle))
+    status=fort_scope_register(self%context,allocation_id,generation,layout, &
+                               merge(1_c_int,0_c_int,initialized),handle)
+    if (status == FORT_SCOPE_ALIAS) then
+      if (present(collision)) then
+        collision=.true.
+        handle=0
+        return
+      endif
+      call report_overlap(self,allocation_id,product(extents)*element_bytes,origin)
+    endif
+    call resident_require(status)
     item%identity=allocation_id; item%handle=handle; item%element_type=element_type
     item%element_bytes=element_bytes; item%extents=extents; item%persistent=persistent
     item%origin='unknown'
     if (present(origin)) item%origin=origin
     self%storage=[self%storage,item]
   end function
+
+  ! Name the registered storage that overlaps count bytes at address. The
+  ! runtime refuses two registrations that share host memory; without the
+  ! names the refusal cannot be traced to its array.
+  subroutine report_overlap(self, address, count, origin)
+    class(resident_domain), intent(in) :: self
+    integer(c_int64_t), intent(in) :: address
+    integer(c_size_t), intent(in) :: count
+    character(*), optional, intent(in) :: origin
+    character(:), allocatable :: requested
+    integer(c_int64_t) :: other, bytes
+    integer :: i, found
+    requested='unknown'
+    if (present(origin)) requested=origin
+    write(error_unit,'(a,a,a,i0,a,i0,a,i0,a,i0)') 'Resident storage overlap: origin=',requested,' address=',address, &
+      ' bytes=',count,' domain=',self%domain,' epoch=',self%generation
+    found=0
+    do i=1,size(self%storage)
+      other=self%storage(i)%identity
+      bytes=int(product(self%storage(i)%extents)*self%storage(i)%element_bytes,c_int64_t)
+      if (address+int(count,c_int64_t) <= other .or. other+bytes <= address) cycle
+      found=found+1
+      write(error_unit,'(a,a,a,i0,a,i0,a,l1)') '  registered: origin=',self%storage(i)%origin,' address=',other, &
+        ' bytes=',bytes,' persistent=',self%storage(i)%persistent
+    enddo
+    if (found==0) write(error_unit,'(a)') '  registered: by storage this domain has no record of'
+  end subroutine
 
   function bind_real32(self, values, lower, initialized, persistent, origin) result(handle)
     class(resident_domain), intent(inout) :: self
@@ -342,6 +395,10 @@ contains
     character(*), optional, intent(in) :: origin
     integer(c_int64_t) :: handle
     type(field_mirror) :: item
+    ! Memory one binding may set aside while it looks for a block no registration covers.
+    integer(c_size_t), parameter :: avoided_limit=1073741824_c_size_t
+    integer(c_size_t) :: set_aside
+    logical :: collision
     integer :: i
     if (.not. self%active) error stop 'field binding outside a storage epoch'
     if (count==0 .or. .not. c_associated(first)) error stop 'invalid or empty resident field'
@@ -357,28 +414,41 @@ contains
     enddo
     item%stride=stride; item%count=count; item%element_type=element_type; item%written=writing
     select case(element_type)
-    case(FORT_SCOPE_INTEGER32)
+    case(FORT_SCOPE_INTEGER32, FORT_SCOPE_REAL32)
       item%bytes=4
-      allocate(item%integers(count))
-    case(FORT_SCOPE_REAL32)
-      item%bytes=4
-      allocate(item%singles(count))
     case(FORT_SCOPE_REAL64)
       item%bytes=8
-      allocate(item%doubles(count))
     case default
       error stop 'unsupported resident field type'
     end select
     if (stride<item%bytes) error stop 'invalid resident field stride'
-    call copy_field(item,.true.)
-    select case(element_type)
-    case(FORT_SCOPE_INTEGER32)
-      item%handle=self%bind_integer32(item%integers,[1],.true.,origin=origin)
-    case(FORT_SCOPE_REAL32)
-      item%handle=self%bind_real32(item%singles,[1],.true.,origin=origin)
-    case default
-      item%handle=self%bind_real64(item%doubles,[1],.true.,origin=origin)
-    end select
+    set_aside=0
+    do
+      select case(element_type)
+      case(FORT_SCOPE_INTEGER32)
+        allocate(item%integers(count))
+      case(FORT_SCOPE_REAL32)
+        allocate(item%singles(count))
+      case default
+        allocate(item%doubles(count))
+      end select
+      call copy_field(item,.true.)
+      item%handle=self%register_storage(mirror_address(item),[count],[1_c_int64_t],element_type,item%bytes, &
+                                        .true.,.false.,origin,collision)
+      if (.not. collision) exit
+      ! The allocator returned memory that is still registered for an array its
+      ! owner has freed. The copy is the domain's own, so it can live anywhere:
+      ! keep this block out of circulation and take another.
+      if (.not. allocated(self%avoided)) allocate(self%avoided(0))
+      if (size(self%avoided)==0) then
+        call report_overlap(self,transfer(mirror_address(item),0_c_int64_t),count*item%bytes,origin)
+        write(error_unit,'(a)') '  The field copy takes other memory; the registration above outlived its array.'
+      endif
+      self%avoided=[self%avoided,item]
+      nullify(item%integers,item%singles,item%doubles)
+      set_aside=set_aside+count*item%bytes
+      if (set_aside>avoided_limit) error stop 'no host memory free of stale registrations for a resident field'
+    enddo
     self%mirrors=[self%mirrors,item]
     handle=item%handle
   end function
@@ -586,13 +656,20 @@ contains
     self%storage=pack(self%storage,self%storage%persistent)
     if (allocated(self%mirrors)) then
       ! The structures hold the fields again; host code may change them freely.
-      do i=1,size(self%mirrors)
-        if (associated(self%mirrors(i)%integers)) deallocate(self%mirrors(i)%integers)
-        if (associated(self%mirrors(i)%singles)) deallocate(self%mirrors(i)%singles)
-        if (associated(self%mirrors(i)%doubles)) deallocate(self%mirrors(i)%doubles)
-      enddo
-      deallocate(self%mirrors)
+      call free_mirrors(self%mirrors)
     endif
+    if (allocated(self%avoided)) call free_mirrors(self%avoided)
+  end subroutine
+
+  subroutine free_mirrors(mirrors)
+    type(field_mirror), allocatable, intent(inout) :: mirrors(:)
+    integer :: i
+    do i=1,size(mirrors)
+      if (associated(mirrors(i)%integers)) deallocate(mirrors(i)%integers)
+      if (associated(mirrors(i)%singles)) deallocate(mirrors(i)%singles)
+      if (associated(mirrors(i)%doubles)) deallocate(mirrors(i)%doubles)
+    enddo
+    deallocate(mirrors)
   end subroutine
 
   subroutine end_epoch(self)
