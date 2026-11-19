@@ -831,6 +831,10 @@ int fort_scope_observe_v1(fort_scope_t context, const fort_buffer_t *buffers, si
  * must stop on error, before original argument/specification evaluation. */
 int fort_scope_observe_all_v1(fort_scope_t context);
 int fort_scope_discard_v1(fort_scope_t context, fort_buffer_t buffer);
+/* Dead values of a buffer its owner is about to define again. Like discard when
+ * no queued task touches the buffer; otherwise the values stay until the new
+ * definition replaces them, and the queue is not submitted. */
+int fort_scope_recycle_v1(fort_scope_t context, fort_buffer_t buffer);
 int fort_scope_retire_v1(fort_scope_t context, fort_buffer_t buffer);
 int fort_scope_host_begin(fort_scope_t context, fort_buffer_t buffer, const fort_scope_access *access);
 int fort_scope_host_end(fort_scope_t context, fort_buffer_t buffer);

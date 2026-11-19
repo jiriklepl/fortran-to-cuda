@@ -4703,6 +4703,20 @@ extern "C" int fort_scope_discard_v1(fort_scope_t h, fort_buffer_t handle) {
         trace(c,"discard",&b);
     });
 }
+// The owner is about to define the buffer again and its values are dead.
+// Forgetting them has to follow every queued user, which would submit the
+// queue at each reuse. A buffer that queued work still touches keeps its
+// values instead: the new definition replaces them in queue order, and the
+// only thing given up is the check that nothing reads them first.
+extern "C" int fort_scope_recycle_v1(fort_scope_t h, fort_buffer_t handle) {
+    return with(h, [&](Context &c) {
+        auto &b = buffer(c,handle);
+        require(!b.prepared, FORT_SCOPE_STATE, "recycle during a prepared buffer access");
+        if (virtual_state(c,handle)) { trace(c,"recycle_queued",&b); return; }
+        b.initialized.clear(); b.host_current.clear(); b.device_current.clear();
+        trace(c,"discard",&b);
+    });
+}
 extern "C" int fort_scope_retire_v1(fort_scope_t h, fort_buffer_t handle) {
     return with(h, [&](Context &c) {
         drain_resources(c,&handle,1);

@@ -563,7 +563,10 @@ contains
       if (self%work3_f32(i)%site/=site) cycle
       if (any(lbound(self%work3_f32(i)%values)/=lower).or.any(ubound(self%work3_f32(i)%values)/=upper)) cycle
       if (self%work3_f32(i)%borrowed) error stop 'overlapping use of a compiler workspace slot'
-      call resident_require(fort_scope_discard_v1(self%context,self%work3_f32(i)%handle))
+      ! An earlier invocation may still read this allocation on the device. Its
+      ! values are dead; they stay until this invocation's writes replace them
+      ! in queue order, so that reusing a slot does not submit the queue.
+      call resident_require(fort_scope_recycle_v1(self%context,self%work3_f32(i)%handle))
       self%work3_f32(i)%borrowed=.true.
       values=>self%work3_f32(i)%values
       return
@@ -608,10 +611,10 @@ contains
       if (self%work3(i)%site/=site) cycle
       if (any(lbound(self%work3(i)%values)/=lower).or.any(ubound(self%work3(i)%values)/=upper)) cycle
       if (self%work3(i)%borrowed) error stop 'overlapping use of a compiler workspace slot'
-      ! An earlier invocation may still read this allocation on the device.
-      ! Discard submits those users before forgetting dead values. It neither
-      ! waits for kernels nor frees their storage; later writes share the stream.
-      call resident_require(fort_scope_discard_v1(self%context,self%work3(i)%handle))
+      ! An earlier invocation may still read this allocation on the device. Its
+      ! values are dead; they stay until this invocation's writes replace them
+      ! in queue order, so that reusing a slot does not submit the queue.
+      call resident_require(fort_scope_recycle_v1(self%context,self%work3(i)%handle))
       self%work3(i)%borrowed=.true.
       values=>self%work3(i)%values
       return
