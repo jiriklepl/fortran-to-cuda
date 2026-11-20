@@ -149,6 +149,16 @@ adds `loop_speedup` next to the complete-process `speedup`, and the bars of the
 timing plots are stacked by phase; what the phases do not cover of a process,
 such as start-up and kernel cache lookups, shows as process overhead.
 
+`--nsys` adds one more run of the GPU executable under Nsight Systems after
+the timing runs, and `--nsys-steps N` caps that run's time steps. The profile
+(`OUTPUT_DIR/resident/nsys/resident.nsys-rep`) comes with text and CSV
+summaries of kernels, CUDA API calls and memory transfers. The kernels run as
+nodes of CUDA graphs, so the profile traces graph nodes; a profile taken with
+the default graph tracing lists almost no kernels and makes the GPU look idle.
+`cudaMemcpyAsync` time in the API summary is mostly the host waiting for the
+kernels queued before a small download, not transfer time. A profile that
+fails is recorded in the report and does not fail the comparison.
+
 For the unmodified natural `channel`, every run must reach the time limit at
 the native reference's step count (2,458 steps in the 4-thread reference setup;
 adaptive CFL timestepping and thread-dependent seeding can yield a different

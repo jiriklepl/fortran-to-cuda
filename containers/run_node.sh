@@ -11,7 +11,8 @@ output="${OUTPUT_DIR:-}" work="${WORK_DIR:-}"
 case_name=channel-simple threads=4 gpu_threads=1 gpu_budget="" jobs="" repeats=7 warmups=1 arch=auto
 cpus=8 memory=32G time_limit="" gpus=1 runtime=auto
 sif="${SIF_FILE:-${workspace}/fortran-abomination.sif}"
-wait_job=1 dry_run=0 interactive=0 jobs_explicit=0 fast_fp=0
+wait_job=1 dry_run=0 interactive=0 jobs_explicit=0 fast_fp=0 nsys=0
+nsys_steps=""
 extra=()
 
 usage() {
@@ -25,6 +26,8 @@ Submit a fresh resident comparison; no local fallback or headnode setup.
   --config DIR                    Explicit application configuration
   --precision dp|sp               Floating-point precision (default: dp)
   --fast-fp                       Opt in to FMA contraction and fast CUDA div/sqrt
+  --nsys                          Run an isolated Nsight Systems profile of the GPU binary
+  --nsys-steps N                  Cap timesteps for the Nsight Systems profile (implies --nsys)
   --grid NXxNYxNZ                 Override grid cell counts (e.g. 64x32x32 or 64,32,32)
   --domain-size LXxLYxLZ          Override domain lengths (e.g. 12x4x2 or 12,4,2)
   --steps N                       Optional timestep cap (smoke experiment)
@@ -67,6 +70,8 @@ while [[ $# -gt 0 ]]; do
         --config) value "$@"; config="$2"; shift 2 ;;
         --precision) value "$@"; precision="$2"; shift 2 ;;
         --fast-fp) fast_fp=1; shift ;;
+        --nsys) nsys=1; shift ;;
+        --nsys-steps) value "$@"; nsys=1; nsys_steps="$2"; shift 2 ;;
         --grid) value "$@"; grid="$2"; shift 2 ;;
         --domain-size) value "$@"; domain_size="$2"; shift 2 ;;
         --steps) value "$@"; steps="$2"; shift 2 ;;
@@ -104,7 +109,7 @@ while [[ $# -gt 0 ]]; do
 done
 for argument in "${extra[@]}"; do
     case "${argument%%=*}" in
-        --case|--config|--precision|--fast-fp|--grid|--domain-size|--steps|--end-time|--cfl|--advection|--re|--timeout|--build-timeout|--threads|--gpu-threads|--gpu-budget|--jobs|--repeats|--warmups|--arch|--output-dir|--output|-o|--work-dir|--app-root|--vkfft|--solver)
+        --case|--config|--precision|--fast-fp|--nsys|--nsys-steps|--grid|--domain-size|--steps|--end-time|--cfl|--advection|--re|--timeout|--build-timeout|--threads|--gpu-threads|--gpu-budget|--jobs|--repeats|--warmups|--arch|--output-dir|--output|-o|--work-dir|--app-root|--vkfft|--solver)
             fail "use ${argument%%=*} before -- so resource and container paths can be checked" ;;
     esac
 done
@@ -133,6 +138,7 @@ for name in threads gpu_threads jobs repeats cpus gpus; do positive "$name" "${!
 [[ "$warmups" =~ ^(0|[1-9][0-9]*)$ ]] || fail "warmups must be a nonnegative integer"
 [[ -z "$gpu_budget" || "$gpu_budget" =~ ^[1-9][0-9]*[KkMmGg]?$ ]] || fail "gpu-budget must be a count of bytes, optionally with K, M or G"
 [[ -z "$steps" ]] || positive steps "$steps"
+[[ -z "$nsys_steps" ]] || positive nsys-steps "$nsys_steps"
 (( cpus >= jobs && cpus >= threads && cpus >= gpu_threads )) || fail "cpus must cover both jobs and runtime threads"
 [[ "$arch" =~ ^(auto|native|(sm_)?[0-9]+[af]?)$ ]] || fail "invalid CUDA architecture"
 [[ -n "$partition" ]] || case "$node" in
@@ -182,6 +188,8 @@ fi
 [[ -z "$steps" ]] || workflow+=(--steps "$steps")
 [[ -z "$precision" ]] || workflow+=(--precision "$precision")
 (( ! fast_fp )) || workflow+=(--fast-fp)
+(( ! nsys )) || workflow+=(--nsys)
+[[ -z "$nsys_steps" ]] || workflow+=(--nsys-steps "$nsys_steps")
 [[ -z "$grid" ]] || workflow+=(--grid "$grid")
 [[ -z "$domain_size" ]] || workflow+=(--domain-size "$domain_size")
 [[ -z "$end_time" ]] || workflow+=(--end-time "$end_time")
@@ -220,7 +228,7 @@ slurm_directive() {
         printf '%s\n' 'set -euo pipefail'
         printf 'workspace=%q\noutput=%q\nwork=%q\nsif=%q\nruntime=%q\nconfig=%q\nconfig_index=%q\n' \
             "$workspace" "$output" "$work" "$sif" "$runtime" "$config" "$config_index"
-        printf 'deps=%q\nsolver=%q\n' "$deps" "$solver"
+        printf 'deps=%q\nsolver=%q\nnsys=%q\n' "$deps" "$solver" "$nsys"
         printf 'jobs_index=%q\njobs_explicit=%q\n' "$jobs_index" "$jobs_explicit"
         printf 'workflow=('; printf ' %q' "${workflow[@]}"; printf ' )\n'
         cat <<'EOF'
@@ -258,6 +266,9 @@ if type module >/dev/null 2>&1; then
     echo 'Loading cluster modules: apptainer, cuda, gcc, Python...'
     load_module apptainer || true
     load_module cuda || true
+    if [[ "$nsys" == 1 ]]; then
+        load_module nsight-systems || load_module nsys || true
+    fi
     load_module gcc || true
     load_module python3.12 || load_module python/3.12 || load_module python-3.12 || true
     printf '\n$ module list\n' >> "$module_log"
@@ -327,6 +338,9 @@ printf 'Batch defaults: %s CPUs, %s memory, %s GPU(s), %s wall time\n' "$cpus" "
 printf 'Output directory: %s\nWork directory: %s\nJob script: %s\n' "$output" "$work" "$job_script"
 printf 'Report: %s/resident/report.json\nFigures: %s/resident/figures\nBuild log: %s/resident/build.log\n' \
     "$output" "$output" "$output"
+if (( nsys )); then
+    printf 'Nsight Systems: %s/resident/nsys\n' "$output"
+fi
 printf 'Module setup log: %s/modules.log\n' "$output"
 printf 'Slurm logs: %s/slurm-<job-id>.out and .err\n' "$output"
 if (( interactive )); then

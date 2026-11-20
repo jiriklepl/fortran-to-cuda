@@ -47,6 +47,103 @@ PHASE_KEYS = (
     ("loop", "loop_seconds"),
     ("finalization", "finalization_seconds"),
 )
+NSYS_STATS_REPORTS = (
+    "cuda_gpu_kern_sum",
+    "cuda_api_sum",
+    "cuda_gpu_mem_time_sum",
+    "cuda_gpu_mem_size_sum",
+)
+
+
+def find_nsys(nvcc=None):
+    candidates = []
+    found = shutil.which("nsys")
+    if found:
+        candidates.append(Path(found))
+    if nvcc:
+        sibling = Path(nvcc).resolve().parent / "nsys"
+        if sibling.is_file() and os.access(sibling, os.X_OK) and sibling not in candidates:
+            candidates.append(sibling)
+    errors = []
+    for candidate in candidates:
+        probe = subprocess.run([str(candidate), "--version"], text=True, capture_output=True, check=False)
+        if probe.returncode == 0:
+            return str(candidate), probe.stdout.strip()
+        detail = (probe.stderr or probe.stdout).strip()
+        errors.append(f"{candidate}: {detail or f'exit status {probe.returncode}'}")
+    if errors:
+        raise RuntimeError("nsys is unavailable (" + "; ".join(errors) + ")")
+    raise RuntimeError("nsys executable not found in PATH or alongside nvcc")
+
+
+def run_nsys_profile(nsys_bin, binary, config, configuration, directory, env, timeout, *, steps_cap=None):
+    directory = Path(directory)
+    run_dir = directory / "run"
+    tmp_dir = directory / "tmp"
+    directory.mkdir(parents=True, exist_ok=False)
+    tmp_dir.mkdir(mode=0o700)
+    shutil.copytree(config, run_dir, ignore=shutil.ignore_patterns("output"))
+    profile_base = directory / "resident"
+    argv = [
+        str(nsys_bin), "profile",
+        "--force-overwrite=true",
+        "--trace=cuda,nvtx",
+        # The generated kernels run as nodes of CUDA graphs. Traced per graph, a launch is one
+        # event and its kernels are missing from every kernel report; trace the nodes instead.
+        "--cuda-graph-trace=node",
+        "--cuda-memory-usage=false",
+        "--sample=none",
+        "-o", str(profile_base),
+        str(binary),
+        *configuration["runtime_arguments"],
+    ]
+    profile_env = {**env, "TMPDIR": str(tmp_dir)}
+    log_path = directory / "application.log"
+    elapsed = command(argv, cwd=run_dir, env=profile_env, log=log_path, timeout=timeout)
+    log = log_path.read_text(errors="replace")
+    timing = validate_log(log, configuration["expected_max_steps"])
+    report_file = profile_base.with_suffix(".nsys-rep")
+    if not report_file.is_file():
+        matches = sorted(directory.glob("resident*.nsys-rep"))
+        if not matches:
+            raise RuntimeError(f"nsys completed without producing a .nsys-rep file in {directory}")
+        report_file = matches[0]
+    stats_file = directory / "stats.txt"
+    csv_files = {}
+    stats_error = None
+    stats_argv = [str(nsys_bin), "stats", "--force-export=true"]
+    for report_name in NSYS_STATS_REPORTS:
+        stats_argv.extend(["--report", report_name])
+    stats_argv.append(str(report_file))
+    try:
+        command(stats_argv, cwd=directory, env=profile_env, log=stats_file, timeout=min(timeout, 300))
+        csv_prefix = directory / "csv"
+        csv_argv = [str(nsys_bin), "stats", "--format", "csv", "--output", str(csv_prefix)]
+        for report_name in NSYS_STATS_REPORTS:
+            csv_argv.extend(["--report", report_name])
+        csv_argv.append(str(report_file))
+        csv_log = directory / "stats-csv.log"
+        command(csv_argv, cwd=directory, env=profile_env, log=csv_log, timeout=min(timeout, 300))
+        for report_name in NSYS_STATS_REPORTS:
+            candidate = directory / f"csv_{report_name}.csv"
+            if candidate.is_file():
+                csv_files[report_name] = str(candidate)
+    except (RuntimeError, subprocess.TimeoutExpired, OSError) as error:
+        stats_error = str(error)
+    return {
+        "executable": str(nsys_bin),
+        "directory": str(directory),
+        "report_file": str(report_file),
+        "stats_file": str(stats_file) if stats_file.is_file() else None,
+        "csv_files": csv_files,
+        "log": str(log_path),
+        "argv": argv,
+        "steps_cap": steps_cap,
+        "wall_seconds": elapsed,
+        "application_timing": timing,
+        "reports": list(NSYS_STATS_REPORTS),
+        "stats_error": stats_error,
+    }
 
 
 def summarize_phases(rows):
@@ -375,6 +472,11 @@ def run(args):
         fortran = Path(shutil.which(args.fortran) or args.fortran).resolve(strict=True)
         cxx = Path(hardware["toolchain"]["cuda_host_cxx"]).resolve(strict=True)
         nvcc = Path(hardware["toolchain"]["nvcc"]).resolve(strict=True)
+        nsys_steps = getattr(args, "nsys_steps", None)
+        nsys_enabled = bool(getattr(args, "nsys", False) or nsys_steps is not None)
+        nsys_bin = nsys_version = None
+        if nsys_enabled:
+            nsys_bin, nsys_version = find_nsys(nvcc)
         dependencies = None
         if args.app_root is None or args.vkfft is None:
             dependencies = prepare_dependencies(work / "dependencies", application=args.app_root is None,
@@ -586,6 +688,42 @@ def run(args):
                 / summary["resident"]["phases"]["loop"]["median_seconds"]
             )
         report.update(status="passed", summary=summary, figures=str(output / "figures"))
+        if nsys_enabled:
+            verify_binaries()
+            if nsys_steps is not None:
+                nsys_config_dir = work / "nsys-config"
+                nsys_configuration = prepare_config(
+                    source, nsys_config_dir, steps=nsys_steps, advection=advection,
+                    grid=getattr(args, "grid", None), domain_size=getattr(args, "domain_size", None),
+                    end_time=getattr(args, "end_time", None), cfl=getattr(args, "cfl", None),
+                    re_number=getattr(args, "re", None),
+                )
+            else:
+                nsys_config_dir = work / "config"
+                nsys_configuration = configuration
+            nsys_env = application_environment(
+                args.threads, gpu["uuid"], caches["timing"],
+                traced=False, resident_threads=gpu_threads,
+                device_budget=getattr(args, "gpu_budget", None),
+            )
+            print("Starting Nsight Systems profile (resident)",
+                  f"steps<={nsys_steps}" if nsys_steps is not None else "full case", flush=True)
+            # The comparison above stands on its own: a profile that fails is reported, not fatal.
+            try:
+                nsys_result = run_nsys_profile(
+                    nsys_bin, binaries["ELMM"]["path"], nsys_config_dir, nsys_configuration,
+                    output / "nsys", nsys_env, args.timeout, steps_cap=nsys_steps,
+                )
+            except (RuntimeError, ValueError, OSError, subprocess.TimeoutExpired) as error:
+                report["nsys"] = {"executable": str(nsys_bin), "version": nsys_version, "steps_cap": nsys_steps,
+                                  "error": f"{type(error).__name__}: {error}"}
+                print("Nsight Systems profile failed:", error, flush=True)
+            else:
+                nsys_result["version"] = nsys_version
+                report["nsys"] = nsys_result
+                print("Nsight Systems report:", nsys_result["report_file"], flush=True)
+                if nsys_result.get("stats_file"):
+                    print("Nsight Systems stats:", nsys_result["stats_file"], flush=True)
         write(report_path, report)
         plot_experiment(report_path, output / "figures")
     except BaseException as error:
@@ -614,6 +752,10 @@ def main(argv=None):
                         help="Floating-point precision: dp (double, default) or sp (single)")
     parser.add_argument("--fast-fp", action="store_true",
                         help="Opt in to FMA contraction and fast CUDA div/sqrt instead of strict no-FMA flags")
+    parser.add_argument("--nsys", action="store_true",
+                        help="Run an isolated Nsight Systems (nsys) profile of the resident GPU binary after timing runs")
+    parser.add_argument("--nsys-steps", type=int, metavar="N",
+                        help="Cap timesteps for the isolated Nsight Systems profile (implies --nsys)")
     parser.add_argument("--grid", help="Override grid cell counts as NXxNYxNZ or NX,NY,NZ")
     parser.add_argument("--domain-size", help="Override domain lengths as LXxLYxLZ or LX,LY,LZ")
     parser.add_argument("--end-time", type=float, help="Override time_stepping.conf end_time")
@@ -676,6 +818,10 @@ def main(argv=None):
         parser.error("gpu-budget must be a positive count of bytes, optionally with K, M or G")
     if args.steps is not None and args.steps < 1:
         parser.error("steps must be positive")
+    if args.nsys_steps is not None:
+        if args.nsys_steps < 1:
+            parser.error("nsys-steps must be positive")
+        args.nsys = True
     run(args)
 
 

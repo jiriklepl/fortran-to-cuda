@@ -602,3 +602,142 @@ def test_fast_fp_is_opt_in_across_cli_cmake_and_resident_build(tmp_path, monkeyp
         assert ("--fast-fp" in build_argvs[0]) is fast_fp
         report = json.loads((out / "resident/report.json").read_text())
         assert report["strict_fp"] is (not fast_fp)
+
+
+def test_nsys_options_and_isolated_profile_run(tmp_path, monkeypatch):
+    # CLI parsing: default off, --nsys-steps implies --nsys, non-positive rejected.
+    parsed = []
+    with monkeypatch.context() as cli_patch:
+        cli_patch.setattr(runner, "run", parsed.append)
+        runner.main(["--output-dir", str(tmp_path)])
+        runner.main(["--output-dir", str(tmp_path), "--nsys"])
+        runner.main(["--output-dir", str(tmp_path), "--nsys-steps", "25"])
+    assert parsed[0].nsys is False and parsed[0].nsys_steps is None
+    assert parsed[1].nsys is True and parsed[1].nsys_steps is None
+    assert parsed[2].nsys is True and parsed[2].nsys_steps == 25
+    with pytest.raises(SystemExit):
+        runner.main(["--output-dir", str(tmp_path), "--nsys-steps", "0"])
+
+    # find_nsys rejects broken stubs (e.g., CUDA toolkit stub printing an error).
+    broken_nsys = tmp_path / "broken-nsys"
+    broken_nsys.write_text("#!/bin/sh\necho 'Nsight Systems not installed' >&2\nexit 1\n")
+    broken_nsys.chmod(0o755)
+    with monkeypatch.context() as probe_patch:
+        probe_patch.setattr(runner.shutil, "which", lambda name: str(broken_nsys) if name == "nsys" else None)
+        with pytest.raises(RuntimeError, match="nsys is unavailable"):
+            runner.find_nsys(None)
+
+    # Full run with a stubbed working nsys executable.
+    fake_nsys = tmp_path / "nsys"
+    fake_nsys.write_text(
+        f"#!{sys.executable}\n"
+        "import os, sys\nfrom pathlib import Path\n"
+        "if sys.argv[1:] == ['--version']:\n"
+        "    print('NVIDIA Nsight Systems version 2026.1.0')\n"
+        "    sys.exit(0)\n"
+        "if sys.argv[1] == 'profile':\n"
+        "    out = Path(sys.argv[sys.argv.index('-o') + 1])\n"
+        "    out.with_suffix('.nsys-rep').write_text('fake-rep')\n"
+        "    print('tstep: 1\\ntstep: 20\\nTotal wall clock time for time steps: 0.42\\n')\n"
+        "    print('Wall clock time for initialization: 0.100000')\n"
+        "    print('Wall clock time for loop: 0.420000')\n"
+        "    print('Wall clock time for finalization: 0.050000')\n"
+        "    print('saved.')\n"
+        "    sys.exit(0)\n"
+        "if sys.argv[1] == 'stats':\n"
+        "    if '--output' in sys.argv:\n"
+        "        prefix = sys.argv[sys.argv.index('--output') + 1]\n"
+        "        Path(prefix + '_cuda_gpu_kern_sum.csv').write_text('Time (%),Name\\n50.0,kernel\\n')\n"
+        "    else:\n"
+        "        print('CUDA GPU Kernel Summary')\n"
+        "    sys.exit(0)\n"
+        "sys.exit(2)\n"
+    )
+    fake_nsys.chmod(0o755)
+
+    out = tmp_path / "out-nsys"
+    args = SimpleNamespace(
+        output_dir=out, work_dir=tmp_path / "work-nsys",
+        app_root=tmp_path, solver=tmp_path, vkfft=tmp_path,
+        case="channel-simple", config=None, steps=2, threads=4,
+        jobs=2, repeats=1, warmups=0, timeout=30, build_timeout=30,
+        fortran=sys.executable, cuda_host=None, nvcc=None,
+        nsys=True, nsys_steps=20,
+    )
+    monkeypatch.setattr(runner.shutil, "which", lambda name: str(fake_nsys) if name == "nsys" else name)
+    monkeypatch.setattr(runner, "doctor", lambda *_args, **_kwargs: {
+        "gpu": {"uuid": "GPU-id", "compute_capability": "8.6"},
+        "toolchain": {"cuda_host_cxx": sys.executable, "nvcc": sys.executable}})
+    monkeypatch.setattr(runner, "prepare_application_basis", lambda *_args: tmp_path)
+    monkeypatch.setattr(runner, "application_paths", lambda _root: {"elmm": tmp_path, "PoisFFT": tmp_path})
+    monkeypatch.setattr(runner, "select_configuration", lambda *_args: tmp_path)
+    monkeypatch.setattr(runner, "source_identity", lambda _root: {"files": {}})
+    monkeypatch.setattr(runner, "solver_identity", lambda _root: {"revision": "test"})
+    prepared_configs = []
+
+    def fake_prepare(_source, destination, **kwargs):
+        prepared_configs.append((destination.name, kwargs.get("steps")))
+        destination.mkdir()
+        (destination / "main.conf").write_text("")
+        return {"runtime_arguments": [], "expected_max_steps": kwargs.get("steps") or 2}
+
+    real_command = runner.command
+    nsys_commands = []
+
+    def fake_command(argv, *, cwd, env, log, timeout):
+        if str(argv[0]) == str(fake_nsys):
+            nsys_commands.append((list(map(str, argv)), dict(env)))
+            return real_command(argv, cwd=cwd, env=env, log=log, timeout=timeout)
+        directory = Path(argv[argv.index("--output") + 1])
+        directory.mkdir()
+        binaries = {}
+        for name in ("ELMM", "ELMM-native", "ELMM-full20", "ELMM-native-full20"):
+            path = directory / name
+            path.write_text(name)
+            binaries[name] = {"path": str(path), "sha256": runner.digest(path)}
+        provider = directory / "provider"
+        provider.write_text("provider")
+        (directory / "built.json").write_text(json.dumps({
+            "status": "PASS", "binaries": binaries,
+            "provider": {"path": str(provider), "sha256": runner.digest(provider)}}))
+        (directory / "packages.json").write_text("[]")
+        return 1.0
+
+    def fake_app(binary, config, configuration, directory, env, timeout, expected_steps=None):
+        directory.mkdir(parents=True)
+        return {"directory": str(directory), "wall_seconds": 1.0,
+                "application_timing": {"completed_steps": 2}}, "vtk", "Time limit reached."
+
+    monkeypatch.setattr(runner, "prepare_config", fake_prepare)
+    monkeypatch.setattr(runner, "command", fake_command)
+    monkeypatch.setattr(runner, "run_application", fake_app)
+    monkeypatch.setattr(runner, "read_fields", lambda *_args: {"fields-U.bin": "values"})
+    monkeypatch.setattr(runner, "checked_fields", lambda *_args: {"passed": True})
+    monkeypatch.setattr(runner, "compare_vtks", lambda *_args: {"passed": True})
+    monkeypatch.setattr(runner, "compare_outputs", lambda *_args: {"passed": True})
+    monkeypatch.setattr(runner, "verify_resident_execution", lambda *_args: {"verified": True})
+    monkeypatch.setattr(runner, "plot_experiment", lambda *_args: None)
+
+    runner.run(args)
+    report = json.loads((out / "resident/report.json").read_text())
+    assert prepared_configs == [("config", 2), ("nsys-config", 20)]
+    assert len(report["runs"]) == 2
+    assert report["nsys"]["steps_cap"] == 20
+    assert report["nsys"]["stats_error"] is None
+    assert Path(report["nsys"]["report_file"]).is_file()
+    assert Path(report["nsys"]["stats_file"]).is_file()
+    assert "CUDA GPU Kernel Summary" in Path(report["nsys"]["stats_file"]).read_text()
+    assert "cuda_gpu_kern_sum" in report["nsys"]["csv_files"]
+    assert nsys_commands[0][1]["POISSON_SOLVER_KERNEL_CACHE_DIR"].endswith("timing-cache")
+    # Kernels inside CUDA graphs only show up when the graph's nodes are traced.
+    assert "--trace=cuda,nvtx" in nsys_commands[0][0] and "--cuda-graph-trace=node" in nsys_commands[0][0]
+
+    # A profile that fails leaves the comparison passed and says what went wrong.
+    fake_nsys.write_text(fake_nsys.read_text().replace(
+        "if sys.argv[1] == 'profile':\n", "if sys.argv[1] == 'profile':\n    sys.exit(3)\n"))
+    args.output_dir, args.work_dir = tmp_path / "out-failed", tmp_path / "work-failed"
+    prepared_configs.clear()
+    runner.run(args)
+    failed = json.loads((tmp_path / "out-failed/resident/report.json").read_text())
+    assert failed["status"] == "passed" and len(failed["runs"]) == 2
+    assert "error" in failed["nsys"] and failed["nsys"]["steps_cap"] == 20

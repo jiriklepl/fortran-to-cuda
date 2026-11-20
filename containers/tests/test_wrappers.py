@@ -175,6 +175,19 @@ def test_node_forwards_opt_in_fast_fp(sandbox):
     assert execute_payload(sandbox).returncode == 0
     argv = json.loads(sandbox[2].read_text())["argv"]
     assert "--fast-fp" in argv
+    assert "--nsys" not in argv
+
+
+def test_node_forwards_opt_in_nsys_and_steps(sandbox):
+    fake_workspace(sandbox)
+    result = sandbox[4]("run_node.sh", "hopper01", "--dry-run", "--nsys-steps", "25")
+    assert result.returncode == 0, result.stderr
+    assert "Nsight Systems:" in result.stdout and "/resident/nsys" in result.stdout
+    assert "load_module nsight-systems" in result.stdout
+    assert execute_payload(sandbox).returncode == 0
+    argv = json.loads(sandbox[2].read_text())["argv"]
+    assert "--nsys" in argv
+    assert values(argv, "--nsys-steps") == ["25"]
 
 
 def test_node_missing_pipeline_fails_before_submission(sandbox):
@@ -360,7 +373,7 @@ def test_node_job_script_is_immutable(sandbox):
 
 @pytest.mark.parametrize("args", [
     ["--cpus", "3"], ["--threads", "9"], ["--gpu-threads", "9"], ["--gpu-threads", "0"], ["--gpu-budget", "lots"], ["--gpu-budget", "0"], ["--jobs", "9"], ["--warmups", "-1"],
-    ["--repeats", "0"], ["--case", "wrong"], ["--case", "second-order"], ["--runtime", "wrong"], ["--steps"],
+    ["--repeats", "0"], ["--case", "wrong"], ["--case", "second-order"], ["--runtime", "wrong"], ["--steps"], ["--nsys-steps", "0"],
 ])
 def test_node_rejects_invalid_resources_before_dispatch(sandbox, args):
     _, _, capture, _, invoke = sandbox
@@ -372,7 +385,7 @@ def test_node_rejects_invalid_resources_before_dispatch(sandbox, args):
 @pytest.mark.parametrize("args", [
     ["--threads", "99"], ["--jobs=99"], ["--config", "/host/config"],
     ["--output-dir=/host/results"], ["--work-dir", "/host/work"],
-    ["--arch", "100"], ["--case", "channel"], ["--steps", "10"], ["--fast-fp"],
+    ["--arch", "100"], ["--case", "channel"], ["--steps", "10"], ["--fast-fp"], ["--nsys"], ["--nsys-steps", "25"],
 ])
 def test_node_extra_arguments_cannot_override_checked_options(sandbox, args):
     _, _, capture, _, invoke = sandbox
