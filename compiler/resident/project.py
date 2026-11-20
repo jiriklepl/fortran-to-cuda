@@ -17,6 +17,7 @@ from pathlib import Path
 
 from compiler.resident.configure import configure_sources
 from compiler.resident.directives import expand_directives
+from compiler.resident.reductions import lower_reductions
 from compiler.resident.rewrites import inline_tile_scratch_nests, promote_line_snapshots
 from compiler.resident.specialize import integer_parameters, specialize
 from compiler.scopes.resident_entries import (
@@ -156,8 +157,11 @@ def prepare(project, directory, *, fortran, host_threads=4):
     resident build compiles in its place (the original itself when nothing
     changed), followed by the sources an edit added, whose ``original`` is
     None; ``entries``, the directories of the compiled entries; and one
-    summary per selection; and ``audit``, the host statements that touch
-    bound arrays (see ``audit``). The directory must not exist.
+    summary per selection; ``audit``, the host statements that touch bound
+    arrays (see ``audit``); and ``reductions``, the loop nests that only
+    accumulate scalars, each with ``compiled`` or the ``reason`` it stays on
+    the host (see ``compiler.resident.reductions``). The directory must not
+    exist.
     """
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
@@ -206,6 +210,25 @@ def prepare(project, directory, *, fortran, host_threads=4):
                 current[holders[0]] = path
                 specialized.add(holders[0])
 
+    # Nests that only accumulate scalars get a form whose partial results the device can store.
+    reductions = []
+    for original in originals:
+        text = current[original].read_text()
+        lowered, records = lower_reductions(text, patterns)
+        if lowered != text:
+            path = directory / "rewritten" / current[original].name
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(lowered)
+            current[original] = path
+            specialized.add(original)
+        reductions += [{**record, "source": original} for record in records]
+    lowered = [record for record in reductions if "tag" in record]
+
+    def reduction(entry):
+        """The rewritten nest an exported entry belongs to: its parameters carry the nest's names."""
+        return next((record for record in lowered if record["procedure"] == entry["procedure"]
+                     and any(parameter["name"].startswith(record["tag"]) for parameter in entry["parameters"])), None)
+
     extracted = export_resident_entries(list(current.values()), patterns, directory / "extracted")
     packages, summaries = [], []
     for selection in project.selections:
@@ -218,10 +241,26 @@ def prepare(project, directory, *, fortran, host_threads=4):
                  "rejected": [item for item in extracted["rejected"] if selected(item)]}
         if selection.guard is not None:
             group = guard_entries(group, directory / (selection.label + "-guarded"), selection.guard)
-        group = pass_scalars_by_value(group, directory / (selection.label + "-values"),
-                                      resources=selection.value_scalars)
+        group = pass_scalars_by_value(
+            group, directory / (selection.label + "-values"), resources=selection.value_scalars,
+            names=lambda entry: (reduction(entry) or {}).get("value_scalars", ()))
         package = compile_resident_entries(group, directory / (selection.label + "-entries"),
                                            host_threads=host_threads)
+        # A rewritten reduction runs on the device only when all three of its nests compiled. Otherwise
+        # its original nest runs, and what the rewrite added is left out of the entries and the report.
+        for record in lowered:
+            if not any(fnmatchcase(record["procedure"], pattern) for pattern in chosen):
+                continue
+            own = [item for item in package["entries"] if reduction(item["region"]) is record]
+            record["compiled"] = sum(len(item["region"]["source_loop_spans"]) for item in own) == 3
+            if record["compiled"]:
+                continue
+            lines = current[record["source"]].read_text().splitlines()
+            mine = [item for item in package["rejected"] if item["procedure"] == record["procedure"]
+                    and record["tag"] in "\n".join(lines[item["first_line"] - 1:item["last_line"]])]
+            record["reason"] = "; ".join(sorted({item["reason"] for item in mine})) or "its nests were not exported"
+            package = {**package, "entries": [item for item in package["entries"] if item not in own],
+                       "rejected": [item for item in package["rejected"] if item not in mine]}
         nests = sum(len(item["region"]["source_loop_spans"]) for item in package["entries"])
         if nests < selection.minimum_nests:
             raise ValueError(f"Selection {selection.label} compiled {nests} loop nests; "
@@ -249,6 +288,13 @@ def prepare(project, directory, *, fortran, host_threads=4):
         texts[original] = replaced.get(before, current[original]).read_text()
         if before in replaced or project.rewrites.get(original.name) or original in specialized:
             touched.add(original)
+    for record in lowered:
+        if not record.get("compiled"):
+            # Its original nest runs instead, after the device values are published.
+            switch = f"logical, parameter :: {record['tag']}compiled = .true."
+            if texts[record["source"]].count(switch) != 1:
+                raise ValueError("Lost the switch of the rewritten reduction in " + record["procedure"])
+            texts[record["source"]] = texts[record["source"]].replace(switch, switch.replace(".true.", ".false."))
     added = {}
     if project.edit is not None:
         for key, text in project.edit(dict(texts)).items():
@@ -291,6 +337,8 @@ def prepare(project, directory, *, fortran, host_threads=4):
               "domain": {"module": project.domain.module, "object": project.domain.object,
                          "default": project.domain == DEFAULT_DOMAIN},
               "sources": records, "entries": [item["directory"] for package in packages for item in package["entries"]],
-              "selections": summaries, "directives": directives, "audit": findings}
+              "selections": summaries, "directives": directives, "audit": findings,
+              "reductions": [{key: str(value) if key == "source" else value for key, value in record.items()
+                              if key not in {"tag", "value_scalars"}} for record in reductions]}
     (directory / "prepared.json").write_text(json.dumps(result, indent=2) + "\n")
     return result

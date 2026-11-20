@@ -1202,6 +1202,13 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                         or binding.root in constants.names or binding is owner.scope.bindings.get(binding.name))
         if kind == "Part_Ref" and not captured_array and not private_array:
             name = str(value.items[0]).lower()
+            found = analysis._candidates(source_scope_for(analysis, value, owner.scope), value.items[0]) \
+                if name == "ieee_is_nan" and len(_children(value.items[1])) == 1 else ()
+            if found and all(item.removeprefix("$intrinsic::").startswith("ieee_arithmetic::") for item in found):
+                # IEEE_IS_NAN of IEEE_ARITHMETIC, the intrinsic module or a source module that stands in
+                # for it where the compiler has none: the comparison that only a NaN fails.
+                operand = str(transformed(_children(value.items[1])[0], owner))
+                return F.Expr(f"(({operand}) /= ({operand}))")
             if _intrinsic_shadowed(analysis, owner, name):
                 raise CompilationError("inline numerical intrinsic is shadowed: " + name)
         if kind == "Part_Ref" and captured_array:

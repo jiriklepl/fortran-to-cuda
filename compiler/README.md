@@ -477,6 +477,9 @@ directives. They are comments, so the same source still builds natively:
 | `!$fort publish [if(<condition>)]` | Bring every value back and forget the device copies, before host code whose accesses are not known |
 | `!$fort observe(<arrays>) [if(<condition>)]` | Bring the named arrays back and keep their device copies, for host code that reads them |
 | `!$fort release(<arrays>)` | Retire a temporary's device copy before the temporary is deallocated |
+| `!$fort active(<logical>)` | Set the variable to whether values are on the device now |
+| `!$fort host` | Inside a loop nest: the nest is host code that takes care of its own access; it is neither compiled nor reported |
+| `!$fort reduction(<op>: <scalars>) [private(<scalars>)]` | Before a loop nest: the scalars only accumulate there, in any order (see below) |
 
 Without `budget` the domain may use what the device has free when the first
 epoch starts, less a reserve of one sixteenth of the device (at least 512 MiB)
@@ -500,7 +503,48 @@ entries then take by handle; the default domain is the runtime's
 `fort_resident_application` module. `rewrites` applies the compiler's loop
 rewrites, or the application's own functions, to a source before export.
 
-Two forms that depend on run-time values are supported in selected procedures.
+Three forms beyond plain array loops are supported in selected procedures.
+
+- **Loops that only accumulate scalars.** A nest such as
+
+  ```fortran
+  do k = 1, nz
+    do j = 1, ny
+      do i = 1, nx
+        p = abs(u(i,j,k)) / dx
+        fastest = max(fastest, p)
+        if (v(i,j,k) > 0) cells = cells + 1
+      end do
+    end do
+  end do
+  ```
+
+  leaves nothing in any array, so it cannot be an entry as it stands. The
+  preparation rewrites it (`compiler.resident.reductions`): up to 65536 device
+  threads each take every 65536th iteration, in source order, and store what
+  they accumulate; a second nest folds those partial results into 256 values;
+  the host brings the 256 values back and folds them into the variables. Only
+  those values cross to the host, the arrays stay where they are, and the
+  original nest remains for the time values are not on the device. Recognized
+  are `s = s + x`, `s = s - x`, `s = max(s, x)`, `s = min(s, x)`, `s = s .or. x`,
+  `s = s .and. x` and the assignment of a logical constant, on scalar REAL,
+  default INTEGER and default LOGICAL variables that the nest uses in no other
+  way, under any conditions and inner loops; the procedure may be a function
+  whose result is accumulated. Maximum, minimum, integer sums and logical
+  accumulation do not depend on the order, so such nests are rewritten wherever
+  they are found. A sum of reals does: it is rewritten only where the source
+  says the order is free, with an OpenMP `reduction` clause on the loop or with
+  `!$fort reduction(+: s)` before it. The device order is fixed, so a run
+  repeats its sums exactly; they differ in rounding from a serial host sum.
+  A scalar the nest assigns without accumulating it is computed in a copy. It
+  must therefore be local to the procedure and not be named after the nest,
+  or be listed in a `private` clause of the OpenMP directive or of the
+  `reduction` directive. `prepared.json` lists every such nest under
+  `reductions`, with `compiled` or the `reason` it stays on the host. A nest
+  that also writes array elements, calls a subroutine, has more iterations
+  than a default integer counts, or whose rewritten form the compiler rejects,
+  stays on the host; in the last two cases the device values are published
+  first, which costs a full download each time the nest is reached.
 
 - **Fields of an array of derived type.** A nest may read and write
   `points(i)%field` for a rank-one array of derived type and a scalar REAL or
@@ -2576,7 +2620,10 @@ slices and snapshots,
 non-pure expression call arguments, other intrinsics/operators, explicit lower
 dummy array bounds, and
 unsupported specification statements reject with a source location.
-Parallel reductions remain unsupported by this ordinary numerical frontend.
+An entry itself has no parallel reductions; a resident build rewrites loops that
+only accumulate scalars before they reach this frontend (see "Resident build of
+an application"). `IEEE_IS_NAN` of `IEEE_ARITHMETIC`, the intrinsic module or a
+source module that stands in for it, is read as the comparison `x /= x`.
 Scoped source generation has the additional proven array-operation normalization
 described above; it does not make arbitrary numerical slices legal. Initialized scalar recurrences, valid
 scalar live-outs, final induction values, and otherwise unproved regions can
@@ -2810,7 +2857,7 @@ uploads host writes before later device work; partial writes preserve other cell
 
 Fallback is an execution policy after semantic validation. Undefined scalar reads,
 invalid types, unsupported constructs, zero-stride errors, and internal failures
-remain errors. It does not implement parallel reductions.
+remain errors.
 
 Distinct array arguments must not overlap whenever either is written. The
 compiler does not perform runtime overlap checks. Repeated actual arguments in

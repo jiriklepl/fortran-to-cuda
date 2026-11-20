@@ -4,7 +4,7 @@ program box
   use params
   use fields
   use stepper, only: advance
-  use diagnostics, only: report
+  use diagnostics, only: report, summary
   use sources, only: place, points
   implicit none
   integer :: step, unit
@@ -30,7 +30,10 @@ program box
   !$fort enter if(min(nx, ny, nz) >= 2)
   do step = 1, steps
     call advance(u, unew)
-    if (mod(step, report_every) == 0) call report(step, u)
+    if (mod(step, report_every) == 0) then
+      call report(step, u)
+      call summary(step, u)
+    end if
   end do
   !$fort leave
 

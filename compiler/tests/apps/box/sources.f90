@@ -42,4 +42,17 @@ contains
       points(q)%seen = points(q)%seen + a(points(q)%xi, points(q)%yj, points(q)%zk)
     end do
   end subroutine sense
+
+  ! The smallest value a source has seen, and whether each of them has seen something.
+  subroutine range(lowest, every)
+    real(rp), intent(out) :: lowest
+    logical, intent(out) :: every
+    integer :: q
+    lowest = huge(lowest)
+    every = .true.
+    do q = size(points), 1, -1
+      lowest = min(points(q)%seen, lowest)
+      every = every .and. points(q)%seen > 0
+    end do
+  end subroutine range
 end module sources

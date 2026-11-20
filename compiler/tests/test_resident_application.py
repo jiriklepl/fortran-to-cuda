@@ -24,11 +24,12 @@ def test_the_box_is_prepared_from_its_description(box):
     directory, prepared = box
     assert json.loads((directory / "prepared.json").read_text()) == prepared
     assert [(row["label"], row["entries"], row["nests"], row["rejected"]) for row in prepared["selections"]] == [
-        ("step", 2, 2, []), ("halo", 1, 3, []), ("sources", 2, 2, [])]
-    assert len(prepared["entries"]) == 5
+        ("step", 2, 2, []), ("halo", 1, 3, []), ("sources", 5, 5, []), ("diagnostics", 4, 6, [])]
+    assert len(prepared["entries"]) == 12
     assert all((Path(entry) / name).is_file() for entry in prepared["entries"] for name in ENTRY_SOURCES)
     assert prepared["domain"] == {"module": "fort_resident_application", "object": "resident", "default": True}
-    assert prepared["directives"] == 4
+    # Four in the sources, and five that each of the three rewritten accumulating loops brings.
+    assert prepared["directives"] == 19
     # Its selected procedures hold nothing but loop nests, so no host statement touches a bound array.
     assert prepared["audit"] == []
     sources = {Path(row["original"]).name: row for row in prepared["sources"]}
@@ -74,8 +75,37 @@ def test_directives_in_the_source_place_the_epoch_and_the_host_reads(box):
     # One field of the source list is brought back through the domain's copy of it.
     field = diagnostics.index("if (size(points) > 0) call resident%observe_field(c_loc(points(lbound(points,1))%seen))")
     assert observe < field < diagnostics.index("energy = energy + a(i,j,k)*a(i,j,k)")
-    # The diagnostic loop was not selected: it stays host code and keeps no entry call.
-    assert "fort_device_run" not in diagnostics
+    # The energy loop was not selected: it stays host code and keeps no entry call.
+    report = diagnostics[diagnostics.index("subroutine report"):diagnostics.index("end subroutine report")]
+    assert "fort_device_run" not in report
+
+
+def test_loops_that_only_accumulate_scalars_run_as_two_nests_and_a_host_fold(box):
+    directory, prepared = box
+    assert prepared["reductions"] == [
+        {"procedure": "sources::range", "line": 55, "variables": ["every", "lowest"],
+         "source": str(BOX / "sources.f90"), "compiled": True},
+        {"procedure": "diagnostics::summary", "line": 38, "variables": ["broken", "warm", "weight"],
+         "source": str(BOX / "diagnostics.f90"), "compiled": True},
+        {"procedure": "diagnostics::peak", "line": 61, "variables": ["peak"],
+         "source": str(BOX / "diagnostics.f90"), "compiled": True}]
+    diagnostics = (directory / "sources/diagnostics.f90").read_text()
+    summary = diagnostics[diagnostics.index("subroutine summary"):diagnostics.index("end subroutine summary")]
+    # One entry stores the partial results of a short loop; another stores and folds those of a long
+    # one. Either way only the folded values come back to the host.
+    assert summary.count("call resident_require(fort_device_run(") == 2
+    call = summary.rindex("call resident_require(fort_device_run(")
+    observe = summary.index("call resident%observe(fort_observed)")
+    fold = summary.index("warm = warm + fort_red1_q1(fort_red1_slot)")
+    assert call < observe < fold < summary.index("if (fort_red1_q3(fort_red1_slot) /= 0) broken = .true.")
+    # The original loop is still there for the time the field is on the host.
+    assert summary.index("\n    else\n", fold) < summary.index("            warm = warm + 1", fold)
+    assert "!$omp" not in summary
+    assert "!$fort" not in diagnostics
+    # A function's loop is rewritten the same way, with its result as the accumulated scalar.
+    peak = diagnostics[diagnostics.index("function peak"):diagnostics.index("end function peak")]
+    assert "peak = max(peak, fort_red2_q1(fort_red2_slot))" in peak
+    assert "fort_red2_i1 = fort_red_ieee_value(peak, fort_red_negative_inf)" in peak
 
 
 def test_the_prepared_fortran_compiles_against_the_runtime_modules(box, tmp_path):

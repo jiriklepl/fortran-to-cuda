@@ -10,12 +10,15 @@ MINIMUM_EXTENT = "nx >= 2 .and. ny >= 2 .and. nz >= 2"
 
 
 def box_project(sources=BOX, *, defines=("DOUBLE",)):
-    """The whole description the box needs: its sources, three selections and a precision."""
+    """The whole description the box needs: its sources, four selections and a precision."""
     return ResidentProject(
         sources=tuple(Path(sources) / (name + ".f90") for name in UNITS),
         selections=(Selection("step", ("stepper::diffuse", "stepper::store"), minimum_nests=2),
                     Selection("halo", ("boundaries::*",), guard=MINIMUM_EXTENT, minimum_nests=3),
-                    Selection("sources", ("sources::inject", "sources::sense"), minimum_nests=2)),
+                    # Each accumulating loop becomes three nests: partial results of a short loop, and
+                    # partial results and their fold for a long one.
+                    Selection("sources", ("sources::inject", "sources::sense", "sources::range"), minimum_nests=5),
+                    Selection("diagnostics", ("diagnostics::summary", "diagnostics::peak"), minimum_nests=6)),
         defines=defines)
 
 

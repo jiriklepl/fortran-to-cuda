@@ -5,6 +5,8 @@ import subprocess
 from fnmatch import fnmatchcase
 from pathlib import Path
 
+from compiler.resident.reductions import _procedures, license_line
+
 
 def _identity(path):
     path = Path(path).resolve(strict=True)
@@ -16,14 +18,15 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
 
     Writes one preprocessed copy of every file into ``directory``; the originals
     are untouched. OpenMP directives are blanked only inside the procedures
-    named in ``procedures`` (``module::name`` or globs): their loop nests become entries
-    that one serial caller dispatches. Every statement, branch and expression
-    stays. Returns the record of originals, prepared copies and removed
-    directives.
+    named in ``procedures`` (``module::name``, ``module::host::name`` for an
+    internal procedure, or globs): their loop nests become entries that one
+    serial caller dispatches. A directive with a ``reduction`` clause leaves a
+    ``!$fort reduction`` line, which keeps what the clause says about the
+    accumulation order. Every statement, branch and expression stays. Returns
+    the record of originals, prepared copies and removed directives.
     """
     from fparser.common.readfortran import FortranStringReader
     from fparser.two.parser import ParserFactory
-    from fparser.two.utils import walk
 
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
@@ -43,20 +46,33 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
         modules = {m.group(1).lower() for m in re.finditer(r"(?im)^\s*module\s+([a-z_]\w*)\b", result.stdout)}
         if any(fnmatchcase(module, name.split("::", 1)[0]) for module in modules for name in selected if "::" in name):
             tree = parser(FortranStringReader(result.stdout, ignore_comments=False))
-            for module in (node for node in walk(tree) if type(node).__name__ == "Module"):
-                header = next(node for node in module.content if type(node).__name__ == "Module_Stmt")
-                module_name = str(header.items[1]).lower()
-                for routine in (node for node in walk(module) if type(node).__name__ == "Subroutine_Subprogram"):
-                    statement = next(node for node in routine.content if type(node).__name__ == "Subroutine_Stmt")
-                    name = module_name + "::" + str(statement.items[1]).lower()
-                    if not any(fnmatchcase(name, pattern) for pattern in selected):
+            for scope in _procedures(tree):
+                if not any(fnmatchcase(scope.qualified, pattern) for pattern in selected):
+                    continue
+                statement = next(node for node in scope.node.content
+                                 if type(node).__name__ in {"Subroutine_Stmt", "Function_Stmt"})
+                first, last = statement.item.span[0], scope.node.content[-1].item.span[1]
+                index = first - 1
+                while index < last:
+                    if not re.match(r"\s*!\$omp\b", lines[index], re.I):
+                        index += 1
                         continue
-                    ending = routine.content[-1]
-                    first, last = statement.item.span[0], ending.item.span[1]
-                    for index in range(first - 1, last):
-                        if re.match(r"\s*!\$omp\b", lines[index], re.I):
-                            removed.append({"line": index + 1, "directive": lines[index].rstrip(), "procedure": name})
-                            lines[index] = "\n"
+                    # One directive, with its continuation lines.
+                    group = [index]
+                    while lines[group[-1]].rstrip().endswith("&") and group[-1] + 1 < last \
+                            and re.match(r"\s*!\$omp\b", lines[group[-1] + 1], re.I):
+                        group.append(group[-1] + 1)
+                    text = " ".join(re.sub(r"(?i)^\s*!\$omp&?", "", lines[item]).strip().rstrip("&") for item in group)
+                    indent = lines[index][:len(lines[index]) - len(lines[index].lstrip())]
+                    for item in group:
+                        removed.append({"line": item + 1, "directive": lines[item].rstrip(),
+                                        "procedure": scope.qualified})
+                        lines[item] = "\n"
+                    # A reduction clause frees the order of an accumulation; that outlives the directive.
+                    stated = license_line(text)
+                    if stated is not None:
+                        lines[index] = indent + stated + "\n"
+                    index = group[-1] + 1
         target = directory / (hashlib.sha256(str(source).encode()).hexdigest()[:12] + "_" + source.name)
         target.write_text("".join(lines))
         if _identity(source) != before:

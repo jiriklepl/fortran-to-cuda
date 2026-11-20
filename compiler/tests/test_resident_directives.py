@@ -37,6 +37,21 @@ def test_enter_starts_an_epoch_once_under_its_condition():
     assert "    call flow%begin_epoch(int(0, c_int))\n" in expand("!$fort enter")[0]
 
 
+def test_active_tells_the_source_and_host_and_reduction_generate_nothing():
+    block, records = expand("    !$fort active(on_device)")
+    assert "      on_device = flow%active\n" in block
+    assert records[0]["directive"] == "active"
+    text, records = expand_directives("  do i = 1, n\n    !$fort host\n    s = s + a(i)\n  end do\n"
+                                      "  !$fort reduction(+: s) private(i)\n", DOMAIN)
+    assert text == "  do i = 1, n\n    s = s + a(i)\n  end do\n"
+    assert [item["directive"] for item in records] == ["host", "reduction"]
+    for line, message in (("!$fort host(a)", "Malformed"), ("!$fort reduction", "Malformed"),
+                          ("!$fort reduction(s)", "Malformed"), ("!$fort active", "needs a list"),
+                          ("!$fort active(a, b)", "takes one logical variable")):
+        with pytest.raises(ValueError, match=message):
+            expand(line)
+
+
 def test_leave_close_and_publish_act_on_the_whole_domain():
     assert "if (flow%active) call flow%end_epoch()" in expand("!$fort leave")[0]
     # Closing is unconditional: it is also valid when the domain was never entered.

@@ -210,6 +210,12 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     """
     analysis = SourceEffects(paths, analysis_sources=analysis_sources)
     analysis.element_fields = True
+    # The body of a module function holds loop nests like any subroutine's.
+    for name, routine in analysis.numerical_helpers.items():
+        if routine.source_kind == "function" and name not in analysis.routines:
+            analysis.routines[name] = routine
+            analysis._source_roles[name] = (routine.execution, analysis._routine_signature(routine),
+                                            str(routine.execution))
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
     resolved_procedures = _resolve_procedures(analysis, procedures, allow_patterns=allow_patterns)
@@ -268,8 +274,17 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
 
         def host(nodes, acknowledged):
             """Record host code that names arrays: it runs beside entries that may hold newer values."""
-            arrays, calls = {}, set()
+            arrays, calls, passed, elsewhere = {}, set(), set(), False
             for node in nodes:
+                # An array handed to a procedure is that procedure's business; so is one in a function's arguments.
+                for call in walk(node, Call_Stmt):
+                    passed.update(id(name) for name in walk(call.items[1], Name))
+                for reference in walk(node, Part_Ref):
+                    candidates = analysis._candidates(routine.scope, reference.items[0]) or ()
+                    if len(candidates) == 1 and candidates[0] in analysis.functions \
+                            and analysis._binding(routine.scope, reference.items[0]) is None:
+                        calls.add(candidates[0])
+                        passed.update(id(name) for name in walk(reference.items[1], Name))
                 # Asking for an array's bounds or allocation, or allocating it, reads none of its values.
                 inquired = {id(reference.items[1].items[0]) for reference in walk(node, Intrinsic_Function_Reference)
                             if str(reference.items[0]).lower() in _INQUIRIES and reference.items[1] is not None
@@ -279,6 +294,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                     binding = analysis._binding(routine.scope, name)
                     if binding is not None and binding.rank and id(name) not in inquired:
                         arrays[binding.root] = binding.name
+                        elsewhere |= id(name) not in passed
                 for call in walk(node, Call_Stmt):
                     try:
                         calls.add(resolve_original_call(analysis, routine.scope, call).procedure)
@@ -296,7 +312,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                                         "arrays": [{"name": name, "resource": root}
                                                    for root, name in sorted(arrays.items())],
                                         "calls": sorted(calls), "acknowledged": acknowledged,
-                                        "only_calls": all(_kind(node) == "Call_Stmt" for node in nodes)})
+                                        "only_calls": not elsewhere})
 
         def scan(sequence):
             follows = set()
@@ -323,14 +339,16 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
             "lifetime_authority": "caller storage epoch; numerical export grants no native-effect authority"}
 
 
-def pass_scalars_by_value(extracted, directory, *, resources=()):
+def pass_scalars_by_value(extracted, directory, *, resources=(), names=None):
     """Rewrite exported entries so chosen INTENT(IN) scalars are passed by VALUE.
 
     Lower-bound parameters always qualify: the caller evaluates them after it
     binds the reached allocation. ``resources`` names further scalars, as
     ``module::name``, that the caller guarantees are defined before any entry
-    runs. VALUE is a language-level input contract; other scalars keep their
-    guarded reference ABI. Returns the export with the rewritten paths.
+    runs. ``names(entry)`` may return the names of scalar parameters that are
+    defined whenever that one entry runs. VALUE is a language-level input
+    contract; other scalars keep their guarded reference ABI. Returns the
+    export with the rewritten paths.
     """
     import re
     from hashlib import sha256
@@ -340,8 +358,10 @@ def pass_scalars_by_value(extracted, directory, *, resources=()):
     resources = set(resources)
     entries = []
     for original in extracted["entries"]:
+        own = set(names(original)) if names is not None else set()
         values = [parameter["name"] for parameter in original["parameters"]
-                  if parameter["lower_bound_dimension"] is not None or parameter["resource"] in resources]
+                  if parameter["lower_bound_dimension"] is not None or parameter["resource"] in resources
+                  or (not parameter["rank"] and parameter["name"] in own)]
         source = Path(original["input_path"])
         text = source.read_text()
         for name in values:

@@ -11,6 +11,9 @@ them. They are comments, so the same source builds natively unchanged.
     !$fort publish [if(<condition>)]
     !$fort observe(<array>[, <array>...]) [if(<condition>)]
     !$fort release(<array>[, <array>...])
+    !$fort active(<logical variable>)
+    !$fort host
+    !$fort reduction(<operator>: <scalar>[, <scalar>...]) [private(<scalar>[, <scalar>...])]
 
 ``enter`` starts keeping values on the device unless that is already the case;
 without ``budget`` the domain may use what the device has free at that point.
@@ -20,8 +23,15 @@ state and must run before the bound arrays are deallocated at program end.
 put it before host code whose accesses are not known. ``observe`` brings back
 only the named arrays and keeps their device copies, for host code that reads
 them. One field of an array of derived type is named ``objects(:)%field``. ``release`` retires a temporary's device copy without bringing it back,
-before the temporary is deallocated. Every directive except ``enter`` and
-``close`` does nothing while values are not on the device.
+before the temporary is deallocated. ``active`` sets a logical variable to
+whether values are on the device now, for source that does something else in
+that case. Every other directive except ``enter`` and ``close`` does nothing
+while values are not on the device.
+
+The last two generate no code. ``host`` inside a loop nest says the nest is
+host code that takes care of its own access, so it is neither compiled nor
+reported. ``reduction`` before a nest says the named scalars only accumulate
+there and the order of their terms is free (see ``compiler.resident.reductions``).
 """
 import re
 
@@ -29,8 +39,8 @@ _LINE = re.compile(r"^(?P<indent>[ \t]*)!\$fort\b[ \t]*(?P<body>.*?)[ \t]*$", re
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*(?:%[A-Za-z][A-Za-z0-9_]*)*\Z")
 _FIELD = re.compile(r"([A-Za-z][A-Za-z0-9_]*)\s*\(\s*:\s*\)\s*%\s*([A-Za-z][A-Za-z0-9_]*)\Z")
 _CLAUSES = {"enter": {"budget", "if", "device"}, "leave": set(), "close": set(), "publish": {"if"},
-            "observe": {"if"}, "release": set()}
-_ARGUMENTS = {"observe", "release"}
+            "observe": {"if"}, "release": set(), "active": set()}
+_ARGUMENTS = {"observe", "release", "active"}
 
 
 def _clauses(text, line):
@@ -94,6 +104,10 @@ def _generate(name, names, clauses, indent, domain, origin):
         return _block(indent, domain, [f"call {this}%close()"])
     if name == "publish":
         return _block(indent, domain, [f"if ({active}) call {this}%publish()"])
+    if name == "active":
+        if len(names) != 1:
+            raise ValueError("The active directive takes one logical variable")
+        return _block(indent, domain, [f"{names[0]} = {this}%active"])
     if name == "release":
         return _block(indent, domain, [f"if ({this}%active) then",
                                        *(f"  call {this}%release_real({item})" for item in names), "endif"])
@@ -121,6 +135,14 @@ def expand_directives(text, domain, *, origin="source"):
         match = _LINE.match(line.rstrip("\r\n"))
         if match is None:
             output.append(line)
+            continue
+        word = match.group("body").split("(", 1)[0].strip().lower()
+        if word in {"host", "reduction"}:
+            from compiler.resident.reductions import parse_license
+            if (word == "host") != (match.group("body").strip().lower() == "host") or (
+                    word == "reduction" and not parse_license(match.group("body"))[0]):
+                raise ValueError(f"Malformed residency directive on line {number}: {match.group('body')!r}")
+            records.append({"line": number, "directive": word, "arrays": [], "clauses": {}})
             continue
         name, names, clauses = _clauses(match.group("body"), number)
         try:
