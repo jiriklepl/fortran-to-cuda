@@ -22,7 +22,8 @@ Poisson solver, and compares fresh ELMM executables:
 - `ELMM-native` uses native Fortran/OpenMP and CPU PoisFFT/FFTW.
 - `ELMM` uses the generated resident GPU path and the local CUDA Poisson solver.
 
-Both are built from the same pinned upstream ELMM and PoisFFT sources, unchanged.
+Both are built from the same pinned upstream ELMM and PoisFFT sources (see
+"Source basis" for the one loop the pipeline changes in its copy).
 The generated build records source snapshots, build commands, binaries and the
 solver source receipt. The comparison records the configuration, toolchain,
 GPU, runtime settings and complete-process timing samples. Work and output
@@ -196,11 +197,14 @@ A capped smoke run is not evidence of full-workload performance.
 ### Source basis
 
 Both executables are built from upstream ELMM
-`ddb426fca5b020216083f02a218292fea70c1df2` and the pinned PoisFFT, unchanged.
-ELMM sums the pressure reference of a boundary plane with an OpenMP reduction,
-so its value depends in rounding on the number of threads; the resident
-executable computes the same sum on the device in a fixed order. The fields of
-the two executables are compared with the tolerances described above, not bit for bit.
+`ddb426fca5b020216083f02a218292fea70c1df2` and the pinned PoisFFT. The
+pipeline changes one loop in the copy it builds from: the sum of the pressure
+reference plane, which ELMM does with an OpenMP reduction whose result differs
+in rounding from run to run, is done by one thread, so that a native run
+repeats itself (the `native-repeat` diagnostic checks that). The resident
+executable computes the same sum on the device in a fixed order of its own.
+The fields of the two executables are compared with the tolerances described
+above, not bit for bit.
 `containers/source_basis.json` pins the repository revisions and the hashes of
 the reviewed sources, includes and build files; drift in the sources or in that
 file fails before the build. The `channel-simple` input records its cloud
