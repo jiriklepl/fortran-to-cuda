@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import copy
 import math
-import re
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
@@ -40,9 +39,6 @@ class OriginalNumericalPrecondition:
     _source_nodes: tuple = field(default=(), compare=False, repr=False)
     _runtime_expression: str = field(default="", repr=False)
 
-    @property
-    def runtime_expression(self):
-        return self._runtime_expression
 
     @property
     def dependencies(self):
@@ -61,18 +57,6 @@ class OriginalNumericalPrecondition:
             collect(domain.upper)
         return tuple(result.values())
 
-    def render(self, resolve):
-        """Render a predicate using a NativeBound -> original-expression map."""
-        values = tuple(f"int(({resolve(bound)}),kind=c_int64_t)" for bound in self.operands)
-        if self.role == "positive_tile_step" and len(values) == 1:
-            return values[0] + " > 0_c_int64_t"
-        if self.role == "tile_integer_range" and len(values) == 2:
-            return " + ".join(values) + " <= 2147483647_c_int64_t"
-        if self.role == "array_extent_range" and len(values) == 1:
-            return values[0] + " <= 2147483647_c_int64_t"
-        if self.role == "array_shape_equal" and len(values) == 2:
-            return values[0] + " == " + values[1]
-        raise CompilationError("unknown original numerical precondition")
 
     def public(self):
         return {"role": self.role, "operands": [item.public() for item in self.operands],
@@ -712,9 +696,8 @@ def allocation_guard(analysis, routine, binding, preceding):
             "lifetime": "reached bounded region; allocation changes and unknown effects end ownership"}
 
 
-def extract_region(analysis, routine, node, *, preceding=(), following=(), cyclic_following=(),
-                   worksharing=None, immutable_inputs=None, atomic_alternative=None):
-    """Construct a bounded loop candidate with its original participation proof."""
+def extract_region(analysis, routine, node, *, preceding=(), following=(), cyclic_following=()):
+    """Construct a bounded candidate from serial counted loops of the original procedure."""
     analysis.verify_source()
     role = analysis._source_roles.get(routine.qualified)
     if (analysis.routines.get(routine.qualified) is not routine or role is None
@@ -731,8 +714,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         raise CompilationError("inline original specification is unsupported: " + "; ".join(specification_issues))
     if analysis._unknown_exports(routine.scope):
         raise CompilationError("inline intrinsic authority requires complete wildcard imports")
-    if worksharing is None and atomic_alternative is None and any(directive(item) is not None
-                                   for item in walk(_part(routine.scope.node, "Specification_Part"))):
+    if any(directive(item) is not None for item in walk(_part(routine.scope.node, "Specification_Part"))):
         # fparser may attach opening executable directives to specifications.
         # A detached DO alone does not prove either serial participation or the
         # complete parallel region; retain the original operation in that case.
@@ -741,17 +723,6 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     nodes = source_nodes
     if not nodes:
         raise CompilationError("inline numerical region is empty")
-    if worksharing is not None:
-        from compiler.frontend.worksharing_completion import WorksharingCompletionProof
-        if not isinstance(worksharing, WorksharingCompletionProof):
-            raise CompilationError('inline worksharing requires a compiler-issued participation proof')
-        worksharing.validate(analysis, routine.qualified, source_nodes)
-        following = worksharing.following(analysis)
-    if atomic_alternative is not None:
-        from compiler.frontend.atomic_worksharing_team import AtomicWorksharingAlternative
-        if type(atomic_alternative) is not AtomicWorksharingAlternative or worksharing is not None:
-            raise CompilationError("atomic extraction requires its distinct whole-team alternative token")
-        atomic_alternative.validate(analysis, routine.qualified, source_nodes)
     selected_span = (min(statement_span(item)[0] for item in nodes),
                      max(statement_span(item)[1] for item in nodes))
 
@@ -769,45 +740,25 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
 
     # A detached DO can be a genuine original AST node while still belonging
     # to a larger team. Source identity alone must not turn it into serial work.
-    if worksharing is None and atomic_alternative is None:
-        complete_original_groups(_children(routine.execution))
+    complete_original_groups(_children(routine.execution))
     # fparser attaches an associated !$OMP DO prefix to its DO construct.
     # Peel only that original structural prefix; do not authorize a projected
     # routine or arbitrary foreign AST as source-backed numerical work.
     # Ordinary comments can precede an attached OpenMP prefix. They belong to
     # the exact original selection, but do not create an execution operation
     # beside the joined group. Keep that selection for completion authority.
-    if atomic_alternative is not None:
-        # Only this exact registered alternative may peel the original DO
-        # prefixes without claiming an independent worksharing completion.
-        grouped = []
-        for original in atomic_alternative.loops:
-            loop = copy.copy(original)
-            content = list(loop.content)
-            while content and _kind(content[0]) == "Comment":
-                content.pop(0)
-            loop.content = content
-            grouped.append(loop)
-        grouped = tuple(grouped)
-    else:
-        grouped = tuple(item for item in grouped_nodes(nodes)
-                        if _kind(item) != "Comment" or directive(item) is not None)
+    grouped = tuple(item for item in grouped_nodes(nodes)
+                    if _kind(item) != "Comment" or directive(item) is not None)
     if len(grouped) == 1 and isinstance(grouped[0], tuple):
         nodes = grouped[0]
-    elif (len(grouped) == 1 or worksharing is not None or atomic_alternative is not None
-          or all(_kind(item) == "Block_Nonlabel_Do_Construct" for item in grouped)):
+    elif len(grouped) == 1 or all(_kind(item) == "Block_Nonlabel_Do_Construct" for item in grouped):
         nodes = grouped
-    joined = worksharing is not None or atomic_alternative is not None or directive(nodes[0]) is not None
-    if joined:
-        if any(_kind(item) not in {"Comment", "Block_Nonlabel_Do_Construct"} for item in nodes):
-            # Selecting only sibling DOs would silently discard an intervening
-            # branch, assignment or call. Reached team scheduling can retain
-            # those original operations; this flat numerical extraction cannot.
-            raise CompilationError("whole-team numerical extraction requires every original operation; structured siblings remain native")
-        loops = tuple(item for item in nodes if _kind(item) == "Block_Nonlabel_Do_Construct")
-    else:
+    if directive(nodes[0]) is not None:
+        # A loop under an OpenMP directive is the work of a whole team; only serial loops are extracted.
+        raise CompilationError("inline OpenMP association requires its complete original source region")
+    if True:
         if not all(_kind(item) == "Block_Nonlabel_Do_Construct" for item in nodes):
-            raise CompilationError("inline numerical region requires one counted DO or a complete joined team")
+            raise CompilationError("inline numerical region requires serial counted DO loops")
         if len(nodes) > 1:
             # Membership and sorted line numbers do not prove a serial group:
             # selecting two loops must not discard an intervening native call,
@@ -849,22 +800,6 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         if not related:
             raise CompilationError("inline extraction nodes must belong to the original execution")
     helpers = _helper_closure(analysis, routine, loops)
-    if atomic_alternative is not None:
-        completion = atomic_alternative.public()
-    elif worksharing is not None:
-        completion = worksharing.public()
-    elif joined:
-        # Completion belongs to the exact original group. Source-proven pure
-        # helper closures have a separate token: it permits numerical outlining
-        # but cannot authorize native memory hooks or establish GPU legality.
-        prove_completion = (analysis.numerical_joined_completion if helpers
-                            else analysis.joined_completion)
-        completion = prove_completion(routine.qualified, source_nodes).public()
-    if completion.get("native_sections_contract"):
-        # A final join proves completion of the unchanged concurrent sections.
-        # It does not authorize stripping their directives or serializing
-        # their bodies into a generated numerical implementation.
-        raise CompilationError("whole-native OpenMP SECTIONS cannot authorize numerical extraction")
     vector_reduction = any(_kind(item) == "Intrinsic_Function_Reference"
                            and str(item.items[0]).lower() in {"sum", "dot_product"}
                            for owner, body in [(routine, loop) for loop in loops]
@@ -981,21 +916,6 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                     | _upward_reads(following_analysis, routine, cyclic_following))
     if scalar_writes & live_scalars:
         raise CompilationError("inline loop-written scalar is live after the region")
-    if joined:
-        from compiler.scopes.participation import _threadprivate
-        if set(used) & _threadprivate(analysis):
-            raise CompilationError("inline OpenMP capture is THREADPRIVATE")
-        explicit_private = (set(atomic_alternative.private_roots) if atomic_alternative is not None else
-                            set(worksharing.private_roots) if worksharing is not None else set())
-        for item in nodes:
-            text = directive(item) or ""
-            for match in re.finditer(r"private\s*\(([^()]*)\)", text):
-                for name in match.group(1).split(","):
-                    binding = analysis._binding(routine.scope, name.strip())
-                    if binding:
-                        explicit_private.add(binding.root)
-        if scalar_writes - iterators - explicit_private:
-            raise CompilationError("inline OpenMP scalar writes need proven PRIVATE storage")
     # Read-only local fixed arrays can only be used if initialized inside the
     # reached numerical work. The ordinary frontend checks every scalarized
     # element's definition before use; they must not be captured as live arrays.
@@ -1013,51 +933,16 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         if root in (_upward_array_reads(following_analysis, routine, following)
                     | _upward_array_reads(following_analysis, routine, cyclic_following)):
             raise CompilationError("inline private array is live after the region")
-        if joined and root not in explicit_private:
-            raise CompilationError("inline OpenMP array writes need proven PRIVATE storage")
     private = {root: used[root] for root in sorted(scalar_writes | local_arrays)}
     occupied = {binding.name for binding in used.values()}
     occupied.update(name for helper in helpers.values() for name in helper.scope.bindings)
-    from compiler.scopes.immutable_inputs import scalar_element_captures
-    immutable_inputs = immutable_inputs or {}
-    elements = scalar_element_captures(analysis, routine, loops, immutable_inputs, occupied)
-    if elements and joined:
-        raise CompilationError("immutable element preparation requires a serial reached preflight; joined worksharing remains native")
-    immutable_reads = {item.formal_resource for item in elements}
-    if immutable_reads & writes:
-        raise CompilationError("immutable input cannot acquire numerical writes")
-    element_references = {id(reference): item for item in elements for reference in item.original_references}
-    if helpers and any(binding.root in immutable_inputs
-                       for helper in helpers.values() for binding, _ in references(analysis, helper.scope, helper.execution)):
-        raise CompilationError("immutable helper payload requires an original reached argument evaluation proof")
+    elements, immutable_reads, element_references = (), set(), {}
     from compiler.scopes.constant_parameters import outline_constants
     constants = outline_constants(analysis, routine, used.values(), occupied, _fixed_shape,
-                                  capture_scalar_parameters=atomic_alternative is not None)
+                                  capture_scalar_parameters=False)
     captures = {root: binding for root, binding in used.items()
                 if root not in private and root not in immutable_reads and "parameter" not in binding.attributes}
     captures.update((binding.root, binding) for binding in constants.scalar_captures)
-    if elements:
-        remaining = set()
-
-        def remaining_reads(value, owner):
-            if isinstance(value, (tuple, list)):
-                for child in value:
-                    remaining_reads(child, owner)
-                return
-            if id(value) in element_references:
-                return
-            if _kind(value) == "Name":
-                binding = analysis._binding(owner.scope, value)
-                if binding is not None:
-                    remaining.add(binding.root)
-            for child in _children(value):
-                remaining_reads(child, owner)
-
-        for owner, body in bodies:
-            remaining_reads(body, owner)
-        captures = {root: binding for root, binding in captures.items() if root in remaining}
-    if worksharing is not None and set(captures) & set(worksharing.private_roots):
-        raise CompilationError('inline worksharing cannot borrow a thread-private input value')
     guards = []
     for binding in captures.values():
         if binding.attributes & {"pointer", "optional", "volatile", "asynchronous", "value"}:

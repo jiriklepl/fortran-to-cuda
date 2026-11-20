@@ -1,6 +1,5 @@
 """Types of unchanged original scalar numeric operations; never their values."""
 
-SOURCE_SCALAR_OPERATOR_VERSION = 1
 
 _SUPPORTED = frozenset({("integer", 4, 0), ("integer", 8, 0),
                         ("real", 4, 0), ("real", 8, 0)})

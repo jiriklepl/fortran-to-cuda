@@ -14,9 +14,6 @@ class CompilerOptions:
     indexing: str | None = None
     gpu_policy: str = "sections"
     scope_transfers: str = "direct"
-    # The function is one leaf of a checked source graph: its tasks are ordered
-    # along the dependency schedule, and automatic placement keeps fusion.
-    source_graph: bool = False
     # Arrays whose subscript tuple the caller checks, before the entry runs, to
     # address a different element in every iteration of each nest that uses it.
     injective_arrays: tuple[str, ...] = ()
@@ -38,8 +35,6 @@ class CompilerOptions:
             raise CompilationError("pipelined slab batching was removed; use shared graph execution")
         if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
             raise CompilationError("scope transfers must be direct, pinned, auto, or coalesced")
-        if type(self.source_graph) is not bool:
-            raise CompilationError("source_graph must be a boolean")
         if any(not isinstance(name, str) or not name for name in self.injective_arrays):
             raise CompilationError("injective arrays are named by their entry arguments")
 

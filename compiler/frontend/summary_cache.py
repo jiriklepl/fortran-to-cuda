@@ -10,10 +10,7 @@ from __future__ import annotations
 
 import json
 import math
-import os
-import tempfile
 from collections import OrderedDict
-from contextlib import suppress
 from hashlib import sha256
 from pathlib import Path
 from threading import RLock
@@ -257,31 +254,3 @@ class SummaryCache:
             self._stats["misses"] += 1
             return None
 
-    def store(self, identity, requested, payload):
-        with self._lock:
-            try:
-                identity_digest, key = self._identity(identity, requested)
-                encoded = _canonical(payload)
-                _payload(payload, requested)
-                record = _canonical({"schema_version": _SCHEMA_VERSION, "identity_sha256": identity_digest,
-                                     "requested": requested, "key": key, "payload_sha256": sha256(encoded).hexdigest(),
-                                     "payload": _decode(encoded)})
-                self._remember(key, encoded)
-                self._stats["stores"] += 1
-                if self.directory is not None:
-                    temporary = None
-                    try:
-                        self.directory.mkdir(parents=True, exist_ok=True)
-                        with tempfile.NamedTemporaryFile(mode="wb", dir=self.directory, prefix=_FILE_PREFIX,
-                                                         suffix=".tmp", delete=False) as handle:
-                            temporary = Path(handle.name)
-                            handle.write(record)
-                        os.replace(temporary, self._filename(key))
-                        temporary = None
-                        self._stats["disk_writes"] += 1
-                    finally:
-                        if temporary is not None:
-                            with suppress(OSError):
-                                temporary.unlink()
-            except _CACHE_ERRORS:
-                self._stats["rejected"] += 1

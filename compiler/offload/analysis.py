@@ -110,9 +110,6 @@ class Interval:
     stop: int
     footprints: tuple[Footprint, ...]
 
-    @property
-    def unit_indices(self) -> tuple[int, ...]:
-        return tuple(range(self.start, self.stop))
 
 
 @dataclass(frozen=True)

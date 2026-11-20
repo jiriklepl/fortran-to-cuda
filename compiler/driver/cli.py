@@ -16,7 +16,7 @@ from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission import generate_sources
 from compiler.emission.common.resources import read_scoped_runtime
-from compiler.frontend import analyze_source_effects, discover_file, lower_file
+from compiler.frontend import discover_file, lower_file
 from compiler.ir import CompilationError, format_ir
 from compiler.offload.config import OffloadConfig
 
@@ -60,24 +60,6 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--emit-scoped-runtime", action="store_true",
                         help="Emit the versioned common memory runtime and build manifest; no input required.")
-    parser.add_argument("--analyze-effects", action="store_true",
-                        help="Report bounded native procedure effects separately from GPU eligibility; write no outputs.")
-    parser.add_argument("--form-scopes", action="store_true",
-                        help="Emit compiler-approved shared source scopes and a versioned build/edit manifest.")
-    parser.add_argument("--scope-preflight", action="store_true",
-                        help="With --form-scopes, inspect independent source/cost blockers and write no outputs.")
-    parser.add_argument("--scope-facts", metavar="FILE",
-                        help="Versioned stable capture/definition and caller participation facts for source scopes.")
-    parser.add_argument("--numerical-sources", metavar="FILE",
-                        help="Hash-bound normalized leaf source and original resource mappings for source scopes.")
-    parser.add_argument("--analysis-sources", metavar="FILE",
-                        help="Hash-bound configured source/include text and original edit spans for effect/scope analysis.")
-    parser.add_argument("--source-file", action="append", default=[], metavar="FILE",
-                        help="Additional source available to native effect analysis; repeat for independent modules.")
-    parser.add_argument("--effect-contracts", metavar="FILE",
-                        help="Explicit versioned generic contracts for opaque native calls in effect analysis.")
-    parser.add_argument("--summary-cache", metavar="DIRECTORY",
-                        help="Optional bounded source-summary disk cache for effect/scope analysis.")
     parser.add_argument(
         "--json", action="store_true", help="Print candidate eligibility or generation results as JSON."
     )
@@ -144,46 +126,13 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print normalized IR, transformations, schedules, addressing proofs, ordered regions, legality, and memory operations.",
     )
-    parser.add_argument("--gpu-policy", metavar="POLICY",
-                        help="Shared graph placement: sections or auto (default: sections).")
-    parser.add_argument("--scope-transfers", default="direct",
-                        help="Scoped transfer mode, independent of GPU placement (default: direct).")
-    parser.add_argument("--calibration-profile", metavar="FILE", help="Explicit offline hardware calibration JSON.")
     parser.add_argument("--host-threads", type=int, default=4, help="Total host-thread budget, including GPU coordination.")
-    parser.add_argument("--gpu-collective", action="store_true",
-                        help="Opt-in entry is called by every thread of one existing OpenMP team.")
     args = parser.parse_args()
     if args.require_markers:
         parser.error("--require-markers was removed; omit it and select an entry with --kernel or --list-candidates")
-    args.gpu_policy = args.gpu_policy or "sections"
-    if args.gpu_policy not in {"sections", "auto"}:
-        parser.error("ordinary GPU policies were removed; use sections or auto with shared graph execution")
-    if args.scope_transfers == "pipelined":
-        parser.error("pipelined slab batching was removed; use shared graph execution")
-    if args.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
-        parser.error("scope transfers must be direct, pinned, auto, or coalesced")
     if any((args.cuda_output, args.cpp_output, args.fortran_output)):
         parser.error("scoped generation emits shared_entry.cu and shared_interface.f90; "
                      "ordinary --cuda-output/--cpp-output/--fortran-output options do not apply")
-    if args.scope_preflight and not args.form_scopes:
-        parser.error("--scope-preflight requires --form-scopes")
-    if args.analyze_effects and (args.list_candidates or args.emit_scoped_runtime or args.form_scopes):
-        parser.error("--analyze-effects cannot be combined with candidate listing or runtime export")
-    if (args.source_file or args.effect_contracts) and not (args.analyze_effects or args.form_scopes):
-        parser.error("--source-file and --effect-contracts require --analyze-effects or --form-scopes")
-    if args.summary_cache and not (args.analyze_effects or args.form_scopes):
-        parser.error("--summary-cache requires --analyze-effects or --form-scopes")
-    if args.scope_facts and not args.form_scopes:
-        parser.error("--scope-facts requires --form-scopes")
-    if args.numerical_sources and not args.form_scopes:
-        parser.error("--numerical-sources requires --form-scopes")
-    if args.analysis_sources and not (args.form_scopes or args.analyze_effects):
-        parser.error("--analysis-sources requires --form-scopes or --analyze-effects")
-    if args.form_scopes:
-        if args.list_candidates or args.emit_scoped_runtime:
-            parser.error("--form-scopes cannot be combined with candidate listing or runtime export")
-        if not args.scope_facts:
-            parser.error("--form-scopes requires --scope-facts")
     if args.emit_scoped_runtime:
         if args.input or args.kernel or args.list_candidates:
             parser.error("--emit-scoped-runtime cannot be combined with input, kernel, or candidate listing")
@@ -195,20 +144,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _offload_config(args):
-    profile, reason = None, None
-    if args.calibration_profile:
-        from compiler.offload.profile import compiler_identity, load_profile
-        try:
-            profile = load_profile(args.calibration_profile, cpu_threads=args.host_threads)
-            compiler_identity(profile)
-        except (OSError, ValueError) as error:
-            profile = None
-            reason = str(error)
-    elif args.gpu_policy == "auto":
-        reason = "no calibration profile supplied; automatic policy retains native execution"
     try:
-        return OffloadConfig(args.gpu_policy, profile, args.host_threads, args.gpu_collective, reason,
-                             getattr(args, "scope_transfers", "direct"))
+        return OffloadConfig("sections", None, args.host_threads, False, None, "direct")
     except ValueError as error:
         raise CompilationError(str(error)) from error
 
@@ -262,71 +199,13 @@ def main() -> None:
     try:
         if not source_file.exists():
             raise CompilationError(f"input file not found: {source_file}")
-        if args.analyze_effects or args.form_scopes:
-            contracts = None
-            analysis_sources = None
-            if args.analysis_sources:
-                try:
-                    analysis_sources = json.loads(Path(args.analysis_sources).read_text())
-                except (OSError, ValueError) as error:
-                    raise CompilationError(f"invalid configured analysis sources: {error}") from error
-            if args.effect_contracts:
-                try:
-                    document = json.loads(Path(args.effect_contracts).read_text())
-                    if not isinstance(document, dict) or document.get("schema_version") != 1 or not isinstance(document.get("procedures"), dict):
-                        raise ValueError("expected schema_version 1 and procedures object")
-                    contracts = document["procedures"]
-                except (OSError, ValueError) as error:
-                    raise CompilationError(f"invalid effect contracts: {error}") from error
-            if args.analyze_effects:
-                effects = analyze_source_effects([source_file, *args.source_file], args.kernel, contracts=contracts,
-                                                 analysis_sources=analysis_sources, summary_cache=args.summary_cache)
-                report = {"kernel": args.kernel, "supported": True, "reason": None, "outputs": [], "effects": effects}
-                print(json.dumps(report, indent=2) if args.json else json.dumps(effects, indent=2))
-                return
         options = CompilerOptions(
             opt_level=args.opt_level,
             schedule=args.schedule,
             tile_sizes=args.tile_sizes,
             fallback=args.fallback,
             indexing=args.indexing,
-            gpu_policy=args.gpu_policy,
-            scope_transfers=args.scope_transfers,
-            source_graph=args.form_scopes,
         )
-        if args.form_scopes:
-            from compiler.scopes.source import form_source_scopes
-            try:
-                facts = json.loads(Path(args.scope_facts).read_text())
-            except (OSError, ValueError) as error:
-                raise CompilationError(f"invalid scope facts: {error}") from error
-            numerical_sources = None
-            if args.numerical_sources:
-                try:
-                    numerical_sources = json.loads(Path(args.numerical_sources).read_text())
-                except (OSError, ValueError) as error:
-                    raise CompilationError(f"invalid numerical source package: {error}") from error
-            if args.scope_preflight:
-                from compiler.scopes.preflight import preflight_source_scopes
-                preflight = preflight_source_scopes([source_file, *args.source_file], args.kernel,
-                    facts=facts, options=options, config=_offload_config(args), contracts=contracts,
-                    numerical_sources=numerical_sources, analysis_sources=analysis_sources,
-                    summary_cache=args.summary_cache)
-                print(json.dumps({"kernel": args.kernel, "supported": True, "reason": None,
-                                  "outputs": [], "preflight": preflight.public()}, indent=2))
-                return
-            outputs, manifest = form_source_scopes([source_file,*args.source_file], args.kernel,
-                                                   facts=facts, options=options, config=_offload_config(args),
-                                                   contracts=contracts, numerical_sources=numerical_sources,
-                                                   analysis_sources=analysis_sources, summary_cache=args.summary_cache)
-            output_dir = Path(args.output_dir).resolve()
-            for name,content in outputs.items():
-                target = output_dir / name
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(content, encoding="utf-8")
-            print(json.dumps({"kernel":args.kernel,"supported":True,"reason":None,
-                              "outputs":list(outputs),"scopes":manifest},indent=2))
-            return
         if args.list_candidates:
             _list_candidates(source_file, args, options)
             return

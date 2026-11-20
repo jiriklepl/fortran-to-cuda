@@ -1,6 +1,6 @@
 """Shared graph execution configuration."""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from compiler.numerical_contract import require_numerical_build_contract
 
@@ -36,6 +36,3 @@ class OffloadConfig:
                 object.__setattr__(self, "profile", None)
                 object.__setattr__(self, "profile_reason", "hardware profile " + str(error))
 
-    def for_numerical_entry(self, **updates):
-        """Keep code-generation options when entering a numerical worker."""
-        return replace(self, **updates)

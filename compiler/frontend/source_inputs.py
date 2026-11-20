@@ -125,18 +125,7 @@ class SourceInputs:
                                          if mapping and all(value is not None for value in mapping) else None)
         return tree
 
-    def require_captured_parsing(self):
-        if self._external_readers:
-            raise CompilationError("immutable source session requires captured prepared text for INCLUDE: "
-                                   + ", ".join(sorted(self._external_readers)))
 
-    def source_text(self, path, *, captured=False):
-        path = str(Path(path).resolve())
-        if captured:
-            if path not in self._texts:
-                raise CompilationError("source text is outside the compilation session: " + path)
-            return self._texts[path]
-        return Path(path).read_text()
 
     def verify(self):
         """Standalone input validation is always fresh, even for frozen copies."""
@@ -160,19 +149,3 @@ class SourceInputs:
                 "preserves_source_order":True,"dependencies":self.dependencies,
                 "entries":[self.entries[name] for name in sorted(self.entries)]})
 
-    def identity(self):
-        """Immutable JSON provenance for reusable source proofs, never ASTs."""
-        from compiler.frontend.immutable_graph import FrozenDict, FrozenList, sealed
-
-        if sealed(self):
-            # Every nested input container already belongs to the immutable
-            # session. Preserve its exact JSON instead of copying all line
-            # maps for every proof. Unsealed analyses still need detachment.
-            return FrozenDict({"schema_version": 1, "sources": self.sources,
-                               "dependencies": self.dependencies,
-                               "configuration": self.configuration,
-                               "entries": FrozenList(self.entries[name] for name in sorted(self.entries))})
-        return deepcopy({"schema_version": 1, "sources": self.sources,
-                         "dependencies": self.dependencies,
-                         "configuration": self.configuration,
-                         "entries": [self.entries[name] for name in sorted(self.entries)]})

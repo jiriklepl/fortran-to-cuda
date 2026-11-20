@@ -8,12 +8,10 @@ also identify the common runtime whose management operations were measured.
 """
 from __future__ import annotations
 
-import json
 import math
 import re
 from hashlib import sha256
 from importlib.resources import files
-from pathlib import Path
 from typing import Any
 
 from compiler.numerical_contract import require_numerical_build_contract
@@ -335,10 +333,3 @@ def scoped_collective_costs(profile: dict, runtime_id: str, *, cpu_threads: int 
     return collective["costs"]
 
 
-def load_profile(path: str | Path, **expected: Any) -> dict:
-    """Load a profile, raising ProfileError rather than supplying guessed costs."""
-    try:
-        profile = json.loads(Path(path).read_text())
-    except (OSError, ValueError, TypeError) as error:
-        raise ProfileError(f"cannot load hardware profile {path}: {error}") from error
-    return validate_profile(profile, **expected)

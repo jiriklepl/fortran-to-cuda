@@ -83,8 +83,7 @@ python -m compiler \
 ```
 
 The entry borrows a caller-owned residency domain; whole applications are
-integrated through checked source scopes (`--form-scopes`) or the ELMM
-pipeline's `resident-build`. See [`compiler/README.md`](compiler/README.md) for
+built with `compiler.resident`, as the ELMM pipeline's `resident-build` does. See [`compiler/README.md`](compiler/README.md) for
 the CLI reference and architecture, and [`containers/README.md`](containers/README.md)
 for the application comparison.
 
@@ -196,8 +195,10 @@ emits shared CUDA entries over one residency runtime.
 - **Shared CUDA entries** — numerical regions become queued CUDA tasks that
   borrow caller-owned residency domains; host/device replicas move only when a
   consumer needs them.
-- **Source scopes** — `--form-scopes` analyses whole original procedures,
-  keeps unsupported work native, and emits the edits and runtime hooks around it.
+- **Resident builds** — `compiler.resident` prepares a whole application: the
+  loop nests of selected procedures become entries, their sources get the
+  entry calls and residency directives, and what it cannot compile stays the
+  original Fortran.
 - **Fortran interface** — an `iso_c_binding` module for each generated entry.
 
 → Full documentation: [`compiler/README.md`](compiler/README.md)

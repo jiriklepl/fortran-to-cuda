@@ -15,11 +15,3 @@ def _fortran_list(prefix: str, values: list[str], suffix: str, indentation: int)
     return lines
 
 
-def _fortran_line(declaration: str, indentation: int) -> list[str]:
-    line = " " * indentation + declaration
-    if len(line) <= 132:
-        return [line]
-    # A rank-15 assumed shape and a long public dummy name can exceed the
-    # free-form limit. A continuation before its name keeps both parts short.
-    left, right = line.split("::", 1)
-    return [left.rstrip() + " :: &", " " * (indentation + 4) + right.strip()]

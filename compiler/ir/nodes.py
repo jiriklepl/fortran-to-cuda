@@ -46,9 +46,6 @@ class PrivateArrayOrigin:
     element_offset: int
     schema_version: int = 1
 
-    @property
-    def extents(self) -> tuple[int, ...]:
-        return tuple(max(0, upper - lower + 1) for lower, upper in self.bounds)
 
 
 @dataclass(frozen=True)

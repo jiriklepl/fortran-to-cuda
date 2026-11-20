@@ -104,9 +104,6 @@ class ResidentProject:
     strict_audit: bool = False
 
 
-def _identity(path):
-    path = Path(path).resolve(strict=True)
-    return {"path": str(path), "sha256": sha256(path.read_bytes()).hexdigest()}
 
 
 def _rewrite(name, text):

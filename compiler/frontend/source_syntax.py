@@ -169,36 +169,7 @@ class SourceSyntaxSnapshot:
         """All authenticated original syntax and source spans reject writes."""
         return self._sealed
 
-    def seal(self):
-        """Return immutable syntax authority for an active compiler session.
 
-        Namespace and configured-file authentication remain separate. Original
-        parser attributes and child lists reject writes; copying a node creates
-        a mutable projection which cannot pass this snapshot's identity check.
-        """
-        if self._sealed:
-            return self
-        checkpoint = self.checkpoint()
-        if not all(checkpoint.unchanged(root) for root in self._roots):
-            raise CompilationError("cannot seal changed original source syntax")
-        from compiler.frontend.sealed_syntax import seal
-
-        seal(self._roots)
-        result = SourceSyntaxSnapshot(self._roots)
-        result._sealed = True
-        return result
-
-    def original_subtree_unchanged(self, node):
-        """Check retained original rows without mutating an immutable session.
-
-        Consumers which inspect declaration values after a delegated callback
-        can request this exact structural check even for sealed syntax. It
-        reuses the original expected rows and does not capture a new baseline.
-        """
-        if node is None:
-            return True
-        state = self._nodes.get(id(node))
-        return state is not None and state.original is node and self._layout(node, cache=False).unchanged()
 
     def _layout(self, node, *, cache=True):
         """Group immutable baseline records; never cache a validation result."""

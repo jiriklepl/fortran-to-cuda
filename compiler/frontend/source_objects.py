@@ -7,15 +7,12 @@ layout for copying, or permission to execute a native continuation.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
-from hashlib import sha256
 
 from fparser.two.utils import Base
 
 from compiler.frontend.component_bindings import _field_binding, _typename
 from compiler.ir import CompilationError
 
-SOURCE_OBJECT_VERSION = 1
 _UNCERTAIN = {"pointer", "allocatable", "optional", "value", "volatile", "asynchronous",
               "parameter", "external", "intrinsic"}
 
@@ -228,41 +225,5 @@ class _TypeBuilder:
         return schema
 
 
-@dataclass(frozen=True)
-class SourceObjectMapping:
-    identity: str
-    _record: str = field(repr=False)
-
-    def public(self):
-        return json.loads(self._record)
 
 
-def source_object_mapping(analysis, formal, actual, node, call, scope):
-    """Match exact original scalar storage using canonical declaring type nodes."""
-    analysis.verify_source()
-    if _kind(node) != "Name" or formal.intent not in {"in", "inout"}:
-        raise CompilationError("source object calls require whole scalar names and IN or INOUT formals")
-    builder = _TypeBuilder(analysis)
-    original = analysis._source_object_calls.get(id(call))
-    if original is None or original[0] is not call or original[1] != str(call):
-        raise CompilationError("source object mapping requires an exact unchanged original call")
-    builder.scope(original[2])
-    if _resolution(scope) != _resolution(original[2]):
-        raise CompilationError("source object original call resolution changed")
-    left, right = builder.binding(formal), builder.binding(actual, projected_actual=True)
-    if left.node is not right.node or left.scope is not right.scope:
-        raise CompilationError("source-call canonical declaring type mismatch: " + formal.name)
-    definition = builder.schema(left)
-    item = getattr(call, "item", None)
-    span = getattr(item, "fort_original_span", None) or getattr(item, "span", None)
-    record = {"schema_version": SOURCE_OBJECT_VERSION, "kind": "fixed_scalar_source_object",
-              "type_identity": sha256(_canonical({"sources": analysis.inputs.identity(), "type": definition}).encode()).hexdigest(),
-              "declaring_type": definition["declaration"], "type_definition": definition,
-              "formal_resource": formal.root, "actual_resource": actual.root,
-              "source_call": {"procedure": getattr(original[2], "qualified", original[2].module),
-                              "source_access": str(call),
-                              "ordinal": original[3], "span": list(span) if span is not None else None},
-              "source_only": True, "numerical_abi": False, "whole_object_copy": False,
-              "native_continuation_authority": False}
-    identity = sha256(_canonical(record).encode()).hexdigest()
-    return SourceObjectMapping(identity, _canonical({**record, "identity": identity}))

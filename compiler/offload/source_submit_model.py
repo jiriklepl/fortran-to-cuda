@@ -31,54 +31,8 @@ def _positive(value):
     return float(value)
 
 
-def _solve(matrix, rhs):
-    """Small pivoted system; singular faces are not candidate optima."""
-    size = len(rhs)
-    rows = [list(row) + [value] for row, value in zip(matrix, rhs, strict=True)]
-    for column in range(size):
-        pivot = max(range(column, size), key=lambda i: abs(rows[i][column]))
-        if rows[pivot][column] == 0:
-            return None
-        rows[column], rows[pivot] = rows[pivot], rows[column]
-        scale = rows[column][column]
-        rows[column] = [value / scale for value in rows[column]]
-        for row in range(size):
-            if row != column:
-                scale = rows[row][column]
-                rows[row] = [a - scale*b for a, b in zip(rows[row], rows[column], strict=True)]
-    result = [row[-1] for row in rows]
-    return result if all(math.isfinite(value) and value >= 0 for value in result) else None
 
 
-def fit_relative(points):
-    """Globally minimize convex relative error over all eight active faces.
-
-    Scaling coordinates and time preserves the objective and nonnegativity.
-    Neither holdouts nor the engineering coverage factor affect the fit.
-    """
-    if not points or any(type(b) is not int or type(n) is not int or b <= 0 or n <= 0 for b, n, _ in points):
-        raise ValueError("source submit model requires positive integer geometry")
-    time = min(_positive(y) for _, _, y in points)
-    bscale, lscale = max(b for b, _, _ in points), max(n for _, n, _ in points)
-    rows = [([time/y, b/bscale*time/y, n/lscale*time/y], 1.0) for b, n, y in points]
-    best = (float(len(points)), [0.0]*3)
-    for mask in range(1, 8):
-        axes = [axis for axis in range(3) if mask & (1 << axis)]
-        gram = [[sum(row[i]*row[j] for row, _ in rows) for j in axes] for i in axes]
-        rhs = [sum(row[i] for row, _ in rows) for i in axes]
-        solution = _solve(gram, rhs)
-        if solution is None:
-            continue
-        coefficients = [0.0]*3
-        for axis, value in zip(axes, solution, strict=True):
-            coefficients[axis] = value
-        objective = sum((sum(a*b for a, b in zip(row, coefficients, strict=True))-1)**2 for row, _ in rows)
-        if math.isfinite(objective) and objective < best[0]:
-            best = objective, coefficients
-    values = [best[1][0]*time, best[1][1]*time/bscale, best[1][2]*time/lscale]
-    if not all(math.isfinite(value) and value >= 0 for value in values) or not any(values):
-        raise ValueError("source submit model has no finite positive constrained fit")
-    return dict(zip(("intercept_seconds", "binding_seconds", "launch_seconds"), values, strict=True))
 
 
 def _predict(model, bindings, launches):
@@ -125,29 +79,6 @@ def _coverage(model, observations):
     return fit_failed, held_failed, diagnostics
 
 
-def fit_model(records, profile, runtime_id):
-    identity, = [row for row in records if row.get("kind") == "source_protocol_identity"]
-    if (identity.get("kernel_argument_words") != ARGUMENT_WORDS
-            or identity.get("kernel_argument_bytes") != 8*ARGUMENT_WORDS):
-        raise ValueError("source submit model lacks its measured launch ABI envelope")
-    observations = _observations(records)
-    training = [(b, n, value) for (b, n), value in observations.items() if b in FIT_BINDINGS and n in FIT_LAUNCHES]
-    model = {"version": 1, "method": METHOD, "runtime_id": runtime_id,
-        "max_bindings": max(BINDINGS), "max_launches": max(LAUNCHES),
-        "kernel_argument_words": ARGUMENT_WORDS, "kernel_argument_bytes": 8*ARGUMENT_WORDS,
-        "block_threads": 256, "calibration_grid_blocks": 1,
-        "coverage_factor": COVERAGE_FACTOR, "coverage_policy": POLICY,
-        "coefficients": fit_relative(training), "fit_bindings": list(FIT_BINDINGS), "fit_launches": list(FIT_LAUNCHES),
-        "observed_bindings": list(BINDINGS), "observed_launches": list(LAUNCHES),
-        "identity": identity, "hardware_identity": profile["hardware"], "precision_bits": profile["precision_bits"],
-        "cpu_threads": profile["cpu_threads"], "application_profiled": False,
-        "scope": "complete source host interval including fixed-envelope enqueue/backpressure; no payload/body or terminal wait"}
-    fit_failed, held_failed, diagnostics = _coverage(model, observations)
-    model.update(available=not (fit_failed or held_failed), failed_fit_points=fit_failed,
-                 failed_holdouts=held_failed, coverage_diagnostics=diagnostics,
-                 measurements=[row for row in records if row.get("name") == "source_submit_host_enqueue_included"])
-    model["model_identity"] = _digest(model)
-    return validate_model(model, profile, runtime_id)
 
 
 def validate_model(model, profile, runtime_id):
