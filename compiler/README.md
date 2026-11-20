@@ -186,6 +186,14 @@ The old `pipelined` slab-batching switch is retired. Production graph generation
 does not enumerate the old four-unit intervals, even when transfer mode is
 `auto`; numerical work uses the complete checked graph and common command queue.
 
+The command queue holds launches back so that several go to the device as one
+CUDA graph, which costs the host less per launch. What is held back is work the
+device is not doing, and after a host read of device values the device has
+nothing else to do. The queue therefore submits itself as soon as its launches
+start 2^18 device threads or more: small launches are still batched, and a
+launch over a whole field goes out at once. `FORT_SCOPE_GRAPH_QUEUE_WORK` sets
+another thread count (0: no limit); the fields do not depend on it.
+
 The additive `fort_scope_set_transfers` metadata operation configures a context
 before registration/planning and initializes no CUDA resources. Generated
 interfaces publish a `configure(context)` helper, and nondefault source owners

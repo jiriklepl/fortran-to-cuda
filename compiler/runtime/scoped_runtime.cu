@@ -113,6 +113,16 @@ struct QueuedTask {
         return kernel;
     }
 };
+// The device threads a launch starts: what the queue counts as its work.
+inline uint64_t launch_work(const fort_scope_kernel_v1 &kernel) {
+    uint64_t threads = 1;
+    for (const uint32_t extent : {kernel.grid[0],kernel.grid[1],kernel.grid[2],
+                                  kernel.block[0],kernel.block[1],kernel.block[2]}) {
+        if (extent && threads > std::numeric_limits<uint64_t>::max()/extent) return std::numeric_limits<uint64_t>::max();
+        threads *= extent;
+    }
+    return threads;
+}
 struct KernelTracePositions {
     const fort_scope_trace_state_v1 *const *values=nullptr;
     const fort_scope_trace_state_v1 *fallback=nullptr;
@@ -197,6 +207,11 @@ struct Context {
         const auto *queue = std::getenv("FORT_SCOPE_GRAPH_QUEUE"), *graphs = std::getenv("FORT_SCOPE_CUDA_GRAPHS");
         queue_stats.queue_enabled = !queue || std::strcmp(queue,"0");
         queue_stats.graphs_enabled = !graphs || std::strcmp(graphs,"0");
+        if (const auto *work = std::getenv("FORT_SCOPE_GRAPH_QUEUE_WORK")) {
+            char *end = nullptr;
+            const auto value = std::strtoull(work,&end,10);
+            if (end != work && !*end) queue_work_limit = value;
+        }
     }
     std::shared_ptr<Residency> residency;
     bool borrowed_domain = false;
@@ -221,6 +236,10 @@ struct Context {
     fort_scope_residency_stats_v1 &residency_stats;
     uint64_t &residency_clock;
     std::vector<std::unique_ptr<QueuedTask>> commands;
+    // Device threads of the queued launches, and how many the queue holds back at most. A queue saves
+    // host time per launch, but the device waits for what is held back: once that is more than a
+    // moment of device work it is submitted. Zero holds back any amount.
+    uint64_t queued_work = 0, queue_work_limit = uint64_t{1} << 18;
     // The state each buffer will have once the queued commands have run. An
     // entry is rebuilt on demand, from the commands that touch its buffer.
     struct VirtualBuffer { uint64_t epoch; Buffer state; };
@@ -1892,6 +1911,11 @@ void flush_commands(Context &c,const std::vector<bool> *selected,bool conflict) 
     if (conflict) ++c.queue_stats.conflict_flushes;
     else ++c.queue_stats.explicit_flushes;
     c.queue_stats.pending_tasks=c.commands.size();
+    c.queued_work=0;
+    for (const auto &command : c.commands) {
+        const auto work=launch_work(command->kernel);
+        c.queued_work=work>std::numeric_limits<uint64_t>::max()-c.queued_work ? std::numeric_limits<uint64_t>::max() : c.queued_work+work;
+    }
     invalidate(c,Change::State);
     trace(c,"queue_flush",nullptr,tasks.size());
 }
@@ -1987,11 +2011,14 @@ void enqueue_graph(Context &c,uint64_t key,const fort_scope_kernel_v1 &kernel,co
     } catch (...) { forget_virtual(c); throw; }
     c.queue_stats.pending_tasks=c.commands.size();
     const auto accepted_size=c.commands.size();
-    if (!c.queue_stats.queue_enabled) {
+    const auto work=launch_work(kernel), held=c.queued_work;
+    c.queued_work=work>std::numeric_limits<uint64_t>::max()-held ? std::numeric_limits<uint64_t>::max() : held+work;
+    if (!c.queue_stats.queue_enabled || (c.queue_work_limit && c.queued_work>=c.queue_work_limit)) {
         try { flush_commands(c); }
         catch (const Error &error) {
             if (error.status==FORT_SCOPE_RESOURCE) {
                 c.commands.pop_back(); forget_virtual(c); c.queue_stats.pending_tasks=c.commands.size();
+                c.queued_work=held;
             }
             throw;
         }
@@ -4912,6 +4939,7 @@ extern "C" int fort_scope_graph_flush_v1(fort_scope_t h) {
 extern "C" int fort_scope_graph_queue_cancel_v1(fort_scope_t h) {
     return with(h,[&](Context &c) {
         c.commands.clear(); c.virtual_buffers.clear(); ++c.virtual_epoch; c.queue_stats.pending_tasks=0;
+        c.queued_work=0;
         trace(c,"queue_cancel");
     },Change::Query);
 }

@@ -42,6 +42,8 @@ int main(int argc,char **argv) {
     int devices=0; if(cudaGetDeviceCount(&devices)!=cudaSuccess || !devices) return 77;
     if(mode=="queue_off") setenv("FORT_SCOPE_GRAPH_QUEUE","0",1);
     if(mode=="graphs_off") setenv("FORT_SCOPE_CUDA_GRAPHS","0",1);
+    if(mode=="work_unlimited") setenv("FORT_SCOPE_GRAPH_QUEUE_WORK","0",1);
+    if(mode=="work_one") setenv("FORT_SCOPE_GRAPH_QUEUE_WORK","1",1);
     if(mode=="long_mirrors" || mode=="pressure") setenv("FORT_SCOPE_QUEUE_TEST_BUDGET","192",1);
     Fixture f;
     if(mode=="stable_parameters") {
@@ -56,6 +58,19 @@ int main(int argc,char **argv) {
             const auto updates=f.graph().parameter_updates;
             assert(updates==(round<3?0u:unsigned(round-2)));
         }
+    } else if(mode=="work_limit" || mode=="work_unlimited" || mode=="work_one") {
+        // The queue holds launches back to save host time, but not more device work than a moment's worth.
+        if(mode!="work_one") { f.tasks[0].kernel.grid[0]=1u<<11; f.tasks[0].kernel.block[0]=128; }
+        enqueue(f,0);
+        if(mode=="work_unlimited") assert(queued(f).pending_tasks==1 && !f.stats().launches);
+        else assert(!queued(f).pending_tasks && f.stats().launches==1 && queued(f).submissions==1);
+        enqueue(f,1);
+        // The small consumer waits for a reason to run, unless every launch is a reason.
+        if(mode=="work_one") assert(!queued(f).pending_tasks && f.stats().launches==2);
+        else assert(queued(f).pending_tasks==(mode=="work_unlimited"?2u:1u));
+        f.observe(f.out);
+        assert(!queued(f).pending_tasks && f.stats().launches==2);
+        for(int i=0;i<8;++i) assert(f.host_out[i]==3*(i+2));
     } else if(mode=="trace_origins") {
         double *other=nullptr;
         fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,f.host_other,f.extent,f.lower,1};
@@ -348,7 +363,8 @@ def cuda_queue_executable(tmp_path_factory):
 @pytest.mark.cuda
 @pytest.mark.parametrize("mode", ["owned", "repeated", "selective", "war", "queue_off", "graphs_off",
                                  "resource_fallback", "launch_failure", "mirrors", "host_mirror", "long_mirrors", "pressure",
-                                 "plan_suffix", "entry_observe", "entry_failure", "stable_parameters"])
+                                 "plan_suffix", "entry_observe", "entry_failure", "stable_parameters",
+                                 "work_limit", "work_unlimited", "work_one"])
 def test_deferred_real_cuda_queue(cuda_queue_executable, mode):
     result = subprocess.run([str(cuda_queue_executable), mode], capture_output=True, text=True, timeout=20)
     if result.returncode == 77:

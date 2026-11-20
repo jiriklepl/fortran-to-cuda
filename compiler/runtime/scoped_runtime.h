@@ -922,6 +922,9 @@ typedef struct fort_scope_graph_queue_stats_v1 {
  * queued tasks and dependency ancestors; independent work remains queued.
  * Explicit flush permits callers to trade submission batching for overlap.
  * Cancel discards only work that has never been submitted and is explicit.
+ * The queue also submits itself once the launches it holds start 2^18 device
+ * threads or more, so that the device does not wait for work of that size;
+ * FORT_SCOPE_GRAPH_QUEUE_WORK sets another count, and 0 none.
  * Context policies are captured at create: FORT_SCOPE_GRAPH_QUEUE=0 submits
  * each accepted task immediately; FORT_SCOPE_CUDA_GRAPHS=0 uses ordered direct
  * launches. Recoverable prelaunch graph resource failures also use direct
