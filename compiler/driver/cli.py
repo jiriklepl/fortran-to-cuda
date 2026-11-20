@@ -49,11 +49,6 @@ def _parse_args() -> argparse.Namespace:
         help="Entry subroutine name or module::name (case-insensitive); required unless listing candidates.",
     )
     parser.add_argument(
-        "--require-markers",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
         "--list-candidates",
         action="store_true",
         help="Check every module subroutine and report generation eligibility without writing outputs.",
@@ -69,21 +64,6 @@ def _parse_args() -> argparse.Namespace:
         default=".",
         metavar="DIR",
         help="Directory for all generated output files (default: current directory).",
-    )
-    parser.add_argument(
-        "--cuda-output",
-        metavar="FILE",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
-        "--cpp-output",
-        metavar="FILE",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
-        "--fortran-output",
-        metavar="FILE",
-        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--common-header",
@@ -128,11 +108,6 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--host-threads", type=int, default=4, help="Total host-thread budget, including GPU coordination.")
     args = parser.parse_args()
-    if args.require_markers:
-        parser.error("--require-markers was removed; omit it and select an entry with --kernel or --list-candidates")
-    if any((args.cuda_output, args.cpp_output, args.fortran_output)):
-        parser.error("scoped generation emits shared_entry.cu and shared_interface.f90; "
-                     "ordinary --cuda-output/--cpp-output/--fortran-output options do not apply")
     if args.emit_scoped_runtime:
         if args.input or args.kernel or args.list_candidates:
             parser.error("--emit-scoped-runtime cannot be combined with input, kernel, or candidate listing")

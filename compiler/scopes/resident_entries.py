@@ -571,7 +571,7 @@ def compile_resident_entry(source, entry, directory, *, host_threads=4, collecti
         config = OffloadConfig(host_threads, collective, "direct")
     except ValueError as error:
         raise CompilationError(str(error)) from error
-    options = CompilerOptions(opt_level=1, fallback="error", gpu_policy="sections", scope_transfers="direct",
+    options = CompilerOptions(opt_level=1, fallback="error", scope_transfers="direct",
                               injective_arrays=tuple(injective))
     _function, plan, sources = compile_kernel_entry(Path(source).resolve(), entry, options=options,
                                                     offload_config=config, common_header="runtime.hpp")

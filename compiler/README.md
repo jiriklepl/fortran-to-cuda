@@ -125,7 +125,7 @@ reserved capacity, discarding resources if the driver cannot meet that limit.
 Only physical execution resources survive: buffer registrations, definitions
 and freshness are rebuilt for every invocation. Poisoned or incomplete scopes
 never enter this cache. `FORT_RUNTIME_TRACE=1` reports `initialize_reuse` with the
-retained byte capacity; legacy allocation counters still count logical field
+retained byte capacity; the allocation counters count logical field
 allocations. The cache is lazy, so native-only execution does not query CUDA.
 At scope close, stream-ordered pools queue final field downloads and field/scratch
 retirement before one completion wait. Native access hooks and unregister still
@@ -182,10 +182,6 @@ procedure execution. A pre-copy resource failure uses direct transfers with an
 explicit reason; a failure after enqueue poisons the context and cannot replay
 numerical work.
 
-The old `pipelined` slab-batching switch is retired. Production graph generation
-does not enumerate the old four-unit intervals, even when transfer mode is
-`auto`; numerical work uses the complete checked graph and common command queue.
-
 The command queue holds launches back so that several go to the device as one
 CUDA graph, which costs the host less per launch. What is held back is work the
 device is not doing, and after a host read of device values the device has
@@ -200,8 +196,7 @@ interfaces publish a `configure(context)` helper, and nondefault source owners
 call it once before planning. Standalone callers use the public helper before
 adding query operations. Complete pinned costs are installed by the additive
 `fort_scope_set_transfer_costs_v1` after host/toolchain compatibility checks;
-GPU identity is still checked before a GPU selection executes. The historical `fort_scope_batch_execute_v1` runtime interface is retained for
-reference fixtures; production source generation does not emit calls to it. `fort_scope_transfer_stats_get_v1` reports requested
+GPU identity is still checked before a GPU selection executes. `fort_scope_transfer_stats_get_v1` reports requested
 and effective modes, fallback reasons, exact packing/transfer counts, staging
 reuse, capacity and event statistics without changing the original stats ABI.
 The runtime manifest describes the shared budget and supported modes. Common
@@ -219,12 +214,9 @@ Scoped numerical generation publishes artifact schema 2: `shared_entry.cu`,
 `shared_interface.f90`, the common header, and runtime artifacts. Its JSON lists
 only the shared-entry and common-runtime build sources, including argument order,
 array types and execution modes. It does not generate an additional ordinary
-CUDA/C++ backend, owned-session interface, or ordinary fallback query. The
-`--cuda-output`, `--cpp-output` and `--fortran-output` switches are retired and
-rejected before publication. Consumers of old
-combined packages must regenerate; use `build_sources` rather than directory
-globbing, which can pick up unrelated or historical files. Runtime and shared
-entry ABIs are unchanged by this artifact-format change.
+CUDA/C++ backend, owned-session interface, or ordinary fallback query.
+Consumers take the files from `build_sources` rather than by globbing the
+directory.
 
 `fort_scope_plan_report_v2` separates incremental execution cost from hypothetical
 publication and teardown. A continuation ranks execution plus the change in
@@ -543,8 +535,8 @@ links, and `compiler.numerical_contract` the compile options they require.
 
 ## Supported Fortran subset
 
-Module subroutines are selectable without annotations. Legacy markers remain
-accepted as comments and discovery metadata:
+Module subroutines are selectable without annotations. A `! kernel` comment
+inside a subroutine marks it for `--list-candidates`:
 
 ```fortran
 ! kernels
@@ -893,24 +885,6 @@ compiler does not perform runtime overlap checks. Repeated actual arguments in
 an inlined helper retain shared identity and are analyzed as aliases. Callers
 must provide valid extents and sufficient storage for every accessed index;
 general bounds checking and broader Fortran semantics are outside this subset.
-
-### Retired features
-
-Until November 2026 the compiler also formed "source scopes" itself: it
-analysed the native effects of whole procedures, built task graphs, and chose
-between host and device per task from calibrated cost models. No application
-used that path once the resident build existed, and it was removed together
-with its options: `--form-scopes`, `--scope-preflight`, `--scope-facts`,
-`--numerical-sources`, `--analysis-sources`, `--source-file`,
-`--effect-contracts`, `--summary-cache`, `--analyze-effects`, `--gpu-policy`,
-`--calibration-profile`, `--scope-transfers` and `--gpu-collective`. An entry is
-now always compiled for forced device placement with direct transfers, and
-the emitter has no cost model: the calibration-profile, automatic-policy and
-slab-batching branches went with the modules they used. What remains of that
-design is in the runtime and in the shape of a generated entry, which still
-registers its regions with the runtime's placement planner and asks it for a
-decision that can only be "device". Removing those calls, and then the
-planning, pricing and source-task entry points of the runtime, is open work.
 
 ## Development and validation
 

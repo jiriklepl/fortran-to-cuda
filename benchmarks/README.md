@@ -3,26 +3,8 @@
 Three momentum-advection kernels (CDU, CDV and CDW) in seven implementation
 variants. Run all commands below from the repository root.
 
-The `CPP`, `CPP-OMP` and `CUDA` sources under `generated/` are archived output of
-the compiler's retired ordinary-call backend. The current compiler emits shared
-graph entries instead, so these files are maintained as fixed benchmark inputs
-and are not regenerated.
-
-## Scope preflight maps
-
-The compiler's `--scope-preflight` report separates source support, numerical
-preparation, automatic cost estimates and unproved ownership. Render the
-`preflight` object from its JSON response into a fresh directory:
-
-```bash
-python -m benchmarks.harness.plot_preflight preflight.json --output new-scope-figures
-```
-
-The HTML report retains guards, resources and rejection reasons; paginated
-PNG/SVG maps preserve source order within each procedure. Gray means unknown,
-not requested or not applicable, and does not establish GPU eligibility.
-The receipt binds the input and rendered files by hash. These diagnostics
-contain no measured transfers, execution proof or application speedup.
+The `CPP`, `CPP-OMP` and `CUDA` sources under `generated/` are fixed benchmark
+inputs; they are maintained by hand and not regenerated.
 
 ## Layout
 
@@ -91,5 +73,4 @@ they cannot replace timing executables. Figures report seconds per Gcell·iterat
 Run the harness regression tests with `python -m pytest benchmarks/tests`.
 
 `python -m benchmarks.harness.plot_strategies REPORT.json --output NEW_DIR`
-redraws the charts of a saved policy-comparison report. The runner that produced
-those reports was removed with the compiler policies it compared.
+redraws the charts of a saved policy-comparison report.

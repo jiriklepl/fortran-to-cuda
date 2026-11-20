@@ -48,10 +48,6 @@ from compiler.ir.intrinsics import (
     model_inquiry,
 )
 
-_REMOVED_MARKER_SELECTOR = object()
-_REMOVED_MARKER_MESSAGE = "require_markers was removed; select entries by name and omit the keyword"
-
-
 
 def _intrinsic_kind_imports(node):
     """Canonical standard kind exports of one unchanged original USE."""
@@ -1532,20 +1528,16 @@ def _parse_file(path: Path, *, source_text: str | None = None) -> Any:
         raise CompilationError(f"invalid Fortran syntax: {error}", SourceLocation(str(path))) from error
 
 
-def lower_file(path: str | Path, entry_name: str, *, require_markers=_REMOVED_MARKER_SELECTOR,
-               source_text: str | None = None) -> FunctionIR:
+def lower_file(path: str | Path, entry_name: str, *, source_text: str | None = None) -> FunctionIR:
     """Lower an entry and its reachable same-module helpers into typed IR.
 
     Select ``module::procedure`` to disambiguate a multi-module file. Marker
-    comments remain accepted and never restrict entry or helper selection.
+    comments never restrict entry or helper selection.
     Unreachable procedures are parsed but their unsupported semantics are ignored.
     When supplied, captured text replaces the live root file while its filename
     retains source form and diagnostic identity. The caller authenticates text
     and any expanded include dependencies before using this route.
     """
-    # Reject the retired keyword explicitly, including False and None.
-    if require_markers is not _REMOVED_MARKER_SELECTOR:
-        raise CompilationError(_REMOVED_MARKER_MESSAGE)
     path = Path(path)
     tree = _parse_file(path, source_text=source_text)
     return _lower_tree(tree, path, entry_name)
@@ -1567,15 +1559,13 @@ def _lower_tree(tree, path, entry_name):
     return lowerer.lower(lowerer.resolve_routine(matches[0]))
 
 
-def discover_file(path: str | Path, *, require_markers=_REMOVED_MARKER_SELECTOR) -> tuple[ProcedureCandidate, ...]:
+def discover_file(path: str | Path) -> tuple[ProcedureCandidate, ...]:
     """Inspect every module subroutine, reporting frontend rejections separately.
 
     ``lowerable`` only covers parsing, types, and supported constructs. It does
     not promise dependence legality or successful generation; callers must run
     the normal compiler pipeline before selecting a candidate for replacement.
     """
-    if require_markers is not _REMOVED_MARKER_SELECTOR:
-        raise CompilationError(_REMOVED_MARKER_MESSAGE)
     path = Path(path)
     tree = _parse_file(path)
     index = _Lowerer(path)

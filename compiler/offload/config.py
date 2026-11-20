@@ -14,8 +14,6 @@ class OffloadConfig:
     def __post_init__(self):
         if type(self.host_threads) is not int or self.host_threads < 1:
             raise ValueError("Host thread budget must be positive")
-        if self.scope_transfers == "pipelined":
-            raise ValueError("Pipelined slab batching was removed; use shared graph execution")
         if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
             raise ValueError("Unknown scope transfer mode")
         if type(self.original_native) is not bool:

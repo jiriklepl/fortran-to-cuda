@@ -90,8 +90,7 @@ for the application comparison.
 ### 2 — Kernel benchmark sources
 
 The `CPP`, `CPP-OMP`, and `CUDA` benchmark variants are built from the archived
-sources in `benchmarks/generated/`. They were produced by the compiler's retired
-ordinary-call backend and are kept as fixed benchmark inputs. `CUDA-pinned`
+sources in `benchmarks/generated/`, which are fixed benchmark inputs. `CUDA-pinned`
 reuses the CUDA sources with pinned host memory enabled. `Fortran-ACC` is a
 handwritten OpenACC variant.
 

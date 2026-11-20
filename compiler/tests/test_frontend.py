@@ -353,15 +353,6 @@ def test_marker_comments_remain_discovery_metadata_without_a_file_header(tmp_pat
     assert candidate.annotated
 
 
-@pytest.mark.parametrize("value", [True, False, None])
-@pytest.mark.parametrize("api", [lower_file, discover_file], ids=["lower_file", "discover_file"])
-def test_retired_marker_keyword_rejects_before_source_access(tmp_path: Path, api, value) -> None:
-    missing = tmp_path / "not-read.f90"
-    args = (missing, "entry") if api is lower_file else (missing,)
-    with pytest.raises(CompilationError, match="require_markers was removed; select entries by name"):
-        api(*args, require_markers=value)
-    assert not missing.exists()
-
 
 @pytest.mark.parametrize("component", ["u", "v", "w"])
 def test_repository_stencils_lower_to_four_ordered_loop_regions(component: str) -> None:

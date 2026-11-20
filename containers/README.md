@@ -347,9 +347,8 @@ OUTPUT_DIR=/work/USER/RUN ./containers/run-docker.sh reproduce-plots \
 ```
 
 Figures are written to a new `figures` directory inside the output directory;
-an existing one is never replaced. `--policy-report FILE` instead redraws the
-older six-policy microbenchmark report into `ordinary-figures`, labeled as
-historical measurements.
+an existing one is never replaced. `--policy-report FILE` instead redraws a
+saved six-policy microbenchmark report into `ordinary-figures`.
 
 ## Other commands
 

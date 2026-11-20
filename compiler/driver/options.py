@@ -12,7 +12,6 @@ class CompilerOptions:
     tile_sizes: tuple[int, ...] = ()
     fallback: str = "error"
     indexing: str | None = None
-    gpu_policy: str = "sections"
     scope_transfers: str = "direct"
     # Arrays whose subscript tuple the caller checks, before the entry runs, to
     # address a different element in every iteration of each nest that uses it.
@@ -29,10 +28,6 @@ class CompilerOptions:
             raise CompilationError("fallback must be error or host")
         if self.indexing not in (None, "source", "auto"):
             raise CompilationError("indexing must be source or auto")
-        if self.gpu_policy not in {"sections", "auto"}:
-            raise CompilationError("ordinary GPU policies were removed; use sections or auto")
-        if self.scope_transfers == "pipelined":
-            raise CompilationError("pipelined slab batching was removed; use shared graph execution")
         if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
             raise CompilationError("scope transfers must be direct, pinned, auto, or coalesced")
         if any(not isinstance(name, str) or not name for name in self.injective_arrays):
