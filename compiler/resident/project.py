@@ -17,6 +17,7 @@ from pathlib import Path
 
 from compiler.resident.configure import configure_sources
 from compiler.resident.directives import expand_directives
+from compiler.resident.inlining import inline_calls
 from compiler.resident.reductions import lower_reductions
 from compiler.resident.rewrites import inline_tile_scratch_nests, promote_line_snapshots
 from compiler.resident.specialize import integer_parameters, specialize
@@ -50,6 +51,11 @@ class Selection:
     with the branches they decide folded away, used while they hold, so that
     loop nests the branches kept apart can share an entry and a launch (see
     ``compiler.resident.specialize``). The procedures are then exact names.
+    ``inline`` names procedures (``module::name``) whose calls from the
+    selection's procedures are replaced by their statements, so that the nests
+    of several calls in a row can share entries and launches (see
+    ``compiler.resident.inlining``); a call that cannot be replaced exactly
+    stays a call.
     """
 
     label: str
@@ -59,6 +65,7 @@ class Selection:
     minimum_nests: int = 0
     native_rejections: bool = True
     assume: tuple[str, ...] = ()
+    inline: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -168,7 +175,9 @@ def prepare(project, directory, *, fortran, host_threads=4):
     changed), followed by the sources an edit added, whose ``original`` is
     None; ``entries``, the directories of the compiled entries; and one
     summary per selection; ``audit``, the host statements that touch bound
-    arrays (see ``audit``); and ``reductions``, the loop nests that only
+    arrays (see ``audit``); ``inlined``, the calls a selection asked to replace
+    by the callee's statements, each ``inlined`` or with the ``reason`` it
+    stays a call; and ``reductions``, the loop nests that only
     accumulate scalars, each with ``compiled`` or the ``reason`` it stays on
     the host (see ``compiler.resident.reductions``). The directory must not
     exist.
@@ -199,10 +208,24 @@ def prepare(project, directory, *, fortran, host_threads=4):
         current[original] = path
 
     assumed = [selection for selection in project.selections if selection.assume]
-    specialized = set()
-    if assumed:
+    inlining = [selection for selection in project.selections if selection.inline]
+    specialized, inlined = set(), []
+    if assumed or inlining:
         texts = {original: path.read_text() for original, path in current.items()}
         constants = integer_parameters(texts.values())
+    # Calls are replaced first, so that assumed conditions also fold what the calls brought in.
+    for selection in inlining:
+        for original in originals:
+            text, records = inline_calls(texts[original], selection.procedures, selection.inline, constants)
+            inlined += records
+            if text != texts[original]:
+                texts[original] = text
+                path = directory / "rewritten" / current[original].name
+                path.parent.mkdir(exist_ok=True)
+                path.write_text(text)
+                current[original] = path
+                specialized.add(original)
+    if assumed:
         for selection in assumed:
             for name in selection.procedures:
                 routine = name.rsplit("::", 1)[-1]
@@ -347,7 +370,7 @@ def prepare(project, directory, *, fortran, host_threads=4):
               "domain": {"module": project.domain.module, "object": project.domain.object,
                          "default": project.domain == DEFAULT_DOMAIN},
               "sources": records, "entries": [item["directory"] for package in packages for item in package["entries"]],
-              "selections": summaries, "directives": directives, "audit": findings,
+              "selections": summaries, "directives": directives, "audit": findings, "inlined": inlined,
               "reductions": [{key: str(value) if key == "source" else value for key, value in record.items()
                               if key not in {"tag", "value_scalars"}} for record in reductions]}
     (directory / "prepared.json").write_text(json.dumps(result, indent=2) + "\n")

@@ -123,6 +123,36 @@ def license_line(text):
     return line + (f" private({', '.join(sorted(private))})" if private else "")
 
 
+def serialize_openmp(lines, first, last):
+    """Blank the OpenMP directives in ``lines[first:last]``; return ``(index, text)`` of each removed line.
+
+    The loop nests of a selected procedure become entries that one serial
+    caller dispatches. A directive with a ``reduction`` clause leaves a
+    ``!$fort reduction`` line: what the clause says about the order of an
+    accumulation outlives the directive.
+    """
+    removed, index = [], first
+    while index < last:
+        if not re.match(r"\s*!\$omp\b", lines[index], re.IGNORECASE):
+            index += 1
+            continue
+        # One directive, with its continuation lines.
+        group = [index]
+        while lines[group[-1]].rstrip().endswith("&") and group[-1] + 1 < last \
+                and re.match(r"\s*!\$omp\b", lines[group[-1] + 1], re.IGNORECASE):
+            group.append(group[-1] + 1)
+        text = " ".join(re.sub(r"(?i)^\s*!\$omp&?", "", lines[item]).strip().rstrip("&") for item in group)
+        indent = lines[index][:len(lines[index]) - len(lines[index].lstrip())]
+        for item in group:
+            removed.append((item, lines[item].rstrip()))
+            lines[item] = "\n"
+        stated = license_line(text)
+        if stated is not None:
+            lines[index] = indent + stated + "\n"
+        index = group[-1] + 1
+    return removed
+
+
 @dataclass
 class _Scope:
     """A procedure with the scopes its names can come from, innermost first."""

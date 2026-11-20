@@ -66,6 +66,9 @@ def test_independent_regions_of_different_extent_share_one_launch():
     "\n".join((loop("u", "x(i)", "n"), "do i=2,n-1\nu(i)=0\nenddo")),
     # The second region writes what the first reads.
     "\n".join((loop("u", "v(i)", "n"), loop("v", "x(i)", "n-1"))),
+    # A condition does not help sections whose bounds do meet.
+    "\n".join(("do i=1,n\nif (n>=3) then\nu(i)=x(i)\nendif\nenddo",
+               "do i=2,n-1\nif (n>=3) then\nu(i)=0\nendif\nenddo")),
 ])
 def test_regions_that_may_depend_on_each_other_keep_their_own_launches(body):
     plan, emitted = emit(body)
@@ -81,6 +84,10 @@ def test_regions_that_may_depend_on_each_other_keep_their_own_launches(body):
     "\n".join((loop("u", "x(i)", "n-2"), "do i=n-1,n\nu(i)=0\nenddo")),
     # Whether they meet depends on n; the runtime decides on the actual sections.
     "\n".join((loop("u", "x(i)", "3"), "do i=n-1,n\nu(i)=0\nenddo")),
+    # Under a condition the sections are upper bounds, and bounds that never meet are enough: this
+    # is what a selection's guard makes of the ghost layers of two opposite faces.
+    "\n".join(("do i=1,n-2\nif (n>=3) then\nu(i)=x(i)\nendif\nenddo",
+               "do i=n-1,n\nif (n>=3) then\nu(i)=0\nendif\nenddo")),
 ])
 def test_regions_that_write_sections_of_one_array_not_known_to_meet_share_a_launch(body):
     plan, emitted = emit(body)

@@ -584,6 +584,29 @@ sections of one array, such as the ghost layers of opposite faces, share a
 launch. A procedure that assigns to a variable the conditions name, or passes
 one to a call, is refused.
 
+Calls keep nests apart as well: a small procedure that is called once per
+field, such as a halo update, gives each call its own entries. A selection
+names such procedures in `inline`:
+
+```python
+Selection("faces", ("boundaries::apply",), inline=("boundaries::corners",))
+```
+
+Each call to them from the selection's procedures is replaced by the callee's
+statements (`compiler.resident.inlining`), before the assumed conditions are
+folded, so the nests of the calls stand in the caller and are grouped like its
+own. The replacement is text substitution and is made only where that is
+exact: caller and callee are in one module; the callee has nothing but
+declarations of its dummies and plain scalar locals, and statements without
+RETURN; each array dummy gets a whole array declared with the same bounds;
+each scalar dummy is INTENT(IN) and gets something the statements do not
+change. A constant argument decides the callee's branches on it, a local that
+is assigned once from unchanged values is replaced by its value, and the
+callee's OpenMP directives go the way of the caller's. A call that does not
+fit stays a call; `prepared.json` lists each one under `inlined`. A guard of a
+selection is applied to an entry part by part: an entry gets the conjuncts
+whose variables it uses.
+
 While an epoch lasts the host mostly runs serial code between kernels, and a
 parallel region it still enters wakes the whole OpenMP team. With
 `FORT_RESIDENT_HOST_THREADS=<n>` in the environment the domain narrows the

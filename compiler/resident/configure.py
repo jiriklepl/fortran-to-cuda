@@ -5,7 +5,7 @@ import subprocess
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from compiler.resident.reductions import _procedures, license_line
+from compiler.resident.reductions import _procedures, serialize_openmp
 
 
 def _identity(path):
@@ -52,27 +52,8 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
                 statement = next(node for node in scope.node.content
                                  if type(node).__name__ in {"Subroutine_Stmt", "Function_Stmt"})
                 first, last = statement.item.span[0], scope.node.content[-1].item.span[1]
-                index = first - 1
-                while index < last:
-                    if not re.match(r"\s*!\$omp\b", lines[index], re.I):
-                        index += 1
-                        continue
-                    # One directive, with its continuation lines.
-                    group = [index]
-                    while lines[group[-1]].rstrip().endswith("&") and group[-1] + 1 < last \
-                            and re.match(r"\s*!\$omp\b", lines[group[-1] + 1], re.I):
-                        group.append(group[-1] + 1)
-                    text = " ".join(re.sub(r"(?i)^\s*!\$omp&?", "", lines[item]).strip().rstrip("&") for item in group)
-                    indent = lines[index][:len(lines[index]) - len(lines[index].lstrip())]
-                    for item in group:
-                        removed.append({"line": item + 1, "directive": lines[item].rstrip(),
-                                        "procedure": scope.qualified})
-                        lines[item] = "\n"
-                    # A reduction clause frees the order of an accumulation; that outlives the directive.
-                    stated = license_line(text)
-                    if stated is not None:
-                        lines[index] = indent + stated + "\n"
-                    index = group[-1] + 1
+                removed += [{"line": index + 1, "directive": directive, "procedure": scope.qualified}
+                            for index, directive in serialize_openmp(lines, first - 1, last)]
         target = directory / (hashlib.sha256(str(source).encode()).hexdigest()[:12] + "_" + source.name)
         target.write_text("".join(lines))
         if _identity(source) != before:

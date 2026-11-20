@@ -268,7 +268,9 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     the entries, so each one that touches an array an entry binds needs the
     host to hold current values.
     """
-    analysis = SourceEffects(paths, analysis_sources=analysis_sources)
+    # A selected procedure can be long, the more so with calls replaced by their statements; the
+    # default bound on statements per procedure is sized for proofs this export does not ask for.
+    analysis = SourceEffects(paths, analysis_sources=analysis_sources, operations=4096)
     analysis.element_fields = True
     # The body of a module function holds loop nests like any subroutine's.
     for name, routine in analysis.numerical_helpers.items():
@@ -430,15 +432,36 @@ def guard_entries(extracted, directory, condition):
     condition is false stops instead of silently skipping work. Use it for a
     property that the caller's activation implies and the loop bounds do not
     show, such as a minimum extent that keeps a halo copy from overlapping.
-    Returns the export with the rewritten paths.
+    A condition that is a conjunction is applied part by part: an entry gets
+    the parts whose variables it has as parameters, and none if it has none of
+    them. Returns the export with the rewritten paths.
     """
     import re
     from hashlib import sha256
 
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
+    parts, depth, start = [], 0, 0
+    for match in re.finditer(r"\(|\)|\.and\.", condition, re.IGNORECASE):
+        if match.group() in "()":
+            depth += 1 if match.group() == "(" else -1
+        elif depth == 0:
+            parts.append(condition[start:match.start()].strip())
+            start = match.end()
+    parts.append(condition[start:].strip())
+    whole = condition
     entries = []
     for original in extracted["entries"]:
+        available = {parameter["name"].lower() for parameter in original["parameters"]}
+        condition = " .and. ".join(
+            part for part in parts
+            if {name.lower() for name in re.findall(r"[A-Za-z_]\w*", re.sub(r"\.\w+\.|\b\d\w*", " ", part))}
+            - {"min", "max", "abs", "mod", "size"} <= available)
+        if not condition:
+            entries.append(original)
+            continue
+        if len(parts) == 1:
+            condition = whole
         source = Path(original["input_path"])
         lines = source.read_text().splitlines(keepends=True)
         open_loops, bodies = [], []

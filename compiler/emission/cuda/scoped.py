@@ -349,8 +349,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 for theirs in units[second.id].footprints:
                     if mine.symbol is not theirs.symbol or mine.symbol not in shared:
                         continue
-                    if (mine.full_read or mine.full_write or theirs.full_read or theirs.full_write
-                            or not mine.exact or not theirs.exact):
+                    # An access under a condition has its section as an upper bound, which serves here:
+                    # sections that do not meet as bounds do not meet as accessed either.
+                    if mine.full_read or mine.full_write or theirs.full_read or theirs.full_write:
                         return False
                     pairs = [(written, other) for written in mine.writes for other in (*theirs.reads, *theirs.writes)]
                     pairs += [(read, written) for read in mine.reads for written in theirs.writes]
@@ -370,9 +371,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 groups.extend(launch_groups(step.else_plan))
                 continue
             member = isinstance(step, ParallelRegion) and groupable(step)
-            # One launch passes every member's arguments; stay far below the launch limit.
+            # One launch passes every member's arguments, at most eight bytes each; CUDA takes 4096 bytes.
             if (member and all(independent(earlier, step) for earlier in run)
-                    and sum(len(_kernel_arguments(region)) for region in (*run, step)) <= 192):
+                    and sum(len(_kernel_arguments(region)) for region in (*run, step)) <= 384):
                 run.append(step)
                 continue
             close()
