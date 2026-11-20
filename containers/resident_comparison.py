@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -96,12 +97,13 @@ def command(argv, *, cwd, env, log, timeout):
             process.wait()
 
 
-def application_environment(threads, gpu, cache, *, traced, resident_threads=None):
+def application_environment(threads, gpu, cache, *, traced, resident_threads=None, device_budget=None):
     """The environment of one application run.
 
     ``threads`` is the OpenMP count the application starts with, the same for the native and the GPU
     run: ELMM's initial state depends on it. ``resident_threads`` narrows the GPU run's team for
-    the time its fields are on the device.
+    the time its fields are on the device. ``device_budget`` states the device memory the GPU run
+    may hold; without it the run takes what the device has free.
     """
     env = environment(threads, traced=traced)
     for key in list(env):
@@ -111,6 +113,8 @@ def application_environment(threads, gpu, cache, *, traced, resident_threads=Non
         env.update(FORT_RUNTIME_TRACE="1", FORT_OFFLOAD_TRACE="1")
     if resident_threads is not None:
         env["FORT_RESIDENT_HOST_THREADS"] = str(resident_threads)
+    if device_budget is not None:
+        env["FORT_RESIDENT_DEVICE_BUDGET"] = device_budget
     env["CUDA_VISIBLE_DEVICES"] = gpu
     if cache is not None:
         env["POISSON_SOLVER_KERNEL_CACHE_DIR"] = str(cache)
@@ -383,7 +387,8 @@ def run(args):
                                          "config": source_identity(work / "config"),
                                          "solver": solver_identity(args.solver),
                                          "runner_sha256": digest(__file__)},
-                      threads=args.threads, gpu_threads=gpu_threads, build_jobs=args.jobs, warmups=args.warmups, repeats=args.repeats,
+                      threads=args.threads, gpu_threads=gpu_threads,
+                      gpu_budget=getattr(args, "gpu_budget", None) or "free device memory", build_jobs=args.jobs, warmups=args.warmups, repeats=args.repeats,
                       cache_policy=("separate initially empty diagnostic and timing caches; "
                                     "warmups populate timing cache"),
                       timing_scope=("complete process including startup, cache lookup or compilation, "
@@ -449,7 +454,8 @@ def run(args):
             print("Starting diagnostic:", name, flush=True)
             is_gpu = mode == "resident"
             env = application_environment(args.threads, gpu["uuid"], caches["diagnostic"] if is_gpu else None,
-                                          traced=is_gpu, resident_threads=gpu_threads if is_gpu else None)
+                                          traced=is_gpu, resident_threads=gpu_threads if is_gpu else None,
+                                          device_budget=getattr(args, "gpu_budget", None) if is_gpu else None)
             binary = binaries["ELMM-full20" if is_gpu else "ELMM-native-full20"]["path"]
             row, vtk, log = run_application(binary, work / "config", configuration, output / "diagnostics" / name,
                                             env, args.timeout, expected_steps)
@@ -506,7 +512,8 @@ def run(args):
                 verify_binaries()
                 is_gpu = mode == "resident"
                 env = application_environment(args.threads, gpu["uuid"], caches["timing"] if is_gpu else None,
-                                              traced=False, resident_threads=gpu_threads if is_gpu else None)
+                                              traced=False, resident_threads=gpu_threads if is_gpu else None,
+                                              device_budget=getattr(args, "gpu_budget", None) if is_gpu else None)
                 binary = binaries["ELMM" if is_gpu else "ELMM-native"]["path"]
                 directory = output / "runs" / f"round-{round_number:02}" / mode
                 print("Starting", mode, "round", round_number, flush=True)
@@ -576,6 +583,9 @@ def main(argv=None):
     parser.add_argument("--gpu-threads", type=int, default=1,
                         help="OpenMP threads of the GPU run while its fields are on the device; its host code "
                              "is serial between kernels, and a larger team only adds wake-up cost")
+    parser.add_argument("--gpu-budget", metavar="BYTES",
+                        help="Device memory the GPU run may hold: bytes, or a count with K, M or G "
+                             "(default: what the device has free, less a reserve)")
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--repeats", type=int, default=7)
     parser.add_argument("--warmups", type=int, default=1)
@@ -620,6 +630,8 @@ def main(argv=None):
     if min(args.threads, args.gpu_threads, args.jobs, args.repeats, args.timeout, args.build_timeout) < 1 \
             or args.warmups < 0:
         parser.error("threads, jobs, repeats and timeouts must be positive; warmups must be nonnegative")
+    if args.gpu_budget is not None and not re.fullmatch(r"[1-9][0-9]*[KkMmGg]?", args.gpu_budget):
+        parser.error("gpu-budget must be a positive count of bytes, optionally with K, M or G")
     if args.steps is not None and args.steps < 1:
         parser.error("steps must be positive")
     run(args)

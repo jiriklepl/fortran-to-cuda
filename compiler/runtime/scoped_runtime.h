@@ -571,6 +571,16 @@ int fort_scope_device_get(fort_scope_t context, int *device);
 /* Configure before CUDA initialization. Budget counts full-layout payloads
  * plus cached context scratch, independently of the sections transferred. */
 int fort_scope_set_device_budget(fort_scope_t context, size_t bytes);
+/* The budget for a domain whose caller states none: FORT_RESIDENT_DEVICE_BUDGET
+ * (bytes, or a count with K, M or G) when set, otherwise the memory free on the
+ * device now less a reserve of one sixteenth of the device, at least 512 MiB,
+ * for what the driver and libraries allocate outside the budget. Selects the
+ * device to ask it and restores the caller's selection. */
+int fort_scope_device_budget_default_v1(int device, size_t *bytes);
+/* The domain's budget and the part of it that no field copy, scratch arena or
+ * external workspace claims at this moment. Fields that are not on the device
+ * yet claim nothing, so this is a cap for a workspace, not a forecast. */
+int fort_scope_domain_budget_get_v1(fort_scope_domain_t domain, size_t *budget, size_t *unclaimed);
 /* At most one active lease per context. Empty requests acquire a token with a
  * null device pointer and do not initialize CUDA. Positive requests reuse the
  * arena or grow it after completing earlier uses; old capacity is retired

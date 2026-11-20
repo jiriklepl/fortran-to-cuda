@@ -27,7 +27,7 @@ program box
   call create()
   call place(values(6))
 
-  !$fort enter budget(1073741824) if(min(nx, ny, nz) >= 2)
+  !$fort enter if(min(nx, ny, nz) >= 2)
   do step = 1, steps
     call advance(u, unew)
     if (mod(step, report_every) == 0) call report(step, u)

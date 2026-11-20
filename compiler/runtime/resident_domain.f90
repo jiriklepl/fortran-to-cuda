@@ -68,6 +68,7 @@ module fort_resident_domain
     type(work_real64_3_slot), allocatable, private :: work3(:)
   contains
     procedure :: begin_epoch
+    procedure :: unclaimed
     procedure :: register_storage
     procedure :: bind_real32
     procedure :: bind_real64
@@ -124,22 +125,50 @@ contains
       end select
       write(error_unit,'(a,a,a,i0,a)') 'Resident runtime failed: ',trim(name),' (status ',status, &
                                       '); source work will not be replayed.'
+      call explain()
       error stop 'resident execution failure'
     endif
   end subroutine
 
+  ! What the runtime said about its last failure on this thread.
+  subroutine explain()
+    character(kind=c_char), pointer :: text(:)
+    type(c_ptr) :: message
+    integer :: length
+    message=fort_scope_error()
+    if (.not. c_associated(message)) return
+    call c_f_pointer(message,text,[512])
+    length=0
+    do while (length < 511)
+      if (text(length+1) == c_null_char) exit
+      length=length+1
+    enddo
+    if (length > 0) write(error_unit,'(a,512a1)') 'Runtime: ',text(:length)
+  end subroutine
+
   ! keep_team is for an epoch during which the host still does its parallel
   ! work: such an epoch leaves the OpenMP team as it is (see narrow_team).
+  !
+  ! budget is the device memory the domain may hold, in bytes. A caller that
+  ! states none gets what the device has free when the domain is created (or
+  ! FORT_RESIDENT_DEVICE_BUDGET): the domain then takes memory as arrays reach
+  ! the device and moves the least recently used ones back when it runs out.
   subroutine begin_epoch(self, device, budget, keep_team)
     class(resident_domain), intent(inout) :: self
     integer(c_int), intent(in) :: device
-    integer(c_size_t), intent(in) :: budget
+    integer(c_size_t), optional, intent(in) :: budget
     logical, optional, intent(in) :: keep_team
+    integer(c_size_t) :: bytes
     if (self%active) error stop 'nested storage epoch'
     if (self%domain == 0) then
+      if (present(budget)) then
+        bytes=budget
+      else
+        call resident_require(fort_scope_device_budget_default_v1(device,bytes))
+      endif
       call resident_require(fort_scope_domain_create_v1(device,self%domain))
       call resident_require(fort_scope_create_in_domain_v1(self%domain,self%context))
-      call resident_require(fort_scope_set_device_budget(self%context,budget))
+      call resident_require(fort_scope_set_device_budget(self%context,bytes))
       allocate(self%storage(0))
     endif
     if (self%generation == huge(self%generation)) error stop 'storage generation overflow'
@@ -150,6 +179,15 @@ contains
     endif
     call narrow_team(self)
   end subroutine
+
+  ! The part of the budget that nothing claims now: the cap to give a library
+  ! that sizes its own device workspace.
+  function unclaimed(self) result(bytes)
+    class(resident_domain), intent(in) :: self
+    integer(c_size_t) :: bytes, budget
+    if (self%domain == 0) error stop 'budget of a domain that has no epoch yet'
+    call resident_require(fort_scope_domain_budget_get_v1(self%domain,budget,bytes))
+  end function
 
   ! While values stay on the device the host runs serial code between kernels,
   ! and each parallel region it still enters wakes the whole team. The epoch

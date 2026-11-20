@@ -29,10 +29,10 @@ def binaries(tmp_path_factory):
                  cxx=host, nvcc=nvcc, architecture=architecture, jobs=min(8, os.cpu_count() or 2))
 
 
-def run(binary, directory, *arguments, trace=False):
+def run(binary, directory, *arguments, trace=False, **variables):
     directory.mkdir()
     environment = {key: value for key, value in os.environ.items() if not key.startswith("FORT_")}
-    environment.update(OMP_NUM_THREADS="4", OMP_DYNAMIC="FALSE")
+    environment.update(OMP_NUM_THREADS="4", OMP_DYNAMIC="FALSE", **variables)
     if trace:
         environment["FORT_RUNTIME_TRACE"] = "1"
     result = subprocess.run([str(binary), *map(str, arguments)], cwd=directory, env=environment,
@@ -104,3 +104,21 @@ def test_an_empty_source_list_leaves_its_entries_out(binaries, tmp_path):
     assert field == native_field
     assert output == native_output
     assert events(trace).count("queue_enqueue") == 12 * 5
+
+
+@pytest.mark.parametrize(("budget", "consequence", "launches"), [
+    # Both fields and nothing else: the source lists and a field take turns on the device.
+    ("1317988", "the least recently used ones now move back to the host", 210),
+    # One field: the two nests that need both fields at once run on the host.
+    ("700K", "loop nests whose arrays do not fit together run on the host", 150),
+    ("600K", "loop nests whose arrays do not fit together run on the host", 0),
+])
+def test_a_budget_that_is_too_small_costs_time_and_says_so_once(binaries, tmp_path, budget, consequence, launches):
+    arguments = (48, 40, 32, 30, 10)
+    output, _, field = run(binaries["box"], tmp_path / "roomy", *arguments)
+    tight_output, trace, tight_field = run(binaries["box"], tmp_path / "tight", *arguments, trace=True,
+                                           FORT_RESIDENT_DEVICE_BUDGET=budget)
+    assert (tight_field, tight_output) == (field, output)
+    assert events(trace).count("queue_enqueue") == launches
+    assert trace.count("Resident domain: the arrays in use exceed the device budget") == 1
+    assert consequence in trace

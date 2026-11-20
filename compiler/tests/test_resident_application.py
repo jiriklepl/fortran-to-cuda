@@ -60,7 +60,8 @@ def test_entries_are_called_while_resident_and_the_original_loops_run_otherwise(
 def test_directives_in_the_source_place_the_epoch_and_the_host_reads(box):
     directory, _prepared = box
     main = (directory / "sources/main.f90").read_text()
-    enter = main.index("if (min(nx, ny, nz) >= 2) call resident%begin_epoch(int(0, c_int), int(1073741824, c_size_t))")
+    # The application states no budget: the domain takes what the device has free.
+    enter = main.index("if (min(nx, ny, nz) >= 2) call resident%begin_epoch(int(0, c_int))")
     loop = main.index("do step = 1, steps")
     leave = main.index("if (resident%active) call resident%end_epoch()")
     write = main.index("write(unit) u")

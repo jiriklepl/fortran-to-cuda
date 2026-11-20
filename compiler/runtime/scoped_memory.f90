@@ -265,6 +265,7 @@ module fort_scoped_memory
   public :: fort_scope_forget_sections_v1, fort_scope_plan_forget_sections_v1
   public :: fort_scope_admit_source_reads_v1
   public :: fort_scope_set_device_budget
+  public :: fort_scope_device_budget_default_v1, fort_scope_domain_budget_get_v1
   public :: fort_scope_scratch_acquire_v1, fort_scope_scratch_release_v1, fort_scope_scratch_stats_get_v1
   public :: fort_scope_set_transfers, fort_scope_transfer_stats_get_v1
   public :: fort_scope_set_transfer_costs_v1, fort_scope_batch_execute_v1, fort_scope_batch_report_get_v1
@@ -638,6 +639,18 @@ module fort_scoped_memory
       import c_int, c_int64_t, c_size_t
       integer(c_int64_t), value :: context
       integer(c_size_t), value :: bytes
+      integer(c_int) :: status
+    end function
+    function fort_scope_device_budget_default_v1(device, bytes) bind(C) result(status)
+      import c_int, c_size_t
+      integer(c_int), value :: device
+      integer(c_size_t), intent(out) :: bytes
+      integer(c_int) :: status
+    end function
+    function fort_scope_domain_budget_get_v1(domain, budget, unclaimed) bind(C) result(status)
+      import c_int, c_int64_t, c_size_t
+      integer(c_int64_t), value :: domain
+      integer(c_size_t), intent(out) :: budget, unclaimed
       integer(c_int) :: status
     end function
     function fort_scope_source_host_prepare_v1(context, call, token) bind(C) result(status)

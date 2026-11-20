@@ -5,7 +5,7 @@ compiler cannot decide from the loop nests alone: where the application starts
 and stops keeping values there, and where code that stays on the host needs
 them. They are comments, so the same source builds natively unchanged.
 
-    !$fort enter budget(<bytes>) [if(<condition>)] [device(<ordinal>)]
+    !$fort enter [budget(<bytes>)] [if(<condition>)] [device(<ordinal>)]
     !$fort leave
     !$fort close
     !$fort publish [if(<condition>)]
@@ -13,6 +13,7 @@ them. They are comments, so the same source builds natively unchanged.
     !$fort release(<array>[, <array>...])
 
 ``enter`` starts keeping values on the device unless that is already the case;
+without ``budget`` the domain may use what the device has free at that point.
 ``leave`` brings every value back and stops. ``close`` also frees the device
 state and must run before the bound arrays are deallocated at program end.
 ``publish`` brings every value back to the host and forgets the device copies:
@@ -82,10 +83,8 @@ def _generate(name, names, clauses, indent, domain, origin):
     condition = clauses.get("if")
     active = f"{this}%active" + (f" .and. ({condition})" if condition else "")
     if name == "enter":
-        if "budget" not in clauses:
-            raise ValueError("The enter directive needs budget(<bytes>): the device memory the domain may use")
-        start = (f"call {this}%begin_epoch(int({clauses.get('device', '0')}, c_int), "
-                 f"int({clauses['budget']}, c_size_t))")
+        budget = f", int({clauses['budget']}, c_size_t)" if "budget" in clauses else ""
+        start = f"call {this}%begin_epoch(int({clauses.get('device', '0')}, c_int){budget})"
         guarded = [f"if ({condition}) {start}"] if condition else [start]
         return _block(indent, domain, [f"if (.not. {this}%active) then", *("  " + line for line in guarded), "endif"],
                       binding=True)

@@ -92,7 +92,9 @@ input. `--grid`, `--domain-size`, `--end-time`, `--cfl`, `--advection` and
 ELMM's initial state depends on the count, so the two runs must share it.
 `--gpu-threads` (default 1) is the GPU run's team while its fields are on the
 device, where its host code runs serially between kernels and a larger team
-only adds the cost of waking it.
+only adds the cost of waking it. The GPU run may hold what the device has free
+when it starts, less a reserve for the driver; `--gpu-budget` (bytes, or a count
+with `K`, `M` or `G`) states a limit instead, for a device shared with other work.
 `--repeats`, `--warmups`, `--timeout`, `--build-timeout`, `--gpu` (visible CUDA
 ordinal or UUID), `--fortran`, `--nvcc` and `--cuda-host` are also available;
 run `entrypoint.sh resident --help` or `run_on_node.sh --help` for all options.

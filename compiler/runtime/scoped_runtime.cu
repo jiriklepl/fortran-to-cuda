@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
@@ -142,7 +143,7 @@ struct Residency {
     uint64_t last_context = 0;
     fort_scope_trace_state_v1 last_provenance{};
     bool ready = false, pending = false, poisoned = false, retired = false;
-    bool copy_completion_priced = false;
+    bool copy_completion_priced = false, budget_warned = false;
     size_t device_budget = std::numeric_limits<size_t>::max();
     std::mutex mutex;
     std::unordered_map<fort_buffer_t, std::unique_ptr<Buffer>> buffers;
@@ -606,6 +607,16 @@ Region pending_host_reads(const Buffer &b) {
             result = unite(std::move(result),reader.sections,budget);
     } catch (const Fragmented &) { return {b.full()}; }
     return result;
+}
+// Said once per domain: from here on the run pays for a budget that is too small.
+void budget_warning(Context &c,const char *consequence) noexcept {
+    if (!c.borrowed_domain || c.residency->budget_warned) return;
+    c.residency->budget_warned=true;
+    try {
+        std::lock_guard<std::mutex> lock(trace_mutex);
+        std::cerr << "Resident domain: the arrays in use exceed the device budget of " << c.device_budget
+                  << " bytes; " << consequence << '.' << std::endl;
+    } catch (...) {}
 }
 size_t field_budget(const Context &c) {
     require(c.scratch_capacity <= c.device_budget &&
@@ -2096,6 +2107,7 @@ void reserve_devices(Context &c,const fort_buffer_t *handles,size_t count,void *
     // Publications borrow caller host memory. Complete the whole batch before
     // returning a host mirror as current or retiring its source allocation.
     if (c.stats.download_bytes!=downloads) wait(c);
+    if (!victims.empty()) budget_warning(c,"the least recently used ones now move back to the host");
     for (auto *b : victims) {
         release(c,*b);
         b->device_current.clear();
@@ -3821,6 +3833,56 @@ extern "C" int fort_scope_set_device_budget(fort_scope_t h, size_t bytes) {
         c.device_budget = bytes;
     });
 }
+extern "C" int fort_scope_device_budget_default_v1(int device, size_t *out) {
+    return protect([&]() {
+        require(out && device>=0,FORT_SCOPE_ARGUMENT,"invalid device or missing budget output");
+        const char *stated=std::getenv("FORT_RESIDENT_DEVICE_BUDGET");
+        if(stated && stated[0]) {
+            // A count of bytes, or a count followed by K, M or G (powers of 1024).
+            char *end=nullptr; errno=0;
+            const unsigned long long count=std::strtoull(stated,&end,10);
+            unsigned shift=0;
+            if(end && (*end=='K' || *end=='k')) { shift=10; ++end; }
+            else if(end && (*end=='M' || *end=='m')) { shift=20; ++end; }
+            else if(end && (*end=='G' || *end=='g')) { shift=30; ++end; }
+            require(end!=stated && !*end && !errno && count && stated[0]!='-' &&
+                    count<=(std::numeric_limits<size_t>::max()>>shift),FORT_SCOPE_ARGUMENT,
+                    "FORT_RESIDENT_DEVICE_BUDGET must be a positive count of bytes, optionally with K, M or G");
+            *out=size_t(count)<<shift;
+            return;
+        }
+#ifdef FORT_SCOPE_CPU_TEST
+        *out=std::numeric_limits<size_t>::max();
+#else
+        int previous=0;
+        size_t free_bytes=0,total_bytes=0;
+        auto failed=[](cudaError_t status) {
+            if(status!=cudaSuccess) throw Error(FORT_SCOPE_RESOURCE,cudaGetErrorString(status));
+        };
+        failed(cudaGetDevice(&previous));
+        if(previous!=device) failed(cudaSetDevice(device));
+        const auto status=cudaMemGetInfo(&free_bytes,&total_bytes);
+        if(previous!=device) failed(cudaSetDevice(previous));
+        failed(status);
+        // The driver, CUDA graphs and library plans allocate outside the
+        // budget: leave them a sixteenth of the device, at least 512 MiB.
+        const size_t reserve=std::max<size_t>(total_bytes/16,size_t(512)<<20);
+        require(free_bytes>reserve,FORT_SCOPE_RESOURCE,"the device has no free memory for a residency domain");
+        *out=free_bytes-reserve;
+#endif
+    });
+}
+extern "C" int fort_scope_domain_budget_get_v1(fort_scope_domain_t domain,size_t *budget,size_t *unclaimed) {
+    return protect([&]() {
+        require(budget && unclaimed,FORT_SCOPE_ARGUMENT,"missing residency budget output");
+        auto owner=lookup_domain(domain);
+        std::lock_guard<std::mutex> lock(owner->mutex);
+        require(!owner->retired,FORT_SCOPE_STALE,"retired residency domain");
+        *budget=owner->device_budget;
+        const size_t claimed=owner->workspace_bytes+owner->scratch_capacity+owner->stats.allocated_bytes;
+        *unclaimed=claimed<owner->device_budget ? owner->device_budget-claimed : 0;
+    });
+}
 extern "C" int fort_scope_set_transfers(fort_scope_t h, uint32_t mode) {
     return with(h, [&](Context &c) {
         require(mode <= FORT_SCOPE_TRANSFERS_COALESCED, FORT_SCOPE_ARGUMENT, "invalid scoped transfer mode");
@@ -4381,7 +4443,12 @@ extern "C" int fort_scope_access_begin_v1(fort_scope_t h, const fort_scope_plan_
     return with(h, [&](Context &c) {
         require(device == 0 || device == 1, FORT_SCOPE_ARGUMENT, "invalid task access execution mode");
         if (count) note_numerical_activity(c);
-        begin_accesses(c, bindings, count, device != 0, devices);
+        try { begin_accesses(c, bindings, count, device != 0, devices); }
+        catch (const Error &error) {
+            if (device && error.status==FORT_SCOPE_RESOURCE)
+                budget_warning(c,"loop nests whose arrays do not fit together run on the host");
+            throw;
+        }
     });
 }
 extern "C" int fort_scope_original_host_begin_v1(fort_scope_t h, const fort_scope_plan_binding *bindings,

@@ -33,6 +33,8 @@ def test_enter_starts_an_epoch_once_under_its_condition():
                         "clauses": {"budget": "2*1024**3", "if": "supported() .and. (n > 1)", "device": "gpu"}}]
     unconditional, _ = expand("!$fort enter budget(1024)")
     assert "  if (.not. flow%active) then\n    call flow%begin_epoch(int(0, c_int), int(1024, c_size_t))\n" in unconditional
+    # Without a budget the domain takes what the device has free.
+    assert "    call flow%begin_epoch(int(0, c_int))\n" in expand("!$fort enter")[0]
 
 
 def test_leave_close_and_publish_act_on_the_whole_domain():
@@ -86,7 +88,6 @@ def test_release_retires_temporaries_without_bringing_them_back():
 @pytest.mark.parametrize(("line", "message"), [
     ("!$fort", "Empty residency directive on line 2"),
     ("!$fort sync", "Unknown residency directive on line 2: sync"),
-    ("!$fort enter", "needs budget"),
     ("!$fort enter budget(1) when(x)", "Unsupported clause"),
     ("!$fort enter budget(1) if(a", "Unbalanced parentheses"),
     ("!$fort publish if", "Unsupported clause"),

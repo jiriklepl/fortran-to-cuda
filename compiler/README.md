@@ -471,12 +471,23 @@ directives. They are comments, so the same source still builds natively:
 
 | Directive | Effect |
 |---|---|
-| `!$fort enter budget(<bytes>) [if(<condition>)] [device(<n>)]` | Start keeping values on the device, unless that is already the case |
+| `!$fort enter [budget(<bytes>)] [if(<condition>)] [device(<n>)]` | Start keeping values on the device, unless that is already the case |
 | `!$fort leave` | Bring every value back to the host and stop |
 | `!$fort close` | Also free the device state; run it before the arrays are deallocated |
 | `!$fort publish [if(<condition>)]` | Bring every value back and forget the device copies, before host code whose accesses are not known |
 | `!$fort observe(<arrays>) [if(<condition>)]` | Bring the named arrays back and keep their device copies, for host code that reads them |
 | `!$fort release(<arrays>)` | Retire a temporary's device copy before the temporary is deallocated |
+
+Without `budget` the domain may use what the device has free when the first
+epoch starts, less a reserve of one sixteenth of the device (at least 512 MiB)
+for what the driver and libraries allocate themselves. Arrays take device
+memory when an entry first uses them; when the budget is reached the least
+recently used ones move back to the host. `FORT_RESIDENT_DEVICE_BUDGET` (bytes,
+or a count with `K`, `M` or `G`) replaces the derived value, for a device shared
+with other work. A `budget` clause is for an application that knows its limit;
+it takes precedence over both. `domain%unclaimed()` is the part of the budget
+nothing claims at that moment: the cap to hand a library that sizes its own
+device workspace.
 
 A directive between two nests ends their shared entry, and a nest with a
 directive inside it is left to the host. An application that cannot carry

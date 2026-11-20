@@ -71,6 +71,11 @@ def test_application_environment_strips_external_controls(monkeypatch, tmp_path)
     assert env["POISSON_SOLVER_KERNEL_CACHE_DIR"] == str(tmp_path)
     assert "FORT_RUNTIME_TRACE" not in env and "ELMM_OTHER" not in env and "LD_PRELOAD" not in env
     assert runner.application_environment(4, "GPU-id", None, traced=True)["FORT_RUNTIME_TRACE"] == "1"
+    # A stated budget reaches the GPU run; an inherited one never does.
+    monkeypatch.setenv("FORT_RESIDENT_DEVICE_BUDGET", "1G")
+    assert "FORT_RESIDENT_DEVICE_BUDGET" not in runner.application_environment(4, "GPU-id", None, traced=False)
+    stated = runner.application_environment(4, "GPU-id", None, traced=False, device_budget="16G")
+    assert stated["FORT_RESIDENT_DEVICE_BUDGET"] == "16G"
 
 
 def test_field_failure_exposes_comparison_details():
@@ -387,7 +392,7 @@ def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, mon
     def application(binary, config, configuration, directory, env, timeout, expected_steps=None):
         calls.append((Path(binary).name, env.get("FORT_RUNTIME_TRACE"),
                       env.get("POISSON_SOLVER_KERNEL_CACHE_DIR"), env["OMP_NUM_THREADS"],
-                      env.get("FORT_RESIDENT_HOST_THREADS")))
+                      env.get("FORT_RESIDENT_HOST_THREADS"), env.get("FORT_RESIDENT_DEVICE_BUDGET")))
         directory.mkdir(parents=True)
         return {"directory": str(directory), "wall_seconds": 2.0 if "native" in binary else 1.0,
             "application_timing": {"completed_steps": natural_steps if natural else 2}}, "vtk", "Time limit reached."
@@ -456,6 +461,8 @@ def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, mon
     assert report["threads"] == 4 and report["gpu_threads"] == 1
     assert all(call[3] == "4" for call in calls)
     assert all(call[4] == (None if "native" in call[0] else "1") for call in calls)
+    # No budget is stated, so the GPU run takes what the device has free.
+    assert report["gpu_budget"] == "free device memory" and all(call[5] is None for call in calls)
     with pytest.raises(FileExistsError):
         runner.run(args)
 
