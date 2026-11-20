@@ -93,6 +93,8 @@ class RegionExtraction:
     scalar_element_captures: tuple = ()
     immutable_array_reads: tuple[str, ...] = ()
     preconditions: tuple[OriginalNumericalPrecondition, ...] = ()
+    # Loops without statements that leave the DO variables read after the region with their final values.
+    final_iterators: tuple[str, ...] = ()
 
     @property
     def requires_numerical_environment(self):
@@ -120,7 +122,7 @@ class RegionExtraction:
                 "runtime_guards": list(self.runtime_guards), "numerical_helpers": list(self.numerical_helpers),
                 "tile_domains": list(self.tile_domains),
                 "source_preconditions": [item.public() for item in self.preconditions],
-                "private_arrays": list(self.private_arrays),
+                "private_arrays": list(self.private_arrays), "final_iterators": list(self.final_iterators),
                 "immutable_constants": list(self.immutable_constants),
                 "immutable_scalar_captures": list(self.immutable_scalar_captures),
                 "scalar_element_captures": [item.public() for item in self.scalar_element_captures],
@@ -392,6 +394,43 @@ def _iterator(node):
     if not counted or len(counted) != 2 or _kind(counted[0]) != "Name":
         raise CompilationError("inline numerical regions require counted DO loops")
     return str(counted[0]).lower(), tuple(counted[1])
+
+
+def _loop_control(analysis, routine, loops, live, iterators, changed):
+    """The loops of a region without their statements, for the DO variables that are read after it.
+
+    A counted loop leaves its variable with a value that only its bounds
+    decide, so the loops alone, run on the host after the entry, leave the
+    variables as the region would. That holds for a variable that only DO
+    statements set (``iterators``), whose loops are not under a condition, and
+    whose bounds read nothing the region changes (``changed``). Loops that
+    hold no such variable are left out. Returns the lines, or raises when a
+    variable in ``live`` is not of that kind.
+    """
+    refusal = CompilationError("inline loop-written scalar is live after the region")
+    if live - iterators:
+        raise refusal
+
+    def variable(loop):
+        return analysis._binding(source_scope_for(analysis, loop, routine.scope), _iterator(loop)[0]).root
+
+    def control(loop, enclosing, depth):
+        name, bounds = _iterator(loop)
+        root, inner = variable(loop), []
+        for child in _children(loop):
+            if _kind(child) == "Block_Nonlabel_Do_Construct":
+                inner += control(child, enclosing | {root}, depth + 1)
+            elif any(variable(item) in live for item in walk(child, F.Block_Nonlabel_Do_Construct)):
+                raise refusal  # Whether that loop runs is decided by the statements left out.
+        if not inner and root not in live:
+            return []
+        read = {binding.root for bound in bounds for binding, _ in references(analysis, routine.scope, bound)}
+        if read & (changed | (iterators - enclosing)):
+            raise refusal
+        margin = "  " * depth
+        return [f"{margin}do {name} = {', '.join(str(bound) for bound in bounds)}", *inner, f"{margin}end do"]
+
+    return tuple(line for loop in loops for line in control(loop, frozenset(), 0))
 
 
 def _fixed_shape(routine, binding):
@@ -833,7 +872,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             if boundary:
                 raise CompilationError(boundary)
             used[binding.root] = binding
-    writes, scalar_writes, iterators, local_arrays = set(), set(), set(), set()
+    writes, scalar_writes, iterators, local_arrays, assigned_scalars = set(), set(), set(), set(), set()
     def write(binding, target):
         if binding is None:
             raise CompilationError("unresolved inline assignment target")
@@ -852,6 +891,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             writes.add(binding.root)
         else:
             scalar_writes.add(binding.root)
+            assigned_scalars.add(binding.root)
 
     for owner, loop in bodies:
         for item in walk(loop):
@@ -914,8 +954,11 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     following_analysis._native_metadata = True
     live_scalars = (_upward_reads(following_analysis, routine, following)
                     | _upward_reads(following_analysis, routine, cyclic_following))
+    final_iterators = ()
     if scalar_writes & live_scalars:
-        raise CompilationError("inline loop-written scalar is live after the region")
+        only_counted = iterators - assigned_scalars
+        final_iterators = _loop_control(analysis, routine, loops, scalar_writes & live_scalars, only_counted,
+                                        (scalar_writes - only_counted) | writes | local_arrays)
     # Read-only local fixed arrays can only be used if initialized inside the
     # reached numerical work. The ordinary frontend checks every scalarized
     # element's definition before use; they must not be captured as live arrays.
@@ -1279,4 +1322,4 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                             immutable_constants=constants.resources,
                             immutable_scalar_captures=tuple(binding.root for binding in constants.scalar_captures),
                             scalar_element_captures=elements, immutable_array_reads=tuple(sorted(immutable_reads)),
-                            preconditions=preconditions)
+                            preconditions=preconditions, final_iterators=final_iterators)

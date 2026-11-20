@@ -125,6 +125,8 @@ def entry_call_block(region, entry, domain, held=None):
     guards = ["        if (.not. (" + guard + ")) error stop 'resident numerical geometry changed'"
               for guard in region["runtime_guards"]]
     call = [f"        call {domain.check}({run}( &", "          " + ", &\n          ".join(arguments) + "))"]
+    # The statements run on the device; DO variables that are read afterwards get their final values here.
+    call += ["        " + line for line in region.get("final_iterators", ())]
     code = ["    block", "      use, intrinsic :: iso_c_binding",
             "      use fort_scoped_memory, only: " + ", ".join(["FORT_SCOPE_GPU", *sorted(kinds)]),
             f"      use {domain.module}, only: {domain.object}, {domain.check}",
