@@ -24,3 +24,13 @@ def box_project(sources=BOX, *, defines=("DOUBLE",)):
 
 def fortran_compiler():
     return shutil.which("gfortran-15") or shutil.which("gfortran")
+
+
+RELAX = Path(__file__).resolve().parent / "apps/relax/relax.f90"
+
+
+def relax_project():
+    """A solver written as one main program and one external procedure, both selected."""
+    return ResidentProject(sources=(RELAX,), selections=(
+        Selection("all", ("$program::relax", "$external::damp"), minimum_nests=12),))
+

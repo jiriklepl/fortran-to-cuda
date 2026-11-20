@@ -274,6 +274,14 @@ build(prepared, out / "built", name="box", programs={"box": src / "main.f90"},
       fortran="gfortran", cxx="g++-14", nvcc="nvcc", architecture="86")
 ```
 
+A selection names procedures as `module::name` or by a glob over such names.
+An internal procedure is `module::host::name`, an external procedure (one
+that stands in no module) is `$external::name`, and a main program is
+`$program::name`, given exactly. The arrays of a main program live as long as
+the run, like a module's. The array dummies of an external procedure are bound
+as they are passed: they get no `TARGET` attribute, which its callers could
+not learn without an interface.
+
 `prepare` preprocesses the sources, removes OpenMP directives inside the
 selected procedures (one serial caller dispatches their nests), exports and
 compiles the entries, replaces each compiled nest by a call that runs while
@@ -321,7 +329,7 @@ entries then take by handle; the default domain is the runtime's
 `fort_resident_application` module. `rewrites` applies the compiler's loop
 rewrites, or the application's own functions, to a source before export.
 
-Three forms beyond plain array loops are supported in selected procedures.
+Forms beyond plain array loops that are supported in selected procedures:
 
 - **Loops that only accumulate scalars.** A nest such as
 
@@ -363,6 +371,48 @@ Three forms beyond plain array loops are supported in selected procedures.
   than a default integer counts, or whose rewritten form the compiler rejects,
   stays on the host; in the last two cases the device values are published
   first, which costs a full download each time the nest is reached.
+
+- **Array assignments.** An assignment to an array section inside a loop is
+  part of the loop's nest: each section is a further loop dimension, and a
+  section of a known small extent is assigned from a snapshot of the right-hand
+  side, as the statement requires. An array assignment outside every loop,
+  such as `total = total + field(1:nx,1:ny,1:nz) * weight`, is written as its
+  loop nest by the preparation (`compiler.resident.array_statements`) when the
+  nest repeats it exactly: every name is declared in the same file, no array
+  is a pointer, the assigned array appears on the right only as the same
+  elements, the right-hand side uses operators and elemental intrinsics, and
+  an allocatable array assigned as a whole keeps its shape. Working arrays of
+  a procedure (its own arrays without `ALLOCATABLE`, `SAVE` or `TARGET`) are
+  left alone. `prepared.json` lists the statements
+  under `array_statements`, `lowered` or with the `reason` they stay. A nest
+  that does not compile runs on the host like the statement it came from,
+  and the audit reports it under the statement's id.
+
+- **Arrays of any declared shape but one.** The arrays of a nest may be
+  assumed-shape or explicit-shape dummies (with constant or run-time lower
+  bounds), allocatable dummies, and module arrays; the entry gets their
+  bounds at each call. An assumed-size array (`a(*)`) has no extent the
+  device copy could take, and a pointer array may share storage with another:
+  nests that use either stay on the host, with that reason.
+
+- **Loops around nests.** A loop whose body holds a loop nest beside other
+  statements is either a nest itself or a loop that runs around nests, such as
+  an iteration or a time loop. It is first taken as a nest. When it cannot be
+  one (it calls a procedure, carries a directive, or its iterations depend on
+  each other), the host runs the loop and the nests in its body are entries,
+  called once per iteration; `prepared.json` lists such a loop under the
+  selection's `descended` when the dependence analysis decided it. An array
+  assignment in such a body is written as its nest like one outside every
+  loop. A nest in such a body that only accumulates scalars is rewritten only
+  where an OpenMP `reduction` clause or `!$fort reduction` marks it, whatever
+  it accumulates: unmarked, it may be the private accumulation of each
+  iteration of a nest.
+
+- **Loop variables that are read after their loop.** The host variable of a
+  compiled nest keeps its old value, so the entry call is followed by the
+  nest's loops without their statements when a later statement reads one of
+  its DO variables. A nest whose other scalars are read later stays on the
+  host.
 
 - **Fields of an array of derived type.** A nest may read and write
   `points(i)%field` for a rank-one array of derived type and a scalar REAL or

@@ -103,7 +103,8 @@ def test_an_order_comparison_of_known_values_is_decided_too():
     assert "      do i = 0, 0\n        u(i) = u(n)\n      end do\n    if (bc(east)==PERIODIC) then\n" in folded
     folded = specialize(source.replace("< INLET", "> INLET"), "apply", ("bc(west) == PERIODIC",),
                         constants).split("    else\n    if (bc(west)==INLET")[0]
-    assert "      u(0) = u(1)\n    if (bc(east)==PERIODIC) then\n" in folded and "u(i) = u(n)" not in folded
+    assert "      u(0) = u(1)\n    if (bc(east)==PERIODIC) then\n" in folded
+    assert "u(i) = u(n)" not in folded
 
 
 @pytest.mark.parametrize(("conditions", "message"), [

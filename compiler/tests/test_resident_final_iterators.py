@@ -99,4 +99,5 @@ last = j + k
     # After the call, in the branch that did not run the statements.
     assert active.split("call require(fort_device_run(", 1)[1].split("))\n", 1)[1] == (
         "        do k = 1, m\n          do j = 1, n\n          end do\n        end do\n")
-    assert "a(0,j,k) = a(n,j,k)" in native and "last = j + k" in native.split("end block", 1)[1]
+    assert "a(0,j,k) = a(n,j,k)" in native
+    assert "last = j + k" in native.split("end block", 1)[1]

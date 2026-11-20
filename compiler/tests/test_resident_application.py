@@ -30,6 +30,9 @@ def test_the_box_is_prepared_from_its_description(box):
     assert prepared["domain"] == {"module": "fort_resident_application", "object": "resident", "default": True}
     # Four in the sources, and five that each of the three rewritten accumulating loops brings.
     assert prepared["directives"] == 19
+    # The one array assignment outside a loop, in store, was written as its nest.
+    assert [(Path(row["source"]).name, row["procedure"], row.get("lowered")) for row in prepared["array_statements"]] == [
+        ("stepper.f90", "stepper::store", True)]
     # Its selected procedures hold nothing but loop nests, so no host statement touches a bound array.
     assert prepared["audit"] == []
     sources = {Path(row["original"]).name: row for row in prepared["sources"]}
@@ -49,7 +52,10 @@ def test_entries_are_called_while_resident_and_the_original_loops_run_otherwise(
     assert "if (resident%active) then" in store
     assert "fort_handle_a=resident%bind_real64(a,lbound(a),.true., &\n          origin='stepper::store::a')" in store
     assert "call resident_require(fort_device_run(" in store
-    assert store.index("      else\n") < store.index("          a(i,j,k) = b(i,j,k)") < store.index("      endif\n")
+    # store is one array assignment in the source; the nest it stands for is what the entry replaces.
+    assert "a(1:nx,1:ny,1:nz) = b(1:nx,1:ny,1:nz)" not in store
+    assert (store.index("      else\n") < store.index("a(fort_arr1_1, fort_arr1_2, fort_arr1_3) = b(fort_arr1_1, ")
+            < store.index("      endif\n"))
     # The selected procedures run from one serial caller, so their directives are gone; the precision is fixed.
     assert "!$omp" not in stepper
     assert "#ifdef" not in (directory / "sources/fields.f90").read_text()
@@ -329,6 +335,46 @@ def test_known_findings_are_accepted_and_strict_mode_refuses_new_ones(tmp_path):
     with pytest.raises(ValueError, match=finding["id"] + r" audited::step line \d+: b\(1\) = a\(n\)"):
         audited(tmp_path / "strict", ("audited::step", "audited::finish"), strict_audit=True)
     assert not (tmp_path / "strict/prepared/sources").exists()
+
+
+def test_an_array_assignment_whose_nest_does_not_compile_is_the_host_statement_it_was(tmp_path):
+    source = tmp_path / "sums.f90"
+    source.write_text("""module sums
+integer :: n
+integer(8) :: wide
+contains
+subroutine step(a, b)
+real(8), contiguous, intent(inout) :: a(:), b(:)
+integer :: i
+do i = 1, n
+a(i) = a(i) + 1
+enddo
+b = a
+a = a * wide
+end subroutine
+end module
+""")
+    prepared = prepare(ResidentProject((source,), (Selection("all", ("sums::step",), minimum_nests=2),)),
+                       tmp_path / "prepared", fortran=fortran_compiler())
+    copy, scaled = prepared["array_statements"]
+    # Lines are those of the preprocessed source, as in the audit.
+    assert copy["lowered"]
+    assert scaled["line"] == copy["line"] + 1
+    # A 64-bit integer is not a type the entries take, so the second nest stays on the host.
+    assert scaled["lowered"] is False
+    assert "wide" in scaled["reason"]
+    # It is not a rejected nest, which would publish everything first: it is the statement, for the audit too.
+    assert prepared["selections"] == [{"label": "all", "entries": 2, "nests": 2, "rejected": []}]
+    finding, = prepared["audit"]
+    assert (finding["arrays"], finding["text"], finding["known"]) == (["a"], "a = a * wide", False)
+    text = (tmp_path / "prepared/sources/sums.f90").read_text()
+    tail = text[text.rindex("    end block\n"):]
+    assert "a(fort_arr2_1) = a(fort_arr2_1) * wide" in tail
+    assert "resident%" not in tail
+    # The finding has the id the unrewritten statement has, so a recorded answer keeps applying.
+    project = ResidentProject((source,), (Selection("all", ("sums::step",)),),
+                              known_host_accesses=frozenset({finding["id"]}), strict_audit=True)
+    assert prepare(project, tmp_path / "known", fortran=fortran_compiler())["audit"][0]["known"]
 
 
 def test_fields_of_an_array_of_derived_type_are_bound_through_the_domain(box):

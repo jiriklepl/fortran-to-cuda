@@ -6,6 +6,7 @@ source scopes. The owner retains scalar control flow, native effects and
 allocation epochs. Every exported entry still goes through ordinary numerical
 lowering and dependence analysis before it can execute on a device.
 """
+import re
 from fnmatch import fnmatchcase
 from hashlib import sha256
 from pathlib import Path
@@ -76,6 +77,12 @@ def _entry_groups(sequence, acknowledged=None):
         yield mark(group)
     if pending:
         yield mark(tuple(pending))
+
+
+def _holds_a_sequence(loop):
+    """Whether a loop's body is more than one nest: a loop nest beside other statements or nests."""
+    body = [item for item in _children(loop) if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
+    return len(body) > 1 and any(_kind(item) == "Block_Nonlabel_Do_Construct" for item in body)
 
 
 def _text(node):
@@ -267,15 +274,40 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     directly precedes it or sits inside it (``acknowledged``). They run beside
     the entries, so each one that touches an array an entry binds needs the
     host to hold current values.
+
+    A loop whose body holds a loop nest beside other statements may be a nest
+    itself, or a loop the host has to run around nests (an iteration, a time
+    loop). When it cannot be exported, its body is exported in its place. When
+    it can, its entry is marked ``descends`` and its body is exported too:
+    the entries, rejections and host statements of the body carry
+    ``alternative_of``, the spans of the loops they replace, outermost first,
+    and count only where none of those loops compiled as an entry (see
+    ``compile_resident_entries``).
     """
     # A selected procedure can be long, the more so with calls replaced by their statements; the
     # default bound on statements per procedure is sized for proofs this export does not ask for.
-    analysis = SourceEffects(paths, analysis_sources=analysis_sources, operations=4096)
+    # A main program is analysed as a procedure only when it is asked for by name.
+    programs = tuple(sorted({name.lower() for name in procedures or ()
+                             if re.fullmatch(r"\$program::[a-z][a-z0-9_]*", name.lower())}))
+    analysis = SourceEffects(paths, analysis_sources=analysis_sources, operations=4096, program_roots=programs)
     analysis.element_fields = True
     # The body of a module function holds loop nests like any subroutine's.
     for name, routine in analysis.numerical_helpers.items():
         if routine.source_kind == "function" and name not in analysis.routines:
             analysis.routines[name] = routine
+            analysis._source_roles[name] = (routine.execution, analysis._routine_signature(routine),
+                                            str(routine.execution))
+    # So does the body of a main program that was asked for. Its variables live as long as the run, like a
+    # module's; the analysis keeps a program frame for call ownership only until it is selected here.
+    for name in programs:
+        routine = analysis.routines.get(name)
+        if routine is not None:
+            routine.issues[:] = [issue for issue in routine.issues if not issue.startswith("original program frame")]
+            # A scalar of the frame is working storage of its nests like a procedure's local: nothing
+            # returns to find it changed, and a later read in the frame is seen by the liveness check.
+            for binding in routine.scope.bindings.values():
+                if not binding.rank:
+                    binding.attributes = binding.attributes - {"save"}
             analysis._source_roles[name] = (routine.execution, analysis._routine_signature(routine),
                                             str(routine.execution))
     directory = Path(directory)
@@ -285,7 +317,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     for procedure in resolved_procedures:
         routine = analysis.routines[procedure]
 
-        def emit(nodes, sequence):
+        def emit(nodes, sequence, outer=()):
             if len(nodes) > 1:
                 # Nests over different arrays of derived type bind, and are skipped when empty, separately.
                 objects = [_structure_objects(analysis, routine.scope, node) for node in nodes]
@@ -293,7 +325,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                     start = 0
                     for index in range(1, len(nodes) + 1):
                         if index == len(nodes) or objects[index] != objects[start]:
-                            emit(nodes[start:index], sequence)
+                            emit(nodes[start:index], sequence, outer)
                             start = index
                     return
             first = min(statement_span(node)[0] for node in nodes)
@@ -316,10 +348,17 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                     grouping_rejections.append({"procedure": procedure, "first_line": first,
                                                 "last_line": last, "reason": str(error)})
                     for node in nodes:
-                        emit((node,), sequence)
+                        emit((node,), sequence, outer)
                     return
-                rejected.append({"procedure": procedure, "first_line": first,
-                                 "last_line": last, "reason": str(error)})
+                if len(nodes) == 1 and _holds_a_sequence(nodes[0]):
+                    # Not a nest but a loop around nests, such as an iteration or a time loop: the
+                    # host runs it, and what stands in its body is looked at in its own right.
+                    grouping_rejections.append({"procedure": procedure, "first_line": first,
+                                                "last_line": last, "reason": str(error)})
+                    within(nodes[0], outer)
+                    return
+                rejected.append({"procedure": procedure, "first_line": first, "last_line": last,
+                                 "reason": str(error), **alternative(outer)})
                 return
             path = extracted.write(directory)
             structures = []
@@ -332,9 +371,25 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
             entries.append({"procedure": procedure, "source": str(routine.scope.path),
                             "input_path": str(path.resolve()), **extracted.public(),
                             "source_loop_spans": [list(statement_span(node)) for node in loops],
-                            "structures": structures, "injective": _indirect_writes(analysis, routine, loops)})
+                            "structures": structures, "injective": _indirect_writes(analysis, routine, loops),
+                            **alternative(outer)})
+            if len(nodes) == 1 and _holds_a_sequence(nodes[0]):
+                # Whether the loop runs its iterations independently is decided when the entry is
+                # compiled. In case it does not, its body is exported as well, to be used then.
+                entries[-1]["descends"] = True
+                within(nodes[0], (*outer, (first, last)))
 
-        def host(nodes, acknowledged):
+        def alternative(outer):
+            """Marks what is used only where the loops of the given spans did not compile as entries."""
+            return {"alternative_of": [list(span) for span in outer]} if outer else {}
+
+        def within(loop, outer):
+            statement = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt")
+            host((statement,), False, outer)
+            scan(tuple(item for item in _children(loop) if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt"}),
+                 outer)
+
+        def host(nodes, acknowledged, outer=()):
             """Record host code that names arrays: it runs beside entries that may hold newer values."""
             arrays, calls, elsewhere = _array_uses(analysis, routine, nodes)
             if arrays:
@@ -349,9 +404,9 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                                         "arrays": [{"name": name, "resource": root}
                                                    for root, name in sorted(arrays.items())],
                                         "calls": sorted(calls), "acknowledged": acknowledged,
-                                        "only_calls": not elsewhere})
+                                        "only_calls": not elsewhere, **alternative(outer)})
 
-        def scan(sequence):
+        def scan(sequence, outer=()):
             follows = set()
             for group in _entry_groups(sequence, follows):
                 nodes = tuple(group) if isinstance(group, tuple) else (group,)
@@ -360,13 +415,17 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                 if len(nodes) == 1 and _kind(nodes[0]) in {"If_Construct", "Associate_Construct", "Block_Construct"}:
                     # The construct's own statements (its conditions, selectors) are host code as well.
                     host(tuple(item for item in nodes[0].content if _kind(item) in _CONSTRUCT_HEADERS),
-                         id(nodes[0]) in follows or carries)
-                    scan(tuple(_children(nodes[0])))
+                         id(nodes[0]) in follows or carries, outer)
+                    scan(tuple(_children(nodes[0])), outer)
                 elif any(_kind(node) == "Block_Nonlabel_Do_Construct" for node in nodes) and not carries:
-                    emit(nodes, sequence)
+                    emit(nodes, sequence, outer)
+                elif len(nodes) == 1 and _kind(nodes[0]) == "Block_Nonlabel_Do_Construct" \
+                        and _holds_a_sequence(nodes[0]):
+                    # A loop around nests, with directives between them: the host runs it.
+                    within(nodes[0], outer)
                 else:
                     # A nest that carries a residency directive is host code that manages its own access.
-                    host(nodes, id(nodes[0]) in follows or carries)
+                    host(nodes, id(nodes[0]) in follows or carries, outer)
 
         scan(tuple(_children(routine.execution)))
     analysis.verify_source()
@@ -528,33 +587,53 @@ def compile_resident_entries(extracted, directory, *, host_threads=4):
 
     An entry that the compiler rejects, or that would leave a region on the
     host, joins the export's rejections with its source span, so the caller
-    keeps that span native. Writes and returns ``device-entries.json``.
+    keeps that span native. For a loop marked ``descends`` the entries of its
+    body are compiled in its place: the loop is listed under ``descended``,
+    and the host statements of its body under ``host_statements``. Writes and
+    returns ``device-entries.json``.
     """
     import json
 
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
-    entries, rejected = [], list(extracted["rejected"])
+    entries, rejected, descended = [], [], []
+    opened = set()
+
+    def counts(item):
+        """Not an alternative, or one of loops that all turned out not to be entries."""
+        return all((item["procedure"], *span) in opened for span in item.get("alternative_of", ()))
+
     for region in extracted["entries"]:
+        if not counts(region):
+            continue
         target = directory / region["source_identity"][:16]
         span = {"procedure": region["procedure"], "first_line": region["first_line"],
                 "last_line": region["last_line"]}
         checked = {requirement["resource"] for requirement in region.get("injective", ())}
+        unavailable = ()
         try:
             report = compile_resident_entry(
                 region["input_path"], region["entry"], target, host_threads=host_threads,
                 injective=[parameter["name"] for parameter in region["parameters"]
                            if parameter["rank"] and parameter["resource"] in checked])
+            unavailable = [item for item in report["scoped"]["region_execution"] if not item["gpu_available"]]
+            failure = {"reason": "Resident GPU entry contains native-only regions",
+                       "regions": unavailable} if unavailable else None
         except CompilationError as error:
-            rejected.append({**span, "reason": str(error)})
-            continue
-        unavailable = [item for item in report["scoped"]["region_execution"] if not item["gpu_available"]]
-        if unavailable:
-            rejected.append({**span, "reason": "Resident GPU entry contains native-only regions",
-                             "regions": unavailable})
-            continue
-        entries.append({"region": region, "directory": str(target), "entry": report["scoped"]})
+            failure = {"reason": str(error)}
+        if failure is None:
+            entries.append({"region": region, "directory": str(target), "entry": report["scoped"]})
+        elif region.get("descends"):
+            # The host runs this loop; the nests in its body were exported for this case.
+            opened.add((span["procedure"], span["first_line"], span["last_line"]))
+            descended.append({**span, **failure})
+        else:
+            rejected.append({**span, **failure})
+    rejected = [item for item in extracted["rejected"] if counts(item)] + rejected
     record = {"version": 1, "kind": "resident_device_entries", "source_inputs": extracted["source_inputs"],
-              "entries": entries, "rejected": rejected, "gpu_execution_established": False}
+              "entries": entries, "rejected": rejected, "descended": descended,
+              "host_statements": [item for item in extracted.get("host_statements", ())
+                                  if item.get("alternative_of") and counts(item)],
+              "gpu_execution_established": False}
     (directory / "device-entries.json").write_text(json.dumps(record, indent=2) + "\n")
     return record

@@ -32,16 +32,7 @@ contains
   subroutine store(a, b)
     real(rp), contiguous, intent(inout) :: a(-1:,-1:,-1:)
     real(rp), contiguous, intent(in) :: b(-1:,-1:,-1:)
-    integer :: i, j, k
-    !$omp parallel do private(i,j)
-    do k = 1, nz
-      do j = 1, ny
-        do i = 1, nx
-          a(i,j,k) = b(i,j,k)
-        end do
-      end do
-    end do
-    !$omp end parallel do
+    a(1:nx,1:ny,1:nz) = b(1:nx,1:ny,1:nz)
   end subroutine store
 
   subroutine advance(a, b)

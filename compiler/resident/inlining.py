@@ -32,7 +32,7 @@ from fnmatch import fnmatchcase
 from fparser.two.utils import walk
 
 from .anchors import _strip_inline_comment, parse_fortran
-from .reductions import _kind, _names, _part, _procedures, _rename, _span, serialize_openmp
+from .reductions import _heading, _kind, _names, _part, _procedures, _rename, _span, _units, serialize_openmp
 from .specialize import _Conditions, _fold
 
 _LITERAL = re.compile(r"[+-]?\d+\Z")
@@ -146,8 +146,7 @@ def inline_calls(text, callers, callees, constants=None):
     the call stays.
     """
     wanted = {name.lower() for name in callees}
-    modules = {match.group(1).lower() for match in re.finditer(r"(?im)^\s*module\s+([a-z_]\w*)\b", text)}
-    if not any(name.split("::", 1)[0] in modules for name in wanted):
+    if not any(name.split("::", 1)[0] in _units(text) for name in wanted):
         return text, []
     lines = text.splitlines(keepends=True)
     tree = parse_fortran(text)
@@ -220,8 +219,7 @@ def inline_calls(text, callers, callees, constants=None):
             edits.append((first, last, body_lines))
             records.append({**record, "inlined": True})
         if added:
-            statement = _part(scope.node, "Subroutine_Stmt") or _part(scope.node, "Function_Stmt")
-            heading = _span(statement)[1]
+            heading = _span(_heading(scope.node))[1]
             specification = _part(scope.node, "Specification_Part")
             ends = [_span(item)[1] for item in (specification.content if specification is not None else ())
                     if _kind(item) != "Comment" and _span(item) is not None]

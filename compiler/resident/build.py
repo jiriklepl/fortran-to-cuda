@@ -72,7 +72,11 @@ def cmake_lists(name, libraries, executables, *, include_directories=(), definit
              "set(CMAKE_EXPORT_COMPILE_COMMANDS ON)", "find_package(CUDAToolkit REQUIRED)",
              "find_package(OpenMP REQUIRED)", *prologue]
     includes = " ".join(cmake_path(path) for path in include_directories)
+    # A program that is its application's only source has no library beside it.
+    empty = {library.name for library in libraries if not library.sources}
     for library in libraries:
+        if library.name in empty:
+            continue
         target = library.name + "_objects"
         modules = "${CMAKE_BINARY_DIR}/" + library.name + "-modules"
         lines += [f"add_library({target} OBJECT\n  " + "\n  ".join(cmake_path(path) for path in library.sources) + "\n)",
@@ -92,7 +96,8 @@ def cmake_lists(name, libraries, executables, *, include_directories=(), definit
                      + ";".join(options) + ")")
     for executable in executables:
         lines += [f"add_executable({executable.name} {cmake_path(executable.source)})",
-                  f"target_link_libraries({executable.name} PRIVATE {executable.library}_objects)",
+                  f"target_link_libraries({executable.name} PRIVATE "
+                  + ("OpenMP::OpenMP_Fortran)" if executable.library in empty else f"{executable.library}_objects)"),
                   f"target_compile_options({executable.name} PRIVATE -cpp {' '.join(fortran_options)}{host_space})"]
         if definitions:
             lines.append(f"target_compile_definitions({executable.name} PRIVATE {' '.join(definitions)})")

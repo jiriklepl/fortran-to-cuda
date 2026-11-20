@@ -15,6 +15,7 @@ from fnmatch import fnmatchcase
 from hashlib import sha256
 from pathlib import Path
 
+from compiler.resident.array_statements import lower_array_statements
 from compiler.resident.configure import configure_sources
 from compiler.resident.directives import expand_directives
 from compiler.resident.inlining import inline_calls
@@ -38,7 +39,9 @@ DEFAULT_DOMAIN = ResidentDomain("fort_resident_application", "resident", "reside
 class Selection:
     """Procedures whose loop nests become entries, and how their entries are compiled.
 
-    ``procedures`` are ``module::name`` values or globs over them. ``guard`` is
+    ``procedures`` are ``module::name`` values or globs over them; an internal
+    procedure is ``host::name`` after its host's name, an external procedure
+    ``$external::name``. ``guard`` is
     a condition the application's activation implies and the loop bounds do not
     show (see ``guard_entries``). ``value_scalars`` are module scalars
     (``module::name``) that are defined before any entry runs and so may be
@@ -174,7 +177,10 @@ def prepare(project, directory, *, fortran, host_threads=4):
     summary per selection; ``audit``, the host statements that touch bound
     arrays (see ``audit``); ``inlined``, the calls a selection asked to replace
     by the callee's statements, each ``inlined`` or with the ``reason`` it
-    stays a call; and ``reductions``, the loop nests that only
+    stays a call; ``array_statements``, the array assignments outside loops in
+    the selected procedures, each ``lowered`` to its loop nest or with the
+    ``reason`` it stays host code (see ``compiler.resident.array_statements``);
+    and ``reductions``, the loop nests that only
     accumulate scalars, each with ``compiled`` or the ``reason`` it stays on
     the host (see ``compiler.resident.reductions``). The directory must not
     exist.
@@ -240,6 +246,19 @@ def prepare(project, directory, *, fortran, host_threads=4):
                 current[holders[0]] = path
                 specialized.add(holders[0])
 
+    # Array assignments outside loops become the loop nests they stand for.
+    array_statements = []
+    for original in originals:
+        text = current[original].read_text()
+        rewritten, records = lower_array_statements(text, patterns)
+        if rewritten != text:
+            path = directory / "rewritten" / current[original].name
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(rewritten)
+            current[original] = path
+            specialized.add(original)
+        array_statements += [{**record, "source": original} for record in records]
+
     # Nests that only accumulate scalars get a form whose partial results the device can store.
     reductions = []
     for original in originals:
@@ -291,18 +310,45 @@ def prepare(project, directory, *, fortran, host_threads=4):
             record["reason"] = "; ".join(sorted({item["reason"] for item in mine})) or "its nests were not exported"
             package = {**package, "entries": [item for item in package["entries"] if item not in own],
                        "rejected": [item for item in package["rejected"] if item not in mine]}
+        # The nest of an array assignment that did not compile stays in place and runs on the host, as the
+        # statement did: it is host code for the audit, not a rejected nest.
+        for record in array_statements:
+            if "tag" not in record or not any(fnmatchcase(record["procedure"], pattern) for pattern in chosen):
+                continue
+            lines = current[record["source"]].read_text().splitlines()
+            mine = [item for item in package["rejected"] if item["procedure"] == record["procedure"]
+                    and record["tag"] in "\n".join(lines[item["first_line"] - 1:item["last_line"]])]
+            if mine:
+                record.update(lowered=False, reason="; ".join(sorted({item["reason"] for item in mine})))
+                package = {**package, "rejected": [item for item in package["rejected"] if item not in mine]}
         nests = sum(len(item["region"]["source_loop_spans"]) for item in package["entries"])
         if nests < selection.minimum_nests:
             raise ValueError(f"Selection {selection.label} compiled {nests} loop nests; "
                              f"at least {selection.minimum_nests} are required")
         summary = {"label": selection.label, "entries": len(package["entries"]), "nests": nests,
                    "rejected": package["rejected"]}
+        if package.get("descended"):
+            # Loops the host runs around entries: each did not compile as a nest of its own.
+            summary["descended"] = package["descended"]
         if not selection.native_rejections:
             package = {**package, "rejected": []}
         packages.append(package)
         summaries.append(summary)
 
-    findings = audit(extracted, packages, patterns, project.known_host_accesses)
+    # Host statements in the body of a loop count where the host runs the loop, not where it is an entry.
+    reached = [item for item in extracted["host_statements"] if not item.get("alternative_of")]
+    reached += [item for package in packages for item in package.get("host_statements", ())]
+    findings = audit({**extracted, "host_statements": reached}, packages, patterns, project.known_host_accesses)
+    bound = {resource["name"].lower().split("%")[0] for package in packages for item in package["entries"]
+             for resource in item["region"]["resources"] if resource["rank"]}
+    for record in array_statements:
+        named = sorted(bound.intersection(record.get("arrays", ()))) if record.get("lowered") is False else []
+        if named:
+            # The same finding, with the same id, that the statement gives where it is not rewritten.
+            identity = sha256((record["procedure"] + "\n" + record["text"]).encode()).hexdigest()[:16]
+            findings.append({"id": identity, "procedure": record["procedure"], "source": str(current[record["source"]]),
+                             "first_line": record["line"], "last_line": record["line"], "arrays": named, "calls": [],
+                             "text": record["text"], "known": identity in project.known_host_accesses})
     unknown = [item for item in findings if not item["known"]]
     if unknown and project.strict_audit:
         raise ValueError("Host statements touch arrays that entries keep on the device, with no residency "
@@ -368,6 +414,8 @@ def prepare(project, directory, *, fortran, host_threads=4):
                          "default": project.domain == DEFAULT_DOMAIN},
               "sources": records, "entries": [item["directory"] for package in packages for item in package["entries"]],
               "selections": summaries, "directives": directives, "audit": findings, "inlined": inlined,
+              "array_statements": [{key: str(value) if key == "source" else value for key, value in record.items()
+                                    if key not in {"tag", "arrays", "text"}} for record in array_statements],
               "reductions": [{key: str(value) if key == "source" else value for key, value in record.items()
                               if key not in {"tag", "value_scalars"}} for record in reductions]}
     (directory / "prepared.json").write_text(json.dumps(result, indent=2) + "\n")

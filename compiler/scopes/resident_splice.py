@@ -235,7 +235,8 @@ def addressable_arrays(text):
     Covers REAL, INTEGER and LOGICAL arrays and arrays of derived type declared
     at module or main-program level, and dummy or allocatable arrays inside
     procedures. Components of derived types, parameters and pointers are left
-    alone.
+    alone, and so are the dummies of an external procedure, which its callers
+    know without an interface.
     """
     from fparser.common.readfortran import FortranStringReader
     from fparser.two.parser import ParserFactory
@@ -260,6 +261,10 @@ def addressable_arrays(text):
         if not is_array or parent is None or type(parent).__name__ == "Derived_Type_Def":
             continue
         if type(parent).__name__ not in {"Module", "Main_Program"} and "intent" not in attrs and "allocatable" not in attrs:
+            continue
+        if (type(parent).__name__ in {"Subroutine_Subprogram", "Function_Subprogram"} and "allocatable" not in attrs
+                and type(getattr(parent, "parent", None)).__name__ == "Program"):
+            # A dummy of an external procedure: with TARGET, every call would need an explicit interface.
             continue
         first, last = node.item.span
         before, after = str(node).split("::", 1)

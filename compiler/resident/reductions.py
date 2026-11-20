@@ -37,7 +37,9 @@ turns into the directive below) or with the directive itself:
     !$fort reduction(+: total) [private(p, q)]
 
 The device order is fixed, so a run repeats its sums exactly, but they differ
-in rounding from a serial host sum. ``private`` names scalars the nest
+in rounding from a serial host sum. A nest in the body of another loop is
+rewritten only with the directive, whatever it accumulates: without it the
+outer loop may be a nest whose every iteration accumulates for itself. ``private`` names scalars the nest
 assigns that carry no value out of it; without it, such a scalar must be
 declared in the procedure and not be named again after the nest.
 """
@@ -162,21 +164,48 @@ class _Scope:
     hosts: tuple = ()
 
 
+def _heading(node):
+    """The statement that opens a procedure or a main program."""
+    return _part(node, "Subroutine_Stmt") or _part(node, "Function_Stmt") or _part(node, "Program_Stmt")
+
+
+def _units(text):
+    """The first parts of the names procedures of ``text`` can be selected by.
+
+    A module's procedures are ``module::name``, an external procedure is
+    ``$external::name`` and a named main program ``$program::name``; internal
+    procedures add ``::name`` to their host's.
+    """
+    return {"$external", "$program",
+            *(match.group(1).lower() for match in re.finditer(r"(?im)^\s*module\s+([a-z_]\w*)\b", text))}
+
+
 def _procedures(tree):
-    def subprograms(parent, part, prefix, hosts):
-        container = _part(parent, part)
-        for node in (container.content if container is not None else ()):
-            statement = _part(node, "Subroutine_Stmt") or _part(node, "Function_Stmt") \
-                if _kind(node) in {"Subroutine_Subprogram", "Function_Subprogram"} else None
+    def subprograms(nodes, prefix, hosts):
+        for node in nodes:
+            statement = _heading(node) if _kind(node) in {"Subroutine_Subprogram", "Function_Subprogram"} else None
             if statement is None:
                 continue
             scope = _Scope(prefix + "::" + str(statement.items[1]).lower(), node, hosts)
             yield scope
-            yield from subprograms(node, "Internal_Subprogram_Part", scope.qualified, (node, *hosts))
+            yield from internal(scope)
+
+    def internal(scope):
+        container = _part(scope.node, "Internal_Subprogram_Part")
+        yield from subprograms(container.content if container is not None else (), scope.qualified,
+                               (scope.node, *scope.hosts))
 
     for module in (node for node in walk(tree) if _kind(node) == "Module"):
         name = str(_part(module, "Module_Stmt").items[1]).lower()
-        yield from subprograms(module, "Module_Subprogram_Part", name, (module,))
+        container = _part(module, "Module_Subprogram_Part")
+        yield from subprograms(container.content if container is not None else (), name, (module,))
+    # Program units of their own: external procedures and the main program.
+    yield from subprograms(tree.content, "$external", ())
+    for program in (node for node in tree.content if _kind(node) == "Main_Program"):
+        if _part(program, "Program_Stmt") is not None:
+            scope = _Scope("$program::" + str(_part(program, "Program_Stmt").items[1]).lower(), program, ())
+            yield scope
+            yield from internal(scope)
 
 
 def _declaration(name, scope):
@@ -502,8 +531,7 @@ def lower_reductions(text, procedures):
     """
     lines = text.splitlines(keepends=True)
     patterns = [pattern.lower() for pattern in procedures]
-    modules = {match.group(1).lower() for match in re.finditer(r"(?im)^\s*module\s+([a-z_]\w*)\b", text)}
-    if not any(fnmatchcase(module, pattern.split("::", 1)[0]) for module in modules for pattern in patterns):
+    if not any(fnmatchcase(unit, pattern.split("::", 1)[0]) for unit in _units(text) for pattern in patterns):
         return text, []
     tree = parse_fortran(text)
     edits, records, number = [], [], 0
@@ -513,12 +541,19 @@ def lower_reductions(text, procedures):
         execution = _part(scope.node, "Execution_Part")
         if execution is None:
             continue
-        statement = _part(scope.node, "Subroutine_Stmt") or _part(scope.node, "Function_Stmt")
+        statement = _heading(scope.node)
         last_line = _span(scope.node.content[-1])[1]
         declarations, uses_infinity, lowered = [], False, False
 
-        def runs(node):
-            """Loop nests that directly follow each other, in every statement sequence of the procedure."""
+        def runs(node, inside=False):
+            """Loop nests that directly follow each other, in every statement sequence of the procedure.
+
+            Each run comes with whether it stands in the body of a loop. A loop
+            whose body holds a nest beside other statements may run around
+            nests (an iteration, a time loop) or be a nest itself, with an
+            accumulation of its own in every iteration; the source says which
+            by stating the order of the accumulation there.
+            """
             run = []
             for item in getattr(node, "content", ()):
                 kind = _kind(item)
@@ -528,12 +563,18 @@ def lower_reductions(text, procedures):
                 if kind == "Comment":
                     continue
                 if run:
-                    yield run
+                    yield run, inside
                     run = []
                 if kind in {"If_Construct", "Block_Construct", "Associate_Construct"}:
-                    yield from runs(item)
+                    yield from runs(item, inside)
             if run:
-                yield run
+                yield run, inside
+            for item in getattr(node, "content", ()):
+                if _kind(item) == "Block_Nonlabel_Do_Construct":
+                    body = [part for part in item.content
+                            if _kind(part) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
+                    if len(body) > 1 and any(_kind(part) == "Block_Nonlabel_Do_Construct" for part in body):
+                        yield from runs(item, True)
 
         def emit(group):
             """One replacement for nests whose results can come back together."""
@@ -554,7 +595,7 @@ def lower_reductions(text, procedures):
                 previous = _span(nest)[1] + 1
             edits.append((first, last, replacement))
 
-        for run in runs(execution):
+        for run, inside in runs(execution):
             group, accumulated = [], set()
             for nest in run:
                 first, last = _span(nest)
@@ -564,7 +605,8 @@ def lower_reductions(text, procedures):
                 marker = _MARKER.match(lines[stated]) if stated >= 0 else None
                 operators, private = parse_license(marker.group(0)) if marker else ({}, set())
                 info = None
-                if re.match(r"(?i)\s*do\b", lines[first - 1]) and re.match(r"(?i)\s*end\s*do\b", lines[last - 1]):
+                if (re.match(r"(?i)\s*do\b", lines[first - 1]) and re.match(r"(?i)\s*end\s*do\b", lines[last - 1])
+                        and (marker is not None or not inside)):
                     info = _analyse(nest, scope, operators, private, lines, last_line)
                 record = {"procedure": scope.qualified, "line": first}
                 if isinstance(info, str):
