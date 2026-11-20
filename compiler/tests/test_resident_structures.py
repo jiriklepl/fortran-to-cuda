@@ -168,12 +168,13 @@ def test_a_write_through_indices_names_what_the_caller_must_check(exported):
     plain, = entries(exported, "by_index")
     assert plain["injective"] == [{"resource": "argument::a", "array": "a", "loops": ["DO i = 1, n"],
                                    "indices": ["cell(i)"], "index_resources": ["walls::cell"]}]
-    # Every subscript tuple of the array is named, within a nest and across the nests of an entry.
-    assert [item["indices"] for item in entries(exported, "shifted")[0]["injective"]] == [["cell(i)"], ["cell(i) + 1"]]
+    # Every subscript tuple the array is written through is named, across the nests of an entry.
     both, = entries(exported, "pair")
     assert [(item["loops"], item["indices"]) for item in both["injective"]] == [
         (["DO i = 1, n"], ["cell(i)"]), (["DO i = 1, n"], ["cell(i) + 1"])]
-    # A tuple that does not go through index values, or a subscript the nest computes itself, cannot be checked.
+    # A tuple that is only read, one that does not go through index values, or a subscript the nest
+    # computes itself cannot be checked.
+    assert entries(exported, "shifted")[0]["injective"] == []
     assert entries(exported, "mixed")[0]["injective"] == []
     assert entries(exported, "computed")[0]["injective"] == []
 
@@ -188,11 +189,11 @@ def test_the_check_is_what_lets_the_scatter_run_on_the_device(exported, tmp_path
         compile_resident_entry(plain["input_path"], plain["entry"], tmp_path / "unchecked")
     report = compile_resident_entry(plain["input_path"], plain["entry"], tmp_path / "checked", injective=["a"])
     assert all(region["gpu_available"] for region in report["scoped"]["region_execution"])
-    # The assumption covers every tuple that goes through index values, so a second, shifted tuple is fine.
+    # The assumption covers the tuples the array is written through: a second tuple that is only read conflicts.
     shifted = by_procedure["shifted"]
-    report = compile_resident_entry(shifted["input_path"], shifted["entry"], tmp_path / "shifted", injective=["a"])
-    assert all(region["gpu_available"] for region in report["scoped"]["region_execution"])
-    # It also makes two nests over the same iterations independent of each other: they become one region.
+    with pytest.raises(CompilationError, match="Cannot parallelize"):
+        compile_resident_entry(shifted["input_path"], shifted["entry"], tmp_path / "shifted", injective=["a"])
+    # It makes two nests over the same iterations independent of each other: they become one region.
     pair = by_procedure["pair"]
     report = compile_resident_entry(pair["input_path"], pair["entry"], tmp_path / "pair", injective=["a"])
     assert len(report["scoped"]["region_execution"]) == 1
@@ -204,9 +205,9 @@ def test_the_check_is_what_lets_the_scatter_run_on_the_device(exported, tmp_path
     # nest whose subscripts the caller cannot check stays rejected.
     package = compile_resident_entries(valued, tmp_path / "entries")
     compiled = {item["region"]["procedure"] for item in package["entries"]}
-    assert {"walls::correct", "walls::relax", "walls::by_index", "walls::shifted", "walls::pair"} <= compiled
+    assert {"walls::correct", "walls::relax", "walls::by_index", "walls::pair"} <= compiled
     rejected = {item["procedure"] for item in package["rejected"]}
-    assert {"walls::mixed", "walls::computed"} <= rejected
+    assert {"walls::shifted", "walls::mixed", "walls::computed"} <= rejected
 
 
 def test_the_call_block_binds_fields_and_checks_before_it_runs(exported, tmp_path):

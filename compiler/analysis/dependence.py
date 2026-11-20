@@ -564,12 +564,13 @@ def _region_model(
                 entry[0][0]: candidate[0] for entry, candidate in zip(entries, candidates, strict=True)
             }
 
-    # A caller may check, before the region runs, that the subscript tuples of
-    # an array address a different element in every iteration, and different
-    # elements from one another. When every access to that array in the region
-    # goes through index values at the same loop depth, two accesses touch the
-    # same element exactly when they use the same tuple in the same iteration,
-    # whatever the index values are.
+    # A caller may check, before the region runs, that the subscript tuples an
+    # array is written through address a different element in every iteration,
+    # and different elements from one another. When every access to that array
+    # in the region goes through such a tuple at the same loop depth, two
+    # accesses touch the same element exactly when they use the same tuple in
+    # the same iteration, whatever the index values are. A tuple that is only
+    # read is not covered: nothing was checked about the elements it names.
     certified = {}
     accesses_by_symbol = {}
     for spec in specifications:
@@ -585,7 +586,8 @@ def _region_model(
             for entry in entries:
                 if entry[3] not in tuples:
                     tuples.append(entry[3])
-            certified[symbol] = tuples
+            if all(any(entry[1] == "write" and entry[3] == item for entry in entries) for item in tuples):
+                certified[symbol] = tuples
 
     def access_maps(kind):
         nonlocal conservative

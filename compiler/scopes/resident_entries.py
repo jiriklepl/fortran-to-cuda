@@ -110,8 +110,9 @@ def _indirect_writes(analysis, routine, loops):
     caller checks all requirements of an array together: no two tuples, in
     any iterations of any of the nests, may address the same element. Then the
     nests are also independent of each other. An array gets requirements only
-    when every nest that writes it is checkable: all its subscript tuples go
-    through index values, with no scalar the nest itself computes.
+    when every nest that writes it is checkable: it is written through each of
+    its subscript tuples, all of which go through index values, with no scalar
+    the nest itself computes.
     """
     found, refused = {}, set()
     for loop in loops:
@@ -124,13 +125,13 @@ def _indirect_writes(analysis, routine, loops):
             binding = analysis._binding(routine.scope, reference.items[0])
             if binding is None or not binding.rank or str(binding.dtype).lower().startswith("type"):
                 continue
-            item = accesses.setdefault(binding.root, {"name": binding.name, "tuples": {}, "written": False})
+            item = accesses.setdefault(binding.root, {"name": binding.name, "tuples": {}, "written": set()})
             item["tuples"].setdefault(_text(reference.items[1]).lower(), reference)
         for statement in walk(loop, Assignment_Stmt):
             target = statement.items[0]
             binding = analysis._binding(routine.scope, target.items[0]) if _kind(target) == "Part_Ref" else None
             if binding is not None and binding.root in accesses:
-                accesses[binding.root]["written"] = True
+                accesses[binding.root]["written"].add(_text(target.items[1]).lower())
         for root, item in accesses.items():
             if not item["written"]:
                 continue
@@ -149,7 +150,8 @@ def _indirect_writes(analysis, routine, loops):
                 by_tuple.append((reference, indexed))
             if not any(indexed for _, indexed in by_tuple) and not uses_computed:
                 continue  # Subscripts of loop variables only: the ordinary dependence proof decides.
-            if uses_computed or not all(indexed for _, indexed in by_tuple):
+            if uses_computed or not all(indexed for _, indexed in by_tuple) or set(item["tuples"]) != item["written"]:
+                # A tuple that is only read names elements the check says nothing about.
                 refused.add(root)
                 continue
             for reference, indexed in by_tuple:
