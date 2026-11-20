@@ -95,6 +95,17 @@ def test_an_else_if_that_becomes_the_first_branch_is_an_if():
     assert folded.startswith("    if (bc(west)==WALL .or. (bc(west)==INLET .and. mode==2)) then\n")
 
 
+def test_an_order_comparison_of_known_values_is_decided_too():
+    # ELMM tells its ordinary boundary kinds from the parallel ones by a range.
+    source = SOURCE.replace("    else if (bc(west)==PERIODIC) then\n", "    else if (bc(west) < INLET .or. bc(west) >= 9) then\n")
+    constants = integer_parameters([PARAMETERS])
+    folded = specialize(source, "apply", ("bc(west) == PERIODIC",), constants).split("    else\n    if (bc(west)==INLET")[0]
+    assert "      do i = 0, 0\n        u(i) = u(n)\n      end do\n    if (bc(east)==PERIODIC) then\n" in folded
+    folded = specialize(source.replace("< INLET", "> INLET"), "apply", ("bc(west) == PERIODIC",),
+                        constants).split("    else\n    if (bc(west)==INLET")[0]
+    assert "      u(0) = u(1)\n    if (bc(east)==PERIODIC) then\n" in folded and "u(i) = u(n)" not in folded
+
+
 @pytest.mark.parametrize(("conditions", "message"), [
     (("mode == 2 .or. mode == 3",), "has the form <expression> == <integer constant>"),
     (("bc(west) == east",), "no known integer value"),

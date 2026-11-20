@@ -13,6 +13,7 @@ each other. The original body stays for every other case::
       <original body>
     end if
 """
+import operator
 import re
 
 from fparser.two import Fortran2003
@@ -23,6 +24,10 @@ from .anchors import _get_parser, _logical_lines, _split_top_level_args, parse_f
 _PARAMETERS = re.compile(r"(?i)^\s*integer\b[^!:]*\bparameter\b[^!:]*::(.*)$")
 _LITERAL = re.compile(r"[+-]?\d+\Z")
 _COMPARISONS = {"==": True, ".EQ.": True, "/=": False, ".NE.": False}
+# Every comparison of two known integers is decided, not only the equalities a condition may state.
+_RELATIONS = {"==": operator.eq, ".EQ.": operator.eq, "/=": operator.ne, ".NE.": operator.ne,
+              "<": operator.lt, ".LT.": operator.lt, "<=": operator.le, ".LE.": operator.le,
+              ">": operator.gt, ".GT.": operator.gt, ">=": operator.ge, ".GE.": operator.ge}
 
 
 def integer_parameters(texts):
@@ -95,11 +100,11 @@ class _Conditions:
             if (not both) in sides:
                 return not both
             return both if sides == [both, both] else None
-        if kind == "Level_4_Expr" and str(node.items[1]).upper() in _COMPARISONS:
+        if kind == "Level_4_Expr" and str(node.items[1]).upper() in _RELATIONS:
             left, right = self._value(node.items[0]), self._value(node.items[2])
             if left is None or right is None:
                 return None
-            return (left == right) == _COMPARISONS[str(node.items[1]).upper()]
+            return _RELATIONS[str(node.items[1]).upper()](left, right)
         return None
 
 
