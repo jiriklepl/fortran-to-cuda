@@ -178,17 +178,6 @@ public:
         if(const int status=fort_scope_view_get_v2(context_,view,&layout)) return status;
         return add_validated(*view,access);
     }
-    int record(uint32_t kind,uint64_t unit,double flops,double memory,int gpu,
-               double cpu_numerical_seconds=0,double gpu_numerical_seconds=0) {
-        if(const int status=seal()) return status;
-        return batch_.record(kind,unit,flops,memory,gpu,cpu_numerical_seconds,gpu_numerical_seconds);
-    }
-    int record_compute(uint32_t kind,uint64_t unit,double flops,double memory,int gpu,
-                       const fort_scope_compute_costs_v1 &compute) {
-        if(const int status=seal()) return status;
-        return batch_.record_compute(kind,unit,flops,memory,gpu,compute);
-    }
-    int decision(uint64_t unit,bool &gpu) { if(const int status=seal()) return status; return batch_.decision(unit,gpu); }
     int export_bindings(fort_scope_plan_binding *out,size_t capacity,size_t *count) {
         if(const int status=seal()) return status;
         return batch_.export_bindings(out,capacity,count);
@@ -199,23 +188,21 @@ public:
     int finish() { return batch_.finish(); }
     void *device(fort_buffer_t handle) const { return batch_.device(handle); }
 };
-inline int forget_view(fort_scope_t context,const fort_scope_view_v1 *view,bool planning) {
+inline int forget_view(fort_scope_t context,const fort_scope_view_v1 *view) {
     fort_scope_view_layout_v1 layout{};
     if(const int status=fort_scope_view_get_v1(context,view,&layout)) return status;
     try {
         std::vector<size_t> upper(view->rank);
         for(size_t k=0;k<view->rank;++k) upper[k]=view->origins[k]+view->extents[k];
         const fort_scope_section section{view->origins,upper.data()};
-        return planning ? fort_scope_plan_forget_sections_v1(context,view->buffer,&section,1)
-                        : fort_scope_forget_sections_v1(context,view->buffer,&section,1);
+        return fort_scope_forget_sections_v1(context,view->buffer,&section,1);
     } catch(const std::bad_alloc &) { return fort_scope_report_error(FORT_SCOPE_RESOURCE,"view definition metadata allocation failed"); }
 }
-inline int forget_view(fort_scope_t context,const fort_scope_view_v2 *view,bool planning) {
+inline int forget_view(fort_scope_t context,const fort_scope_view_v2 *view) {
     fort_scope_view_layout_v2 layout{};
     if(const int status=fort_scope_view_get_v2(context,view,&layout)) return status;
     if(!layout.elements)
-        return planning ? fort_scope_plan_forget_sections_v1(context,view->buffer,nullptr,0)
-                        : fort_scope_forget_sections_v1(context,view->buffer,nullptr,0);
+        return fort_scope_forget_sections_v1(context,view->buffer,nullptr,0);
     try {
         std::vector<size_t> upper(view->root_rank);
         for(size_t axis=0;axis<view->root_rank;++axis) upper[axis]=view->origins[axis]+1;
@@ -224,8 +211,7 @@ inline int forget_view(fort_scope_t context,const fort_scope_view_v2 *view,bool 
         // Empty logical views discard no definitions, including fixed axes
         // which have no address in an empty allocation.
         const size_t count=layout.elements ? 1 : 0;
-        return planning ? fort_scope_plan_forget_sections_v1(context,view->buffer,&section,count)
-                        : fort_scope_forget_sections_v1(context,view->buffer,&section,count);
+        return fort_scope_forget_sections_v1(context,view->buffer,&section,count);
     } catch(const std::bad_alloc &) { return fort_scope_report_error(FORT_SCOPE_RESOURCE,"view definition metadata allocation failed"); }
 }
 } // namespace fort_scoped

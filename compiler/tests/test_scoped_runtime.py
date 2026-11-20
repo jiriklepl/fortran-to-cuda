@@ -44,6 +44,32 @@ class Stats(c.Structure):
     )]
 
 
+class Binding(c.Structure):
+    _fields_ = [("buffer", TOKEN), ("access", Access)]
+
+
+class Costs(c.Structure):
+    """The base rates a physical-copy calibration is stated against."""
+    _fields_ = [("version", c.c_uint32), ("valid", c.c_uint32), ("max_allocation_bytes", c.c_size_t)] + [
+        (name, c.c_double) for name in (
+            "cpu_flops", "cpu_bandwidth", "gpu_flops", "gpu_bandwidth",
+            "h2d_latency", "h2d_bandwidth", "d2h_latency", "d2h_bandwidth",
+            "create_seconds", "register_seconds", "host_access_seconds", "device_access_seconds",
+            "gpu_setup_seconds", "cold_driver_startup_seconds", "allocation_seconds", "release_seconds",
+            "wait_seconds", "launch_enqueue_seconds", "planning_operation_seconds",
+            "h2d_fit_relative_error", "d2h_fit_relative_error")]
+
+
+def costs():
+    result = Costs(2, 1, 1 << 26)
+    for name, _ in Costs._fields_[3:]:
+        setattr(result, name, 1e-9)
+    result.h2d_fit_relative_error = result.d2h_fit_relative_error = 0
+    result.cpu_flops = result.cpu_bandwidth = 1e8
+    result.gpu_flops = result.gpu_bandwidth = result.h2d_bandwidth = result.d2h_bandwidth = 1e12
+    return result
+
+
 def access(*, read=(), write=(), overwrite=(), flags=0):
     result = Access(flags=flags)
     # Keep coordinate storage alive for the entire foreign call.

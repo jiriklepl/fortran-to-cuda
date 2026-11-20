@@ -10,8 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from compiler.tests.test_scoped_continuation_runtime import begin, consume, report
-from compiler.tests.test_scoped_planning_runtime import costs, planning, record, select  # noqa: F401
 from compiler.tests.test_scoped_runtime import TOKEN, Scope, access, runtime  # noqa: F401
 
 
@@ -25,13 +23,10 @@ class TransferStats(c.Structure):
 
 
 @pytest.fixture
-def pinned(planning):
-    planning.fort_scope_set_transfers.argtypes = [TOKEN, c.c_uint32]
-    planning.fort_scope_transfer_stats_get_v1.argtypes = [TOKEN, c.POINTER(TransferStats)]
-    planning.fort_scope_plan_reset_mode.argtypes = [TOKEN, c.c_uint32]
-    from compiler.tests.test_scoped_continuation_runtime import Report
-    planning.fort_scope_plan_report_v2.argtypes = [TOKEN, c.POINTER(Report)]
-    return planning
+def pinned(runtime):
+    runtime.fort_scope_set_transfers.argtypes = [TOKEN, c.c_uint32]
+    runtime.fort_scope_transfer_stats_get_v1.argtypes = [TOKEN, c.POINTER(TransferStats)]
+    return runtime
 
 
 def stats(scope):
@@ -60,31 +55,6 @@ def test_configuration_and_readonly_statistics_do_not_initialize_cuda(pinned, mo
     assert pinned.fort_scope_set_transfers(scope.handle, 5) == 1
     assert stats(scope).requested_mode == mode
     scope.close()
-
-
-def test_public_manual_planner_never_uses_direct_calibration_for_pinned(pinned):
-    scope = configured(pinned)
-    values = (c.c_double * 8)(*range(8))
-    status, handle = scope.register(values, [8])
-    scope.check(status)
-    assert pinned.fort_scope_set_transfers(scope.handle, 0) == 8
-    begin(scope)
-    bindings = record(scope, 301, handle, access(flags=3))
-    scope.check(pinned.fort_scope_plan_validate(scope.handle))
-    decision = select(scope, costs())
-    assert not decision.available
-    assert decision.gpu_units == 0
-    assert decision.cpu_units == 1
-    assert not report(scope).available
-    consume(scope, 301, bindings, 0)
-    scope.cpu_begin(handle, access(flags=3))
-    for index in range(8):
-        values[index] += 4
-    scope.cpu_end(handle)
-    scope.check(pinned.fort_scope_wait(scope.handle))
-    assert scope.stats().allocations == stats(scope).pinned_uploads == 0
-    scope.close()
-    assert list(values) == [index + 4 for index in range(8)]
 
 
 def test_opposite_rectangular_faces_preserve_host_halos_and_full_pitches(pinned):

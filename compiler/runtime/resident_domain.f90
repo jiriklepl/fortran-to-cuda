@@ -121,8 +121,6 @@ contains
         name='UNINITIALIZED'
       case(FORT_SCOPE_STATE)
         name='STATE'
-      case(FORT_SCOPE_PLAN_MISMATCH)
-        name='PLAN_MISMATCH'
       case default
         name='UNKNOWN'
       end select

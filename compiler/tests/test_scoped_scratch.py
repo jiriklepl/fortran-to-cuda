@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from compiler.tests.test_scoped_planning_runtime import Binding, Costs, Decision, costs, record, select
 from compiler.tests.test_scoped_runtime import TOKEN, Access, Layout, Scope, Stats, access
 
 RUNTIME = Path(__file__).resolve().parents[1] / "runtime"
@@ -59,11 +58,6 @@ def scratch_runtime(tmp_path_factory):
         "scratch_acquire_v1": [TOKEN, c.c_size_t, c.POINTER(Lease)],
         "scratch_release_v1": [TOKEN, TOKEN],
         "scratch_stats_get_v1": [TOKEN, c.POINTER(ScratchStats)],
-        "plan_reset": [TOKEN],
-        "plan_reset_mode": [TOKEN, c.c_uint32],
-        "plan_add": [TOKEN, c.c_uint32, TOKEN, c.POINTER(Binding), c.c_size_t,
-                     c.c_double, c.c_double, c.c_int],
-        "plan_select": [TOKEN, c.POINTER(Costs), c.c_int, c.POINTER(Decision)],
     }
     for name, signature in signatures.items():
         getattr(lib, "fort_scope_" + name).argtypes = signature
@@ -246,58 +240,6 @@ def test_field_release_preserves_scratch_cache_and_recovers_budget(scratch_runti
     assert scope.stats().allocated_bytes == 0
     assert scratch_stats(scope).peak_total_device_bytes == 160
     scope.close()
-
-
-@pytest.mark.native
-def test_cached_capacity_invalidates_preview_and_constrains_planning(scratch_runtime):
-    scope = Scope(scratch_runtime)
-    scope.check(scratch_runtime.fort_scope_set_device_budget(scope.handle, 224))
-    values = (c.c_double * 16)(*range(16))
-    status, handle = scope.register(values, [16])
-    scope.check(status)
-    scope.check(scratch_runtime.fort_scope_plan_reset(scope.handle))
-    record(scope, 31, handle, access(flags=3))
-    assert select(scope, costs(), -1).gpu_units == 1
-    lease = acquire(scope, 128)
-    release(scope, lease)
-    # Idle capacity still leaves only 96 bytes for this 128-byte field.
-    decision = select(scope, costs(), -1)
-    assert decision.available
-    assert decision.gpu_units == 0
-    assert scope.stats().allocations == scope.stats().uploads == 0
-    scope.close()
-
-
-@pytest.mark.native
-def test_continuation_counts_cached_scratch_and_existing_fields(scratch_runtime):
-    scope = Scope(scratch_runtime)
-    scope.check(scratch_runtime.fort_scope_set_device_budget(scope.handle, 256))
-    first = (c.c_double * 16)(*range(16))
-    second = (c.c_double * 16)(*range(16))
-    status, first_handle = scope.register(first, [16])
-    scope.check(status)
-    device = scope.gpu(first_handle, access(flags=6))
-    for i in range(16):
-        device[i] = 10+i
-    scope.gpu_end(first_handle)
-    lease = acquire(scope, 128)
-    release(scope, lease)
-    status, second_handle = scope.register(second, [16], identity=2)
-    scope.check(status)
-    # Reached queries require completion of the previous numerical segment;
-    # this wait does not publish its device-current field or retire scratch.
-    scope.check(scratch_runtime.fort_scope_wait(scope.handle))
-    scope.check(scratch_runtime.fort_scope_plan_reset_mode(scope.handle, 1))
-    record(scope, 32, second_handle, access(flags=3))
-    decision = select(scope, costs(), -1)
-    assert decision.available
-    assert decision.gpu_units == 0
-    assert scope.stats().allocated_bytes == 128
-    assert scope.stats().downloads == 0
-    assert scratch_stats(scope).peak_total_device_bytes == 256
-    scope.close()
-    assert list(first) == list(range(10, 26))
-    assert list(second) == list(range(16))
 
 
 @pytest.mark.native

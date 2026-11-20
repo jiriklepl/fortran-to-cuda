@@ -134,7 +134,7 @@ int main() {
     fort_scope_access effect{}; effect.flags=FORT_SCOPE_WRITE_ALL|FORT_SCOPE_OVERWRITE_ALL;
     assert(!access.add(&v1,effect)); assert(access.add(&v1,effect)==FORT_SCOPE_ALIAS);
   }
-  assert(!fort_scoped::forget_view(context,&v1,false));
+  assert(!fort_scoped::forget_view(context,&v1));
   { fort_scoped::ViewAccessBatch<2> access(context);
     fort_scope_access effect{}; effect.flags=FORT_SCOPE_READ_ALL;
     assert(!access.add(&v1,effect)); assert(access.begin(false)==FORT_SCOPE_UNINITIALIZED);

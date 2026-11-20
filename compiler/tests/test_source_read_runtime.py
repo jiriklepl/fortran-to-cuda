@@ -6,7 +6,6 @@ import ctypes as c
 
 import pytest
 
-from compiler.tests.test_scoped_planning_runtime import costs, planning, record, select  # noqa: F401
 from compiler.tests.test_scoped_runtime import (  # noqa: F401
     RECTANGLE_LIMIT,
     SIZE,
@@ -94,35 +93,6 @@ def test_fragmented_source_read_admission_commits_neither_coverage_set(runtime):
     scope.cpu_end(buffer)
     scope.close()
     assert list(host) == list(range(size))
-
-
-@pytest.mark.native
-def test_reached_claim_invalidates_failed_query_and_prices_only_exact_transfers(planning):
-    scope = Scope(planning)
-    host = (c.c_double * 8)(*range(8))
-    status, buffer = scope.register(host, [8], initialized=False)
-    scope.check(status)
-    scope.check(planning.fort_scope_plan_reset(scope.handle))
-    effect = access(read=[([2], [6])], write=[([2], [6])])
-    record(scope, 701, buffer, effect)
-    assert planning.fort_scope_plan_validate(scope.handle) == 7
-    scope.check(admit(scope, buffer, [([2], [6])]))
-    scope.check(planning.fort_scope_plan_validate(scope.handle))
-    preview = select(scope, costs(), -1)
-    assert preview.available
-    assert preview.gpu_units == 1
-    assert (preview.upload_bytes, preview.download_bytes) == (32, 32)
-    assert not any(counters(scope))
-    device = scope.gpu(buffer, effect)
-    for i in range(2, 6):
-        device[i] += 100
-    scope.gpu_end(buffer)
-    scope.cpu_begin(buffer, access(read=[([2], [6])]))
-    scope.cpu_end(buffer)
-    observed = scope.stats()
-    assert (observed.upload_bytes, observed.download_bytes) == (preview.upload_bytes, preview.download_bytes)
-    scope.close()
-    assert list(host) == [0, 1, 102, 103, 104, 105, 6, 7]
 
 
 @pytest.mark.native

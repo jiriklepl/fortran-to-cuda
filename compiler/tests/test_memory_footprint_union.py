@@ -108,33 +108,3 @@ def union_binary(tmp_path_factory):
 def test_computation_memory_unions(union_binary, mode):
     result = subprocess.run([str(union_binary), mode], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_unavailable_memory_cost_preserves_scoped_definition_proof(tmp_path):
-    source = r'''
-#include "scoped_planning.hpp"
-#include <cassert>
-using namespace fort_scoped::planning;
-int main(){
-    Inputs in;in.graph_mode=true;
-    Resource b;b.handle=1;b.element_bytes=8;b.bytes=32;b.extents={4};
-    b.initialized=b.host_current={Box{{0},{4}}};in.resources={b};
-    Operation op;op.kind=FORT_SCOPE_PLAN_WORKER;op.unit=1;op.flops=8;
-    op.memory_bytes=std::numeric_limits<double>::quiet_NaN();op.gpu_available=true;
-    Region full=b.initialized;op.bindings={{1,{full,full,full}}};in.operations={op};
-    assert(validate_definitions(in).status==FORT_SCOPE_OK);
-    fort_scope_plan_costs c{};c.version=FORT_SCOPE_PLANNING_ABI_VERSION;c.valid=1;c.max_allocation_bytes=1024;
-    for(double *value:{&c.cpu_flops,&c.cpu_bandwidth,&c.gpu_flops,&c.gpu_bandwidth,
-        &c.h2d_bandwidth,&c.d2h_bandwidth,&c.create_seconds,&c.register_seconds,
-        &c.host_access_seconds,&c.device_access_seconds,&c.gpu_setup_seconds,
-        &c.cold_driver_startup_seconds,&c.allocation_seconds,&c.release_seconds,
-        &c.wait_seconds,&c.launch_enqueue_seconds,&c.planning_operation_seconds})*value=1;
-    const auto result=select(in,c);
-    assert(!result.decision.available && result.reason=="unknown_or_overflowed_work");
-    for(const Region *r:{&in.operations[0].bindings[0].effects.writes,
-                        &in.resources[0].initialized,&in.resources[0].host_current}) {
-        assert(r->size()==1 && r->front().lo==full.front().lo && r->front().hi==full.front().hi);
-    }
-}
-'''
-    compile_and_run(tmp_path, source)

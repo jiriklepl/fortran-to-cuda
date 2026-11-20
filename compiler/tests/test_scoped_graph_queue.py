@@ -29,9 +29,6 @@ def queue(graphs):
                                                            c.POINTER(Member), SIZE]
     graphs.fort_scope_graph_flush_v1.argtypes = graphs.fort_scope_graph_queue_cancel_v1.argtypes = [TOKEN]
     graphs.fort_scope_graph_queue_stats_get_v1.argtypes = [TOKEN, c.POINTER(QueueStats)]
-    graphs.fort_scope_plan_reset.argtypes = graphs.fort_scope_plan_validate.argtypes = [TOKEN]
-    graphs.fort_scope_plan_add.argtypes = [TOKEN, c.c_uint32, TOKEN, c.POINTER(Binding), SIZE,
-                                         c.c_double, c.c_double, c.c_int]
     return graphs
 
 
@@ -148,10 +145,6 @@ def test_virtual_definitions_span_entries_and_native_independent_work(queue):
     scope.cpu_end(x)
     assert stats(scope).pending_tasks == 1
     scope.check(enqueue(scope, 102, pack((b, access(flags=1)), (out, access(flags=6)))))
-    scope.check(queue.fort_scope_plan_reset(scope.handle))
-    reads = pack((out, access(flags=1)))
-    scope.check(queue.fort_scope_plan_add(scope.handle, 0, 0, reads, 1, 0, 0, 0))
-    scope.check(queue.fort_scope_plan_validate(scope.handle))
     assert scope.stats().launches == scope.stats().uploads == scope.stats().downloads == 0
     assert stats(scope).accepted_tasks == stats(scope).pending_tasks == 2
     # The reference backend cannot execute CUDA. Failed drain must retain all
@@ -221,23 +214,4 @@ def test_enqueue_requires_owned_sizes_and_reserved_storage(queue):
     assert queue.fort_scope_graph_enqueue_v1(scope.handle, 7, c.byref(task), None) == 1
     assert queue.fort_scope_graph_enqueue_v1(scope.handle, 7, c.byref(task), (SIZE * 1)(0)) == 1
     assert stats(scope).pending_tasks == 0
-    scope.close()
-
-
-@pytest.mark.native
-def test_graph_runtime_accepts_query_beyond_legacy_record_and_worker_caps(queue):
-    scope = Scope(queue)
-    queue.fort_scope_task_graph_enable_v1.argtypes = [TOKEN]
-    scope.check(queue.fort_scope_task_graph_enable_v1(scope.handle))
-    values = (c.c_double * 8)(*range(8))
-    status, handle = scope.register(values, [8])
-    scope.check(status)
-    scope.check(queue.fort_scope_plan_reset(scope.handle))
-    bindings = pack((handle, access(flags=3)))
-    for index in range(320):
-        scope.check(queue.fort_scope_plan_add(scope.handle, 1, index + 1, bindings, 1, 100, 128, 1))
-        if index % 3 == 0:
-            scope.check(queue.fort_scope_plan_add(scope.handle, 0, 0, None, 0, 0, 0, 0))
-    scope.check(queue.fort_scope_plan_validate(scope.handle))
-    assert scope.stats().launches == scope.stats().allocations == 0
     scope.close()

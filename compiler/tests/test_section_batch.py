@@ -7,7 +7,6 @@ import pytest
 
 SOURCE = r'''
 #include "section_batch_cost.hpp"
-#include "scoped_planning.hpp"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -80,39 +79,7 @@ int main(int argc,char **argv) try {
         auto c=costs();fort_scope_plan_costs base{};base.valid=1;
         const auto p=make_plan({{0,8,1,1,8,1},{32,8,1,1,8,1}},64,64);
         PoolState pool{0,32*1024*1024,false};
-        if(mode=="model" || mode=="model_budget" || mode=="model_direct_price" || mode=="model_unknown" || mode=="model_oneop" || mode=="model_pool" || mode=="model_idle") {
-            namespace planning=fort_scoped::planning;
-            planning::Inputs input;input.transfer_mode=FORT_SCOPE_TRANSFERS_AUTO;
-            input.device_budget=mode=="model_budget" ? 512 : 1024*1024;
-            if(mode=="model_pool")input.copy_pool_available_bytes=0;
-            if(mode=="model_idle")input.copy_pool_cold_available=false;
-            input.copy_costs=Pricing{c,base};
-            if(mode=="model_direct_price")input.copy_costs->copy.compact_cold[0].batch_seconds=3;
-            planning::Resource resource;resource.handle=1;resource.element_bytes=8;resource.bytes=512;
-            resource.extents={64};resource.allocated=true;resource.initialized=resource.host_current={{{0},{64}}};
-            planning::detail::State state;state.resources={resource};state.allocated=512;
-            base.h2d_latency=.01;base.h2d_bandwidth=1e9;
-            fort_scoped::coherence::Region edges={{{0},{3}},{{61},{64}}};
-            if(mode=="model_unknown") {
-                input.copy_costs->copy.direct[0].minimum_payload_bytes=64;
-                bool unknown=false;try{planning::detail::ensure(state,state.resources[0],edges,true,input,base);}
-                catch(const planning::detail::Unavailable &e){unknown=std::string(e.reason)=="physical_copy_estimate_unavailable";}
-                assert(unknown && !state.count.uploads);return 0;
-            }
-            if(mode=="model_oneop")edges.resize(1);
-            planning::detail::ensure(state,state.resources[0],edges,true,input,base);
-            assert(state.count.upload_bytes==(mode=="model_oneop"?24u:48u));
-            if(mode=="model") {
-                assert(state.count.uploads==1 && !state.pending && state.upload_readers.empty());
-                assert(state.compact_capacity==256*1024 && state.count.peak_device_bytes==512+512*1024);
-            } else {const auto count=mode=="model_oneop"?1u:2u;assert(state.count.uploads==count && state.pending && state.upload_readers.size()==count);}
-            if(mode=="model_oneop")assert(state.time>1 && state.time<1.001);
-            if(mode=="model_pool" || mode=="model_idle")assert(state.time>2 && state.time<2.001);
-            if(mode=="model_direct_price")assert(state.time>2 && state.time<2.001);
-            const auto before=state.count.uploads;
-            planning::detail::ensure(state,state.resources[0],edges,true,input,base);
-            planning::detail::ensure(state,state.resources[0],edges,false,input,base);
-            assert(state.count.uploads==before && !state.count.downloads);
+        if(mode=="price") {
         } else if(mode=="price") {
             const auto q=price(p,c,base,true,false,pool);
             assert(q.available && q.selected && q.operations==2 && q.chunks==1 && q.workspace_bytes==512*1024);
@@ -229,89 +196,10 @@ int main(int argc,char **argv) try {
             assert(price(p,c,base,true,false,pool).available && !price(p,c,base,true,false,pool).compact_available);
             c=costs();c.compact_cold[0].layout_combinations_mask=4;
             assert(price(p,c,base,true,false,pool).available && !price(p,c,base,true,false,pool).compact_available);
-        } else if(mode=="model_wait_accounting" || mode=="upload_reader_wait" || mode=="complete_compact_wait") {
-            namespace planning=fort_scoped::planning;
-            planning::Inputs input;input.transfer_mode=FORT_SCOPE_TRANSFERS_AUTO;
-            input.device_budget=mode=="complete_compact_wait"?1024*1024:512;
-            base.wait_seconds=7;base.cpu_flops=base.cpu_bandwidth=base.gpu_flops=base.gpu_bandwidth=1;
-            base.h2d_bandwidth=base.d2h_bandwidth=1e9;
-            if(mode=="complete_compact_wait")c.direct[0].submission_seconds=100;
-            input.copy_costs=Pricing{c,base};
-            planning::Resource resource;resource.handle=1;resource.element_bytes=8;resource.bytes=512;
-            resource.extents={64};resource.allocated=true;resource.initialized=resource.host_current={{{0},{64}}};
-            planning::detail::State state;state.resources={resource};state.index={{1,0}};state.allocated=512;
-            fort_scoped::coherence::Region edges={{{0},{3}},{{61},{64}}};
-            if(mode=="complete_compact_wait")planning::detail::queued_work(state);
-            planning::detail::ensure(state,state.resources[0],edges,true,input,base);
-            assert(state.count.upload_bytes==48 && !state.count.downloads);
-            // Legacy contiguous-fit dispersion is not a multiplier for a V2 path.
-            assert(state.h2d_seconds==0 && state.d2h_seconds==0);
-            if(mode=="complete_compact_wait") {
-                const auto actual=make_plan({{0,24,1,1,24,1},{488,24,1,1,24,1}},512,512);
-                const auto expected=price(actual,c,base,true,true,{0,1024*1024-512,false});
-                assert(expected.selected && expected.compact_seconds==expected.compact_path_seconds+7);
-                assert(state.time==expected.compact_seconds && state.count.waits==1);
-                assert(state.count.uploads==1 && !state.pending && !state.completion_already_priced);
-                assert(state.upload_readers.empty());
-            } else {
-                assert(state.pending && state.completion_already_priced && state.upload_readers.size()==2);
-                assert(state.count.uploads==2 && state.count.waits==0);
-                const auto before=state.time;
-                if(mode=="upload_reader_wait") {
-                    planning::Operation native;native.kind=FORT_SCOPE_PLAN_NATIVE;native.flops=1;
-                    fort_scoped::coherence::Effects writes;writes.writes=writes.overwrites=edges;
-                    native.bindings={{1,writes}};uint64_t work=0;
-                    planning::detail::execute(state,native,false,input,base,work);
-                    assert(state.time==before+1 && state.count.waits==1 && state.upload_readers.empty());
-                    assert(state.pending && !state.completion_already_priced && work==1);
-                } else {
-                    planning::detail::wait(state,base);
-                    assert(state.time==before && state.count.waits==1 && !state.pending);
-                    assert(!state.completion_already_priced && state.upload_readers.empty());
-                    planning::detail::wait(state,base);assert(state.time==before && state.count.waits==1);
-                    // An actual modeled new GPU operation cannot reuse the old completion credit.
-                    state.completion_already_priced=true;
-                    planning::Operation gpu;gpu.kind=FORT_SCOPE_PLAN_WORKER;gpu.unit=17;gpu.flops=1;gpu.gpu_available=true;
-                    uint64_t work=0;planning::detail::execute(state,gpu,true,input,base,work);
-                    assert(state.pending && !state.completion_already_priced && state.count.launches==1);
-                    planning::detail::wait(state,base);
-                    assert(state.time==before+1+7 && state.count.waits==2 && !state.pending);
-                    // Device allocation is another independently queued boundary.
-                    state.completion_already_priced=true;state.resources[0].allocated=false;state.allocated=0;
-                    input.device_budget=1024;base.max_allocation_bytes=512;
-                    planning::detail::allocate(state,state.resources[0],input,base);
-                    assert(state.pending && !state.completion_already_priced && state.count.allocations==1);
-                }
-            }
-        } else if(mode=="v2_direct_ignores_legacy_price") {
-            namespace planning=fort_scoped::planning;
-            for(bool overflow:{false,true}) {
-                planning::Inputs input;input.transfer_mode=FORT_SCOPE_TRANSFERS_AUTO;input.device_budget=512;
-                base.h2d_bandwidth=overflow?1e9:0;
-                base.h2d_latency=overflow?std::numeric_limits<double>::max():0;
-                input.copy_costs=Pricing{c,base};
-                auto fresh=[] {
-                    planning::Resource r;r.handle=1;r.element_bytes=8;r.bytes=512;r.extents={64};r.allocated=true;
-                    r.initialized=r.host_current={{{0},{64}}};planning::detail::State state;
-                    state.resources={r};state.index={{1,0}};state.allocated=512;return state;
-                };
-                const fort_scoped::coherence::Region edges={{{0},{3}},{{61},{64}}};
-                auto state=fresh();planning::detail::ensure(state,state.resources[0],edges,true,input,base);
-                assert(state.count.uploads==2 && state.count.upload_bytes==48 && state.pending);
-                assert(state.completion_already_priced && state.upload_readers.size()==2);
-                assert(state.time==2+48e-9 && state.h2d_seconds==0 && state.d2h_seconds==0);
-                // Absent V2 retains the old direct-price validation and rejection.
-                input.copy_costs.reset();auto legacy=fresh();bool rejected=false;
-                try {planning::detail::ensure(legacy,legacy.resources[0],edges,true,input,base);}
-                catch(const planning::detail::Unavailable &failure) {
-                    rejected=std::string(failure.reason)==(overflow?"arithmetic_overflow":"invalid_cost_estimate");
-                }
-                assert(rejected);
-            }
         } else assert(false);
     }
-} catch(const fort_scoped::planning::detail::Unavailable &failure) {
-    std::fprintf(stderr,"unavailable: %s\n",failure.reason);return 1;
+} catch(const Ineligible &) {
+    std::fprintf(stderr,"ineligible\n");return 1;
 }
 '''
 
@@ -334,9 +222,7 @@ def executable(tmp_path_factory):
 
 @pytest.mark.parametrize("mode", ["word64", "word32", "byte", "pitched", "chunks", "empty", "reject",
                                  "price", "cold_reuse", "single_operation", "coverage", "rate_coverage", "invalid_costs", "budget", "dispersion",
-                                 "margin", "complete_terms", "support_envelope",
-                                 "model_wait_accounting", "upload_reader_wait", "complete_compact_wait", "v2_direct_ignores_legacy_price",
-                                 "model", "model_budget", "model_direct_price", "model_unknown", "model_oneop", "model_pool", "model_idle"])
+                                 "margin", "complete_terms", "support_envelope"])
 def test_exact_batch_and_bounded_offline_selection(executable, mode):
     result = subprocess.run([str(executable), mode], capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr

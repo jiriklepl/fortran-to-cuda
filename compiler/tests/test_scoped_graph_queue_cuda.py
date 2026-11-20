@@ -105,41 +105,6 @@ int main(int argc,char **argv) {
             assert(std::string(current.implementation)==std::string(64,'f'));
             assert(!queued(f).pending_tasks && f.stats().launches==3u*(round+1));
         }
-    } else if(mode=="plan_suffix") {
-        check(fort_scope_task_graph_enable_v1(f.context));
-        check(fort_scope_plan_reset_mode(f.context,FORT_SCOPE_PLAN_CONTINUE));
-        check(fort_scope_plan_add(f.context,FORT_SCOPE_PLAN_WORKER,100,f.producer,2,1e8,128,1));
-        check(fort_scope_plan_add(f.context,FORT_SCOPE_PLAN_WORKER,101,f.consumer,2,1e8,128,1));
-        fort_scope_plan_costs costs{}; costs.version=FORT_SCOPE_PLANNING_ABI_VERSION; costs.valid=1; costs.max_allocation_bytes=1u<<26;
-        costs.cpu_flops=costs.cpu_bandwidth=1e8;
-        costs.gpu_flops=costs.gpu_bandwidth=costs.h2d_bandwidth=costs.d2h_bandwidth=1e12;
-        costs.create_seconds=costs.register_seconds=costs.host_access_seconds=costs.device_access_seconds=1e-9;
-        costs.gpu_setup_seconds=costs.cold_driver_startup_seconds=costs.allocation_seconds=costs.release_seconds=1e-9;
-        costs.wait_seconds=costs.launch_enqueue_seconds=costs.planning_operation_seconds=1e-9;
-        fort_scope_plan_decision decision{};
-        check(fort_scope_plan_validate(f.context));
-        check(fort_scope_plan_select(f.context,&costs,1,&decision));
-        assert(decision.available && decision.gpu_units==2);
-        int gpu=0; check(fort_scope_plan_next(f.context,100,f.producer,2,&gpu)); assert(gpu);
-        enqueue(f,0); assert(queued(f).pending_tasks==1 && !f.stats().launches);
-        assert(fort_scope_close(f.context)==FORT_SCOPE_STATE);
-        check(fort_scope_plan_abandon_remaining_v1(f.context));
-        assert(queued(f).pending_tasks==1 && !f.stats().launches && !f.stats().upload_bytes);
-        // No future output definition was admitted, and its failed read does
-        // not launch or discard the independent accepted producer.
-        fort_scope_access read{}; read.flags=FORT_SCOPE_READ_ALL;
-        assert(fort_scope_host_begin(f.context,f.out,&read)==FORT_SCOPE_UNINITIALIZED);
-        assert(queued(f).pending_tasks==1);
-        f.observe(f.b); assert(f.stats().launches==1 && !queued(f).pending_tasks);
-        fort_scope_access write{}; write.flags=FORT_SCOPE_WRITE_ALL|FORT_SCOPE_OVERWRITE_ALL;
-        check(fort_scope_host_begin(f.context,f.out,&write));
-        for(int i=0;i<8;++i) { assert(f.host_b[i]==i+2); f.host_out[i]=3*f.host_b[i]; }
-        check(fort_scope_host_end(f.context,f.out));
-        assert(f.stats().upload_bytes==64 && f.stats().download_bytes==64);
-        // The native read preserved B's GPU mirror for a later GPU consumer.
-        enqueue(f,1); f.observe(f.out);
-        for(int i=0;i<8;++i) assert(f.host_out[i]==3*(i+2));
-        assert(f.stats().launches==2 && f.stats().upload_bytes==64 && f.stats().download_bytes==128);
     } else if(mode=="pressure") {
         enqueue(f,0); assert(!f.stats().launches);
         fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,f.host_other,f.extent,f.lower,1};
@@ -363,7 +328,7 @@ def cuda_queue_executable(tmp_path_factory):
 @pytest.mark.cuda
 @pytest.mark.parametrize("mode", ["owned", "repeated", "selective", "war", "queue_off", "graphs_off",
                                  "resource_fallback", "launch_failure", "mirrors", "host_mirror", "long_mirrors", "pressure",
-                                 "plan_suffix", "entry_observe", "entry_failure", "stable_parameters",
+                                 "entry_observe", "entry_failure", "stable_parameters",
                                  "work_limit", "work_unlimited", "work_one"])
 def test_deferred_real_cuda_queue(cuda_queue_executable, mode):
     result = subprocess.run([str(cuda_queue_executable), mode], capture_output=True, text=True, timeout=20)

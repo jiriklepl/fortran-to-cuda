@@ -6,8 +6,7 @@ import pytest
 
 from compiler.tests.test_scoped_compact_runtime import CopyCosts, compact_events, prepare, synthetic_copy_costs
 from compiler.tests.test_scoped_domains import Domain, domain_runtime  # noqa: F401
-from compiler.tests.test_scoped_planning_runtime import Costs, costs
-from compiler.tests.test_scoped_runtime import TOKEN, access
+from compiler.tests.test_scoped_runtime import TOKEN, Costs, access, costs
 
 
 def configure(scope):

@@ -3,8 +3,7 @@ import ctypes as c
 
 import pytest
 
-from compiler.tests.test_scoped_planning_runtime import Binding, costs, planning, record, select  # noqa: F401
-from compiler.tests.test_scoped_runtime import SIZE, TOKEN, Scope, Section, access
+from compiler.tests.test_scoped_runtime import SIZE, TOKEN, Binding, Scope, Section, access
 from compiler.tests.test_scoped_runtime import runtime as shared_runtime  # noqa: F401
 
 
@@ -132,74 +131,6 @@ def test_later_invalid_binding_cannot_publish_or_prepare_an_earlier_resource(run
     begin(scope, buffer, access(flags=1))
     scope.cpu_end(buffer)
     assert list(host) == [-99, -99, 7, 9, -99, -99, -99, -99]
-    scope.close()
-
-
-@pytest.mark.native
-@pytest.mark.parametrize("write", [False, True])
-def test_original_host_plan_matches_actual_copies_without_initializing_holes(planning, write):  # noqa: F811
-    scope = Scope(planning)
-    host = (c.c_double * 8)(*([-99] * 8))
-    status, buffer = scope.register(host, [8], initialized=False)
-    scope.check(status)
-    cells = [([2], [5])]
-    device = scope.gpu(buffer, access(write=cells, overwrite=cells))
-    for i in range(2, 5):
-        device[i] = i * 7
-    scope.gpu_end(buffer)
-    before = scope.stats()
-    scope.check(planning.fort_scope_wait(scope.handle))
-    scope.check(planning.fort_scope_plan_reset(scope.handle))
-    effects = access(flags=3 if write else 1)
-    binding = Binding(buffer, effects)
-    scope.check(planning.fort_scope_plan_add(scope.handle, 6, 0, c.byref(binding), 1, 0, 0, 0))
-    record(scope, 42, buffer, access(read=cells))
-    scope.check(planning.fort_scope_plan_validate(scope.handle))
-    prediction = select(scope, costs(), -1)
-    assert prediction.available
-    assert prediction.gpu_units == 1
-    assert prediction.download_bytes == 24
-    assert prediction.upload_bytes == (24 if write else 0)
-    assert scope.stats().download_bytes == before.download_bytes
-    begin(scope, buffer, effects)
-    if write:
-        host[3] += 10
-    scope.cpu_end(buffer)
-    device = scope.gpu(buffer, access(read=cells))
-    assert [device[i] for i in range(2, 5)] == [14, 31 if write else 21, 28]
-    scope.gpu_end(buffer)
-    after = scope.stats()
-    for field in ("uploads", "downloads", "upload_bytes", "download_bytes"):
-        assert getattr(after, field) - getattr(before, field) == getattr(prediction, field)
-    assert strict_read(scope, buffer, access(flags=1)) == 7
-    scope.close()
-
-
-@pytest.mark.native
-@pytest.mark.parametrize(("kind", "overwrite", "whole", "status"), [(0, False, False, 7), (6, False, False, 7),
-                                                        (6, True, False, 0), (6, True, True, 7)])
-def test_definition_preflight_keeps_strict_access_and_only_credits_must_overwrites(
-        planning, kind, overwrite, whole, status):  # noqa: F811
-    scope = Scope(planning)
-    host = (c.c_double * 8)(*([-99] * 8))
-    registered, buffer = scope.register(host, [8], initialized=False)
-    scope.check(registered)
-    cells = [([2], [5])]
-    effects = access(flags=2, overwrite=cells if overwrite else ())
-    binding = Binding(buffer, effects)
-    scope.check(planning.fort_scope_plan_reset(scope.handle))
-    scope.check(planning.fort_scope_plan_add(scope.handle, kind, 0, c.byref(binding), 1, 0, 0, 0))
-    record(scope, 42, buffer, access(flags=1) if whole else access(read=cells))
-    assert planning.fort_scope_plan_validate(scope.handle) == status
-    assert scope.stats().allocations == scope.stats().uploads == scope.stats().downloads == 0
-    scope.close()
-
-
-@pytest.mark.native
-def test_original_host_cannot_be_planned_as_device_work(planning):  # noqa: F811
-    scope = Scope(planning)
-    scope.check(planning.fort_scope_plan_reset(scope.handle))
-    assert planning.fort_scope_plan_add(scope.handle, 6, 42, None, 0, 1e8, 0, 1) != 0
     scope.close()
 
 

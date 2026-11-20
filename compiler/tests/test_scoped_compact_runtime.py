@@ -6,8 +6,7 @@ import json
 import pytest
 
 from compiler.tests.test_scoped_pinned_runtime import pinned, stats  # noqa: F401
-from compiler.tests.test_scoped_planning_runtime import Costs, costs, planning  # noqa: F401
-from compiler.tests.test_scoped_runtime import TOKEN, Scope, access, runtime  # noqa: F401
+from compiler.tests.test_scoped_runtime import TOKEN, Costs, Scope, access, costs, runtime  # noqa: F401
 
 
 class Rate(c.Structure):
@@ -168,41 +167,3 @@ def test_uncovered_physical_rate_executes_exact_direct_without_new_definition_cr
     scope.gpu_end(handle)
     assert bytes(scope.stats()) == before
     scope.close()
-
-
-def test_compact_pool_race_invalidates_only_cost_authority(tmp_path):
-    """A changed physical lease must not leave a stale accepted owner price."""
-    import shutil
-    import subprocess
-    from pathlib import Path
-
-    compiler = shutil.which("g++")
-    assert compiler is not None
-    root = Path(__file__).resolve().parents[1] / "runtime"
-    source = tmp_path / "estimate.cpp"
-    source.write_text(r'''#define FORT_SCOPE_CPU_TEST
-#include "scoped_runtime.cu"
-#include <cassert>
-int main(){
-  Context c(0);
-  auto reset=[&]{c.owner_estimate_available=true;c.last_report=fort_scope_plan_report{};
-    c.last_report->available=c.last_report->owner_available=1;};
-  auto invalid=[&]{assert(!c.owner_estimate_available && !c.last_report->available &&
-    !c.last_report->owner_available && !c.poisoned && c.stats.uploads==0 && c.stats.downloads==0);};
-  reset();compact_lease_observation(c,262144,true,262144,true);
-  assert(c.owner_estimate_available && c.last_report->available && c.last_report->owner_available);
-  reset();compact_lease_observation(c,262144,true,262144,false);invalid();
-  reset();compact_lease_observation(c,262144,false,1048576,false);invalid();
-  reset();compact_fallback(c,FORT_SCOPE_TRANSFER_ALLOCATION);invalid();
-  assert(c.transfer_stats.fallback_reason==FORT_SCOPE_TRANSFER_ALLOCATION);
-  reset();compact_fallback(c,FORT_SCOPE_TRANSFER_BUDGET);invalid();
-  assert(c.transfer_stats.fallback_reason==FORT_SCOPE_TRANSFER_BUDGET && c.transfer_stats.fallbacks==2);
-  reset();compact_estimate_unavailable(c);invalid();
-}
-''')
-    binary = tmp_path / "estimate"
-    built = subprocess.run([compiler, "-O0", "-std=c++17", "-pthread", "-I", str(root),
-                            str(source), "-o", str(binary)], capture_output=True, text=True, timeout=120)
-    assert built.returncode == 0, built.stdout + built.stderr
-    ran = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
-    assert ran.returncode == 0, ran.stdout + ran.stderr

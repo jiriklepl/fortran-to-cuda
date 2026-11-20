@@ -1,5 +1,5 @@
-/* One complete physical-batch model shared by planning and admission.
- * Empirical placement costs confer no data, lifetime or execution authority. */
+/* The complete physical-batch cost model of compact copies.
+ * Empirical costs confer no data, lifetime or execution authority. */
 #ifndef FORT_SECTION_BATCH_COST_HPP
 #define FORT_SECTION_BATCH_COST_HPP
 #include "scoped_runtime.h"
@@ -41,6 +41,19 @@ inline bool valid_costs(const fort_scope_copy_costs_v3 &c) {
            !finite_supported_prediction(c.direct[d],true)||!finite_supported_prediction(c.compact_cold[d],false)||
            !finite_supported_prediction(c.compact_reuse[d],false)||
            c.compact_cold[d].minimum_operations<1||c.compact_reuse[d].minimum_operations<1)return false;
+    return true;
+}
+// The base rates a physical-copy calibration is stated against. Throughputs and lifecycle costs are
+// strictly positive; a fitted transfer intercept can be zero.
+inline bool valid_base(const fort_scope_plan_costs &c) {
+    if(c.version!=FORT_SCOPE_PLANNING_ABI_VERSION||!c.valid||!c.max_allocation_bytes)return false;
+    for(double x:{c.cpu_flops,c.cpu_bandwidth,c.gpu_flops,c.gpu_bandwidth,c.h2d_bandwidth,c.d2h_bandwidth,
+                  c.create_seconds,c.register_seconds,c.host_access_seconds,c.device_access_seconds,
+                  c.gpu_setup_seconds,c.cold_driver_startup_seconds,c.allocation_seconds,c.release_seconds,
+                  c.wait_seconds,c.launch_enqueue_seconds,c.planning_operation_seconds})
+        if(!std::isfinite(x)||x<=0)return false;
+    for(double x:{c.h2d_latency,c.d2h_latency})if(!finite_nonnegative(x))return false;
+    for(double x:{c.h2d_fit_relative_error,c.d2h_fit_relative_error})if(!finite_nonnegative(x)||x>=1)return false;
     return true;
 }
 inline unsigned layout_mask(const Plan &p) {
@@ -100,7 +113,7 @@ inline Price price(const Plan &p,const fort_scope_copy_costs_v3 &c,const fort_sc
 }
 // Bounded rent-or-buy metadata. Observed successful API submission is a pricing
 // heuristic only: it does not certify completion, readability or future work.
-// The same pure transition serves speculative planning and the locked pool.
+// The transition is pure; the staging pool applies it under its lock.
 namespace startup {
 inline Key key(const Pricing &p,int device) {
     Key result;std::size_t i=0;

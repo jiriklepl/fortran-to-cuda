@@ -113,7 +113,7 @@ python -m compiler --emit-scoped-runtime --json --output-dir out/scoped
 ```
 
 The output contains `scoped_runtime.h`, `scoped_entry.hpp`, `section_copy.hpp`, `staging.hpp`,
-`scoped_regions.hpp`, `scoped_planning.hpp`, `scoped_cuda_resources.hpp`,
+`scoped_regions.hpp`, `scoped_cuda_resources.hpp`,
 `scoped_runtime.cu`, `fort_scoped_memory.f90`, and `scoped-runtime.json`. Compile and link the CUDA
 runtime once per executable with host OpenMP support (`-Xcompiler=-fopenmp`) and compile the common Fortran interface before its
 users. The manifest identifies the ABI, source hashes, source languages, and
@@ -141,8 +141,7 @@ zero-based physical coordinates with exclusive upper bounds. Access descriptors
 separate reads, possible writes, and proven overwrites.
 After bounded union and subtraction, adjacent rectangles merge only when their
 union is itself a rectangle. This reduces copy submissions without adding cells
-or filling holes. Execution and planning use the same normalized coverage; the
-32-rectangle and 1,024-intersection limits remain in force.
+or filling holes. The 32-rectangle and 1,024-intersection limits remain in force.
 
 `fort_scope_register_sections` accepts partially initialized host coverage.
 `fort_scope_forget_definition` clears semantic definition coverage while
@@ -190,13 +189,9 @@ start 2^18 device threads or more: small launches are still batched, and a
 launch over a whole field goes out at once. `FORT_SCOPE_GRAPH_QUEUE_WORK` sets
 another thread count (0: no limit); the fields do not depend on it.
 
-The additive `fort_scope_set_transfers` metadata operation configures a context
-before registration/planning and initializes no CUDA resources. Generated
-interfaces publish a `configure(context)` helper, and nondefault source owners
-call it once before planning. Standalone callers use the public helper before
-adding query operations. Complete pinned costs are installed by the additive
-`fort_scope_set_transfer_costs_v1` after host/toolchain compatibility checks;
-GPU identity is still checked before a GPU selection executes. `fort_scope_transfer_stats_get_v1` reports requested
+The `fort_scope_set_transfers` metadata operation configures a context before
+registration and initializes no CUDA resources. Generated interfaces publish a
+`configure(context)` helper for it. `fort_scope_transfer_stats_get_v1` reports requested
 and effective modes, fallback reasons, exact packing/transfer counts, staging
 reuse, capacity and event statistics without changing the original stats ABI.
 The runtime manifest describes the shared budget and supported modes. Common
@@ -218,16 +213,6 @@ CUDA/C++ backend, owned-session interface, or ordinary fallback query.
 Consumers take the files from `build_sources` rather than by globbing the
 directory.
 
-`fort_scope_plan_report_v2` separates incremental execution cost from hypothetical
-publication and teardown. A continuation ranks execution plus the change in
-terminal liability against native continuation from the same incoming state;
-the ranking can be negative when native writes retire dirty device values.
-Projected terminal operations do not execute between segments and do not count
-as their transferred bytes. Owner estimates sum reached execution and one final
-terminal cost. Creation and registrations are charged when incurred, and retained
-allocations are charged only when newly allocated. Unknown or failed execution
-invalidates the complete-owner estimate. Existing planning costs and decision
-structures remain ABI version 1.
 Shared numerical entry ABI version 2 accepts scalar pointers through its C
 interface, with matching Fortran reference arguments. Binding those references
 does not read their values. A scalar used only behind a conditional or possibly
@@ -761,32 +746,9 @@ operand selection, including signed zero. A finite leading literal uses the
 separately checked constant-first form, including degenerate numerical clamps.
 Unordered multi-argument forms are not covered by this contract and new helper
 closures retain native execution for them. IEEE exception guards remain at
-their original source locations. Scoped runtime setup and planning save and
-restore the caller thread's rounding mode, exception flags and trap mask;
-numerical computation is not moved into setup or query evaluation.
-
-The runtime keeps the compute-cost payload `fort_scope_compute_costs_v1`, which
-source task quotes use. Generated numerical entries record their units through
-`fort_scope_plan_add_costs_v2` and supply no per-backend seconds.
-
-The key binds the checked executable graph, profile, entry facts and epoch
-policy, safely available array descriptor metadata, and the caller's CPU,
-OpenMP and floating-point environment. Entry observations use allocation,
-contiguity, bounds and extents; optional, pointer and unavailable descriptors
-are omitted. Only copied metadata enters the cache. It holds at most 64 keys
-of 512 words each, including environment metadata. After 64 hits, the next
-invocation plans normally. Unobserved values or entered paths can make a new
-GPU opportunity profitable before that replan; this is an explicit placement
-quality limit of the hint.
-
-A hit runs the original CPU operations and whole OpenMP teams directly,
-preserving their original calls, array associations and saved state. Any live
-runtime context prevents a hit, so borrowed coherent callers continue through
-the existing validation and memory hooks. Read-only mirror retention, write
-invalidation and transfer completion rules remain governed by that coherence
-path. The separate `FORT_SCOPED native_hint` metadata event reports lookup and
-learning with unavailable estimates; it supplies no execution or speedup
-evidence.
+their original source locations. Scoped runtime calls save and restore the
+caller thread's rounding mode, exception flags and trap mask; numerical
+computation is not moved into them.
 
 ## Legality and caller contract
 

@@ -145,11 +145,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
     if config.collective:
         lines.insert(5, '#include "scoped_team_observer.hpp"')
     lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
-              *(["    FORT_SHARED_CHECK(fort_scope_task_graph_enable_v1(fort_context));"]),
               f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});", "}"]
-    # Queued tasks share the graph/domain; the old slab batching is retired
-    # and no entry is eligible for it.
-    batch_requested = config.scope_transfers in {"pipelined", "auto"}
     captures = {}
     locals_ = host_symbols(function, plan)
     for region in plan.regions:
@@ -315,7 +311,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
     lines += [f"    {cpp_type(s)} {s.cpp_name};" for s in host_symbols(function, plan)]
     for s in arrays:
         if s.intent == "out":
-            forget = (f"fort_scoped::forget_view(fort_context, {s.cpp_name}_view, false)" if root_views else
+            forget = (f"fort_scoped::forget_view(fort_context, {s.cpp_name}_view)" if root_views else
                       f"fort_scope_forget_definition(fort_context, {s.cpp_name}_handle)")
             lines += [f"    FORT_SHARED_CHECK({forget});"]
     lines += ["    const bool fort_gpu_requested = fort_mode == 1;"]
@@ -777,26 +773,6 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
                                        "fallback_reason": "coalesced_upload_ineligible",
                                        "trace_events": {"upload_coalesced": "actual physical span bytes",
                                                         "upload_requested": "required section bytes"}}},
-        "batch_execution": {"abi_version": 1, "runtime_api": "fort_scope_batch_execute_v1",
-                            "runtime_report": "fort_scope_batch_report_get_v1",
-                            "eligible": False, "enabled": False,
-                            "reason": ("collective batch coordination is unavailable" if config.collective else
-                                       "legacy slab batching is retired; use the shared task graph"),
-                            "entry": None,
-                            "window_entry": None,
-                            "window_argument_order": ["window", "first_unit", "stop_unit", "axis", "launches",
-                                                      *[s.name for s in arrays], *[s.name for s in scalars]],
-                            "candidates": [],
-                            "limits": {"adjacent_units": None,
-                                       "complete_legal_group": True},
-                            "coordinates": "original logical coordinates and full-array pitches",
-                            "kernels": "reuse existing numerical kernels; no partition-specific copies",
-                            "publication": "retain device results until original native consumers or owner close",
-                            "complete_owner_estimate": "unavailable after batch execution until full repricing",
-                            "fallback": "ordinary synchronous execution before batch work; no replay after start",
-                            "statistics": ["selected_transfers", "chunk_iterations", "slot_bytes", "prefix_upload_bytes",
-                                           "batches", "actual_upload_bytes", "actual_download_bytes", "actual_launches",
-                                           "preparation_operations", "execution_seconds", "terminal_delta_seconds"]},
         "runtime_provenance": provenance.public(),
         "host_threads": config.host_threads,
         "definition_changes": [s.name for s in arrays if s.intent == "out"],
@@ -826,8 +802,6 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
             parameter["passing"] = f"root_view_v{root_view_abi}"
         if root_view_abi == 2:
             report["borrowed_views"]["rank_reduction"] = "retained logical axes map to original full-layout pitches; fixed axes select one coordinate"
-        if batch_requested:
-            report["batch_execution"]["reason"] = "borrowed-view subchain batching is unavailable"
     if config.collective:
         report["team"] = {
             "available": True, "entry_abi_version": 1, "entry": team_name,

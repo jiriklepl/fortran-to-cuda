@@ -6,7 +6,6 @@ import pytest
 
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.tests.test_scoped_pinned_runtime import configured, pinned, stats  # noqa: F401
-from compiler.tests.test_scoped_planning_runtime import planning  # noqa: F401
 from compiler.tests.test_scoped_runtime import TOKEN, access, runtime  # noqa: F401
 from compiler.tests.test_scoped_scratch import ScratchStats
 

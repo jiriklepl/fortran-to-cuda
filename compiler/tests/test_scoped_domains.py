@@ -9,8 +9,6 @@ import subprocess
 
 import pytest
 
-from compiler.tests.test_scoped_planning_runtime import Binding as PlanBinding
-from compiler.tests.test_scoped_planning_runtime import Costs, Decision, costs
 from compiler.tests.test_scoped_runtime import RUNTIME, SIZE, TOKEN, Access, Layout, Scope, Stats, access
 
 pytestmark = pytest.mark.native
@@ -37,11 +35,6 @@ class Call(c.Structure):
 class Report(c.Structure):
     _fields_ = [("version", c.c_uint32), ("status", c.c_int32),
                 ("started", c.c_uint32), ("committed", c.c_uint32)]
-
-
-class Hint(c.Structure):
-    _fields_ = [("version", c.c_uint32), ("eligible", c.c_uint32), ("word_count", SIZE),
-                ("gpu_generation", TOKEN), ("error_generation", TOKEN), ("words", TOKEN * 512)]
 
 
 Worker = c.CFUNCTYPE(c.c_int, c.c_void_p, c.POINTER(View), SIZE, c.c_void_p, c.POINTER(c.c_int))
@@ -75,10 +68,6 @@ def domain_runtime(tmp_path_factory):
         "identity_swap_v1": [TOKEN, TOKEN, TOKEN, c.POINTER(Layout), c.POINTER(Layout),
                              c.POINTER(TOKEN), c.POINTER(TOKEN)],
         "layout_get": [TOKEN, TOKEN, c.POINTER(Layout)],
-        "plan_reset": [TOKEN],
-        "plan_validate": [TOKEN],
-        "plan_add": [TOKEN, c.c_uint32, TOKEN, c.POINTER(PlanBinding), SIZE, c.c_double, c.c_double, c.c_int],
-        "plan_select": [TOKEN, c.POINTER(Costs), c.c_int, c.POINTER(Decision)],
         "set_device_budget": [TOKEN, SIZE],
         "device_begin": [TOKEN, TOKEN, c.POINTER(Access), c.POINTER(c.c_void_p)],
         "host_begin": [TOKEN, TOKEN, c.POINTER(Access)],
@@ -86,8 +75,6 @@ def domain_runtime(tmp_path_factory):
         "retire_v1": [TOKEN, TOKEN], "close": [TOKEN], "abandon": [TOKEN], "wait": [TOKEN],
         "stats_get": [TOKEN, c.POINTER(Stats)],
         "external_execute_v1": [TOKEN, c.POINTER(Call), Worker, c.c_void_p, c.POINTER(Report)],
-        "native_hint_begin_v1": [c.POINTER(TOKEN), SIZE, c.POINTER(Hint), c.POINTER(c.c_int)],
-        "native_hint_finish_v1": [c.POINTER(Hint)],
     }
     for name, signature in signatures.items():
         function = getattr(lib, "fort_scope_" + name)
@@ -407,40 +394,7 @@ def test_descriptor_exchange_never_seeds_definitions_from_the_new_logical_name(d
     assert list(a) == [-9, -8]
 
 
-def test_validated_uninstalled_query_is_abandoned_after_actual_host_commit_and_descriptor_swap(domain_runtime):
-    domain = Domain(domain_runtime)
-    scope = domain.context()
-    a, b = (c.c_double * 2)(1, 2), (c.c_double * 2)(3, 4)
-    status, old_a = scope.register(a, [2], generation=2)
-    scope.check(status)
-    status, old_b = scope.register(b, [2], identity=2, generation=7)
-    scope.check(status)
-    effects = access(flags=3)
-    native = (PlanBinding * 1)(PlanBinding(old_a, effects))
-    scope.check(domain_runtime.fort_scope_plan_reset(scope.handle))
-    scope.check(domain_runtime.fort_scope_plan_add(scope.handle, 0, 0, native, 1, 0, 16, 0))
-    scope.check(domain_runtime.fort_scope_plan_validate(scope.handle))
-    # Forced sections/native fallback has performed the original operation,
-    # even though its validation-only query was never installed as a schedule.
-    scope.cpu_begin(old_a, effects)
-    a[0], a[1] = 11, 12
-    scope.cpu_end(old_a)
-    after_a, after_b = layout(b, [2], 7, [0]), layout(a, [2], 2, [0])
-    new_a, new_b = TOKEN(), TOKEN()
-    scope.check(domain_runtime.fort_scope_identity_swap_v1(scope.handle, old_a, old_b, c.byref(after_a),
-                                                         c.byref(after_b), c.byref(new_a), c.byref(new_b)))
-    assert (new_a.value, new_b.value) == (old_b.value, old_a.value)
-    assert domain_runtime.fort_scope_plan_validate(scope.handle) == 8
-    device = scope.gpu(new_b, access(flags=1))
-    assert [device[0], device[1]] == [11, 12]
-    scope.gpu_end(new_b)
-    scope.close()
-    domain.close()
-    assert list(a) == [11, 12]
-    assert list(b) == [3, 4]
-
-
-@pytest.mark.parametrize("invalid", ["host", "generation", "extent", "lower", "same_handle", "prepared", "installed_query"])
+@pytest.mark.parametrize("invalid", ["host", "generation", "extent", "lower", "same_handle", "prepared"])
 def test_postmutation_descriptor_exchange_rejects_fatally_without_replay_or_publication(domain_runtime, invalid):
     domain = Domain(domain_runtime)
     scope = domain.context()
@@ -465,16 +419,6 @@ def test_postmutation_descriptor_exchange_rejects_fatally_without_replay_or_publ
         old_b = old_a
     elif invalid == "prepared":
         scope.gpu(old_b, access(flags=1))
-    elif invalid == "installed_query":
-        scope.check(domain_runtime.fort_scope_wait(scope.handle))
-        scope.check(domain_runtime.fort_scope_plan_reset(scope.handle))
-        worker = (PlanBinding * 1)(PlanBinding(old_b, access(flags=1)))
-        scope.check(domain_runtime.fort_scope_plan_add(scope.handle, 1, 42, worker, 1, 1e8, 16, 1))
-        scope.check(domain_runtime.fort_scope_plan_validate(scope.handle))
-        decision = Decision()
-        scope.check(domain_runtime.fort_scope_plan_select(scope.handle, c.byref(costs()), 1, c.byref(decision)))
-        assert decision.available == 1
-        assert decision.gpu_units == 1
     current_a, current_b = TOKEN(111), TOKEN(222)
     assert domain_runtime.fort_scope_identity_swap_v1(scope.handle, old_a, old_b, c.byref(after_a),
                                                      c.byref(after_b), c.byref(current_a), c.byref(current_b)) == 6
@@ -722,36 +666,6 @@ def test_domain_lifecycle_and_physical_totals_keep_explicit_source_attribution(d
     assert f"context={domain.handle.value} " in closes[0]
     assert "domain_role=storage" in closes[0]
     assert "owner=" + identity.decode() in closes[0]
-
-
-def test_detached_domain_vetoes_contextless_native_hint_lookup_and_learning(domain_runtime):
-    words = (TOKEN * 1)(0xD04A19)
-
-    def begin():
-        observation, hit = Hint(), c.c_int(-1)
-        assert domain_runtime.fort_scope_native_hint_begin_v1(words, 1, c.byref(observation), c.byref(hit)) == 0
-        return observation, hit.value
-
-    observation, hit = begin()
-    assert (observation.eligible, hit) == (1, 0)
-    domain = Domain(domain_runtime)
-    scope = domain.context()
-    scope.close()
-    # No live execution context remains, but the domain can still own dirty
-    # storage: neither lookup bypass nor a learned observation is permitted.
-    live, hit = begin()
-    assert (live.eligible, hit) == (0, 0)
-    assert domain_runtime.fort_scope_native_hint_finish_v1(c.byref(observation)) == 0
-    domain.close()
-    observation, hit = begin()
-    assert (observation.eligible, hit) == (1, 0)
-    assert domain_runtime.fort_scope_native_hint_finish_v1(c.byref(observation)) == 0
-    observation, hit = begin()
-    assert (observation.eligible, hit) == (0, 1)
-    domain = Domain(domain_runtime)
-    observation, hit = begin()
-    assert (observation.eligible, hit) == (0, 0)
-    domain.close()
 
 
 def test_cpp_callback_exception_is_contained_and_cannot_publish_or_replay(domain_runtime, tmp_path):

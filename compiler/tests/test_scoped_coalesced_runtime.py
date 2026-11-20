@@ -6,9 +6,7 @@ import ctypes as c
 
 import pytest
 
-from compiler.tests.test_scoped_continuation_runtime import consume
 from compiler.tests.test_scoped_pinned_runtime import configured, pinned, stats  # noqa: F401
-from compiler.tests.test_scoped_planning_runtime import costs, planning, record, select  # noqa: F401
 from compiler.tests.test_scoped_runtime import access, runtime  # noqa: F401
 
 DENSE = [([0, 0], [16, 4]), ([0, 4], [17, 8])]
@@ -138,27 +136,6 @@ def test_nonzero_physical_origin_retains_original_pitches(pinned):
     assert scope.stats().upload_bytes == 136 * 8
     scope.close()
     assert list(values) == list(range(170))
-
-
-def test_cost_selected_schedule_retains_calibrated_exact_transfers(pinned):
-    scope = configured(pinned, 4)
-    values = (c.c_double * 136)(*range(136))
-    status, handle = scope.register(values, [17, 8])
-    scope.check(status)
-    effects = access(read=DENSE)
-    scope.check(pinned.fort_scope_plan_reset(scope.handle))
-    bindings = record(scope, 92, handle, effects)
-    decision = select(scope, costs())
-    assert decision.available
-    assert decision.gpu_units == 1
-    consume(scope, 92, bindings, 1)
-    scope.gpu(handle, effects)
-    scope.gpu_end(handle)
-    assert scope.stats().uploads == decision.uploads == 2
-    assert scope.stats().upload_bytes == decision.upload_bytes == 132 * 8
-    assert stats(scope).effective_mode == 0
-    assert stats(scope).fallback_reason == 1
-    scope.close()
 
 
 def test_empty_and_overflow_never_allocate(pinned):

@@ -1,4 +1,4 @@
-// One bounded metadata record shared by the existing staging pool and planner.
+// One bounded metadata record kept by the staging pool.
 // Credit represents submitted heuristic observations, never completion or data authority.
 #ifndef FORT_COPY_STARTUP_HPP
 #define FORT_COPY_STARTUP_HPP

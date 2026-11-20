@@ -8,12 +8,6 @@ import subprocess
 
 import pytest
 
-from compiler.tests.test_scoped_planning_runtime import (
-    costs,
-    planning,  # noqa: F401
-    record,
-    select,
-)
 from compiler.tests.test_scoped_runtime import (
     RECTANGLE_LIMIT,
     RUNTIME,
@@ -142,34 +136,6 @@ def test_partial_definition_fragmentation_failure_is_atomic(runtime):
     assert runtime.fort_scope_forget_sections_v1(scope.handle, buffer, partial.writes, partial.write_count) == 5
     scope.close()
     assert list(data) == [i+1000 for i in range(size)]
-
-
-@pytest.mark.native
-def test_partial_definition_queries_do_not_mutate_and_revalidate_reads(planning):
-    scope = Scope(planning)
-    data = (c.c_double * 8)(*range(8))
-    status, buffer = scope.register(data, [8])
-    scope.check(status)
-    planning.fort_scope_plan_forget_sections_v1.argtypes = [TOKEN, TOKEN, c.POINTER(Section), SIZE]
-    cut = access(write=[([2], [5])])
-    scope.check(planning.fort_scope_plan_reset(scope.handle))
-    scope.check(planning.fort_scope_plan_forget_sections_v1(scope.handle, buffer, cut.writes, 1))
-    record(scope, 51, buffer, access(flags=1))
-    assert planning.fort_scope_plan_validate(scope.handle) == 7
-    assert scope.stats().uploads == scope.stats().allocations == 0
-    assert list(data) == list(range(8))
-    # Changing this query invalidates its failed proof; an exact write defines
-    # the discarded section before the later read without losing other data.
-    scope.check(planning.fort_scope_plan_reset(scope.handle))
-    scope.check(planning.fort_scope_plan_forget_sections_v1(scope.handle, buffer, cut.writes, 1))
-    record(scope, 52, buffer, access(write=[([2], [5])], overwrite=[([2], [5])]))
-    record(scope, 53, buffer, access(flags=1))
-    scope.check(planning.fort_scope_plan_validate(scope.handle))
-    decision = select(scope, costs(), -1)
-    assert decision.available
-    assert decision.gpu_units == 2
-    scope.close()
-    assert list(data) == list(range(8))
 
 
 @pytest.mark.native

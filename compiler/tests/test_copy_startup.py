@@ -11,8 +11,6 @@ RUNTIME = Path(__file__).resolve().parents[1] / "runtime"
 
 SOURCE = r'''
 #include "section_batch_cost.hpp"
-#include "scoped_planning.hpp"
-#include "scoped_memo.hpp"
 #include "staging.hpp"
 #include <cassert>
 #include <atomic>
@@ -103,39 +101,12 @@ int main(int argc,char **argv) {
         assert(s.disabled && !s.credit[0] && !startup::choose(plan,p,true,false,pool,s).seed);
         s=earned(p,plan,pool);s.generation=std::numeric_limits<uint64_t>::max();startup::ownership_changed(s);
         assert(s.disabled && !s.credit[0]);
-    } else if(mode=="planner") {
-        namespace planning=fort_scoped::planning;
-        planning::Inputs input;input.copy_costs=p;input.transfer_mode=FORT_SCOPE_TRANSFERS_AUTO;
-        input.device_budget=1u<<20;input.copy_device=0;
-        planning::Resource b;b.handle=1;b.element_bytes=8;b.bytes=64;b.extents={8};b.allocated=true;
-        planning::detail::State s;s.allocated=64;fort_scope_plan_costs base{};
-        const fort_scoped::coherence::Region parts={{{0},{1}},{{4},{5}}};
-        for(int i=0;i<3;++i)planning::detail::copy_region(s,b,parts,true,input,base,nullptr,0,"test");
-        assert(s.time==29 && s.count.uploads==5 && s.count.upload_bytes==48 && s.compact_capacity==capacities[0]);
-        assert(!s.copy_startup.credit[0] && !s.pending);
-        planning::detail::copy_region(s,b,parts,true,input,base,nullptr,0,"test");
-        assert(s.time==30 && s.count.uploads==6);
-        // Each speculative alternative owns an independent state; input is inert.
-        assert(!input.copy_startup.bound);
     } else if(mode=="pending") {
         p.base.wait_seconds=2;auto s=earned(p,plan,pool);
         auto q=startup::choose(plan,p,true,true,pool,s);
         assert(q.seed && q.premium==8 && q.price.compact_seconds==11 && q.price.compact_path_seconds==9);
         startup::State zero;startup::bind(zero,p,0);q=startup::choose(plan,p,true,true,pool,zero);
         assert(q.observation==2 && !q.seed);
-    } else if(mode=="memo") {
-        namespace planning=fort_scoped::planning;
-        planning::Inputs input;input.graph_mode=true;input.definitions_validated=true;input.copy_costs=p;
-        const auto base=p.base;
-        auto key=fort_scoped::memo::make_key(input,base,{});assert(key);
-        for(int i=0;i<8;++i) {
-            auto x=input;
-            switch(i) {case 0:x.copy_device=1;break;case 1:x.copy_startup.credit[0]=1;break;
-            case 2:x.copy_startup.revision++;break;case 3:x.copy_startup.generation++;break;
-            case 4:x.copy_startup.model.words[18]++;break;case 5:x.copy_startup.cap[3]=1;break;
-            case 6:x.copy_startup.disabled=true;break;case 7:x.copy_completion_priced=true;break;}
-            auto changed=fort_scoped::memo::make_key(x,base,{});assert(changed && changed->words!=key->words);
-        }
     } else {
         using namespace fort_staging;auto &b=budget_state();b.startup=earned(p,plan,pool);
         const auto before=b.startup;const auto decision=startup::choose(plan,p,true,false,pool,before);
@@ -194,7 +165,7 @@ def startup_program(tmp_path_factory):
 
 
 @pytest.mark.parametrize("mode", ["earn", "saturation", "keys", "eligibility", "stale", "overflow",
-                                  "planner", "pending", "memo", "pool_race", "pool_budget",
+                                  "pending", "pool_race", "pool_budget",
                                   "pool_allocation", "pool_changed"])
 def test_bounded_pricing_transition_and_real_pool_reservation(startup_program, mode):
     result = subprocess.run([str(startup_program), mode], text=True, capture_output=True, timeout=15)

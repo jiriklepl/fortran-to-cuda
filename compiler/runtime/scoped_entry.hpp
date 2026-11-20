@@ -35,13 +35,6 @@ public:
             fort_scope_trace_restore_v1(context_, &previous_);
     }
 };
-// Window launchers borrow validated full-root views. No context call is legal
-// inside the batch callback, whose executor owns the context mutex/coherence.
-inline const fort_scope_batch_view *batch_view(const fort_scope_batch_window &window, fort_buffer_t handle) noexcept {
-    if (window.version!=FORT_SCOPE_BATCH_ABI_VERSION || (window.view_count && !window.views)) return nullptr;
-    for (size_t i=0; i<window.view_count; ++i) if (window.views[i].buffer==handle) return &window.views[i];
-    return nullptr;
-}
 template<size_t Capacity> class AccessBatch {
     struct Binding {
         fort_buffer_t handle = 0;
@@ -94,28 +87,6 @@ public:
         *count = size_;
         return FORT_SCOPE_OK;
     }
-    int record(uint32_t kind, uint64_t unit, double flops, double memory_bytes, int gpu_available,
-               double cpu_numerical_seconds = 0, double gpu_numerical_seconds = 0) const {
-        std::array<fort_scope_plan_binding, Capacity> values{};
-        for (size_t i=0; i<size_; ++i) values[i] = {bindings_[i].handle, bindings_[i].effects};
-        return fort_scope_plan_add_costs_v2(context_, kind, unit, values.data(), size_, flops, memory_bytes,
-                                           gpu_available, cpu_numerical_seconds, gpu_numerical_seconds);
-    }
-    int record_compute(uint32_t kind, uint64_t unit, double flops, double memory_bytes, int gpu_available,
-                       const fort_scope_compute_costs_v1 &compute) const {
-        std::array<fort_scope_plan_binding, Capacity> values{};
-        for (size_t i=0; i<size_; ++i) values[i] = {bindings_[i].handle, bindings_[i].effects};
-        return fort_scope_plan_add_compute_costs_v3(context_, kind, unit, values.data(), size_, flops,
-                                                  memory_bytes, gpu_available, &compute);
-    }
-    int decision(uint64_t unit, bool &gpu) const {
-        std::array<fort_scope_plan_binding, Capacity> values{};
-        for (size_t i=0; i<size_; ++i) values[i] = {bindings_[i].handle, bindings_[i].effects};
-        int selected = 0;
-        const int status = fort_scope_plan_next(context_, unit, values.data(), size_, &selected);
-        gpu = selected != 0;
-        return status;
-    }
     int begin(bool device) {
         if (begun_ || executing_)
             return fort_scope_report_error(FORT_SCOPE_STATE, "numerical task access already prepared");
@@ -159,102 +130,6 @@ public:
     void *device(fort_buffer_t handle) const {
         for (size_t i=0; i<size_; ++i) if (bindings_[i].handle == handle) return bindings_[i].device;
         return nullptr;
-    }
-};
-// A query projection can construct exact worker footprints in lexical blocks.
-// This collector only owns copies of that existing metadata until one atomic
-// native handoff; it records no query and executes no numerical work.
-class NativeWorkerCollector {
-    struct Binding {
-        fort_buffer_t buffer;
-        uint32_t flags;
-        coherence::Effects effects;
-        std::vector<fort_scope_section> reads, writes, overwrites;
-        static void views(const coherence::Region &parts, std::vector<fort_scope_section> &out) {
-            out.clear(); out.reserve(parts.size());
-            for (const auto &part : parts) out.push_back({part.lo.data(),part.hi.data()});
-        }
-        fort_scope_plan_binding view() {
-            views(effects.reads,reads); views(effects.writes,writes); views(effects.overwrites,overwrites);
-            return {buffer,{flags,reads.size(),reads.data(),writes.size(),writes.data(),
-                            overwrites.size(),overwrites.data()}};
-        }
-    };
-    struct Worker {
-        uint64_t unit;
-        std::vector<Binding> bindings;
-        std::vector<fort_scope_plan_binding> views;
-        fort_scope_native_worker_v1 view() {
-            views.clear(); views.reserve(bindings.size());
-            for (auto &binding : bindings) views.push_back(binding.view());
-            return {unit,views.data(),views.size()};
-        }
-    };
-    fort_scope_t context_;
-    std::vector<Worker> workers_;
-    bool begun_ = false;
-    static coherence::Region copy(const fort_scope_section *parts,size_t count,size_t rank) {
-        if (count>coherence::rectangle_limit || (count && !parts) || rank>coherence::rank_limit)
-            throw int(FORT_SCOPE_ARGUMENT);
-        coherence::Region result;
-        result.reserve(count);
-        for (size_t i=0;i<count;++i) {
-            if (!parts[i].lower || !parts[i].upper) throw int(FORT_SCOPE_ARGUMENT);
-            coherence::Box box;
-            for (size_t k=0;k<rank;++k) { box.lo.push_back(parts[i].lower[k]); box.hi.push_back(parts[i].upper[k]); }
-            result.push_back(box);
-        }
-        return result;
-    }
-public:
-    explicit NativeWorkerCollector(fort_scope_t context) : context_(context) {}
-    NativeWorkerCollector(const NativeWorkerCollector &) = delete;
-    int add(uint64_t unit,const fort_scope_plan_binding *bindings,size_t count) {
-        if (begun_ || (count && !bindings))
-            return fort_scope_report_error(FORT_SCOPE_ARGUMENT,"invalid native worker collection");
-        try {
-            Worker worker{unit,{},{}};
-            worker.bindings.reserve(count);
-            for (size_t i=0;i<count;++i) {
-                fort_scope_layout layout{};
-                const auto &binding=bindings[i];
-                const int status=fort_scope_layout_get(context_,binding.buffer,&layout);
-                if (status) return status;
-                const auto &access=binding.access;
-                worker.bindings.push_back({binding.buffer,access.flags,
-                    {copy(access.reads,access.read_count,layout.rank),
-                     copy(access.writes,access.write_count,layout.rank),
-                     copy(access.overwrites,access.overwrite_count,layout.rank)},{},{},{}});
-            }
-            workers_.push_back(std::move(worker));
-            return FORT_SCOPE_OK;
-        } catch (int status) {
-            return fort_scope_report_error(status,"invalid native worker footprint storage");
-        } catch (const std::bad_alloc &) {
-            return fort_scope_report_error(FORT_SCOPE_RESOURCE,"native worker metadata allocation failed");
-        }
-    }
-    template<class Batch> int add(uint64_t unit,Batch &batch) {
-        std::array<fort_scope_plan_binding,Batch::binding_capacity> bindings{};
-        size_t count=0;
-        const int status=batch.export_bindings(bindings.data(),bindings.size(),&count);
-        return status ? status : add(unit,bindings.data(),count);
-    }
-    int begin(const fort_scope_plan_binding *native_bindings,size_t count,int *applied) {
-        if (applied) *applied=0;
-        if (begun_)
-            return fort_scope_report_error(FORT_SCOPE_STATE,"native worker collection already applied");
-        try {
-            std::vector<fort_scope_native_worker_v1> workers;
-            workers.reserve(workers_.size());
-            for (auto &worker : workers_) workers.push_back(worker.view());
-            const int status=fort_scope_plan_native_begin_v1(context_,workers.data(),workers.size(),
-                                                           native_bindings,count,applied);
-            if (!status && applied && *applied) begun_=true;
-            return status;
-        } catch (const std::bad_alloc &) {
-            return fort_scope_report_error(FORT_SCOPE_RESOURCE,"native worker metadata allocation failed");
-        }
     }
 };
 class GPUCall {

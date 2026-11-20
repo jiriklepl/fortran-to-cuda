@@ -3,7 +3,7 @@
 `scoped_runtime.h` and `scoped_memory.f90` expose temporary device storage through
 `fort_scope_scratch_acquire_v1`, `fort_scope_scratch_release_v1`, and
 `fort_scope_scratch_stats_get_v1`. The interfaces are additive; existing array,
-session, planning and statistics layouts remain unchanged.
+session and statistics layouts remain unchanged.
 
 Each context owns one reusable arena and permits one active lease. Acquisition
 returns a versioned record containing a fresh token, device pointer, requested
@@ -38,17 +38,12 @@ effort device cleanup, including active or idle scratch, without publishing
 invalid results. Stale and foreign lease tokens return `FORT_SCOPE_STALE`.
 
 The device budget includes cached scratch capacity and all full-layout field
-allocations. Ordinary and batch planning subtract cached scratch from the field
-budget. Scratch capacity is exact rather than rounded to a growth factor. The
+allocations. Scratch capacity is exact rather than rounded to a growth factor. The
 existing `fort_scope_stats` still counts only field allocation bytes and peaks.
 The additive scratch statistics report acquisitions, allocations, reuse,
 releases, successful growth, cached and active bytes, peak scratch bytes, and
 peak combined field/scratch payload. Allocator pool overhead and reserved pool
 pages are not payload statistics.
 
-These operations provide storage, not a numerical implementation or cost proof.
-Existing planning models do not price scratch lifetime costs; nonempty scratch
-acquisition marks the complete-owner estimate unavailable. Generated snapshot
-implementations must establish their own legality and calibrated allocation,
-traffic, launch and teardown costs before automatic promotion. Runtime source
-changes also invalidate calibration identity.
+These operations provide storage, not a numerical implementation. Generated
+snapshot implementations must establish their own legality.
