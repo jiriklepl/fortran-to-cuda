@@ -123,8 +123,9 @@ def audit(extracted, packages, selected, known=frozenset()):
     host statement in the same procedure that names it may see stale values
     unless the host copy was brought up to date first. A statement is not
     reported when a residency directive directly precedes it or sits inside
-    it, or when it only calls procedures that are selected themselves. Each
-    finding carries ``known``: whether its id is in the accepted set.
+    it, or when all it does with arrays is pass them whole to procedures that
+    are selected themselves, directly or through wrappers that only pass them
+    on. Each finding carries ``known``: whether its id is in the accepted set.
 
     The audit looks inside the selected procedures only. It does not follow an
     array into a host procedure that receives it as an argument, and it cannot
@@ -132,13 +133,22 @@ def audit(extracted, packages, selected, known=frozenset()):
     """
     bound = {resource["resource"] for package in packages for item in package["entries"]
              for resource in item["region"]["resources"] if resource["rank"]}
+    forwarders = extracted.get("forwarders", {})
+
+    def covered(call, visiting=()):
+        """A selected procedure, or a wrapper whose arrays all end up in selected ones."""
+        if any(fnmatchcase(call, pattern) for pattern in selected):
+            return True
+        wrapper = forwarders.get(call)
+        return bool(wrapper and wrapper["only_calls"] and call not in visiting
+                    and all(covered(item, (*visiting, call)) for item in wrapper["calls"]))
+
     findings = []
     for statement in extracted["host_statements"]:
         arrays = [item["name"] for item in statement["arrays"] if item["resource"] in bound]
         if not arrays or statement["acknowledged"]:
             continue
-        if statement["only_calls"] and statement["calls"] and all(
-                any(fnmatchcase(call, pattern) for pattern in selected) for call in statement["calls"]):
+        if statement["only_calls"] and statement["calls"] and all(covered(call) for call in statement["calls"]):
             continue
         findings.append({"id": statement["id"], "procedure": statement["procedure"],
                          # Lines of the preprocessed source the entries were exported from.

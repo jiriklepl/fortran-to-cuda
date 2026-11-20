@@ -172,6 +172,66 @@ def _indirect_writes(analysis, routine, loops):
             for requirement in requirements]
 
 
+def _array_uses(analysis, routine, nodes):
+    """The arrays ``nodes`` name, the procedures they call, and whether an array is used outside a call.
+
+    A whole array that is an actual argument is the called procedure's
+    business. A section or an expression of it is evaluated here, so it counts
+    as a use, like any other mention. Asking for an array's bounds or
+    allocation, or allocating it, reads none of its values.
+    """
+    arrays, calls, passed, elsewhere = {}, set(), set(), False
+
+    def whole_arguments(arguments):
+        for argument in (_children(arguments) if arguments is not None else ()):
+            value = argument.items[1] if _kind(argument) == "Actual_Arg_Spec" else argument
+            if _kind(value) == "Name":
+                passed.add(id(value))
+
+    for node in nodes:
+        for call in walk(node, Call_Stmt):
+            whole_arguments(call.items[1])
+            try:
+                calls.add(resolve_original_call(analysis, routine.scope, call).procedure)
+            except CompilationError:
+                calls.update(analysis._candidates(routine.scope, call.items[0]) or ("$unresolved",))
+        for reference in walk(node, Part_Ref):
+            candidates = analysis._candidates(routine.scope, reference.items[0]) or ()
+            if len(candidates) == 1 and candidates[0] in analysis.functions \
+                    and analysis._binding(routine.scope, reference.items[0]) is None:
+                calls.add(candidates[0])
+                whole_arguments(reference.items[1])
+        inquired = {id(reference.items[1].items[0]) for reference in walk(node, Intrinsic_Function_Reference)
+                    if str(reference.items[0]).lower() in _INQUIRIES and reference.items[1] is not None
+                    and reference.items[1].items}
+        inquired |= {id(allocation.items[0]) for allocation in walk(node, Allocation)}
+        for name in walk(node, Name):
+            binding = analysis._binding(routine.scope, name)
+            if binding is not None and binding.rank and id(name) not in inquired:
+                arrays[binding.root] = binding.name
+                elsewhere |= id(name) not in passed
+    return arrays, calls, elsewhere
+
+
+def _forwarders(analysis, selected, host_statements):
+    """Procedures outside the selection that host statements call, and whether each only passes arrays on.
+
+    A wrapper that hands its arrays to other procedures and does nothing else
+    with them is as safe as what it calls. Each record has ``only_calls`` and
+    the procedures it ``calls``; the audit follows them.
+    """
+    found, pending = {}, {call for statement in host_statements for call in statement["calls"]}
+    while pending:
+        name = pending.pop()
+        routine = analysis.routines.get(name) or analysis.numerical_helpers.get(name)
+        if name in found or name in selected or routine is None or routine.execution is None:
+            continue
+        _arrays, calls, elsewhere = _array_uses(analysis, routine, tuple(_children(routine.execution)))
+        found[name] = {"only_calls": not elsewhere, "calls": sorted(calls)}
+        pending.update(calls)
+    return found
+
+
 def _resolve_procedures(analysis, procedures, *, allow_patterns=False):
     available = sorted(analysis.routines)
     if procedures is None:
@@ -274,32 +334,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
 
         def host(nodes, acknowledged):
             """Record host code that names arrays: it runs beside entries that may hold newer values."""
-            arrays, calls, passed, elsewhere = {}, set(), set(), False
-            for node in nodes:
-                # An array handed to a procedure is that procedure's business; so is one in a function's arguments.
-                for call in walk(node, Call_Stmt):
-                    passed.update(id(name) for name in walk(call.items[1], Name))
-                for reference in walk(node, Part_Ref):
-                    candidates = analysis._candidates(routine.scope, reference.items[0]) or ()
-                    if len(candidates) == 1 and candidates[0] in analysis.functions \
-                            and analysis._binding(routine.scope, reference.items[0]) is None:
-                        calls.add(candidates[0])
-                        passed.update(id(name) for name in walk(reference.items[1], Name))
-                # Asking for an array's bounds or allocation, or allocating it, reads none of its values.
-                inquired = {id(reference.items[1].items[0]) for reference in walk(node, Intrinsic_Function_Reference)
-                            if str(reference.items[0]).lower() in _INQUIRIES and reference.items[1] is not None
-                            and reference.items[1].items}
-                inquired |= {id(allocation.items[0]) for allocation in walk(node, Allocation)}
-                for name in walk(node, Name):
-                    binding = analysis._binding(routine.scope, name)
-                    if binding is not None and binding.rank and id(name) not in inquired:
-                        arrays[binding.root] = binding.name
-                        elsewhere |= id(name) not in passed
-                for call in walk(node, Call_Stmt):
-                    try:
-                        calls.add(resolve_original_call(analysis, routine.scope, call).procedure)
-                    except CompilationError:
-                        calls.update(analysis._candidates(routine.scope, call.items[0]) or ("$unresolved",))
+            arrays, calls, elsewhere = _array_uses(analysis, routine, nodes)
             if arrays:
                 first = min(statement_span(node)[0] for node in nodes)
                 last = max(statement_span(node)[1] for node in nodes)
@@ -336,6 +371,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     return {"version": 2, "kind": "caller_owned_resident_entries", "source_inputs": analysis.sources,
             "entries": entries, "rejected": rejected, "grouping_rejections": grouping_rejections,
             "host_statements": host_statements,
+            "forwarders": _forwarders(analysis, set(resolved_procedures), host_statements),
             "lifetime_authority": "caller storage epoch; numerical export grants no native-effect authority"}
 
 

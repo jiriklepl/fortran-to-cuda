@@ -293,6 +293,34 @@ def test_a_directive_or_a_selected_callee_answers_a_finding(tmp_path):
     assert audited(tmp_path / "directive", ("audited::step", "audited::finish"), before="!$fort observe(a)") == []
 
 
+def test_a_wrapper_that_only_passes_arrays_on_counts_as_what_it_calls(tmp_path):
+    wrapped = AUDITED.replace("call finish(a)", "call twice(a)").replace("subroutine untouched(c)", """subroutine twice(a)
+real(8), contiguous, intent(inout) :: a(:)
+call finish(a)
+call finish(a)
+end subroutine
+subroutine untouched(c)""")
+
+    def findings(directory, procedures, source):
+        directory.mkdir()
+        (directory / "audited.f90").write_text(source.format(before=""))
+        project = ResidentProject((directory / "audited.f90",), (Selection("all", procedures),))
+        return [item["text"] for item in prepare(project, directory / "prepared", fortran=fortran_compiler())["audit"]]
+
+    # The wrapper is host code, but everything it does with the array is done by a selected procedure.
+    assert findings(tmp_path / "selected", ("audited::step", "audited::finish"), wrapped) == ["b(1) = a(n)"]
+    # With finish on the host as well, the array ends up in host loops: the call is reported.
+    assert findings(tmp_path / "host", ("audited::step",), wrapped) == ["b(1) = a(n)", "CALL twice(a)"]
+    # A wrapper that also reads the array itself is no wrapper.
+    reading = wrapped.replace("call finish(a)\ncall finish(a)", "call finish(a)\nn = int(a(1))")
+    assert findings(tmp_path / "reading", ("audited::step", "audited::finish"), reading) == [
+        "b(1) = a(n)", "CALL twice(a)"]
+    # Passing a section hands over other storage than the array an entry binds: that is a use here.
+    section = AUDITED.replace("call finish(a)", "call finish(a(2:n))")
+    assert findings(tmp_path / "section", ("audited::step", "audited::finish"), section) == [
+        "b(1) = a(n)", "CALL finish(a(2 : n))"]
+
+
 def test_known_findings_are_accepted_and_strict_mode_refuses_new_ones(tmp_path):
     finding, = audited(tmp_path / "report", ("audited::step", "audited::finish"))
     accepted, = audited(tmp_path / "known", ("audited::step", "audited::finish"),

@@ -595,10 +595,13 @@ which the host still does its parallel work is begun with `keep_team=.true.`.
 `prepare` also audits the selected procedures. A statement there that stays
 host code and names an array some entry binds may read values that are newer
 on the device, so it is reported in `prepared["audit"]` with its procedure,
-line and text, unless a residency directive directly precedes it or it only
-calls procedures that are selected themselves. Asking for an array's bounds or
-allocation is not a read. The audit does not follow an array into a host
-procedure that receives it as an argument. A project lists the findings it
+line and text, unless a residency directive directly precedes it or all it
+does with such arrays is pass them whole to procedures that are selected
+themselves. A wrapper that is not selected and only passes its arrays on
+counts as what it calls; a section or an expression of an array is a use, not
+a hand-over. Asking for an array's bounds or allocation is not a read. The
+audit does not look into a host procedure that does anything else with an
+array it receives: such a call is a finding. A project lists the findings it
 accepts in `known_host_accesses`; with `strict_audit` any other finding stops
 the preparation.
 
