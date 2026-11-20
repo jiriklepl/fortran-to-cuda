@@ -39,7 +39,7 @@ def generate_sources(
     if any(character in common_header for character in ('"', "\n", "\r")):
         raise CompilationError("Common header filename cannot contain quotes or newlines")
     artifacts, runtime = read_scoped_runtime()
-    shared = generate_scoped(function, plan, config, common_header, runtime_id=runtime["runtime_id"])
+    shared = generate_scoped(function, plan, config, common_header)
     artifacts.update({"shared_entry.cu": shared.cuda, "shared_interface.f90": shared.fortran,
                       "scoped-runtime.json": json.dumps(runtime, indent=2) + "\n"})
     scoped = {**shared.report, "runtime": runtime, "numerical_contract": numerical_build_contract()}

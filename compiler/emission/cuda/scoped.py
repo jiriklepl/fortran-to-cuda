@@ -1,7 +1,6 @@
 """Numerical entries borrowing common buffers through the versioned public ABI."""
 
-import json
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from hashlib import sha256
 
 from compiler.analysis.sections import must_overlap
@@ -13,7 +12,7 @@ from compiler.emission.common.schedules import checked_product, region_schedule,
 from compiler.emission.common.symbols import host_symbols, region_symbols
 from compiler.emission.cuda.graphs import _kernel_arguments, generate_graph_group, graph_group_eligible
 from compiler.emission.cuda.kernels import generate_group_kernel, generate_kernel, generate_launch
-from compiler.emission.cuda.offload import _cpu_worker, _host_profile_compatibility, _metadata, _precision
+from compiler.emission.cuda.offload import _cpu_worker
 from compiler.emission.cuda.structured import _query_expression
 from compiler.emission.fortran.formatting import _fortran_list
 from compiler.ir import (
@@ -32,13 +31,11 @@ from compiler.ir import (
 )
 from compiler.numerical_contract import numerical_build_contract, numerical_source_prologue
 from compiler.offload.analysis import (
-    OffloadAnalysis,
     Unit,
     _protected_scalar_inputs,
     _unit_footprints,
 )
 from compiler.offload.codegen import query_expression
-from compiler.offload.preparation import prepare_offload
 
 
 @dataclass(frozen=True)
@@ -58,7 +55,7 @@ TYPES = {
 ENTRY_ABI_VERSION = 3
 
 
-def generate_scoped(function, plan, config, common_header, *, runtime_id=None, root_views=False, root_view_abi=1):
+def generate_scoped(function, plan, config, common_header, *, root_views=False, root_view_abi=1):
     if root_view_abi not in {1, 2}:
         raise CompilationError("unsupported borrowed numerical view ABI")
     view_type = f"fort_scope_view_v{root_view_abi}"
@@ -123,7 +120,6 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     lines.insert(0, "#include <type_traits>")
     if root_views:
         lines.insert(5, '#include "view_entry.hpp"')
-    lines += _host_profile_compatibility(config.host_threads, _precision(function))
     invariants = set(function.parameters)
 
     def collect(current):
@@ -136,7 +132,6 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 collect(step.else_plan)
 
     collect(plan)
-    prep = prepare_offload(function, plan)
     units = {r.id: _unit_footprints(Unit(i, r, (), None), frozenset(invariants))
              for i, r in enumerate(plan.regions)}
     protected = {r.id: _protected_scalar_inputs(r, frozenset(function.parameters))[0]
@@ -147,44 +142,11 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                   for e in (*box.lower, *box.upper))
         for r in plan.regions
     }
-    if config.original_native:
-        # The static counts describe the generated worker. Only the hardware
-        # ranking prices a unit whose native alternative is original Fortran.
-        units = {identity: replace(unit, work_per_iteration=None,
-                                   work_estimate_reason="original Fortran work is ranked only by graph AUTO")
-                 for identity, unit in units.items()}
-    query_available = prep.analysis.available
-    query_reason = prep.analysis.reason
-    planning_reason = query_reason
-    if prep.analysis.available and any(u.work_per_iteration is None or u.work_is_upper_bound for u in units.values()):
-        planning_reason = "; ".join(dict.fromkeys(u.work_estimate_reason or "work estimate is unknown or conditional"
-            for u in units.values() if u.work_per_iteration is None or u.work_is_upper_bound))
-    if function.requires_numerical_environment:
-        # Static counts do not include the flagged entry guards or their
-        # collective barriers.
-        planning_reason = "numerical environment guards have no static estimate"
-    planning_available = prep.analysis.available and planning_reason is None
-    # No hardware calibration is supplied to an entry: the cost selector gets no
-    # rates, and the manifest names the reason.
-    profile_reason = "hardware profile is missing"
-    if config.collective:
-        profile_reason = "collective synchronization calibration is unavailable: " + profile_reason
-    team_configure_name = c_name + "_configure_team_v1"
     if config.collective:
         lines.insert(5, '#include "scoped_team_observer.hpp"')
-        lines += [f"static int {team_configure_name}(fort_scope_t fort_context) {{",
-                  "    return fort_scope_set_team_costs_v1(fort_context, nullptr, 0);", "}"]
-    if config.scope_transfers == "pinned":
-        # Pinned bandwidth alone omits staging preparation, packing and changed
-        # copy geometry. Planning v1 has no complete calibrated model for it.
-        profile_reason = "transfer_estimates_unavailable"
-    transfer_setup = ([f"    FORT_SHARED_CHECK(fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]}));",
-                       f"    return {team_configure_name}(fort_context);"] if config.collective else
-                      [f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});"])
     lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
               *(["    FORT_SHARED_CHECK(fort_scope_task_graph_enable_v1(fort_context));"]),
-              *transfer_setup, "}"]
-    unit_ids = {r.id: int(sha256(f"{name}:region:{r.id}".encode()).hexdigest()[:16], 16) for r in plan.regions}
+              f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});", "}"]
     # Queued tasks share the graph/domain; the old slab batching is retired
     # and no entry is eligible for it.
     batch_requested = config.scope_transfers in {"pipelined", "auto"}
@@ -287,7 +249,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                  "    const int fort_entry_result=[&]() -> int {"]),
               "    if (fort_scope_abi_version() != FORT_SCOPE_ABI_VERSION)",
               '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "incompatible shared runtime ABI");',
-              "    if (fort_mode < 0 || fort_mode > 2)",
+              "    if (fort_mode < 0 || fort_mode > 1)",
               '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "unknown shared execution mode");']
     if function.requires_numerical_environment:
         lines += ["    if (!fort_runtime::numerical_environment_supported())",
@@ -358,20 +320,14 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             lines += [f"    FORT_SHARED_CHECK({forget});"]
     lines += ["    const bool fort_gpu_requested = fort_mode == 1;"]
 
-    def prefetch(symbols, *, planning=False, query_helper=False):
+    def prefetch(symbols):
         ordered = [s for s in arrays if s in symbols]
         if not ordered:
             return []
         result = ["{", f"    fort_scoped::{batch_type}<{capacity}> fort_metadata(fort_context);",
                   "    fort_scope_access fort_read{}; fort_read.flags = FORT_SCOPE_READ_ALL;"]
-        def check(expression):
-            if query_helper:
-                return f"if ((fort_query_status = {expression})) {{ d.valid = false; return d; }}"
-            return f"FORT_SHARED_CHECK({expression});"
         for s in ordered:
-            result += ["    " + check(f"fort_metadata.add({array_argument(s)}, fort_read)")]
-        if planning:
-            return [*result, "    " + check("fort_metadata.record(FORT_SCOPE_PLAN_NATIVE, 0, 0, 0, false)"), "}"]
+            result += [f"    FORT_SHARED_CHECK(fort_metadata.add({array_argument(s)}, fort_read));"]
         return [*result, "    FORT_SHARED_CHECK(fort_metadata.begin(false));",
                 "    FORT_SHARED_CHECK(fort_metadata.finish());", "}"]
 
@@ -398,15 +354,15 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             factors = tuple(f"fort_internal_extent{a}" for a in schedule.axis_order)
         return [*result, *checked_product("fort_internal_total", factors)]
 
-    def descriptors(unit, *, planning=False):
+    def descriptors(unit):
         result = [f"fort_scoped::{batch_type}<{capacity}> fort_access(fort_context);", "bool fort_valid = true;"]
-        checked = planning or any(isinstance(node, ArrayAccess)
-                                  for fp in unit.footprints for box in (*fp.reads, *fp.writes)
-                                  for expression in (*box.lower, *box.upper) for node in walk_expr(expression))
-        if checked and not planning:
+        checked = any(isinstance(node, ArrayAccess)
+                      for fp in unit.footprints for box in (*fp.reads, *fp.writes)
+                      for expression in (*box.lower, *box.upper) for node in walk_expr(expression))
+        if checked:
             result += ["offload::Data d;"]
         value = (lambda expression: _query_expression(expression, {})) if checked else query_expression
-        invalid = 'return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "invalid checked planning footprint");' if planning else 'return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "invalid physical entry footprint");'
+        invalid = 'return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "invalid physical entry footprint");'
 
         for fp in unit.footprints:
             s = fp.symbol
@@ -533,7 +489,6 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 # workers can still use the same coherent device allocations.
                 gpu_choice = "false" if protected[step.id] else "fort_gpu_requested"
                 body = [*descriptors(unit), f"bool fort_gpu = {gpu_choice};"]
-                body += [f"if (fort_mode == 2) FORT_SHARED_CHECK(fort_access.decision({unit_ids[step.id]}ULL, fort_gpu));"]
                 if protected[step.id]:
                     body += [f'if (fort_gpu_requested) offload::decision_trace("{function.name}", "native-scoped-protected-scalar", 0, 1);']
                 body += [trace_worker(step)]
@@ -624,7 +579,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         lines += [
                   "            if (fort_scope_abi_version() != FORT_SCOPE_ABI_VERSION)",
                   '                return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "incompatible shared runtime ABI");',
-                  "            if (fort_mode < 0 || fort_mode > 2)",
+                  "            if (fort_mode < 0 || fort_mode > 1)",
                   '                return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "unknown shared execution mode");']
         for s in scalars:
             lines += [f"            if (!fort_scalar_{s.cpp_name})",
@@ -702,8 +657,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                             "if (!fort_internal_total) return FORT_SCOPE_OK;",
                             *descriptors(units[step.id])[1:]]
                     gpu_choice = "false" if protected[step.id] else "fort_gpu_requested"
-                    body += [f"bool fort_gpu = {gpu_choice};",
-                             f"if (fort_mode == 2) FORT_SHARED_CHECK(fort_access.decision({unit_ids[step.id]}ULL, fort_gpu));"]
+                    body += [f"bool fort_gpu = {gpu_choice};"]
                     if protected[step.id]:
                         body += [f'if (fort_gpu_requested) offload::decision_trace("{function.name}", "native-scoped-protected-scalar", 0, 1);']
                     body += [trace_worker(step), *queued_task(step, accepted=(
@@ -748,213 +702,13 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         lines += indent(team_execution(plan), 2)
         lines += ["    }", "    const int fort_result = shared->status;",
                   "    #pragma omp barrier", "    return fort_result;", "}"]
-    plan_name, choose_name = c_name + "_plan", c_name + "_choose"
-    planning_payload_arrays = set()
-
-    def planning_inputs(current):
-        for step in current.steps:
-            if isinstance(step, HostBlock):
-                expressions = [a.value for a in step.assignments if a in prep.assignments]
-            elif isinstance(step, ConditionalRegion):
-                expressions = [step.condition]
-                planning_inputs(step.then_plan)
-                planning_inputs(step.else_plan)
-            elif isinstance(step, ParallelRegion):
-                expressions = [e for loop in step.loops for e in
-                               (loop.lower, loop.upper) + (() if isinstance(loop.step, int) else (loop.step,))]
-                expressions += [e for fp in units[step.id].footprints for box in (*fp.reads, *fp.writes)
-                                for e in (*box.lower, *box.upper)]
-            else:
-                expressions = []
-            planning_payload_arrays.update(expression_reads(expressions))
-
-    planning_inputs(plan)
-    query_scalars = tuple(s for s in scalars if s in prep.query_scalars)
-    planning_parameters = ["fort_context", *[array_argument(s) for s in arrays], *[s.cpp_name for s in query_scalars]]
-    planning_signature = [signature[0], *[array_parameter(s) for s in arrays],
-                          *[f"const {cpp_type(s)} *fort_scalar_{s.cpp_name}" for s in query_scalars]]
-    query_captures = {}
-    query_arguments = {}
-    query_helpers = []
-    query_cost_footprints = {}
-    if query_available:
-        for unit in units.values():
-            control_symbols = set()
-            for loop in unit.region.loops:
-                for expression in (loop.lower, loop.upper) + (() if isinstance(loop.step, int) else (loop.step,)):
-                    control_symbols.update(referenced_symbols(expression))
-            for footprint in unit.footprints:
-                for box in (*footprint.uploads, *footprint.downloads):
-                    for expression in (*box.lower, *box.upper):
-                        control_symbols.update(referenced_symbols(expression))
-            query_captures[unit.region.id] = tuple(s for s in locals_ if s in control_symbols)
-            query_signature = ("fort_scope_t fort_context, int &fort_query_status, "
-                               + "".join(array_parameter(s) + ", " for s in arrays)) + ", ".join(
-                cpp_declaration(a, array_views=root_views) if a.symbol.rank else f"const volatile {cpp_type(a.symbol)} &{a.name}"
-                for a in abi)
-            query_signature += "".join(f", const {cpp_type(s)} &{s.cpp_name}" for s in query_captures[unit.region.id])
-            query_arguments[unit.region.id] = ("fort_context, fort_query_status, "
-                                               + "".join(array_argument(s) + ", " for s in arrays)) + worker_arguments + "".join(
-                f", {s.cpp_name}" for s in query_captures[unit.region.id])
-            known_work = (unit.work_per_iteration is not None and not unit.work_is_upper_bound
-                          and not function.requires_numerical_environment)
-            # Exact descriptors below repeat every footprint bound check. Keep
-            # the existing metadata path for full/uncertain/protected effects,
-            # whose conservative boxes can have additional empty-shape guards.
-            exact_effects = not protected_footprints[unit.region.id] and all(
-                fp.exact and not fp.full_upload and not fp.full_write for fp in unit.footprints)
-            query_cost_footprints[unit.region.id] = known_work or not exact_effects
-            helper = _metadata(function, OffloadAnalysis(True, None, (replace(unit, index=0),)),
-                               query_signature, f"plan_unit_{unit.region.id}",
-                               lambda expression: _query_expression(expression, {}),
-                               host_pointer=(lambda symbol: symbol.cpp_name + ".root") if root_views else None,
-                               cost_footprints=query_cost_footprints[unit.region.id])
-            axis = 0
-            for line in helper:
-                query_helpers.append(line)
-                if line == "        if (active) {":
-                    loop = unit.region.loops[axis]
-                    expressions = (loop.lower, loop.upper) + (() if isinstance(loop.step, int) else (loop.step,))
-                    query_helpers += indent(prefetch(expression_reads(expressions), planning=True, query_helper=True), 3)
-                    axis += 1
-            if axis != len(unit.region.loops):
-                raise CompilationError("checked scoped metadata did not preserve per-axis bound guards")
-        # Helpers must be defined before the public query, and never execute
-        # numerical assignments. INTEGER/LOGICAL values form a checked slice.
-        lines += query_helpers
-    lines += [f'extern "C" int {plan_name}({", ".join(planning_signature)}) {{']
-    if function.requires_numerical_environment:
-        lines += ["    if (!fort_runtime::numerical_environment_supported())",
-                  '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported planning numerical environment for real short reduction");']
-    if not query_available:
-        lines += [f"    return fort_scope_report_error(FORT_SCOPE_BOUNDARY, {json.dumps(query_reason)});"]
-    else:
-        query_setup = []
-        for symbol in scalars:
-            if symbol in query_scalars:
-                query_setup += [f"    if (!fort_scalar_{symbol.cpp_name})",
-                                '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "null planning scalar argument");',
-                                f"    const volatile {cpp_type(symbol)} &{symbol.cpp_name} = *fort_scalar_{symbol.cpp_name};"]
-            else:
-                # Internal metadata helpers share the worker's ABI. Their
-                # numerical scalar arguments are deliberately not public query
-                # inputs and the checked control slice never reads them.
-                query_setup += [f"    const {cpp_type(symbol)} {symbol.cpp_name}{{}};"]
-        query_setup += layout_setup
-        query_setup += alias_setup
-        lines += query_setup
-        if config.collective:
-            lines += ["    FORT_SHARED_CHECK(fort_scope_plan_team_entry_v1(fort_context));"]
-        lines += [f"    FORT_SHARED_CHECK(fort_scope_plan_host_current(fort_context, {s.cpp_name}_handle));"
-                  for s in arrays if s in planning_payload_arrays]
-        lines += ["    offload::Data d; int fort_query_status = FORT_SCOPE_OK;", *indent([f"{cpp_type(s)} {s.cpp_name};" for s in locals_
-                                                if s.dtype in {ScalarType.INTEGER, ScalarType.LOGICAL}])]
-        for symbol in arrays:
-            if symbol.intent == "out":
-                if root_views:
-                    lines += [f"    FORT_SHARED_CHECK(fort_scoped::forget_view(fort_context, {symbol.cpp_name}_view, true));"]
-                else:
-                    lines += ["    {", f"        fort_scoped::{batch_type}<{capacity}> fort_forget(fort_context);",
-                          "        fort_scope_access fort_definition{};",
-                          f"        FORT_SHARED_CHECK(fort_forget.add({array_argument(symbol)}, fort_definition));",
-                          "        FORT_SHARED_CHECK(fort_forget.record(FORT_SCOPE_PLAN_FORGET, 0, 0, 0, false));", "    }"]
-
-        def project(current, *, native_capture=False):
-            result = []
-            for step in current.steps:
-                if isinstance(step, HostBlock):
-                    touched = set(step.read_symbols) | set(step.write_symbols)
-                    record = ["{", f"    fort_scoped::{batch_type}<{capacity}> fort_host(fort_context);"]
-                    for symbol in arrays:
-                        if symbol in touched:
-                            flags = (1 if symbol in step.read_symbols else 0) | (2 if symbol in step.write_symbols else 0)
-                            record += [f"    fort_scope_access fort_effect_{symbol.id}{{}}; fort_effect_{symbol.id}.flags = {flags};",
-                                       f"    FORT_SHARED_CHECK(fort_host.add({array_argument(symbol)}, fort_effect_{symbol.id}));"]
-                    if not native_capture:
-                        result += ["if (d.valid) {", *indent(record + ["    FORT_SHARED_CHECK(fort_host.record(FORT_SCOPE_PLAN_NATIVE, 0, 0, 0, false));", "}"]), "}"]
-                    for assignment in step.assignments:
-                        if assignment in prep.assignments:
-                            result += [f"if (d.valid) {assignment.target.symbol.cpp_name} = {_query_expression(assignment.value, {})};"]
-                elif isinstance(step, ConditionalRegion):
-                    result += ["if (d.valid) {", *indent(prefetch(expression_reads((step.condition,)), planning=True)),
-                               f"    const bool branch = {_query_expression(step.condition, {})};",
-                               "    if (d.valid && branch) {", *indent(project(step.then_plan, native_capture=native_capture), 2),
-                               "    } else if (d.valid) {", *indent(project(step.else_plan, native_capture=native_capture), 2), "    }", "}"]
-                elif isinstance(step, ParallelRegion):
-                    known_work = (units[step.id].work_per_iteration is not None
-                                  and not units[step.id].work_is_upper_bound
-                                  and not function.requires_numerical_environment)
-                    flops = "unit.units[0].flops" if known_work else "0.0"
-                    memory_bytes = "unit.units[0].memory_bytes" if known_work else "0.0"
-                    record = [f"        FORT_SHARED_CHECK(fort_access.record(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, {flops}, {memory_bytes}, {'true' if known_work and not protected[step.id] else 'false'}, unit.units[0].cpu_numerical_seconds, unit.units[0].gpu_numerical_seconds));"]
-                    if native_capture:
-                        record = [f"        FORT_SHARED_CHECK(fort_native_expected.add({unit_ids[step.id]}ULL, fort_access));"]
-                    result += ["if (d.valid) {",
-                               f"    auto unit = plan_unit_{step.id}({query_arguments[step.id]});",
-                               "    FORT_SHARED_CHECK(fort_query_status);", "    d.valid = unit.valid;", "    if (d.valid && unit.units[0].iterations) {",
-                               *indent(descriptors(units[step.id], planning=True), 2),
-                               *record,
-                               "    }", "}"]
-                else:
-                    raise TypeError(step)
-            return result
-
-        lines += indent(project(plan))
-        lines += ['    if (!d.valid) return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "checked planning preparation is invalid or overflows");',
-                  "    return FORT_SCOPE_OK;"]
-    lines += ["}"]
-    native_begin_name = c_name + "_native_begin_v1"
-    native_begin_available = config.collective and query_available
-    if config.collective:
-        native_signature = [*planning_signature, "const fort_scope_plan_binding *fort_native_bindings",
-                            "size_t fort_native_count", "int *fort_native_applied"]
-        lines += [f'extern "C" int {native_begin_name}({", ".join(native_signature)}) {{',
-                  '    if (!fort_native_applied) return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "null native handoff result");',
-                  "    *fort_native_applied = 0;"]
-        if function.requires_numerical_environment:
-            lines += ["    if (!fort_runtime::numerical_environment_supported())",
-                      '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported native handoff numerical environment");']
-        if native_begin_available:
-            # The exact existing query projection supplies worker identities
-            # and effects. Collection owns all transient section coordinates;
-            # it never records, resets, selects or consumes the live plan.
-            lines += query_setup
-            lines += [f"    FORT_SHARED_CHECK(fort_scope_plan_host_current(fort_context, {s.cpp_name}_handle));"
-                      for s in arrays if s in planning_payload_arrays]
-            lines += ["    fort_scoped::NativeWorkerCollector fort_native_expected(fort_context);",
-                      "    offload::Data d; int fort_query_status = FORT_SCOPE_OK;",
-                      *indent([f"{cpp_type(s)} {s.cpp_name};" for s in locals_
-                               if s.dtype in {ScalarType.INTEGER, ScalarType.LOGICAL}]),
-                      *indent(project(plan, native_capture=True)),
-                      '    if (!d.valid) return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "native worker collection is invalid or overflows");',
-                      "    return fort_native_expected.begin(fort_native_bindings, fort_native_count, fort_native_applied);"]
-        else:
-            lines += [f"    return fort_scope_report_error(FORT_SCOPE_BOUNDARY, {json.dumps(query_reason)});"]
-        lines += ["}"]
-    cost_lines = ["fort_scope_plan_costs costs{}; costs.version = FORT_SCOPE_PLANNING_ABI_VERSION;"]
-    choose_team_guard = (["    int fort_team_ready=0;",
-                         "    FORT_SHARED_CHECK(fort_scope_team_costs_ready_v1(fort_context, &fort_team_ready));",
-                         "    if (!fort_team_ready) costs.valid=0;"] if config.collective else [])
-    lines += [f'extern "C" int {choose_name}(fort_scope_t fort_context, fort_scope_plan_decision *decision) {{']
-    if function.requires_numerical_environment:
-        lines += ["    if (!fort_runtime::numerical_environment_supported())",
-                  '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported selection numerical environment for real short reduction");']
-    lines += ['    if (!decision) return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "null planning decision");',
-              *indent(cost_lines), *choose_team_guard, "    static const auto profile = offload::Profile{};",
-              "    int fort_scope_device = -1, fort_current_device = -1;",
-              "    FORT_SHARED_CHECK(fort_scope_device_get(fort_context, &fort_scope_device));",
-              "    fort_scope_plan_decision preview{};",
-              "    FORT_SHARED_CHECK(fort_scope_plan_select(fort_context, &costs, -1, &preview));",
-              f"    const bool compatible = !preview.available || (scoped_host_compatible(profile) && (!preview.gpu_units || (cudaGetDevice(&fort_current_device) == cudaSuccess && fort_current_device == fort_scope_device && offload::compatible(profile, {config.host_threads}, {_precision(function)}))));",
-              "    FORT_SHARED_CHECK(fort_scope_plan_select(fort_context, &costs, compatible ? 1 : 0, decision));",
-              f'    offload::decision_trace("{function.name}", decision->gpu_units ? "scoped-scheduled" : "native-scoped-scheduled", decision->gpu_units, decision->cpu_units);',
-              "    return FORT_SCOPE_OK;", "}", "}", "#undef FORT_SHARED_CHECK", ""]
+    lines += ["}", "#undef FORT_SHARED_CHECK", ""]
     parameters = ["fort_context", "fort_mode", *[array_argument(s) for s in arrays], *[s.cpp_name for s in scalars]]
-    public = "  public :: run, run_team, plan, choose, configure" if config.collective else "  public :: run, plan, choose, configure"
-    if config.collective:
-        public += ", native_begin"
+    public = "  public :: run, run_team, configure" if config.collective else "  public :: run, configure"
     view_import = ", " + view_type if root_views else ""
-    fortran = [f"module {name}", "  use iso_c_binding", "  use fort_scoped_memory, only: fort_scope_plan_decision" + view_import, "  implicit none", "  private", public, "  interface"]
+    fortran = [f"module {name}", "  use iso_c_binding",
+               *(["  use fort_scoped_memory, only: " + view_type] if root_views else []),
+               "  implicit none", "  private", public, "  interface"]
     fortran += _fortran_list("function run(", parameters, f") bind(C, name='{c_name}') result(fort_status)", 4)
     fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool" + view_import, "      integer(c_int) :: fort_status",
                 "      integer(c_int64_t), value :: fort_context", "      integer(c_int), value :: fort_mode"]
@@ -971,35 +725,13 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         fortran += [f"      integer(c_int64_t), value :: {s.cpp_name}_handle" for s in arrays]
         fortran += [f"      {TYPES[s.dtype][1]}, intent(in) :: {s.cpp_name}" for s in scalars]
         fortran += ["    end function"]
-    fortran += _fortran_list("function plan(", planning_parameters, f") bind(C, name='{plan_name}') result(fort_status)", 4)
-    fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool" + view_import, "      integer(c_int) :: fort_status",
-                "      integer(c_int64_t), value :: fort_context"]
-    fortran += [(f"      type({view_type}), intent(in) :: {s.cpp_name}_view" if root_views else
-                 f"      integer(c_int64_t), value :: {s.cpp_name}_handle") for s in arrays]
-    fortran += [f"      {TYPES[s.dtype][1]}, intent(in) :: {s.cpp_name}" for s in query_scalars]
-    fortran += ["    end function"]
-    if config.collective:
-        fortran += _fortran_list("function native_begin(", [*planning_parameters, "fort_native_bindings",
-            "fort_native_count", "fort_native_applied"], f") bind(C, name='{native_begin_name}') result(fort_status)", 4)
-        fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool, c_ptr, c_size_t",
-                    "      integer(c_int) :: fort_status", "      integer(c_int64_t), value :: fort_context"]
-        fortran += [f"      integer(c_int64_t), value :: {s.cpp_name}_handle" for s in arrays]
-        fortran += [f"      {TYPES[s.dtype][1]}, intent(in) :: {s.cpp_name}" for s in query_scalars]
-        fortran += ["      type(c_ptr), value :: fort_native_bindings", "      integer(c_size_t), value :: fort_native_count",
-                    "      integer(c_int), intent(out) :: fort_native_applied", "    end function"]
-    fortran += [f"    function choose(fort_context, decision) bind(C, name='{choose_name}') result(fort_status)",
-                "      import :: c_int, c_int64_t, fort_scope_plan_decision", "      integer(c_int) :: fort_status",
-                "      integer(c_int64_t), value :: fort_context", "      type(fort_scope_plan_decision), intent(out) :: decision",
-                "    end function", f"    function configure(fort_context) bind(C, name='{configure_name}') result(fort_status)",
+    fortran += [f"    function configure(fort_context) bind(C, name='{configure_name}') result(fort_status)",
                 "      import :: c_int, c_int64_t", "      integer(c_int) :: fort_status",
                 "      integer(c_int64_t), value :: fort_context", "    end function",
                 "  end interface", f"end module {name}", ""]
     report = {
         "schema_version": 1, "abi_version": 1, "entry_abi_version": ENTRY_ABI_VERSION,
         "numerical_contract": numerical_build_contract(),
-        "graph_auto_costs": {"heuristic": False, "units": {},
-            "unpriced_team_overhead": False,
-            "cost_authorizes_execution": False, "cold_costs_reported": True},
         "entry": c_name, "fortran_module": name, "fortran_procedure": "run",
         "cuda_source": "shared_entry.cu", "fortran_source": "shared_interface.f90",
         "array_parameters": [{"name": s.name, "rank": s.rank, "dtype": s.dtype.value,
@@ -1007,13 +739,13 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         "scalar_parameters": [{"name": s.name, "dtype": s.dtype.value,
                                "passing": "value" if s.by_value else "reference"} for s in scalars],
         "argument_order": ["context", "mode", *[s.name for s in arrays], *[s.name for s in scalars]],
-        "modes": {"native": 0, "gpu": 1, "automatic": 2},
+        "modes": {"native": 0, "gpu": 1},
         "numerical_environment": {
             "required": function.requires_numerical_environment,
             "check": "fort_scope_numerical_environment_supported",
             "rounding": "round to nearest", "exceptions": "host traps disabled",
             "caller_contract": "floating-point exception flags are not observed",
-            "check_position": "before entry work and planning; every run, all collective participants",
+            "check_position": "before entry work; every run, all collective participants",
             "unsupported": "pre-work boundary; original-source caller executes its coherent native operation",
             "generated_cpu_fallback": "does not replace the original source for unsupported environments",
         },
@@ -1023,7 +755,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                    "reason": transfer_reason, "available_modes": ["direct", "pinned", "coalesced"],
                                    "entry": configure_name, "fortran_procedure": "configure",
                                    "argument_order": ["context"],
-                                   "position": "once per owning context before registration and planning",
+                                   "position": "once per owning context before registration",
                                    "execution": "synchronous", "pinned_budget_bytes": 64 * 1024 * 1024,
                                    "budget_scope": "process-wide including cached staging",
                                    "resource_fallback": "direct before this copy is enqueued; numerical work is never replayed",
@@ -1041,14 +773,10 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                        "pinning": False,
                                        "initial_effective_mode": "direct",
                                        "selected": "runtime eligibility per upload",
-                                       "placement": "cost-selected plans retain exact direct execution until calibrated",
-                                       "placement_fallback_reason": "transfer_estimates_unavailable",
                                        "fallback": "exact direct transfer",
                                        "fallback_reason": "coalesced_upload_ineligible",
                                        "trace_events": {"upload_coalesced": "actual physical span bytes",
-                                                        "upload_requested": "required section bytes"}},
-                                   "placement_estimate_available": False,
-                                   "placement_estimate_reason": planning_reason or profile_reason},
+                                                        "upload_requested": "required section bytes"}}},
         "batch_execution": {"abi_version": 1, "runtime_api": "fort_scope_batch_execute_v1",
                             "runtime_report": "fort_scope_batch_report_get_v1",
                             "eligible": False, "enabled": False,
@@ -1070,33 +798,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                            "batches", "actual_upload_bytes", "actual_download_bytes", "actual_launches",
                                            "preparation_operations", "execution_seconds", "terminal_delta_seconds"]},
         "runtime_provenance": provenance.public(),
-        "automatic_estimate_available": False,
-        "automatic_reason": planning_reason or profile_reason,
-        "native_backend": "original Fortran" if config.original_native else "generated C++ worker",
-        "automatic_scope_available": planning_available, "host_threads": config.host_threads,
-        "planning": {"abi_version": 1, "available": planning_available, "reason": planning_reason,
-                     "decision_trace_entry": function.name,
-                     "supported_endpoint_modes": ["complete", "continue"],
-                     "continuation_abi_version": 2, "runtime_report": "fort_scope_plan_report_v2",
-                     "query_available": query_available, "query_reason": query_reason,
-                     "entry": plan_name, "fortran_procedure": "plan", "selector": choose_name,
-                     "fortran_selector": "choose", "argument_order": ["context", *[s.name for s in arrays], *[s.name for s in query_scalars]],
-                     "scalar_inputs": [s.name for s in scalars if s in prep.query_scalars],
-                     "native_begin": ({"available": native_begin_available, "entry": native_begin_name,
-                         "fortran_procedure": "native_begin", "runtime_api": "fort_scope_plan_native_begin_v1",
-                         "authority": "caller independently proves original native effects and completion",
-                         "effects": "exact existing numerical query projection; owned temporary worker bindings",
-                         "schedule": "acquire only an exact all-CPU current worker range; retain future choices"}
-                         if config.collective else None),
-                     "payload_arrays": [s.name for s in arrays if s in planning_payload_arrays],
-                     "layout_arrays": [s.name for s in arrays],
-                     "source_effects": False, "preparation": "checked INTEGER/LOGICAL control slice",
-                     "units": [{"region": r.id, "id": unit_ids[r.id], "work_per_iteration": units[r.id].work_per_iteration,
-                                "cost_footprints_prepared": query_cost_footprints.get(r.id, False),
-                                "work_estimate_reason": units[r.id].work_estimate_reason}
-                               for r in plan.regions],
-                     "profile_available": False, "profile_reason": profile_reason,
-                     "runtime_id": runtime_id},
+        "host_threads": config.host_threads,
         "definition_changes": [s.name for s in arrays if s.intent == "out"],
         "resource_failure": "continue native at current worker before execution; never replay completed work",
         "transfer_volume": "missing physical read/preservation sections from shared runtime state",
@@ -1109,7 +811,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     }
     report["graph_execution"] = {"abi_version": 1, "runtime_api": "fort_scope_graph_enqueue_v1",
         "groups": list(graph_launch_groups.values()),
-        "selection": "forced GPU and calibrated automatic GPU decisions enqueue; native decisions acquire host effects",
+        "selection": "device-mode tasks enqueue; host-mode tasks acquire host effects",
         "submission": "context queue spans numerical calls; conflicting host tasks drain dependencies",
         "collective": "enqueue on original team master; existing team barriers remain",
         "parameter_lifetime": "runtime owns nonempty task values and effects until submission",
@@ -1137,10 +839,5 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             "cpu_workers": "all existing team members with tid/team; no nested team",
             "locals": "shared coordinator preparation; borrowed scalar references",
             "status": "uniform after matching barriers; no replay after execution starts",
-            "planning": "plan and choose are coordinator-only",
-            "automatic_estimate_available": False,
-            "automatic_reason": planning_reason or profile_reason,
-            "calibration_protocol_id": "0x4654434f4c4c0001",
-            "calibration": "offline original persistent team and emitted coordination; serial rates are not substituted",
         }
     return ScopedEmission(numerical_source_prologue() + "\n".join(lines), "\n".join(fortran), report)

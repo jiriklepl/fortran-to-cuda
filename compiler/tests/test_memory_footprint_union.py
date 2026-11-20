@@ -5,13 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.driver.pipeline import prepare_function
-from compiler.emission.common.abi import dimension_name
-from compiler.emission.cuda.offload import _metadata
-from compiler.frontend import lower_source
-from compiler.offload.analysis import analyze_offload
-
 RUNTIME = Path(__file__).resolve().parents[1] / 'runtime'
 DRIVER = r'''
 #include "offload.hpp"
@@ -115,64 +108,6 @@ def union_binary(tmp_path_factory):
 def test_computation_memory_unions(union_binary, mode):
     result = subprocess.run([str(union_binary), mode], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
-
-
-@pytest.mark.parametrize('budget_exhausted', [False, True])
-def test_actual_generated_stencil_metadata_counts_union_and_both_rw_directions(tmp_path, budget_exhausted):
-    source = '''module memory_case
-contains
-subroutine stencil(a,b)
-real(8),intent(in)::a(:,:,:)
-real(8),intent(inout)::b(:,:,:)
-integer::i,j,k
-do k=2,size(a,3)-1
- do j=2,size(a,2)-1
-  do i=2,size(a,1)-1
-   b(i,j,k)=b(i,j,k)+a(i,j,k)+a(i-1,j,k)+a(i+1,j,k)+a(i,j-1,k)+a(i,j+1,k)+a(i,j,k-1)+a(i,j,k+1)
-  end do
- end do
-end do
-end subroutine
-end module'''
-    dimensions = (10, 9, 8)
-    if budget_exhausted:
-        dimensions = (36, 36, 36)
-        source = source.replace('do k=2,size(a,3)-1', 'do k=1,2')
-        source = source.replace('do j=2,size(a,2)-1', 'do j=1,2')
-        source = source.replace('do i=2,size(a,1)-1', 'do i=1,2')
-        expression = '+'.join(f'a(i+{offset},j+{offset},k+{offset})' for offset in range(33))
-        before = source.index('   b(i,j,k)=')
-        after = source.index('\n', before)
-        source = source[:before] + '   b(i,j,k)=b(i,j,k)+' + expression + source[after:]
-    function, plan = prepare_function(lower_source(source, 'stencil', source_name='memory_case.f90'),
-                                      options=CompilerOptions(opt_level=0))
-    analysis = analyze_offload(function, plan)
-    assert analysis.available, analysis.reason
-    declarations, actuals = [], []
-    for position, symbol in enumerate(function.parameters):
-        assert symbol.rank == 3
-        declarations.append(f'const double *{symbol.cpp_name}')
-        elements = '*'.join(map(str, dimensions))
-        actuals.append(f'storage+{position}*{elements}')
-        for axis, extent in enumerate(dimensions, 1):
-            declarations.append(f'std::size_t {dimension_name(symbol, axis)}')
-            actuals.append(str(extent))
-    helper = '\n'.join(_metadata(function, analysis, ', '.join(declarations), 'metadata'))
-    assert helper.count('offload::footprint_bytes(') == 2
-    driver = '#include "offload.hpp"\n#include <cassert>\n#include <climits>\nnamespace offload=generated_kernels::offload;\n'
-    driver += helper
-    driver += f'\nint main(){{double storage[2*{elements}]{{}};auto data=metadata(' + ','.join(actuals) + ');'
-    # a's read union: interior plus six faces. b is read and written separately.
-    driver += 'assert(data.valid && data.units.size()==1);'
-    if budget_exhausted:
-        driver += 'assert(data.units[0].iterations==8);assert(std::isnan(data.units[0].memory_bytes));'
-        driver += 'offload::Profile profile;profile.valid=true;'
-        driver += 'assert(offload::select(data,profile,false).has_gpu());'
-        driver += 'assert(!offload::select(data,profile,true).has_gpu());}\n'
-    else:
-        driver += 'assert(data.units[0].iterations==8*7*6);'
-        driver += 'assert(data.units[0].memory_bytes==8*(3*8*7*6+2*(8*7+8*6+7*6)));}\n'
-    compile_and_run(tmp_path, driver)
 
 
 def test_unavailable_memory_cost_preserves_scoped_definition_proof(tmp_path):

@@ -283,53 +283,29 @@ def test_local_integer_setup_preserves_device_values_and_zero_trip_paths(generat
 
 
 @pytest.mark.cuda
-def test_installed_plan_executes_independent_gpu_entries_with_shared_contents(generated):
-    from compiler.tests.test_scoped_planning_runtime import Costs, Decision, costs
-
+@pytest.mark.parametrize("mode", [-1, 2])
+def test_an_entry_rejects_a_mode_other_than_host_or_device(generated, mode):
     _, lib, reports, _ = generated
-    require_gpu(lib)
+    assert reports["producer"]["scoped"]["modes"] == {"native": 0, "gpu": 1}
     scope = Scope(lib)
     n = c.c_int(16)
-    a = (c.c_double * 16)(*[i*0.25+1 for i in range(16)])
-    b, out = (c.c_double * 16)(*([-99]*16)), (c.c_double * 16)(*([-99]*16))
+    a = (c.c_double * 16)(*range(16))
+    b = (c.c_double * 16)(*([-99]*16))
     handles = []
-    for i, values in enumerate((a, b, out)):
-        status, handle = scope.register(values, [16], identity=i+1, initialized=i == 0, lower=[-2])
+    for identity, values in enumerate((a, b), 1):
+        status, handle = scope.register(values, [16], identity=identity, initialized=identity == 1, lower=[-2])
         scope.check(status)
         handles.append(handle)
-    lib.fort_scope_plan_reset.argtypes = [TOKEN]
-    lib.fort_scope_plan_select.argtypes = [TOKEN, c.POINTER(Costs), c.c_int, c.POINTER(Decision)]
-    scope.check(lib.fort_scope_plan_reset(scope.handle))
-    for entry, bindings in (("producer", handles[:2]), ("consumer", handles)):
-        public = reports[entry]["scoped"]["planning"]
-        query = getattr(lib, public["entry"])
-        query.argtypes = [TOKEN, *[TOKEN for _ in bindings], c.POINTER(c.c_int)]
-        scope.check(query(scope.handle, *bindings, c.byref(n)))
-    assert list(b) == list(out) == [-99]*16
-    assert scope.stats().allocations == scope.stats().launches == 0
-    # Deterministic synthetic costs force the GPU branch for correctness only;
-    # they are never used as calibration or performance evidence.
-    calibration, decision = costs(), Decision()
-    scope.check(lib.fort_scope_plan_select(scope.handle, c.byref(calibration), 1, c.byref(decision)))
-    assert decision.available
-    assert (decision.gpu_units, decision.cpu_units) == (2, 0)
-    invoke(scope, reports, "producer", handles[:2], [n], 2)
-    invoke(scope, reports, "consumer", handles, [n], 2)
-    scope.check(lib.fort_scope_wait(scope.handle))
-    assert (scope.stats().uploads, scope.stats().downloads) == (1, 0)
-    for handle in handles[1:]:
-        scope.cpu_begin(handle, access(flags=1))
-        scope.cpu_end(handle)
-    stats = scope.stats()
-    for field in ("upload_bytes", "download_bytes", "uploads", "downloads", "launches", "allocations", "peak_device_bytes"):
-        assert getattr(stats, field) == getattr(decision, field), field
+    function = getattr(lib, reports["producer"]["scoped"]["entry"])
+    assert function(scope.handle, mode, *handles, c.byref(n)) == 1
+    assert lib.fort_scope_error() == b"unknown shared execution mode"
+    assert scope.stats().launches == scope.stats().allocations == 0
     scope.close()
-    assert list(b) == [2*a[i]+i-2 for i in range(16)]
-    assert list(out) == [3*a[i]+i-2 for i in range(16)]
+    assert list(b) == [-99]*16
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("mode", [0, 1, 2])
+@pytest.mark.parametrize("mode", [0, 1])
 def test_independent_generated_entries_and_cpu_mirrors(generated, mode):
     _, lib, reports, _ = generated
     if mode == 1:
@@ -493,7 +469,7 @@ libc.mmap.restype=c.c_void_p
 libc.mmap.argtypes=[c.c_void_p,c.c_size_t,c.c_int,c.c_int,c.c_int,c.c_long]
 pointer=libc.mmap(None,4096,0,0x22,-1,0)
 assert pointer and pointer!=c.c_void_p(-1).value
-for mode in [0,1,2]:
+for mode in [0,1]:
     scope=Scope(lib)
     array=(c.c_double*16)()
     status,buffer=scope.register(array,[4,4],initialized=False)
@@ -509,7 +485,7 @@ for mode in [0,1,2]:
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("mode", [0, 1, 2])
+@pytest.mark.parametrize("mode", [0, 1])
 @pytest.mark.parametrize("entry", ["guarded_value", "guarded_index", "guarded_host"])
 def test_active_worker_keeps_conditional_scalar_protected(generated, mode, entry):
     directory, lib, reports, _ = generated
