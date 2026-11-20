@@ -59,6 +59,7 @@ class _Conditions:
         _get_parser()  # the expression classes exist once a parser has been created
         self.constants = constants
         self.known = {}
+        self.names = set()
         for text in conditions:
             node = Fortran2003.Expr(text)
             if type(node).__name__ != "Level_4_Expr" or not _COMPARISONS.get(str(node.items[1]).upper()):
@@ -68,6 +69,7 @@ class _Conditions:
                 raise ValueError("The constant of an assumed condition has no known integer value: " + text)
             if self.known.setdefault(_key(node.items[0]), value) != value:
                 raise ValueError("Assumed conditions contradict each other: " + text)
+            self.names |= {str(name).lower() for name in walk(node.items[0], Fortran2003.Name)}
 
     def _value(self, node):
         if type(node).__name__ == "Parenthesis":
@@ -161,9 +163,11 @@ def specialize(text, routine, conditions, constants):
     that the procedure can evaluate; ``constants`` maps named constants to
     their values (see ``integer_parameters``). An IF branch is folded when the
     conditions decide it. The procedure tests the conditions once at entry and
-    runs the original body when they do not hold. Raises ValueError when the
-    conditions decide no branch of the procedure, or its body cannot be
-    written twice.
+    runs the original body when they do not hold, so nothing it calls may
+    change what they test. Raises ValueError when the conditions decide no
+    branch of the procedure, when the procedure itself assigns to a variable
+    they name or passes one to a call, or when its body cannot be written
+    twice.
     """
     known = _Conditions(conditions, constants)
     tree = parse_fortran(text)
@@ -183,6 +187,15 @@ def specialize(text, routine, conditions, constants):
         item = getattr(node, "item", None)
         if item is not None and (getattr(item, "label", None) is not None or getattr(item, "name", None)):
             raise ValueError(f"Procedure {routine} has a labelled or named statement; its body cannot be written twice")
+        # The conditions are tested once, at entry: the body must not be able to change them.
+        changed = ()
+        if type(node).__name__ == "Assignment_Stmt":
+            changed = [name for name in walk(node.items[0], Fortran2003.Name)][:1]
+        elif type(node).__name__ == "Call_Stmt" and node.items[1] is not None:
+            changed = walk(node.items[1], Fortran2003.Name)
+        if any(str(name).lower() in known.names for name in changed):
+            raise ValueError(f"Procedure {routine} may change what an assumed condition tests: "
+                             + " ".join(str(node).split()))
     lines = text.splitlines(keepends=True)
     first, last = _span(execution)
     counter = [0]
