@@ -22,9 +22,7 @@ Poisson solver, and compares fresh ELMM executables:
 - `ELMM-native` uses native Fortran/OpenMP and CPU PoisFFT/FFTW.
 - `ELMM` uses the generated resident GPU path and the local CUDA Poisson solver.
 
-Both start from the same pinned upstream ELMM and PoisFFT sources and apply the
-reviewed deterministic TOP/BOTTOM pressure-reference fix. Thus the native
-reference is an approved derivative of the original, not pristine upstream.
+Both are built from the same pinned upstream ELMM and PoisFFT sources, unchanged.
 The generated build records source snapshots, build commands, binaries and the
 solver source receipt. The comparison records the configuration, toolchain,
 GPU, runtime settings and complete-process timing samples. Work and output
@@ -51,7 +49,7 @@ git clone https://github.com/DTolm/VkFFT.git "$DEPS_ROOT/VkFFT"
 git -C "$DEPS_ROOT/VkFFT" checkout --detach 066a17c17068c0f11c9298d848c2976c71fad1c1
 ```
 
-The runner reconstructs the approved application derivative in its own work
+The runner checks the pinned application sources out into its own work
 directory. It rejects unclean or mismatched application/VkFFT checkouts; local
 solver edits are snapshotted and hashed. The selected compiler and pipeline are
 the current workspace sources. Keep the same revisions and source receipts to
@@ -197,32 +195,31 @@ A capped smoke run is not evidence of full-workload performance.
 
 ### Source basis
 
-Both executables are built from the same approved ELMM derivative of upstream
-`ddb426fca5b020216083f02a218292fea70c1df2`: only the TOP/BOTTOM plane-average
-reduction uses fixed-order `MASTER` accumulation followed by its required
-barrier. The approved [patch](patches/elmm-deterministic-top.patch) produces
-pressure SHA256 `65d6ee76dc4b63b4545a1bfd481dbf875cb168f55a484bac7d0a39b78f21f7d0`
-and deterministic local commit `be38bbbec88756ef0f32d67b44dc412a71e0e6e8`.
-PoisFFT is unchanged. This derivative is reconstructed locally; it is not
-advertised as a revision available from the upstream remote.
+Both executables are built from upstream ELMM
+`ddb426fca5b020216083f02a218292fea70c1df2` and the pinned PoisFFT, unchanged.
+ELMM sums the pressure reference of a boundary plane with an OpenMP reduction,
+so its value depends in rounding on the number of threads; the resident
+executable computes the same sum on the device in a fixed order. The fields of
+the two executables are compared with the tolerances described above, not bit for bit.
 `containers/source_basis.json` pins the repository revisions and the hashes of
 the reviewed sources, includes and build files; drift in the sources or in that
 file fails before the build. The `channel-simple` input records its cloud
 repository revision and parser conversions in `cases/channel-simple/origin.json`.
 
-The comparison reconstructs the derivative under `WORK_DIR/resident/application-basis`.
-The same preparation can also run on its own, using pinned upstream checkouts
-as read-only inputs:
+The comparison checks the sources out under `WORK_DIR/resident/application-basis`.
+The same preparation can also run on its own, using upstream checkouts as
+read-only inputs:
 
 ```bash
 .venv/bin/python containers/application_basis.py \
-    --upstream-root "$DEPS_ROOT" --output out/approved-applications
+    --upstream-root "$DEPS_ROOT" --output out/applications
 ```
 
-It creates clean ELMM/PoisFFT Git siblings and records the patch, fixed commit
-metadata and every command in `OUTPUT-preparation.json` beside them. Reusing a
-destination validates its pinned revisions and all tracked inputs; dirty or
-unexpected sources are rejected, never reset.
+It creates clean ELMM/PoisFFT Git siblings at the pinned revisions and records
+every command in `OUTPUT-preparation.json` beside them. Reusing a destination
+validates its pinned revisions and all tracked inputs; dirty or unexpected
+sources are rejected, never reset.
+
 
 ## On the MFF clusters
 

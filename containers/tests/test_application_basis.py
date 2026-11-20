@@ -1,4 +1,4 @@
-"""Check clean deterministic source preparation with real, small Git repositories."""
+"""Check clean source preparation with real, small Git repositories."""
 import hashlib
 import importlib.util
 import json
@@ -15,11 +15,10 @@ spec.loader.exec_module(basis)
 
 
 @pytest.fixture
-def sources(tmp_path, monkeypatch):
+def sources(tmp_path):
     environment = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null",
-                   "GIT_AUTHOR_NAME": basis.BASIS["name"], "GIT_COMMITTER_NAME": basis.BASIS["name"],
-                   "GIT_AUTHOR_EMAIL": basis.BASIS["email"], "GIT_COMMITTER_EMAIL": basis.BASIS["email"],
-                   "GIT_AUTHOR_DATE": basis.BASIS["date"], "GIT_COMMITTER_DATE": basis.BASIS["date"]}
+                   "GIT_AUTHOR_NAME": "basis test", "GIT_COMMITTER_NAME": "basis test",
+                   "GIT_AUTHOR_EMAIL": "basis@example.invalid", "GIT_COMMITTER_EMAIL": "basis@example.invalid"}
 
     def git(root, *args):
         return subprocess.check_output(["git", "-c", "commit.gpgsign=false", "-C", str(root), *args],
@@ -32,44 +31,33 @@ def sources(tmp_path, monkeypatch):
         (root / "src/SConstruct").write_text("# unchanged build\n")
         (root / "README").write_text("tracked provenance input\n")
         if name == "elmm":
-            (root / "src/pressure.f90").write_text("original pressure sum\n")
+            (root / "src/pressure.f90").write_text("pinned pressure sum\n")
         git(root, "init", "-q")
         git(root, "add", ".")
         git(root, "commit", "-qm", "pinned upstream")
     elmm = upstream / "elmm"
-    base = git(elmm, "rev-parse", "HEAD")
-    original = (elmm / "src/pressure.f90").read_bytes()
-    (elmm / "src/pressure.f90").write_text("approved fixed order pressure sum\n")
-    approved = (elmm / "src/pressure.f90").read_bytes()
-    patch = tmp_path / "pressure.patch"
-    patch.write_text(subprocess.check_output(["git", "-C", str(elmm), "diff"], text=True))
-    git(elmm, "add", ".")
-    # Normal git commit independently creates the expected commit identity.
-    git(elmm, "commit", "-qm", basis.BASIS["message"])
-    revision, tree = git(elmm, "rev-parse", "HEAD"), git(elmm, "rev-parse", "HEAD^{tree}")
-    git(elmm, "checkout", "--detach", base)
-    identity = {**basis.BASIS, "base": base, "revision": revision, "tree": tree,
-                "original_pressure_sha256": hashlib.sha256(original).hexdigest(),
-                "pressure_sha256": hashlib.sha256(approved).hexdigest(), "patch_sha256": basis.digest(patch)}
-    monkeypatch.setattr(basis, "BASIS", identity)
-    monkeypatch.setattr(basis, "PATCH", patch)
-    contract = {"schema_version": 2, "source_sha256": {"elmm/src/pressure.f90": identity["pressure_sha256"]},
+    pinned = git(elmm, "rev-parse", "HEAD")
+    # The upstream checkout may have moved on; the basis is the pinned revision.
+    (elmm / "src/pressure.f90").write_text("later pressure sum\n")
+    git(elmm, "commit", "-qam", "later upstream")
+    contract = {"schema_version": 2,
+                "source_sha256": {"elmm/src/pressure.f90": hashlib.sha256(b"pinned pressure sum\n").hexdigest()},
                 "include_sha256": {}, "build_sha256": {
                     name + "/src/SConstruct": basis.digest(upstream / name / "src/SConstruct") for name in ("elmm", "PoisFFT")},
-                "repositories": {"elmm": {"revision": revision},
+                "repositories": {"elmm": {"revision": pinned},
                                  "PoisFFT": {"revision": git(upstream / "PoisFFT", "rev-parse", "HEAD")}}}
     contract_path = tmp_path / "contract.json"
     contract_path.write_text(json.dumps(contract))
     return upstream, tmp_path / "prepared", contract_path, git
 
 
-def test_reconstructs_only_approved_file_and_reuses_clean_basis(sources):
+def test_checks_out_the_pinned_revision_and_reuses_clean_basis(sources):
     upstream, output, contract, git = sources
-    original = (upstream / "elmm/src/pressure.f90").read_bytes()
+    later = (upstream / "elmm/src/pressure.f90").read_bytes()
     assert basis.prepare_application_basis(upstream, output, contract_path=contract) == output
-    assert git(output / "elmm", "rev-parse", "HEAD") == basis.BASIS["revision"]
-    assert git(output / "elmm", "diff", "--name-only", basis.BASIS["base"], "HEAD") == "src/pressure.f90"
-    assert (upstream / "elmm/src/pressure.f90").read_bytes() == original
+    assert git(output / "elmm", "rev-parse", "HEAD") == json.loads(contract.read_text())["repositories"]["elmm"]["revision"]
+    assert (output / "elmm/src/pressure.f90").read_text() == "pinned pressure sum\n"
+    assert (upstream / "elmm/src/pressure.f90").read_bytes() == later
     assert git(upstream / "elmm", "status", "--porcelain") == ""
     receipt = basis.preparation_receipt(output)
     before = receipt.read_bytes()
@@ -102,12 +90,14 @@ def test_existing_unrelated_directory_is_not_reset_or_overwritten(sources):
     assert not basis.preparation_receipt(output).exists()
 
 
-def test_changed_patch_fails_before_creating_output(sources):
+def test_sources_that_differ_from_the_contract_fail_and_leave_evidence(sources):
     upstream, output, contract, _git = sources
-    basis.PATCH.write_text("unexpected patch")
-    with pytest.raises(ValueError, match="source patch changed"):
+    changed = json.loads(contract.read_text())
+    changed["source_sha256"]["elmm/src/pressure.f90"] = "0" * 64
+    contract.write_text(json.dumps(changed))
+    with pytest.raises(ValueError, match="hash mismatch"):
         basis.prepare_application_basis(upstream, output, contract_path=contract)
-    assert not output.exists()
+    assert json.loads(basis.preparation_receipt(output).read_text())["status"] == "failed"
 
 
 def test_changed_include_rejects_contract_before_rebinding(tmp_path):
