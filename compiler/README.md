@@ -505,9 +505,37 @@ Two forms that depend on run-time values are supported in selected procedures.
   element each time. The compiler cannot know that, so the call block checks
   it on the host, once per publication: it walks the nest's loops and marks
   each addressed element. If an element is named twice, the device values are
-  published and the original loop runs. The assumption covers one subscript
-  tuple per array and nest; a second tuple, or a subscript the nest computes
-  itself, is rejected as before.
+  published and the original loop runs. All subscript tuples an array is
+  written through, in all nests of the entry, are marked in one mask, so the
+  nests are also independent of each other and nests over the same iterations
+  become one launch. A tuple that is only read, or a subscript the nest
+  computes itself, is rejected as before.
+
+Branches on run-time configuration keep nests apart: each branch is an entry
+of its own. When the application knows which values the configuration has
+while its fields are on the device, a selection lists them in `assume`, as
+comparisons `<expression> == <integer constant>`:
+
+```python
+Selection("faces", ("boundaries::apply",), assume=("kind(west) == PERIODIC", "kind(east) == PERIODIC"))
+```
+
+Each procedure of the selection then gets a second version of its body with
+the branches these conditions decide folded away. The procedure tests the
+conditions once at entry and runs that version while they hold and its
+original body otherwise, so nothing is assumed that is not checked. The nests
+that end up next to each other share an entry, and those that write different
+sections of one array, such as the ghost layers of opposite faces, share a
+launch. A procedure that assigns to a variable the conditions name, or passes
+one to a call, is refused.
+
+While an epoch lasts the host mostly runs serial code between kernels, and a
+parallel region it still enters wakes the whole OpenMP team. With
+`FORT_RESIDENT_HOST_THREADS=<n>` in the environment the domain narrows the
+team to `n` threads when an epoch begins and restores the application's count
+when it ends. The count the application starts with is left alone, because it
+can decide results (a parallel random initialization does). An epoch during
+which the host still does its parallel work is begun with `keep_team=.true.`.
 
 `prepare` also audits the selected procedures. A statement there that stays
 host code and names an array some entry binds may read values that are newer

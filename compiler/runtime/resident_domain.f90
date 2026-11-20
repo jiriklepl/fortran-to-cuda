@@ -128,10 +128,13 @@ contains
     endif
   end subroutine
 
-  subroutine begin_epoch(self, device, budget)
+  ! keep_team is for an epoch during which the host still does its parallel
+  ! work: such an epoch leaves the OpenMP team as it is (see narrow_team).
+  subroutine begin_epoch(self, device, budget, keep_team)
     class(resident_domain), intent(inout) :: self
     integer(c_int), intent(in) :: device
     integer(c_size_t), intent(in) :: budget
+    logical, optional, intent(in) :: keep_team
     if (self%active) error stop 'nested storage epoch'
     if (self%domain == 0) then
       call resident_require(fort_scope_domain_create_v1(device,self%domain))
@@ -142,6 +145,9 @@ contains
     if (self%generation == huge(self%generation)) error stop 'storage generation overflow'
     self%generation = self%generation + 1
     self%active = .true.
+    if (present(keep_team)) then
+      if (keep_team) return
+    endif
     call narrow_team(self)
   end subroutine
 

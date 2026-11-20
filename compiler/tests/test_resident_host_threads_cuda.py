@@ -36,6 +36,9 @@ program test
     call owner%end_epoch()
     print '(a,i0)', 'outside ', omp_get_max_threads()
   enddo
+  ! An epoch during which the host still does its parallel work keeps the team.
+  call owner%begin_epoch(0_c_int,1048576_c_size_t,keep_team=.true.)
+  print '(a,i0)', 'kept ', omp_get_max_threads()
   call owner%close()
 end program
 '''
@@ -79,10 +82,10 @@ def test_the_team_is_narrowed_only_while_the_epoch_lasts(tmp_path):
     if result.returncode == 77:
         pytest.skip("CUDA device unavailable")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.split() == ["inside", "2", "outside", "4"] * 2
+    assert result.stdout.split() == [*["inside", "2", "outside", "4"] * 2, "kept", "4"]
     # Without the variable, or with a count that would widen the team, nothing changes.
-    assert teams(None).stdout.split() == ["inside", "4", "outside", "4"] * 2
-    assert teams("9").stdout.split() == ["inside", "4", "outside", "4"] * 2
+    assert teams(None).stdout.split() == [*["inside", "4", "outside", "4"] * 2, "kept", "4"]
+    assert teams("9").stdout.split() == [*["inside", "4", "outside", "4"] * 2, "kept", "4"]
     refused = teams("none")
     assert refused.returncode != 0
     assert "FORT_RESIDENT_HOST_THREADS must be a positive integer" in refused.stderr

@@ -345,18 +345,17 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             # Both members run, so each of their loops has an iteration.
             running = [(loop.lower, loop.upper) for region in (first, second) for loop in region.loops
                        if loop.step == 1]
-            others = {footprint.symbol: footprint for footprint in units[second.id].footprints}
             for mine in units[first.id].footprints:
-                if mine.symbol not in shared:
-                    continue
-                theirs = others[mine.symbol]
-                if (mine.full_read or mine.full_write or theirs.full_read or theirs.full_write
-                        or not mine.exact or not theirs.exact):
-                    return False
-                pairs = [(written, other) for written in mine.writes for other in (*theirs.reads, *theirs.writes)]
-                pairs += [(read, written) for read in mine.reads for written in theirs.writes]
-                if any(must_overlap(one, other, running) for one, other in pairs):
-                    return False
+                for theirs in units[second.id].footprints:
+                    if mine.symbol is not theirs.symbol or mine.symbol not in shared:
+                        continue
+                    if (mine.full_read or mine.full_write or theirs.full_read or theirs.full_write
+                            or not mine.exact or not theirs.exact):
+                        return False
+                    pairs = [(written, other) for written in mine.writes for other in (*theirs.reads, *theirs.writes)]
+                    pairs += [(read, written) for read in mine.reads for written in theirs.writes]
+                    if any(must_overlap(one, other, running) for one, other in pairs):
+                        return False
             return True
 
         def close():
