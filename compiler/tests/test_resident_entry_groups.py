@@ -85,3 +85,28 @@ def test_direct_extraction_cannot_skip_effect_or_branch_boundaries(tmp_path, bod
     loops = tuple(item for item in walk(routine.execution) if _kind(item) == "Block_Nonlabel_Do_Construct")
     with pytest.raises(CompilationError, match="consecutive original sibling loops"):
         extract_region(analysis, routine, loops)
+
+
+def test_an_assumed_size_array_stays_on_the_host(tmp_path):
+    # The device copy of an array is as large as the array; a(*) does not say how large it is.
+    source = tmp_path / "input.f90"
+    source.write_text("""module sized
+contains
+subroutine step(a, b, n)
+integer, intent(in) :: n
+real(8), intent(inout) :: a(*)
+real(8), intent(in) :: b(n)
+integer :: i
+do i = 1, n
+a(i) = 2*b(i)
+enddo
+do i = 1, n
+if (b(i) > 0) print *, i
+enddo
+end subroutine
+end module
+""")
+    result = export_resident_entries([source], ["sized::step"], tmp_path / "entries")
+    assert not result["entries"]
+    assert result["rejected"][0]["reason"] == "an assumed-size array has no extent to keep on the device: a"
+

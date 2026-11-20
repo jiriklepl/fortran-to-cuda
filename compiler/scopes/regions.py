@@ -872,6 +872,10 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             if boundary:
                 raise CompilationError(boundary)
             used[binding.root] = binding
+    for binding in used.values():
+        # The device copy of an array is as large as the array, and this one does not say how large it is.
+        if any(_kind(axis) == "Assumed_Size_Spec" for axis in binding.shape_nodes):
+            raise CompilationError("an assumed-size array has no extent to keep on the device: " + binding.name)
     writes, scalar_writes, iterators, local_arrays, assigned_scalars = set(), set(), set(), set(), set()
     def write(binding, target):
         if binding is None:
