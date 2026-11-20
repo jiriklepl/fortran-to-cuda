@@ -10,8 +10,6 @@ from compiler.offload.config import OffloadConfig
 def test_retired_public_policy_objects_are_rejected(policy):
     with pytest.raises(CompilationError, match='removed'):
         CompilerOptions(gpu_policy=policy)
-    with pytest.raises(ValueError, match='removed'):
-        OffloadConfig(policy=policy)
 
 
 def test_retired_public_ownership_is_rejected():

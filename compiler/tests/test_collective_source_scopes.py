@@ -70,6 +70,6 @@ def test_collective_entry_preparation_uses_effect_records_without_native_call_ma
     path.write_text(source)
     function, plan = prepare_function(lower_file(path, "operators::produce"),
                                       options=CompilerOptions(gpu_policy="sections"))
-    emitted = generate_scoped(function, plan, OffloadConfig("sections", None, 4, True), "common_functions.cuh")
+    emitted = generate_scoped(function, plan, OffloadConfig(4, True), "common_functions.cuh")
     assert ".record(FORT_SCOPE_PLAN_NATIVE," in emitted.cuda
     assert "fort_scope_plan_team_native_call_v1(" not in emitted.cuda

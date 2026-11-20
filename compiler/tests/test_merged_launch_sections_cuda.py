@@ -85,7 +85,7 @@ def test_the_runtime_decides_whether_sections_of_one_array_share_a_launch(tmp_pa
     source = tmp_path / "original.f90"
     source.write_text(SOURCE)
     function, plan = prepare_function(lower_file(source, "entry"), options=CompilerOptions(gpu_policy="sections"))
-    generated = generate_scoped(function, plan, OffloadConfig(policy="sections"), "common_functions.cuh")
+    generated = generate_scoped(function, plan, OffloadConfig(), "common_functions.cuh")
     assert [group["regions"] for group in generated.report["graph_execution"]["groups"]
             if len(group["regions"]) > 1] == [[0, 1]]
     artifacts, _manifest = read_scoped_runtime()

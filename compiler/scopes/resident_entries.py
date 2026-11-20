@@ -568,7 +568,7 @@ def compile_resident_entry(source, entry, directory, *, host_threads=4, collecti
     from compiler.offload.config import OffloadConfig
 
     try:
-        config = OffloadConfig("sections", None, host_threads, collective, None, "direct")
+        config = OffloadConfig(host_threads, collective, "direct")
     except ValueError as error:
         raise CompilationError(str(error)) from error
     options = CompilerOptions(opt_level=1, fallback="error", gpu_policy="sections", scope_transfers="direct",

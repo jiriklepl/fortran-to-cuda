@@ -145,7 +145,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _offload_config(args):
     try:
-        return OffloadConfig("sections", None, args.host_threads, False, None, "direct")
+        return OffloadConfig(args.host_threads, False, "direct")
     except ValueError as error:
         raise CompilationError(str(error)) from error
 

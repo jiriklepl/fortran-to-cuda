@@ -35,9 +35,7 @@ def generate_sources(
     from compiler.emission.cuda.scoped import generate_scoped
     from compiler.offload.config import OffloadConfig
 
-    config = offload_config or OffloadConfig(policy="sections")
-    if config.policy not in {"sections", "auto"}:
-        raise CompilationError("ordinary GPU policies were removed; use sections or auto with shared graph execution")
+    config = offload_config or OffloadConfig()
     if any(character in common_header for character in ('"', "\n", "\r")):
         raise CompilationError("Common header filename cannot contain quotes or newlines")
     artifacts, runtime = read_scoped_runtime()

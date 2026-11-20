@@ -1,7 +1,6 @@
 """Numerical entries borrowing common buffers through the versioned public ABI."""
 
 import json
-from contextlib import suppress
 from dataclasses import dataclass, replace
 from hashlib import sha256
 
@@ -38,17 +37,8 @@ from compiler.offload.analysis import (
     _protected_scalar_inputs,
     _unit_footprints,
 )
-from compiler.offload.codegen import profile_expression, query_expression
+from compiler.offload.codegen import query_expression
 from compiler.offload.preparation import prepare_offload
-from compiler.offload.profile import (
-    ProfileError,
-    compiler_identity,
-    scoped_collective_costs,
-    scoped_costs,
-    scoped_physical_copy_costs,
-    scoped_transfer_costs,
-    validate_profile,
-)
 
 
 @dataclass(frozen=True)
@@ -157,13 +147,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                   for e in (*box.lower, *box.upper))
         for r in plan.regions
     }
-    hardware_heuristic = (config.policy == "auto"
-                          and config.profile is not None)
-    graph_cost_provenance = {}
-    if hardware_heuristic:
-        from compiler.offload.graph_costs import apply_graph_hardware_costs
-        units, graph_cost_provenance = apply_graph_hardware_costs(units)
-    elif config.original_native:
+    if config.original_native:
         # The static counts describe the generated worker. Only the hardware
         # ranking prices a unit whose native alternative is original Fortran.
         units = {identity: replace(unit, work_per_iteration=None,
@@ -172,126 +156,38 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     query_available = prep.analysis.available
     query_reason = prep.analysis.reason
     planning_reason = query_reason
-    if not hardware_heuristic and prep.analysis.available and any(u.work_per_iteration is None or u.work_is_upper_bound for u in units.values()):
+    if prep.analysis.available and any(u.work_per_iteration is None or u.work_is_upper_bound for u in units.values()):
         planning_reason = "; ".join(dict.fromkeys(u.work_estimate_reason or "work estimate is unknown or conditional"
             for u in units.values() if u.work_per_iteration is None or u.work_is_upper_bound))
-    if function.requires_numerical_environment and not hardware_heuristic:
+    if function.requires_numerical_environment:
         # Static counts do not include the flagged entry guards or their
         # collective barriers.
         planning_reason = "numerical environment guards have no static estimate"
     planning_available = prep.analysis.available and planning_reason is None
-    profile_reason = config.profile_reason
-    costs = None
-    transfer_costs = None
-    physical_copy_costs = None
-    transfer_profile_reason = "hardware profile is missing"
-    team_costs = None
-    if config.profile is None:
-        profile_reason = profile_reason or "hardware profile is missing"
-    elif runtime_id is None:
-        profile_reason = "shared runtime calibration identity is unavailable"
-    else:
-        try:
-            validate_profile(config.profile, precision_bits=_precision(function), cpu_threads=config.host_threads,
-                             scoped_runtime_id=runtime_id)
-            compiler_identity(config.profile)
-            costs = scoped_costs(config.profile, runtime_id)
-            if config.scope_transfers == "auto":
-                # Missing complete-path observations retain direct copies.
-                with suppress(ProfileError):
-                    physical_copy_costs = scoped_physical_copy_costs(config.profile, runtime_id)
-            try:
-                transfer_costs = scoped_transfer_costs(config.profile, runtime_id)
-                transfer_profile_reason = None
-            except ProfileError as error:
-                transfer_profile_reason = str(error)
-        except ProfileError as error:
-            profile_reason = str(error)
-            transfer_profile_reason = str(error)
-    # Complete physical-copy measurements use the validated serial runtime
-    # costs. Missing collective computation costs must not disable that
-    # independent transport model on a collective owning context.
-    copy_base_costs = costs
+    # No hardware calibration is supplied to an entry: the cost selector gets no
+    # rates, and the manifest names the reason.
+    profile_reason = "hardware profile is missing"
     if config.collective:
-        try:
-            if costs is None:
-                reason = "collective synchronization calibration is unavailable"
-                if profile_reason:
-                    reason += ": " + profile_reason
-                raise ProfileError(reason)
-            team_costs = scoped_collective_costs(config.profile, runtime_id, cpu_threads=config.host_threads)
-        except ProfileError as error:
-            if not hardware_heuristic:
-                costs = None
-                profile_reason = str(error)
-        if function.requires_numerical_environment:
-            team_costs = None
+        profile_reason = "collective synchronization calibration is unavailable: " + profile_reason
     team_configure_name = c_name + "_configure_team_v1"
     if config.collective:
         lines.insert(5, '#include "scoped_team_observer.hpp"')
-        lines += [f"static int {team_configure_name}(fort_scope_t fort_context) {{"]
-        if team_costs is None:
-            lines += ["    return fort_scope_set_team_costs_v1(fort_context, nullptr, 0);"]
-        else:
-            lines += ["    fort_scope_team_costs team{}; team.version=FORT_SCOPE_TEAM_ABI_VERSION; team.valid=1;",
-                      f"    team.cpu_threads={config.host_threads}; team.expected_omp_level=1;",
-                      "    team.protocol_id=FORT_SCOPE_TEAM_PROTOCOL_ID;"]
-            lines += [f"    team.{field}={float(value)!r};" for field,value in team_costs.items()
-                      if field not in {"cpu_flops", "cpu_bandwidth"}]
-            lines += ["    static const auto profile=" + profile_expression(config.profile) + ";",
-                      "    return fort_scope_set_team_costs_v1(fort_context, &team, scoped_host_compatible(profile));"]
-        lines += ["}"]
-    if config.scope_transfers == "pinned" and transfer_costs is None:
+        lines += [f"static int {team_configure_name}(fort_scope_t fort_context) {{",
+                  "    return fort_scope_set_team_costs_v1(fort_context, nullptr, 0);", "}"]
+    if config.scope_transfers == "pinned":
         # Pinned bandwidth alone omits staging preparation, packing and changed
         # copy geometry. Planning v1 has no complete calibrated model for it.
-        costs = None
         profile_reason = "transfer_estimates_unavailable"
-    if copy_base_costs is None:
-        physical_copy_costs = None
-    copy_setup = []
-    if physical_copy_costs is not None:
-        transfer_reason = None
-        from compiler.emission.cuda.batch import base_cost_lines, physical_copy_cost_lines
-        copy_configure_name = c_name + "_configure_copy_v2"
-        lines += [f"static int {copy_configure_name}(fort_scope_t fort_context) {{",
-                  *indent(base_cost_lines(config.profile, copy_base_costs)),
-                  *indent(physical_copy_cost_lines(physical_copy_costs)),
-                  "    const auto profile = " + profile_expression(config.profile) + ";",
-                  "    return fort_scope_set_copy_costs_v3(fort_context, &copy_costs, &costs, scoped_host_compatible(profile));", "}"]
-        copy_setup = [f"    FORT_SHARED_CHECK({copy_configure_name}(fort_context));"]
-    if transfer_costs is None or config.scope_transfers in {"direct", "coalesced"}:
-        if copy_setup:
-            transfer_setup = [f"    FORT_SHARED_CHECK(fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]}));",
-                              *copy_setup,
-                              f"    return {team_configure_name}(fort_context);" if config.collective else "    return FORT_SCOPE_OK;"]
-        else:
-            transfer_setup = ([f"    FORT_SHARED_CHECK(fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]}));",
-                               f"    return {team_configure_name}(fort_context);"] if config.collective else
-                              [f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});"])
-        lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
-                  *(["    FORT_SHARED_CHECK(fort_scope_task_graph_enable_v1(fort_context));"]),
-                  *transfer_setup, "}"]
-    else:
-        from compiler.emission.cuda.batch import transfer_cost_lines
-        lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
-                  *(["    FORT_SHARED_CHECK(fort_scope_task_graph_enable_v1(fort_context));"]),
-                  f"    if (const int status = fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]})) return status;",
-                  *indent(transfer_cost_lines(config.profile, transfer_costs)),
-                  *copy_setup,
-                  "    const auto profile = " + profile_expression(config.profile) + ";",
-                  *((["    FORT_SHARED_CHECK(fort_scope_set_transfer_costs_v1(fort_context, &transfer_costs, scoped_host_compatible(profile)));",
-                       f"    return {team_configure_name}(fort_context);"]) if config.collective else
-                    ["    return fort_scope_set_transfer_costs_v1(fort_context, &transfer_costs, scoped_host_compatible(profile));"]), "}"]
+    transfer_setup = ([f"    FORT_SHARED_CHECK(fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]}));",
+                       f"    return {team_configure_name}(fort_context);"] if config.collective else
+                      [f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});"])
+    lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
+              *(["    FORT_SHARED_CHECK(fort_scope_task_graph_enable_v1(fort_context));"]),
+              *transfer_setup, "}"]
     unit_ids = {r.id: int(sha256(f"{name}:region:{r.id}".encode()).hexdigest()[:16], 16) for r in plan.regions}
-    # Queued tasks share the graph/domain. The old slab prototype has its
-    # own four-unit interval enumeration and cannot price production groups.
-    batch_analysis = OffloadAnalysis(False, "legacy slab batching is retired; use the shared task graph")
-    batch_candidates = ()
+    # Queued tasks share the graph/domain; the old slab batching is retired
+    # and no entry is eligible for it.
     batch_requested = config.scope_transfers in {"pipelined", "auto"}
-    batch_eligible = batch_requested and not config.collective and not root_views and any(slab for _, slab, _ in batch_candidates)
-    batch_enabled = batch_eligible and costs is not None and transfer_costs is not None
-    batch_name = c_name + "_batch_v1"
-    window_name = c_name + "_window_v1"
     captures = {}
     locals_ = host_symbols(function, plan)
     for region in plan.regions:
@@ -382,14 +278,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         close()
         return groups
 
-    merged_launches = [] if config.collective or root_views or batch_enabled else launch_groups(plan)
+    merged_launches = [] if config.collective or root_views else launch_groups(plan)
     for group in merged_launches:
         lines.extend(generate_group_kernel(group, array_views=root_views))
-    if batch_eligible:
-        from compiler.emission.cuda.batch import numerical_batch_helpers
-        lines[0:0] = ["#include <memory>", "#include <vector>"]
-        lines += numerical_batch_helpers(function, plan, batch_candidates, batch_analysis.units, c_name, unit_ids,
-                                          config.profile, costs, transfer_costs, config.host_threads, _precision(function))
     lines += [f'extern "C" int {c_name}({", ".join(signature)}) {{',
               f'    fort_scoped::TracePosition fort_entry_trace(fort_context, "{procedure_id}", "");',
               *(["    bool fort_entry_work_started=false;",
@@ -460,16 +351,11 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         setup += alias_setup
     lines += setup
     lines += [f"    {cpp_type(s)} {s.cpp_name};" for s in host_symbols(function, plan)]
-    if batch_enabled:
-        from compiler.emission.cuda.batch import worker_arguments as batch_worker_arguments
-        batch_arguments = batch_worker_arguments(function)
-        lines += ["    std::size_t fort_batch_skip=0;",
-                  f"    FORT_SHARED_CHECK({batch_name}(fort_context,fort_mode,0,&fort_batch_skip,{','.join(batch_arguments)}));"]
     for s in arrays:
         if s.intent == "out":
             forget = (f"fort_scoped::forget_view(fort_context, {s.cpp_name}_view, false)" if root_views else
                       f"fort_scope_forget_definition(fort_context, {s.cpp_name}_handle)")
-            lines += [f"    {'if (!fort_batch_skip) ' if batch_enabled else ''}FORT_SHARED_CHECK({forget});"]
+            lines += [f"    FORT_SHARED_CHECK({forget});"]
     lines += ["    const bool fort_gpu_requested = fort_mode == 1;"]
 
     def prefetch(symbols, *, planning=False, query_helper=False):
@@ -640,12 +526,6 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 unit = units[step.id]
                 if step.id in group_first:
                     group_start = len(result)
-                if batch_enabled:
-                    position = next(index for index, region in enumerate(plan.regions) if region.id == step.id)
-                    result += [f"if ({position}ULL >= fort_batch_skip) {{"]
-                    if position:
-                        result += [f"    FORT_SHARED_CHECK({batch_name}(fort_context,fort_mode,{position}ULL,&fort_batch_skip,{','.join(batch_arguments)}));"]
-                    result += [f"if ({position}ULL >= fort_batch_skip) {{"]
                 result += ["{", *indent(bounds(step)), "    if (fort_internal_total) {"]
                 # A CUDA launch captures scalar values before its kernel body.
                 # References preserve CPU guards, but cannot make that capture
@@ -690,8 +570,6 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 if enqueue:
                     body += ["}"]
                 result += [*indent(body, 2), "    }", "}"]
-                if batch_enabled:
-                    result += ["}", "}"]
                 if step.id in group_last:
                     # The members' own code, emitted just above, is the fallback.
                     result[group_start:] = merged_launch(group_last[step.id], result[group_start:])
@@ -918,8 +796,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             query_arguments[unit.region.id] = ("fort_context, fort_query_status, "
                                                + "".join(array_argument(s) + ", " for s in arrays)) + worker_arguments + "".join(
                 f", {s.cpp_name}" for s in query_captures[unit.region.id])
-            known_work = (unit.work_per_iteration is not None and (hardware_heuristic or
-                          (not unit.work_is_upper_bound and not function.requires_numerical_environment)))
+            known_work = (unit.work_per_iteration is not None and not unit.work_is_upper_bound
+                          and not function.requires_numerical_environment)
             # Exact descriptors below repeat every footprint bound check. Keep
             # the existing metadata path for full/uncertain/protected effects,
             # whose conservative boxes can have additional empty-shape guards.
@@ -1003,9 +881,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                "    if (d.valid && branch) {", *indent(project(step.then_plan, native_capture=native_capture), 2),
                                "    } else if (d.valid) {", *indent(project(step.else_plan, native_capture=native_capture), 2), "    }", "}"]
                 elif isinstance(step, ParallelRegion):
-                    known_work = (units[step.id].work_per_iteration is not None and (hardware_heuristic or
-                                  (not units[step.id].work_is_upper_bound
-                                   and not function.requires_numerical_environment)))
+                    known_work = (units[step.id].work_per_iteration is not None
+                                  and not units[step.id].work_is_upper_bound
+                                  and not function.requires_numerical_environment)
                     flops = "unit.units[0].flops" if known_work else "0.0"
                     memory_bytes = "unit.units[0].memory_bytes" if known_work else "0.0"
                     record = [f"        FORT_SHARED_CHECK(fort_access.record(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, {flops}, {memory_bytes}, {'true' if known_work and not protected[step.id] else 'false'}, unit.units[0].cpu_numerical_seconds, unit.units[0].gpu_numerical_seconds));"]
@@ -1054,22 +932,15 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             lines += [f"    return fort_scope_report_error(FORT_SCOPE_BOUNDARY, {json.dumps(query_reason)});"]
         lines += ["}"]
     cost_lines = ["fort_scope_plan_costs costs{}; costs.version = FORT_SCOPE_PLANNING_ABI_VERSION;"]
-    if costs is not None:
-        from compiler.emission.cuda.batch import base_cost_fields
-        fields = base_cost_fields(config.profile, costs)
-        if team_costs is not None:
-            fields.update(cpu_flops=team_costs["cpu_flops"], cpu_bandwidth=team_costs["cpu_bandwidth"])
-        cost_lines += [f"costs.valid = {int(planning_available)};", f"costs.max_allocation_bytes = {config.profile['scoped']['max_allocation_bytes']}ULL;"]
-        cost_lines += [f"costs.{field} = {float(value)!r};" for field, value in fields.items()]
     choose_team_guard = (["    int fort_team_ready=0;",
                          "    FORT_SHARED_CHECK(fort_scope_team_costs_ready_v1(fort_context, &fort_team_ready));",
-                         "    if (!fort_team_ready) costs.valid=0;"] if config.collective and not hardware_heuristic else [])
+                         "    if (!fort_team_ready) costs.valid=0;"] if config.collective else [])
     lines += [f'extern "C" int {choose_name}(fort_scope_t fort_context, fort_scope_plan_decision *decision) {{']
     if function.requires_numerical_environment:
         lines += ["    if (!fort_runtime::numerical_environment_supported())",
                   '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported selection numerical environment for real short reduction");']
     lines += ['    if (!decision) return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "null planning decision");',
-              *indent(cost_lines), *choose_team_guard, f"    static const auto profile = {profile_expression(config.profile if costs is not None else None)};",
+              *indent(cost_lines), *choose_team_guard, "    static const auto profile = offload::Profile{};",
               "    int fort_scope_device = -1, fort_current_device = -1;",
               "    FORT_SHARED_CHECK(fort_scope_device_get(fort_context, &fort_scope_device));",
               "    fort_scope_plan_decision preview{};",
@@ -1126,8 +997,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     report = {
         "schema_version": 1, "abi_version": 1, "entry_abi_version": ENTRY_ABI_VERSION,
         "numerical_contract": numerical_build_contract(),
-        "graph_auto_costs": {"heuristic": hardware_heuristic, "units": graph_cost_provenance,
-            "unpriced_team_overhead": bool(hardware_heuristic and config.collective and team_costs is None),
+        "graph_auto_costs": {"heuristic": False, "units": {},
+            "unpriced_team_overhead": False,
             "cost_authorizes_execution": False, "cold_costs_reported": True},
         "entry": c_name, "fortran_module": name, "fortran_procedure": "run",
         "cuda_source": "shared_entry.cu", "fortran_source": "shared_interface.f90",
@@ -1147,7 +1018,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             "generated_cpu_fallback": "does not replace the original source for unsupported environments",
         },
         "transfer_configuration": {"abi_version": 1, "requested": config.scope_transfers,
-                                   "selected": ("runtime" if config.scope_transfers == "coalesced" or physical_copy_costs is not None else
+                                   "selected": ("runtime" if config.scope_transfers == "coalesced" else
                                                 "pinned" if config.scope_transfers == "pinned" else "direct"),
                                    "reason": transfer_reason, "available_modes": ["direct", "pinned", "coalesced"],
                                    "entry": configure_name, "fortran_procedure": "configure",
@@ -1158,7 +1029,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                    "resource_fallback": "direct before this copy is enqueued; numerical work is never replayed",
                                    "runtime_stats": "fort_scope_transfer_stats_get_v1",
                                    "physical_copy_calibration": {
-                                       "abi_version": 3, "available": physical_copy_costs is not None,
+                                       "abi_version": 3, "available": False,
                                        "selection": "AUTO selects supported complete Compact predictions below half the direct prediction",
                                        "missing_evidence": "direct physical copies",
                                    },
@@ -1176,22 +1047,18 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                        "fallback_reason": "coalesced_upload_ineligible",
                                        "trace_events": {"upload_coalesced": "actual physical span bytes",
                                                         "upload_requested": "required section bytes"}},
-                                   "placement_estimate_available": bool(planning_available and costs is not None),
+                                   "placement_estimate_available": False,
                                    "placement_estimate_reason": planning_reason or profile_reason},
         "batch_execution": {"abi_version": 1, "runtime_api": "fort_scope_batch_execute_v1",
                             "runtime_report": "fort_scope_batch_report_get_v1",
-                            "eligible": batch_eligible, "enabled": batch_enabled,
+                            "eligible": False, "enabled": False,
                             "reason": ("collective batch coordination is unavailable" if config.collective else
-                                       batch_analysis.reason if not batch_analysis.available else
-                                       transfer_profile_reason if transfer_costs is None else None),
-                            "entry": batch_name if batch_eligible else None,
-                            "window_entry": window_name if batch_eligible else None,
+                                       "legacy slab batching is retired; use the shared task graph"),
+                            "entry": None,
+                            "window_entry": None,
                             "window_argument_order": ["window", "first_unit", "stop_unit", "axis", "launches",
                                                       *[s.name for s in arrays], *[s.name for s in scalars]],
-                            "candidates": [{"first_unit": interval.start, "stop_unit": interval.stop,
-                                            "eligible": slab is not None, "reason": reason,
-                                            "slab": slab.to_dict() if slab else None}
-                                           for interval, slab, reason in batch_candidates],
+                            "candidates": [],
                             "limits": {"adjacent_units": None,
                                        "complete_legal_group": True},
                             "coordinates": "original logical coordinates and full-array pitches",
@@ -1203,7 +1070,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                            "batches", "actual_upload_bytes", "actual_download_bytes", "actual_launches",
                                            "preparation_operations", "execution_seconds", "terminal_delta_seconds"]},
         "runtime_provenance": provenance.public(),
-        "automatic_estimate_available": bool(planning_available and costs is not None),
+        "automatic_estimate_available": False,
         "automatic_reason": planning_reason or profile_reason,
         "native_backend": "original Fortran" if config.original_native else "generated C++ worker",
         "automatic_scope_available": planning_available, "host_threads": config.host_threads,
@@ -1228,7 +1095,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                 "cost_footprints_prepared": query_cost_footprints.get(r.id, False),
                                 "work_estimate_reason": units[r.id].work_estimate_reason}
                                for r in plan.regions],
-                     "profile_available": costs is not None, "profile_reason": profile_reason,
+                     "profile_available": False, "profile_reason": profile_reason,
                      "runtime_id": runtime_id},
         "definition_changes": [s.name for s in arrays if s.intent == "out"],
         "resource_failure": "continue native at current worker before execution; never replay completed work",
@@ -1240,9 +1107,6 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                               "reason": "CUDA value capture would evaluate a protected scalar" if protected[r.id] else None}
                              for r in plan.regions],
     }
-    if batch_enabled:
-        report["transfer_configuration"].update(selected="runtime", reason=None,
-            available_modes=["direct", "pinned", "pipelined"], execution="synchronous return with two-stream batch overlap")
     report["graph_execution"] = {"abi_version": 1, "runtime_api": "fort_scope_graph_enqueue_v1",
         "groups": list(graph_launch_groups.values()),
         "selection": "forced GPU and calibrated automatic GPU decisions enqueue; native decisions acquire host effects",
@@ -1274,13 +1138,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             "locals": "shared coordinator preparation; borrowed scalar references",
             "status": "uniform after matching barriers; no replay after execution starts",
             "planning": "plan and choose are coordinator-only",
-            "automatic_estimate_available": bool(planning_available and costs is not None and
-                                                  (hardware_heuristic or team_costs is not None)),
-            "automatic_reason": planning_reason or (profile_reason if costs is None or
-                                                    (team_costs is None and not hardware_heuristic) else None),
+            "automatic_estimate_available": False,
+            "automatic_reason": planning_reason or profile_reason,
             "calibration_protocol_id": "0x4654434f4c4c0001",
-            "calibration": ("hardware roofline heuristic; transformed team overhead is unpriced" if
-                            hardware_heuristic and team_costs is None else
-                            "offline original persistent team and emitted coordination; serial rates are not substituted"),
+            "calibration": "offline original persistent team and emitted coordination; serial rates are not substituted",
         }
     return ScopedEmission(numerical_source_prologue() + "\n".join(lines), "\n".join(fortran), report)

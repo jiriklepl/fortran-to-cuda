@@ -24,7 +24,7 @@ end module
 """
     function, plan = prepare_function(lower_source(source, "update", source_name="faces.f90"),
                                       options=CompilerOptions())
-    return plan, generate_scoped(function, plan, OffloadConfig("sections"), "common_functions.cuh")
+    return plan, generate_scoped(function, plan, OffloadConfig(), "common_functions.cuh")
 
 
 def loop(target, value, upper):

@@ -904,9 +904,13 @@ with its options: `--form-scopes`, `--scope-preflight`, `--scope-facts`,
 `--numerical-sources`, `--analysis-sources`, `--source-file`,
 `--effect-contracts`, `--summary-cache`, `--analyze-effects`, `--gpu-policy`,
 `--calibration-profile`, `--scope-transfers` and `--gpu-collective`. An entry is
-now always compiled for forced device placement with direct transfers. The
-runtime still contains planning, pricing and team-coordination entry points
-that the removed generator called; generated code no longer uses them.
+now always compiled for forced device placement with direct transfers, and
+the emitter has no cost model: the calibration-profile, automatic-policy and
+slab-batching branches went with the modules they used. What remains of that
+design is in the runtime and in the shape of a generated entry, which still
+registers its regions with the runtime's placement planner and asks it for a
+decision that can only be "device". Removing those calls, and then the
+planning, pricing and source-task entry points of the runtime, is open work.
 
 ## Development and validation
 
