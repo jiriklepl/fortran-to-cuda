@@ -42,6 +42,26 @@ NATURAL_CHANNEL_FIELDS = {"fields-" + name + ".bin" for name in
 NATURAL_CHANNEL_OUTPUTS = {"out.vtk", "avg.vtk", "U.vtk", "V.vtk", "W.vtk", "Uavg.vtk", "Vavg.vtk",
                            "Wavg.vtk", "Retau.unf", "times.unf", "frame-y-times.txt", "frame-z-times.txt"} | {
                                f"frame-{axis}-{index}.vtk" for axis in ("y", "z") for index in range(51)}
+PHASE_KEYS = (
+    ("initialization", "initialization_seconds"),
+    ("loop", "loop_seconds"),
+    ("finalization", "finalization_seconds"),
+)
+
+
+def summarize_phases(rows):
+    timings = [row.get("application_timing") or {} for row in rows]
+    present = [any(timing.get(key) is not None for _phase, key in PHASE_KEYS) for timing in timings]
+    if not any(present):
+        return None
+    phases = {}
+    for phase, key in PHASE_KEYS:
+        values = [timing.get(key) for timing in timings]
+        if any(value is None or not math.isfinite(value) or value < 0 for value in values):
+            raise ValueError(f"incomplete or invalid application phase timing: {key}")
+        samples = [float(value) for value in values]
+        phases[phase] = {"samples_seconds": samples, "median_seconds": statistics.median(samples)}
+    return phases
 
 
 def write(path, value):
@@ -536,13 +556,35 @@ def run(args):
                     else compare_vtks(reference_vtk, vtk, precision=precision)
                 )
                 write(report_path, report)
-                print(mode, "round", round_number, "seconds", round(row["wall_seconds"], 3), flush=True)
+                timing = row.get("application_timing") or {}
+                if all(timing.get(key) is not None for _phase, key in PHASE_KEYS):
+                    print(
+                        mode, "round", round_number, "seconds", round(row["wall_seconds"], 3),
+                        f"(init={timing['initialization_seconds']:.3f}s",
+                        f"loop={timing['loop_seconds']:.3f}s",
+                        f"fin={timing['finalization_seconds']:.3f}s)",
+                        flush=True,
+                    )
+                else:
+                    print(mode, "round", round_number, "seconds", round(row["wall_seconds"], 3), flush=True)
         verify_binaries()
         summary = {}
         for mode in ("native", "resident"):
-            samples = [row["wall_seconds"] for row in report["runs"] if row["mode"] == mode and not row["warmup"]]
-            summary[mode] = {"samples_seconds": samples, "median_seconds": statistics.median(samples)}
+            mode_rows = [row for row in report["runs"] if row["mode"] == mode and not row["warmup"]]
+            samples = [row["wall_seconds"] for row in mode_rows]
+            entry = {"samples_seconds": samples, "median_seconds": statistics.median(samples)}
+            phases = summarize_phases(mode_rows)
+            if phases is not None:
+                entry["phases"] = phases
+            summary[mode] = entry
+        if ("phases" in summary["native"]) != ("phases" in summary["resident"]):
+            raise ValueError("both modes must report phase timings together")
         summary["speedup"] = summary["native"]["median_seconds"] / summary["resident"]["median_seconds"]
+        if "phases" in summary["native"] and summary["resident"]["phases"]["loop"]["median_seconds"] > 0:
+            summary["loop_speedup"] = (
+                summary["native"]["phases"]["loop"]["median_seconds"]
+                / summary["resident"]["phases"]["loop"]["median_seconds"]
+            )
         report.update(status="passed", summary=summary, figures=str(output / "figures"))
         write(report_path, report)
         plot_experiment(report_path, output / "figures")

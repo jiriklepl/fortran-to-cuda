@@ -292,6 +292,56 @@ def test_a_single_precision_report_is_plotted_under_its_own_policy(tmp_path):
         plot_experiment.plot_experiment(report, tmp_path / "unknown")
 
 
+def test_resident_timing_plots_stack_initialization_loop_and_finalization(tmp_path):
+    import plot_experiment
+
+    fields = {"fields-U.bin": {"passed": True}}
+    diagnostics = [{"mode": "native"}, {"mode": "native", "fields": fields, "vtk": {"passed": True}},
+                   {"mode": "resident", "fields": fields, "vtk": {"passed": True},
+                    "gpu_activity": {"gpu_kernels_by_procedure": {"dynamics::convection": 1,
+                                                                  "subgrid::sgs_sigma_uniform": 1}}}]
+    runs = [
+        {"mode": "native", "warmup": False, "traced": False, "wall_seconds": 10.0, "vtk": {"passed": True},
+         "application_timing": {"completed_steps": 10, "initialization_seconds": 1.0,
+                                "loop_seconds": 8.0, "finalization_seconds": 0.9}},
+        {"mode": "resident", "warmup": False, "traced": False, "wall_seconds": 4.0, "vtk": {"passed": True},
+         "application_timing": {"completed_steps": 10, "initialization_seconds": 1.2,
+                                "loop_seconds": 2.0, "finalization_seconds": 0.7}},
+    ]
+    summary = {
+        "native": {"samples_seconds": [10.0], "median_seconds": 10.0,
+                   "phases": {"initialization": {"samples_seconds": [1.0], "median_seconds": 1.0},
+                              "loop": {"samples_seconds": [8.0], "median_seconds": 8.0},
+                              "finalization": {"samples_seconds": [0.9], "median_seconds": 0.9}}},
+        "resident": {"samples_seconds": [4.0], "median_seconds": 4.0,
+                     "phases": {"initialization": {"samples_seconds": [1.2], "median_seconds": 1.2},
+                                "loop": {"samples_seconds": [2.0], "median_seconds": 2.0},
+                                "finalization": {"samples_seconds": [0.7], "median_seconds": 0.7}}},
+        "speedup": 2.5,
+        "loop_speedup": 4.0,
+    }
+    assert runner.summarize_phases([runs[0]]) == summary["native"]["phases"]
+    assert runner.summarize_phases([runs[1]]) == summary["resident"]["phases"]
+    assert runner.summarize_phases([{"application_timing": {"completed_steps": 10}}]) is None
+    value = {"status": "passed", "case": "channel-simple", "release_qualified": False,
+             "validation_policy": "pointwise-1e-6-1e-5", "threads": 4, "warmups": 1,
+             "diagnostics": diagnostics, "runs": runs, "summary": summary}
+    report = tmp_path / "report.json"
+    report.write_text(json.dumps(value))
+    output = tmp_path / "figures"
+    plot_experiment.plot_experiment(report, output)
+    svg = (output / "complete-wall-absolute.svg").read_text()
+    for label in ("Initialization", "Loop", "Finalization", "4.00x loop"):
+        assert label in svg
+    assert (output / "complete-wall-relative.png").is_file()
+
+    # Tampered phase medians must fail verification.
+    value["summary"]["resident"]["phases"]["loop"]["median_seconds"] = 1.0
+    report.write_text(json.dumps(value))
+    with pytest.raises(ValueError, match="does not match samples"):
+        plot_experiment.plot_experiment(report, tmp_path / "tampered")
+
+
 def test_default_work_directory_follows_output(monkeypatch, tmp_path):
     monkeypatch.delenv("WORK_DIR", raising=False)
     monkeypatch.delenv("DEPS_ROOT", raising=False)

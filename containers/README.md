@@ -141,6 +141,14 @@ Initially empty, owner-only diagnostic and timing kernel caches are separate;
 an excluded warmup populates the timing cache. With zero warmups the first
 timing includes cache misses and compilation.
 
+Both executables also report how their wall time divides into initialization,
+the time-stepping loop and finalization (which includes writing the results
+and, for the GPU run, bringing the fields back). When those lines are present
+the summary of each mode carries `phases` with samples and medians, the report
+adds `loop_speedup` next to the complete-process `speedup`, and the bars of the
+timing plots are stacked by phase; what the phases do not cover of a process,
+such as start-up and kernel cache lookups, shows as process overhead.
+
 For the unmodified natural `channel`, every run must reach the time limit at
 the native reference's step count (2,458 steps in the 4-thread reference setup;
 adaptive CFL timestepping and thread-dependent seeding can yield a different
