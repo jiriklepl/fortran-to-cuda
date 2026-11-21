@@ -224,6 +224,11 @@ def optimize_function(
             if id(fused) not in candidate_regions or not preserved <= set(candidate_regions):
                 reports.append(f"{label}: skipped (combined parallel independence not proved)")
                 continue
+            # Passes that are independent whatever their scalars are stay so: combined, they must not come
+            # to depend on a condition that the entry would then have to check, and could fail.
+            if set(candidate_regions[id(fused)].assumptions) - {*left.assumptions, *right.assumptions}:
+                reports.append(f"{label}: skipped (combined independence holds only for some scalar values)")
+                continue
             reports.append(f"{label}: applied; moved {len(setup)} scalar setup assignment(s)")
             function, plan = candidate, checked
             changed = True

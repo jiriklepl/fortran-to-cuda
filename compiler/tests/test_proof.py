@@ -66,9 +66,11 @@ def test_integer_guard_proves_periodic_halo_copy_only_on_disjoint_domain(guarded
     loop = Loop(ITERATOR, ONE, three, Block((body,)), LOCATION)
     function = replace(function_with_assignment(POINT, ONE), body=Block((loop,)))
     proof = query(function)
-    assert proof.proven is guarded
-    if guarded:
-        assert not proof.region.report.conservative
+    assert proof.proven
+    assert not proof.region.report.conservative
+    # Without the guard in the source the region is independent only where the copies do not meet, which is
+    # then a condition on the value it starts with.
+    assert bool(proof.region.assumptions) is not guarded
 
 
 def test_integer_guard_does_not_hide_conflicts_in_else_arm():
@@ -77,7 +79,11 @@ def test_integer_guard_does_not_hide_conflicts_in_else_arm():
     unsafe = Assignment(POINT, ArrayAccess(A, (Binary("-", Reference(ITERATOR), ONE),)), LOCATION)
     branch = If(Binary(">=", Reference(N), three), Block((safe,)), Block((unsafe,)), LOCATION)
     loop = Loop(ITERATOR, ONE, three, Block((branch,)), LOCATION)
-    assert not query(replace(function_with_assignment(POINT, ONE), body=Block((loop,)))).proven
+    proof = query(replace(function_with_assignment(POINT, ONE), body=Block((loop,))))
+    # The other arm carries a value from iteration to iteration: the region is independent only for
+    # values that never reach it.
+    assert proof.proven
+    assert proof.region.assumptions
 
 
 def test_comment_before_if_keeps_original_branch_header():

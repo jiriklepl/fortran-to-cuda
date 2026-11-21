@@ -244,7 +244,7 @@ project = ResidentProject(
     sources=(src / "params.f90", src / "fields.f90", src / "boundaries.f90",
              src / "stepper.f90", src / "diagnostics.f90", src / "main.f90"),
     selections=(Selection("step", ("stepper::diffuse", "stepper::store"), minimum_nests=2),
-                Selection("halo", ("boundaries::*",), guard="nx >= 2 .and. ny >= 2 .and. nz >= 2")),
+                Selection("halo", ("boundaries::*",))),
     defines=("DOUBLE",))
 prepared = prepare(project, out / "prepared", fortran="gfortran")
 build(prepared, out / "built", name="box", programs={"box": src / "main.f90"},
@@ -395,6 +395,21 @@ Forms beyond plain array loops that are supported in selected procedures:
   it accumulates: unmarked, it may be the private accumulation of each
   iteration of a nest.
 
+- **Nests that are independent for some values of their scalars.** Whether two
+  iterations of a nest touch the same element can depend on integer values
+  the nest starts with: a halo copy whose two sides meet in a grid of one
+  cell, a nest that reads one level of an array and writes another where the
+  two levels are scalars. The dependence analysis says for which values
+  iterations conflict; where that leaves values for which they do not, the
+  nest is compiled for those, and its entry checks the condition before it
+  does anything. Called with other values it declines, and the caller runs
+  the original statements after the device values are published. A subscript
+  that is not affine but does not change while the nest runs, such as
+  `mod(step, 2) + 1`, counts as one such value. A condition that would only
+  say that one of the nest's loops has a single iteration is not used: such
+  a nest is rejected, or its outer loop is left to the host. The report of an
+  entry lists its `conditions`.
+
 - **Scalars that only a branch reads.** A scalar that only a branch of a nest
   reads may be undefined where no iteration takes the branch. An INTEGER or
   REAL variable that is always there (a local, a dummy argument, a module
@@ -466,9 +481,7 @@ each scalar dummy is INTENT(IN) and gets something the statements do not
 change. A constant argument decides the callee's branches on it, a local that
 is assigned once from unchanged values is replaced by its value, and the
 callee's OpenMP directives go the way of the caller's. A call that does not
-fit stays a call; `prepared.json` lists each one under `inlined`. A guard of a
-selection is applied to an entry part by part: an entry gets the conjuncts
-whose variables it uses.
+fit stays a call; `prepared.json` lists each one under `inlined`.
 
 While an epoch lasts the host mostly runs serial code between kernels, and a
 parallel region it still enters wakes the whole OpenMP team. With
@@ -559,9 +572,6 @@ steps, all in `compiler.scopes`:
   leave a region on the host, joins the rejections with its span.
   `compile_resident_entry` does the same for one entry and is what the command
   line runs for `--kernel`.
-- `resident_entries.guard_entries` wraps a condition around the work of every
-  entry, for a property the caller's activation implies and the loop bounds do
-  not show.
 - `resident_splice.splice_resident_entries` writes each source with its
   compiled spans replaced by a block that binds the arrays through the domain
   object and calls the entry while the domain is active, and runs the original

@@ -1,5 +1,6 @@
 """A whole application is prepared for residency from a short description, without a device."""
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -59,9 +60,10 @@ def test_entries_are_called_while_resident_and_the_original_loops_run_otherwise(
     # The selected procedures run from one serial caller, so their directives are gone; the precision is fixed.
     assert "!$omp" not in stepper
     assert "#ifdef" not in (directory / "sources/fields.f90").read_text()
-    # The halo copies are guarded, and the guard is checked before the entry is used.
+    # The halo copies of a direction meet in a box of one cell. Their entry was compiled for the other
+    # sizes and says when it was called with that one; the original copies run then.
     boundaries = (directory / "sources/boundaries.f90").read_text()
-    assert "if (.not. (nx >= 2 .and. ny >= 2 .and. nz >= 2)) error stop" in boundaries
+    assert "fort_resident = fort_status /= FORT_SCOPE_DECLINED" in boundaries
 
 
 def test_directives_in_the_source_place_the_epoch_and_the_host_reads(box):
@@ -637,3 +639,55 @@ def test_a_scalar_only_a_branch_reads_is_read_at_the_call_when_it_is_always_ther
     # An allocatable scalar may not be there at all: it is read only where the original statements read it.
     assert rejected("allocatable", module_scalar.replace("real(8) :: rate", "real(8), allocatable :: rate")) == [
         "Resident GPU entry contains native-only regions: CUDA value capture would evaluate a protected scalar"]
+
+
+LEVELS = """module levels
+integer :: n, steps
+contains
+subroutine run(u)
+real(8), contiguous, intent(inout) :: u(0:,0:,:)
+integer :: step, i, j, old, new
+old = 1
+new = 2
+do step = 1, steps
+do j = 1, n
+do i = 1, n
+u(i,j,new) = 0.25d0 * (u(i-1,j,old) + u(i+1,j,old) + u(i,j-1,old) + u(i,j+1,old))
+enddo
+enddo
+old = new
+new = 3 - old
+enddo
+end subroutine
+end module
+"""
+
+
+def test_a_nest_that_is_independent_for_some_values_of_its_scalars_checks_them_when_it_is_called(tmp_path):
+    source = tmp_path / "levels.f90"
+    source.write_text(LEVELS)
+    prepared = prepare(ResidentProject((source,), (Selection("all", ("levels::run",)),)), tmp_path / "prepared",
+                       fortran=fortran_compiler())
+    summary, = prepared["selections"]
+    # The nest reads one level of the array and writes another: independent unless the two are the same.
+    assert (summary["entries"], summary["nests"], summary["rejected"]) == (1, 1, [])
+    entry, = prepared["entries"]
+    condition = (Path(entry) / "shared_entry.cu").read_text().split("return FORT_SCOPE_DECLINED;")[0].rsplit("if (!", 1)[1]
+    assert re.search(r"\(1 \* fort_v\d+_new\)\) \+ \(-1 \* fort_v\d+_old\)\) >= 0\)", condition)
+    text = (tmp_path / "prepared/sources/levels.f90").read_text()
+    call = text[text.index("fort_status = fort_device_run("):text.index("old = new")]
+    # Called with equal levels the entry does nothing and says so; the original statements run instead.
+    assert call.index("fort_resident = fort_status /= FORT_SCOPE_DECLINED") < call.index(
+        "call resident_require(fort_status)") < call.index("if (.not. fort_resident) then") < call.index(
+            "if (resident%active) call resident%publish()") < call.index("u(i,j,new) = 0.25d0")
+
+
+def test_a_condition_that_only_says_a_loop_is_too_short_is_no_condition(tmp_path):
+    source = tmp_path / "levels.f90"
+    source.write_text(LEVELS.replace("u(i,j,new) = 0.25d0 * (u(i-1,j,old)", "u(i,j,old) = 0.25d0 * (u(i-1,j,old)"))
+    prepared = prepare(ResidentProject((source,), (Selection("all", ("levels::run",)),)), tmp_path / "prepared",
+                       fortran=fortran_compiler())
+    summary, = prepared["selections"]
+    # In place the nest conflicts with itself whenever it has two iterations: that stays a rejection.
+    assert summary["entries"] == 0
+    assert "Cannot parallelize" in "".join(item["reason"] + "".join(item.get("inside", ())) for item in summary["rejected"])

@@ -74,6 +74,9 @@ class ParallelRegion:
 
     schedule: RegionSchedule | None = None
     addressing: RegionAddressing | None = None
+    # Conditions on the values the region starts with under which its iterations are independent.
+    # They hold whenever the region runs: whoever starts it checks them first.
+    assumptions: tuple[Expr, ...] = ()
 
 
 @dataclass(frozen=True)

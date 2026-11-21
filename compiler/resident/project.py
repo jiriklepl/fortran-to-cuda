@@ -25,7 +25,6 @@ from compiler.resident.specialize import integer_parameters, specialize
 from compiler.scopes.resident_entries import (
     compile_resident_entries,
     export_resident_entries,
-    guard_entries,
     pass_scalars_by_value,
 )
 from compiler.scopes.resident_splice import (
@@ -46,9 +45,7 @@ class Selection:
 
     ``procedures`` are ``module::name`` values or globs over them; an internal
     procedure is ``host::name`` after its host's name, an external procedure
-    ``$external::name``. ``guard`` is
-    a condition the application's activation implies and the loop bounds do not
-    show (see ``guard_entries``). ``minimum_nests`` is the number of source loop nests that
+    ``$external::name``. ``minimum_nests`` is the number of source loop nests that
     must end up compiled; fewer is an error, so lost coverage is not silent.
     With ``native_rejections`` off, a nest the compiler rejects is left exactly
     as it is, for code the activation condition makes unreachable. ``assume``
@@ -66,7 +63,6 @@ class Selection:
 
     label: str
     procedures: tuple[str, ...]
-    guard: str | None = None
     minimum_nests: int = 0
     native_rejections: bool = True
     assume: tuple[str, ...] = ()
@@ -323,8 +319,6 @@ def prepare(project, directory, *, fortran, host_threads=4):
 
         group = {**extracted, "entries": [item for item in extracted["entries"] if selected(item)],
                  "rejected": [item for item in extracted["rejected"] if selected(item)]}
-        if selection.guard is not None:
-            group = guard_entries(group, directory / (selection.label + "-guarded"), selection.guard)
         group = pass_scalars_by_value(group, directory / (selection.label + "-values"))
         package = compile_resident_entries(group, directory / (selection.label + "-entries"),
                                            host_threads=host_threads)

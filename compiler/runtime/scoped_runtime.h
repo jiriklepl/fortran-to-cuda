@@ -42,7 +42,10 @@ void fort_scope_trace_restore_v1(fort_scope_t context, const fort_scope_trace_st
 enum fort_scope_status {
     FORT_SCOPE_OK = 0, FORT_SCOPE_ARGUMENT = 1, FORT_SCOPE_STALE = 2,
     FORT_SCOPE_ALIAS = 3, FORT_SCOPE_RESOURCE = 4, FORT_SCOPE_BOUNDARY = 5,
-    FORT_SCOPE_EXECUTION = 6, FORT_SCOPE_UNINITIALIZED = 7, FORT_SCOPE_STATE = 8
+    FORT_SCOPE_EXECUTION = 6, FORT_SCOPE_UNINITIALIZED = 7, FORT_SCOPE_STATE = 8,
+    // Not an error: an entry was compiled for values of its scalars under which its iterations are
+    // independent, the values it was called with are others, and nothing was done.
+    FORT_SCOPE_DECLINED = 9
 };
 enum fort_scope_type {
     FORT_SCOPE_BYTES = 0, FORT_SCOPE_REAL32 = 1, FORT_SCOPE_REAL64 = 2,

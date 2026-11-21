@@ -77,7 +77,9 @@ def entry_call_block(region, entry, domain, held=None):
     it. Where the entry writes through index values, the block first checks,
     once per publication, that the subscript tuples of each such array name
     every element at most once, across all its nests; if they do not, the
-    device values are published and the original statements run.
+    device values are published and the original statements run. The same
+    happens where an entry that was compiled for some values of its scalars
+    only (its ``conditions``) says that it was called with others.
     """
     bindings = {binding["resource"]: binding for binding in region["resources"]}
     written = set(region.get("written_resources", ()))
@@ -124,21 +126,31 @@ def entry_call_block(region, entry, domain, held=None):
     arguments = [f"{domain.object}%context", "FORT_SCOPE_GPU"] + [actual[name] for name in entry["argument_order"][2:]]
     guards = ["        if (.not. (" + guard + ")) error stop 'resident numerical geometry changed'"
               for guard in region["runtime_guards"]]
-    call = [f"        call {domain.check}({run}( &", "          " + ", &\n          ".join(arguments) + "))"]
+    conditional = bool(entry.get("conditions"))
+    resident, status = f"{domain.prefix}_resident", f"{domain.prefix}_status"
+    passed = "          " + ", &\n          ".join(arguments)
     # The statements run on the device; DO variables that are read afterwards get their final values here.
-    call += ["        " + line for line in region.get("final_iterators", ())]
+    after = ["        " + line for line in region.get("final_iterators", ())]
+    if conditional:
+        call = [f"        {status} = {run}( &", passed + ")",
+                f"        {resident} = {status} /= FORT_SCOPE_DECLINED", f"        if ({resident}) then",
+                f"          call {domain.check}({status})", *("  " + line for line in after), "        endif"]
+    else:
+        call = [f"        call {domain.check}({run}( &", passed + "))", *after]
     code = ["    block", "      use, intrinsic :: iso_c_binding",
-            "      use fort_scoped_memory, only: " + ", ".join(["FORT_SCOPE_GPU", *sorted(kinds)]),
+            "      use fort_scoped_memory, only: " + ", ".join(
+                ["FORT_SCOPE_GPU", *(["FORT_SCOPE_DECLINED"] if conditional else []), *sorted(kinds)]),
             f"      use {domain.module}, only: {domain.object}, {domain.check}",
             "      use " + entry["fortran_module"] + f", only: {run} => run",
             *(["      integer(c_int64_t) :: " + ",".join(handles)] if handles else [])]
-    if not structures and not checks:
+    if not structures and not checks and not conditional:
         code += [f"      if ({domain.object}%active) then", *guards, *registration, *call,
                  "      else", "@ORIGINAL@", "      endif", "    end block"]
         return "\n".join(code) + "\n"
 
-    resident = f"{domain.prefix}_resident"
     code.append(f"      logical :: {resident}")
+    if conditional:
+        code.append(f"      integer(c_int) :: {status}")
     if checks:
         code += [f"      logical, save :: {domain.prefix}_distinct = .false.",
                  f"      integer(c_int64_t), save :: {domain.prefix}_checked(2) = -1_c_int64_t"]
@@ -163,7 +175,9 @@ def entry_call_block(region, entry, domain, held=None):
             code += _distinct_check(group, number, domain, "          ")
         code += [f"          {domain.prefix}_checked = [{domain.object}%generation, {domain.object}%stamp]",
                  "        endif", f"        {resident} = {domain.prefix}_distinct"]
-    code += ["      endif", f"      if ({resident}) then", *call, "      else",
+    code += ["      endif", f"      if ({resident}) then", *call,
+             # An entry that declines leaves everything as it was, for the original statements.
+             *(["      endif", f"      if (.not. {resident}) then"] if conditional else ["      else"]),
              f"        if ({domain.object}%active) call {domain.object}%publish()", "@ORIGINAL@", "      endif"]
     if counted:
         code.append("      endif")

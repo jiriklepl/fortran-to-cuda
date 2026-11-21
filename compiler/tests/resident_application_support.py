@@ -6,7 +6,6 @@ from compiler.resident.project import ResidentProject, Selection
 
 BOX = Path(__file__).resolve().parent / "apps/box"
 UNITS = ("params", "fields", "boundaries", "sources", "stepper", "diagnostics", "main")
-MINIMUM_EXTENT = "nx >= 2 .and. ny >= 2 .and. nz >= 2"
 
 
 def box_project(sources=BOX, *, defines=("DOUBLE",)):
@@ -14,7 +13,9 @@ def box_project(sources=BOX, *, defines=("DOUBLE",)):
     return ResidentProject(
         sources=tuple(Path(sources) / (name + ".f90") for name in UNITS),
         selections=(Selection("step", ("stepper::diffuse", "stepper::store"), minimum_nests=2),
-                    Selection("halo", ("boundaries::*",), guard=MINIMUM_EXTENT, minimum_nests=3),
+                    # The copies of a periodic direction do not meet from two cells on: the compiler finds
+                    # that condition and the entry checks it.
+                    Selection("halo", ("boundaries::*",), minimum_nests=3),
                     # Each accumulating loop becomes three nests: partial results of a short loop, and
                     # partial results and their fold for a long one.
                     Selection("sources", ("sources::inject", "sources::sense", "sources::range"), minimum_nests=5),

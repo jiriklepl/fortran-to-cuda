@@ -308,6 +308,12 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
         alias_setup += ["    }"]
         setup += alias_setup
     lines += setup
+    # A region may be independent only for some values of the entry's scalars. For others the entry does
+    # nothing and says so; its caller still has the original statements.
+    assumptions = [expression for region in plan.regions for expression in region.assumptions]
+    if assumptions and config.collective:
+        raise CompilationError("an entry whose independence depends on its scalar values has no team form")
+    lines += [f"    if (!{render_expression(expression)}) return FORT_SCOPE_DECLINED;" for expression in assumptions]
     lines += [f"    {cpp_type(s)} {s.cpp_name};" for s in host_symbols(function, plan)]
     for s in arrays:
         if s.intent == "out":
@@ -736,6 +742,8 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
                                "passing": "value" if s.by_value else "reference"} for s in scalars],
         "argument_order": ["context", "mode", *[s.name for s in arrays], *[s.name for s in scalars]],
         "modes": {"native": 0, "gpu": 1},
+        # With conditions, the entry returns FORT_SCOPE_DECLINED where one does not hold.
+        "conditions": [render_expression(expression) for expression in assumptions],
         "numerical_environment": {
             "required": function.requires_numerical_environment,
             "check": "fort_scope_numerical_environment_supported",

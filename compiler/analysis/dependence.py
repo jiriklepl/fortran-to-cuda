@@ -6,7 +6,7 @@ for proving independence; no value-based dependence removal or scheduling is don
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import islpy as isl
 
@@ -150,6 +150,75 @@ class _AffineRegionModel:
     parallel: isl.UnionMap
     conflicts: tuple[tuple[str, isl.UnionMap], ...]
     physical_affine: bool
+    # What a parameter of the relations stands for, where that is a value known when the region starts.
+    known: tuple[tuple[str, Expr], ...] = ()
+
+    def independence_condition(self):
+        """A condition on the values the region starts with under which no iteration conflicts with another.
+
+        The conflict relations say for which parameter values two iterations
+        touch the same element. Outside those values the region is independent.
+        A case in which one of the region's loops has a single iteration is
+        left out: such a condition would only say that a loop is too short to
+        conflict with itself.
+        Returns the condition in ISL syntax and as an expression, or None when
+        nothing is left, or when the condition needs a value that is not known
+        when the region starts.
+        """
+        same_iteration = self.parallel.apply_range(self.parallel.reverse())
+        conflicting = None
+        for _kind, relation in self.conflicts:
+            bad = relation.subtract(same_iteration)
+            if not bad.is_empty():
+                conflicting = bad.params() if conflicting is None else conflicting.union(bad.params())
+        if conflicting is None:
+            return None
+        free = isl.Set.universe(conflicting.get_space()).subtract(conflicting).coalesce()
+        if free.is_empty():
+            return None
+        known = dict(self.known)
+        iterations = isl.Set.from_union_set(self.parallel.range())
+        pairs = isl.Map.from_domain_and_range(iterations, iterations)
+        # Per loop of the region: the pairs of iterations that differ along it.
+        apart = [pairs.order_lt(isl.dim_type.in_, axis, isl.dim_type.out, axis).union(
+                     pairs.order_gt(isl.dim_type.in_, axis, isl.dim_type.out, axis))
+                 for axis in range(iterations.dim(isl.dim_type.set))]
+        apart = [item for item in apart if not item.is_empty()]
+        texts, expressions = [], []
+        for basic in free.get_basic_sets():
+            if any(item.intersect_params(isl.Set.from_basic_set(basic)).is_empty() for item in apart):
+                continue
+            names = [basic.get_dim_name(isl.dim_type.param, index) for index in range(basic.dim(isl.dim_type.param))]
+            parts, terms = [], []
+            for constraint in basic.get_constraints():
+                if basic.dim(isl.dim_type.div) and constraint.involves_dims(isl.dim_type.div, 0, basic.dim(isl.dim_type.div)):
+                    return None
+                coefficients = [(name, constraint.get_coefficient_val(isl.dim_type.param, index).to_python())
+                                for index, name in enumerate(names)]
+                coefficients = [(name, value) for name, value in coefficients if value]
+                if any(name not in known for name, _value in coefficients):
+                    return None
+                constant = constraint.get_constant_val().to_python()
+                relation = "=" if constraint.is_equality() else ">="
+                parts.append("(" + " + ".join([str(constant), *(f"{value}*{name}" for name, value in coefficients)])
+                             + f" {relation} 0)")
+                total: Expr = Literal(str(constant), ScalarType.INTEGER)
+                for name, value in coefficients:
+                    total = Binary("+", total, Binary("*", Literal(str(value), ScalarType.INTEGER), known[name]))
+                terms.append(Binary("==" if constraint.is_equality() else ">=", total, Literal("0", ScalarType.INTEGER)))
+            if not terms:
+                return None
+            texts.append("(" + " and ".join(parts) + ")")
+            expression = terms[0]
+            for term in terms[1:]:
+                expression = Binary(".and.", expression, term)
+            expressions.append(expression)
+        if not expressions:
+            return None
+        condition = expressions[0]
+        for expression in expressions[1:]:
+            condition = Binary(".or.", condition, expression)
+        return "(" + " or ".join(texts) + ")", condition
 
     def require_unconditional(self):
         same_iteration = self.parallel.apply_range(self.parallel.reverse())
@@ -202,6 +271,7 @@ def _region_model(
     context=None,
     consume=None,
     injective=frozenset(),
+    assume=(),
 ) -> _AffineRegionModel:
     context = isl.DEFAULT_CONTEXT if context is None else context
     tick = (lambda: None) if consume is None else consume
@@ -486,6 +556,20 @@ def _region_model(
         return available
 
     visit(body, environment, {}, available, iterators, coordinates, conditions, order, order_conditions)
+    start_values = {symbol for symbol in environment if symbol.parameter and symbol.dtype is ScalarType.INTEGER
+                    and environment[symbol] == Affine(terms=((f"p{symbol.id}", 1),))}
+    unknown: dict[Expr, str] = {}
+
+    def fixed(expression):
+        """Built from nothing but integer values the region starts with."""
+        return (not any(isinstance(node, (ArrayAccess, Size)) for node in walk_expr(expression))
+                and bool(referenced_symbols(expression)) and referenced_symbols(expression) <= start_values)
+
+    def unknown_value(expression):
+        name = unknown.setdefault(expression, f"v{region_id}_{len(unknown)}")
+        parameters.add(name)
+        return Affine(terms=((name, 1),))
+
     specifications = []
     for index, event in enumerate(events):
         tick()
@@ -497,6 +581,10 @@ def _region_model(
                 indices = tuple(
                     affine_or_unknown(expr, event.environment, active, event.origin.location) for expr in access.indices
                 )
+                # A subscript that is not affine but does not change while the region runs is one
+                # unknown value: accesses through the same expression meet, through another they may.
+                indices = tuple(value if value is not None or not fixed(expression) else unknown_value(expression)
+                                for value, expression in zip(indices, resolved, strict=True))
                 # A later injectivity certificate may use affine operands of
                 # this otherwise nonlinear expression. Collect their parameters
                 # before constructing any ISL spaces.
@@ -509,7 +597,7 @@ def _region_model(
     extent_constraints = tuple(f"{name} >= 0" for name in sorted(parameters) if name.startswith("d"))
 
     def event_domain(event):
-        return " and ".join((*event.conditions, *extent_constraints)) or "true"
+        return " and ".join((*event.conditions, *extent_constraints, *assume)) or "true"
 
     def instance(index):
         return f"S{index}[{','.join(events[index].coordinates)}]"
@@ -656,12 +744,28 @@ def _region_model(
         tuple(sorted(read_arrays, key=lambda s: s.id)),
         tuple(sorted(write_arrays, key=lambda s: s.id)),
     )
+    known = (*((f"p{symbol.id}", Reference(symbol)) for symbol in sorted(start_values, key=lambda s: s.id)),
+             *((name, expression) for expression, name in unknown.items()))
     return _AffineRegionModel(region, tuple(events), reads, writes, schedule, parallel,
-                              tuple(conflicts.items()), physical_affine and not conservative)
+                              tuple(conflicts.items()), physical_affine and not conservative, known)
 
 
 def _region(region_id, loop, environment, defined, later, injective=frozenset()):
-    return _region_model(region_id, loop, environment, defined, later, injective=injective).require_unconditional()
+    """The region when its iterations are independent, if need be under a condition on its starting values."""
+    model = _region_model(region_id, loop, environment, defined, later, injective=injective)
+    try:
+        return model.require_unconditional()
+    except ParallelizationError as error:
+        condition = model.independence_condition()
+        if condition is None:
+            raise
+        text, expression = condition
+        try:
+            region = _region_model(region_id, loop, environment, defined, later, injective=injective,
+                                   assume=(text,)).require_unconditional()
+        except ParallelizationError:
+            raise error from None
+        return replace(region, assumptions=(expression,))
 
 
 def prove_region(region_id, loop, environment, defined, later, *, injective=frozenset()):

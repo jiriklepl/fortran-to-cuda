@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from compiler.ir import CompilationError
 from compiler.resident.anchors import (
     find_all_calls,
     find_call_span,
@@ -19,7 +18,6 @@ from compiler.resident.rewrites import inline_tile_scratch_nests, promote_line_s
 from compiler.scopes.resident_entries import (
     compile_resident_entry,
     export_resident_entries,
-    guard_entries,
     pass_scalars_by_value,
 )
 
@@ -290,26 +288,16 @@ end module
 """
 
 
-def test_a_guard_states_what_the_loop_bounds_do_not_show(tmp_path):
+def test_an_entry_checks_what_the_loop_bounds_do_not_show(tmp_path):
     source = tmp_path / "halo.f90"
     source.write_text(HALO)
     exported = export_resident_entries([source], ["halo::wrap"], tmp_path / "exported")
-    entry, = exported["entries"]
-    # Whether the copied cells overlap depends on nx, which the bounds do not constrain.
-    with pytest.raises(CompilationError, match="Cannot parallelize"):
-        compile_resident_entry(entry["input_path"], entry["entry"], tmp_path / "unguarded")
-    guarded = guard_entries(exported, tmp_path / "guarded", "nx >= 2")
-    item, = guarded["entries"]
-    assert item["runtime_guards"] == [*entry["runtime_guards"], "nx >= 2"]
-    assert item["guard"]["original"]["path"] == entry["input_path"]
-    lines = Path(item["input_path"]).read_text().splitlines()
-    opening = next(index for index, line in enumerate(lines) if line.strip() == "if (nx >= 2) then")
-    assert lines[opening - 1].strip().startswith("DO i")
-    assert lines[opening + 2].strip() == "endif"
-    assert lines[opening + 3].strip() == "END DO"
-    assert Path(entry["input_path"]).read_text().count("nx >= 2") == 0
-    # The guard composes with the value ABI, which device placement needs for the lower bound.
-    item, = pass_scalars_by_value(guarded, tmp_path / "values")["entries"]
-    report = compile_resident_entry(item["input_path"], item["entry"], tmp_path / "entry")
+    entry, = pass_scalars_by_value(exported, tmp_path / "values")["entries"]
+    # Whether the copied cells meet depends on nx, which the bounds do not constrain. The entry is
+    # compiled for the values of nx for which they do not, and declines the others.
+    report = compile_resident_entry(entry["input_path"], entry["entry"], tmp_path / "entry")
     assert all(region["gpu_available"] for region in report["scoped"]["region_execution"])
-
+    condition, = report["scoped"]["conditions"]
+    assert "nx" in condition
+    text = (tmp_path / "entry/shared_entry.cu").read_text()
+    assert f"if (!{condition}) return FORT_SCOPE_DECLINED;" in text
