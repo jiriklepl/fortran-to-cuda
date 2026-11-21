@@ -574,9 +574,7 @@ def test_the_host_runs_a_loop_that_repeats_one_nest(tmp_path):
     assert "publish" not in text
 
 
-def test_a_loop_whose_variable_places_what_is_assigned_is_a_dimension_of_its_nest(tmp_path):
-    # Planes that each depend on the one before: the loop over them is part of the nest, which does not
-    # compile as a whole. Whether the host should launch plane after plane is not decided by rejecting it.
+def test_the_host_runs_a_sweep_through_planes_that_each_use_the_one_before(tmp_path):
     prepared, text = marched(tmp_path, more="""do step = 2, steps
 do j = 1, n
 do i = 1, n
@@ -585,31 +583,57 @@ enddo
 enddo
 enddo""")
     summary, = prepared["selections"]
-    assert (summary["entries"], summary["nests"]) == (1, 1)
-    assert [(item["first_line"], item["last_line"]) for item in summary["rejected"]] == [(18, 24)]
+    # The planes cannot be computed side by side, but each plane can: the host walks through them.
+    assert (summary["entries"], summary["nests"], summary["rejected"]) == (2, 2, [])
     # Next to each other the two loops are one entry at first; it does not compile, and each is looked at
-    # on its own, so the loop that repeats its nest does not go down with the other.
+    # on its own.
+    assert [(item["first_line"], item["last_line"]) for item in summary["descended"]] == [
+        (11, 24), (11, 17), (18, 24)]
+    sweep = text[text.index("do step = 2, steps"):]
+    assert sweep.index("call resident_require(fort_device_run(") < sweep.index("\nenddo\n")
+    assert "publish" not in text
+
+
+def test_a_loop_is_rejected_as_a_whole_when_nothing_inside_it_compiles(tmp_path):
+    # The plane depends on the row before as well: neither the sweep nor what it holds can be an entry. The
+    # host gets the arrays once for the whole loop, not once per plane.
+    prepared, text = marched(tmp_path, more="""do step = 2, steps
+do j = 2, n
+do i = 2, n
+c(i,j,step) = c(i-1,j-1,step-1) + c(i-1,j,step) + c(i,j-1,step)
+enddo
+enddo
+enddo""")
+    summary, = prepared["selections"]
+    assert (summary["entries"], summary["nests"]) == (1, 1)
+    whole, = summary["rejected"]
+    assert (whole["first_line"], whole["last_line"]) == (18, 24)
+    assert len(whole["inside"]) >= 1
+    assert all("Cannot parallelize" in reason for reason in whole["inside"])
     assert [(item["first_line"], item["last_line"]) for item in summary["descended"]] == [(11, 24), (11, 17)]
     assert text.count("call resident_require(fort_device_run(") == 1
 
 
-def test_a_scalar_the_procedure_has_assigned_is_read_at_the_call(tmp_path):
-    # Only a branch of the nest divides by rate. Read at the call, a scalar must be defined even where no
-    # iteration takes the branch: the assignment at the top of the procedure says that it is.
-    prepared, _text = marched(tmp_path / "assigned")
-    assert prepared["selections"][0]["rejected"] == []
-    # Assigned in a branch of its own, or not here at all, it may be undefined where the nest starts.
+def test_a_scalar_only_a_branch_reads_is_read_at_the_call_when_it_is_always_there(tmp_path):
+    # Only a branch of the nest divides by rate. Read at the call, the scalar may be undefined where no
+    # iteration takes the branch, but a variable that is always there can be loaded all the same: nothing
+    # uses the value. That holds for a local, wherever it is assigned, and for a module variable.
     plain = MARCH.format(more="")
     module_scalar = plain.replace("real(8) :: rate\n", "").replace("rate = 0.1d0\n", "").replace(
         "integer :: n, steps\n", "integer :: n, steps\nreal(8) :: rate\n")
-    for number, text in enumerate((plain.replace("rate = 0.1d0", "if (n > 3) rate = 0.1d0"),
-                                   plain.replace("rate = 0.1d0", "if (n > 3) then\nrate = 0.1d0\nelse\nn = n\nend if"),
-                                   module_scalar)):
-        directory = tmp_path / str(number)
+
+    def rejected(name, text):
+        directory = tmp_path / name
         directory.mkdir()
         source = directory / "march.f90"
         source.write_text(text)
         prepared = prepare(ResidentProject((source,), (Selection("all", ("march::run",)),)), directory / "prepared",
                            fortran=fortran_compiler())
-        reasons = [region["reason"] for item in prepared["selections"][0]["rejected"] for region in item["regions"]]
-        assert reasons == ["CUDA value capture would evaluate a protected scalar"], text
+        return [reason for item in prepared["selections"][0]["rejected"] for reason in item["inside"]]
+
+    assert rejected("local", plain) == []
+    assert rejected("branch", plain.replace("rate = 0.1d0", "if (n > 3) rate = 0.1d0")) == []
+    assert rejected("module", module_scalar) == []
+    # An allocatable scalar may not be there at all: it is read only where the original statements read it.
+    assert rejected("allocatable", module_scalar.replace("real(8) :: rate", "real(8), allocatable :: rate")) == [
+        "Resident GPU entry contains native-only regions: CUDA value capture would evaluate a protected scalar"]

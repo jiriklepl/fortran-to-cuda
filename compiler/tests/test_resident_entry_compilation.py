@@ -100,26 +100,25 @@ def test_a_collective_entry_is_requested_explicitly(tmp_path):
     assert not (tmp_path / "invalid").exists()
 
 
-def test_lower_bounds_and_named_scalars_become_value_arguments(tmp_path):
+def test_lower_bounds_and_scalars_that_are_always_there_become_value_arguments(tmp_path):
     exported = export(tmp_path, ("fields::step",))
-    rewritten = pass_scalars_by_value(exported, tmp_path / "values", resources=("grid::nx",))
+    rewritten = pass_scalars_by_value(exported, tmp_path / "values")
     entry, = rewritten["entries"]
     original, = exported["entries"]
-    assert entry["value_inputs"] == ["fort_region_lb_a_1", "nx"]
+    assert entry["value_inputs"] == ["fort_region_lb_a_1", "dx", "nx"]
     assert Path(entry["input_path"]).parent == tmp_path / "values"
     assert entry["original_numerical_input"]["path"] == original["input_path"]
     text = Path(entry["input_path"]).read_text()
     assert "integer, value, intent(in) :: fort_region_lb_a_1" in text
     assert "integer, value, intent(in) :: nx" in text
-    # A scalar nobody vouched for keeps its reference ABI.
-    assert "real(8), intent(in) :: dx" in text
+    assert "real(8), value, intent(in) :: dx" in text
     # Applying the pass to its own output changes nothing.
-    again, = pass_scalars_by_value(rewritten, tmp_path / "again", resources=("grid::nx",))["entries"]
+    again, = pass_scalars_by_value(rewritten, tmp_path / "again")["entries"]
     assert Path(again["input_path"]).read_text() == text
     # The rewritten entry still compiles and takes the scalars by value.
     report = compile_resident_entry(entry["input_path"], entry["entry"], tmp_path / "entry")
     passing = {item["name"]: item["passing"] for item in report["scoped"]["scalar_parameters"]}
-    assert passing == {"fort_region_lb_a_1": "value", "dx": "reference", "nx": "value"}
+    assert passing == {"fort_region_lb_a_1": "value", "dx": "value", "nx": "value"}
 
 
 LOWERED = """module stencil

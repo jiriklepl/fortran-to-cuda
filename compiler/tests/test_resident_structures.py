@@ -181,7 +181,7 @@ def test_a_write_through_indices_names_what_the_caller_must_check(exported):
 
 def test_the_check_is_what_lets_the_scatter_run_on_the_device(exported, tmp_path):
     directory, export = exported
-    valued = pass_scalars_by_value(export, tmp_path / "values", resources=("walls::n",))
+    valued = pass_scalars_by_value(export, tmp_path / "values")
     by_procedure = {entry["procedure"].split("::")[1]: entry for entry in valued["entries"]
                     if entry["procedure"] != "walls::two_lists"}
     plain = by_procedure["by_index"]

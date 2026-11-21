@@ -48,10 +48,7 @@ class Selection:
     procedure is ``host::name`` after its host's name, an external procedure
     ``$external::name``. ``guard`` is
     a condition the application's activation implies and the loop bounds do not
-    show (see ``guard_entries``). ``value_scalars`` are module scalars
-    (``module::name``) that are defined before any entry runs and so may be
-    passed by value; a scalar that the procedure of a nest assigns itself
-    before the nest needs no naming. ``minimum_nests`` is the number of source loop nests that
+    show (see ``guard_entries``). ``minimum_nests`` is the number of source loop nests that
     must end up compiled; fewer is an error, so lost coverage is not silent.
     With ``native_rejections`` off, a nest the compiler rejects is left exactly
     as it is, for code the activation condition makes unreachable. ``assume``
@@ -70,7 +67,6 @@ class Selection:
     label: str
     procedures: tuple[str, ...]
     guard: str | None = None
-    value_scalars: tuple[str, ...] = ()
     minimum_nests: int = 0
     native_rejections: bool = True
     assume: tuple[str, ...] = ()
@@ -329,9 +325,7 @@ def prepare(project, directory, *, fortran, host_threads=4):
                  "rejected": [item for item in extracted["rejected"] if selected(item)]}
         if selection.guard is not None:
             group = guard_entries(group, directory / (selection.label + "-guarded"), selection.guard)
-        group = pass_scalars_by_value(
-            group, directory / (selection.label + "-values"), resources=selection.value_scalars,
-            names=lambda entry: (reduction(entry) or {}).get("value_scalars", ()))
+        group = pass_scalars_by_value(group, directory / (selection.label + "-values"))
         package = compile_resident_entries(group, directory / (selection.label + "-entries"),
                                            host_threads=host_threads)
         # A rewritten reduction runs on the device only when all three of its nests compiled. Otherwise
@@ -479,7 +473,7 @@ def prepare(project, directory, *, fortran, host_threads=4):
               "array_statements": [{key: str(value) if key == "source" else value for key, value in record.items()
                                     if key not in {"tag", "arrays", "text"}} for record in array_statements],
               "reductions": [{key: str(value) if key == "source" else value for key, value in record.items()
-                              if key not in {"tag", "value_scalars"}} for record in reductions],
+                              if key != "tag"} for record in reductions],
               "temporaries": [{"procedure": item["procedure"], "name": item["name"]} for item in temporaries]}
     (directory / "prepared.json").write_text(json.dumps(result, indent=2) + "\n")
     return result

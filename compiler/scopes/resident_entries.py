@@ -29,6 +29,7 @@ from compiler.frontend.call_bindings import resolve_original_call
 from compiler.frontend.component_bindings import component_access
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
+from compiler.scopes.numerical import resource_binding
 from compiler.scopes.region_context import original_region_context
 from compiler.scopes.regions import extract_region
 from compiler.scopes.segments import directive, grouped_nodes, statement_span
@@ -92,14 +93,19 @@ def _counted(loop):
     return str(counted[0]).lower(), tuple(counted[1])
 
 
-def _repeats(loop):
-    """Whether every iteration of a loop assigns the same array elements, as steps of an iteration or of time do.
+def _carries(loop):
+    """Whether the iterations of a loop may depend on each other through an array its body assigns.
 
-    That is so when no subscript of an assigned array depends on the loop's
-    variable, directly or through scalars and inner loop bounds computed from
-    it. Such a loop cannot be a dimension of the nest in its body. A body that
-    calls procedures is not looked into, and one that assigns no array element
-    is a nest that accumulates scalars.
+    A cheap reading of the subscripts, to decide which loops are worth trying
+    as loops the host runs around a nest; the dependence analysis has the say
+    on whether a nest compiles. The iterations of a loop are apart when every
+    assigned array is addressed through the loop's variable (directly or
+    through scalars and inner loop bounds computed from it), and wherever the
+    body names that array it has the same subscripts in those places. They may
+    depend on each other when an assigned array is not addressed through the
+    variable at all, as under the steps of an iteration or of time, or when it
+    is named with other subscripts there, as in a sweep through planes that
+    each use the one before. A body that calls procedures is not looked into.
     """
     variable, _bounds = _counted(loop)
     if variable is None or walk(loop, Call_Stmt):
@@ -122,23 +128,39 @@ def _repeats(loop):
             if name is not None and name not in depends and any(named(bound) & depends for bound in bounds):
                 depends.add(name)
                 grown = True
-    targets = [statement.items[0] for statement in assignments if _kind(statement.items[0]) in {"Part_Ref", "Data_Ref"}]
-    # A loop that assigns no array element at all only accumulates scalars: that is a nest of its own kind.
-    return bool(targets) and not any(
-        (named(target) - {str(walk(target, Name)[0]).lower()}) & depends for target in targets)
+
+    def subscripts(reference):
+        listed = reference.items[1]
+        return tuple(_children(listed)) if _kind(listed) == "Section_Subscript_List" else (listed,)
+
+    uses = {}
+    for reference in walk(loop, Part_Ref):
+        uses.setdefault(str(reference.items[0]).lower(), []).append(subscripts(reference))
+    for statement in assignments:
+        target = statement.items[0]
+        if _kind(target) != "Part_Ref":
+            continue
+        written = subscripts(target)
+        places = [index for index, item in enumerate(written) if named(item) & depends]
+        if not places:
+            return True
+        for other in uses[str(target.items[0]).lower()]:
+            if len(other) != len(written) or any(_text(other[index]) != _text(written[index]) for index in places):
+                return True
+    return False
 
 
 def _around_nests(loop):
     """Whether a loop may be one that the host runs around nests, and not the outer loop of a nest.
 
     Either its body is more than one nest (a loop nest beside other statements
-    or nests), or its body is one nest that every iteration applies to the
-    same elements (see ``_repeats``).
+    or nests), or its body is one nest and its iterations may depend on each
+    other (see ``_carries``).
     """
     body = [item for item in _children(loop) if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
     if not any(_kind(item) == "Block_Nonlabel_Do_Construct" for item in body):
         return False
-    return len(body) > 1 or _repeats(loop)
+    return len(body) > 1 or _carries(loop)
 
 
 def _text(node):
@@ -360,6 +382,27 @@ def _array_uses(analysis, routine, nodes):
     return arrays, calls, elsewhere, written & set(arrays), released & set(arrays)
 
 
+def _readable(analysis, routine, parameter):
+    """Whether a scalar input can be read wherever its nest is reached, whatever the nest then does with it.
+
+    A scalar that only a branch of a nest uses may be undefined where no
+    iteration takes the branch. Reading an undefined variable early is still
+    only a load of a value nothing uses, as long as the variable is there. An
+    allocatable scalar may not be; pointers and optional arguments are no
+    inputs of a nest at all. A component is not looked into.
+    """
+    if parameter.rank or parameter.lower_bound_dimension is not None or "%" in parameter.resource:
+        return False
+    name = parameter.resource.rsplit("::", 1)[-1]
+    binding = analysis._binding(routine.scope, name)
+    if binding is None or binding.root != parameter.resource:
+        try:
+            binding = resource_binding(analysis, routine, parameter.resource)
+        except CompilationError:
+            return False
+    return not binding.attributes & {"allocatable", "pointer", "optional"}
+
+
 def _temporaries(analysis, routine, procedure):
     """The temporary arrays of a procedure: locals it allocates and deallocates once, in its own statements.
 
@@ -505,9 +548,10 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     host to hold current values.
 
     A loop whose body holds a loop nest beside other statements, or one nest
-    that every iteration applies to the same elements, may be a nest itself,
-    or a loop the host has to run around nests (an iteration, a time loop).
-    When it cannot be exported, its body is exported in its place. When
+    while its iterations may depend on each other (see ``_carries``), may be a
+    nest itself, or a loop the host has to run around nests (an iteration, a
+    time loop, a sweep). When it cannot be exported, its body is exported in
+    its place. When
     it can, its entry is marked ``descends`` and its body is exported too:
     the entries, rejections and host statements of the body carry
     ``alternative_of``, the spans of the loops they replace, outermost first,
@@ -548,7 +592,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     for procedure in resolved_procedures:
         routine = analysis.routines[procedure]
 
-        def emit(nodes, sequence, outer=(), defined=frozenset()):
+        def emit(nodes, sequence, outer=()):
             if len(nodes) > 1:
                 # Nests over different arrays of derived type bind, and are skipped when empty, separately.
                 objects = [_structure_objects(analysis, routine.scope, node) for node in nodes]
@@ -556,7 +600,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                     start = 0
                     for index in range(1, len(nodes) + 1):
                         if index == len(nodes) or objects[index] != objects[start]:
-                            emit(nodes[start:index], sequence, outer, defined)
+                            emit(nodes[start:index], sequence, outer)
                             start = index
                     return
             first = min(statement_span(node)[0] for node in nodes)
@@ -579,14 +623,14 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                     grouping_rejections.append({"procedure": procedure, "first_line": first,
                                                 "last_line": last, "reason": str(error)})
                     for node in nodes:
-                        emit((node,), sequence, outer, defined)
+                        emit((node,), sequence, outer)
                     return
                 if len(nodes) == 1 and _around_nests(nodes[0]):
                     # Not a nest but a loop around nests, such as an iteration or a time loop: the
                     # host runs it, and what stands in its body is looked at in its own right.
                     grouping_rejections.append({"procedure": procedure, "first_line": first,
                                                 "last_line": last, "reason": str(error)})
-                    within(nodes[0], outer, defined)
+                    within(nodes[0], outer)
                     return
                 rejected.append({"procedure": procedure, "first_line": first, "last_line": last,
                                  "reason": str(error), **alternative(outer), **host_code(nodes)})
@@ -605,33 +649,30 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                             "structures": structures, "injective": _indirect_writes(analysis, routine, loops),
                             # For the case that the entry does not compile and the nests stay host code.
                             "host_code": host_code(nodes),
-                            # Scalar inputs that the procedure's own statements have assigned whenever
-                            # control reaches the nests: reading them at the call reads nothing undefined.
-                            "defined_scalars": sorted(parameter.name for parameter in extracted.parameters
-                                                      if not parameter.rank and parameter.name.lower() in defined),
+                            "readable_scalars": sorted(parameter.name for parameter in extracted.parameters
+                                                       if _readable(analysis, routine, parameter)),
                             **alternative(outer)})
             if len(nodes) == 1 and _around_nests(nodes[0]):
                 # Whether the loop runs its iterations independently is decided when the entry is
                 # compiled. In case it does not, its body is exported as well, to be used then.
                 entries[-1]["descends"] = True
-                within(nodes[0], (*outer, (first, last)), defined)
+                within(nodes[0], (*outer, (first, last)))
             elif len(loops) > 1 and any(_around_nests(node) for node in loops):
                 # One of the nests that share this entry may be such a loop. In case the entry does not
                 # compile because of it, each nest is exported on its own as well.
                 entries[-1]["descends"] = True
                 for node in loops:
-                    emit((node,), sequence, (*outer, (first, last)), defined)
+                    emit((node,), sequence, (*outer, (first, last)))
 
         def alternative(outer):
             """Marks what is used only where the loops of the given spans did not compile as entries."""
             return {"alternative_of": [list(span) for span in outer]} if outer else {}
 
-        def within(loop, outer, defined=frozenset()):
+        def within(loop, outer):
             statement = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt")
             host((statement,), False, outer)
-            variable, _bounds = _counted(loop)
             scan(tuple(item for item in _children(loop) if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt"}),
-                 outer, defined | ({variable} if variable else set()))
+                 outer)
 
         def touched(arrays, written, released):
             return [{"name": binding.name, "resource": root, "type": binding.dtype, "kind": binding.kind,
@@ -667,32 +708,26 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                                         "calls": sorted(calls), "acknowledged": acknowledged,
                                         "only_calls": not elsewhere, **alternative(outer)})
 
-        def scan(sequence, outer=(), defined=frozenset()):
-            """Look at a sequence of statements; ``defined`` are the scalars assigned whenever control gets here."""
-            follows, reached = set(), defined
+        def scan(sequence, outer=()):
+            follows = set()
             for group in _entry_groups(sequence, follows):
                 nodes = tuple(group) if isinstance(group, tuple) else (group,)
-                if len(nodes) == 1 and _kind(nodes[0]) in {"Else_Stmt", "Else_If_Stmt"}:
-                    # Another branch: what the branch before it assigned has not happened here.
-                    defined = reached
                 carries = any(_residency_directive(item) for node in nodes for item in walk(node)
                               if _kind(item) == "Comment")
                 if len(nodes) == 1 and _kind(nodes[0]) in {"If_Construct", "Associate_Construct", "Block_Construct"}:
                     # The construct's own statements (its conditions, selectors) are host code as well.
                     host(tuple(item for item in nodes[0].content if _kind(item) in _CONSTRUCT_HEADERS),
                          id(nodes[0]) in follows or carries, outer)
-                    scan(tuple(_children(nodes[0])), outer, defined)
+                    scan(tuple(_children(nodes[0])), outer)
                 elif any(_kind(node) == "Block_Nonlabel_Do_Construct" for node in nodes) and not carries:
-                    emit(nodes, sequence, outer, defined)
+                    emit(nodes, sequence, outer)
                 elif len(nodes) == 1 and _kind(nodes[0]) == "Block_Nonlabel_Do_Construct" \
                         and _around_nests(nodes[0]):
                     # A loop around nests, with directives between them: the host runs it.
-                    within(nodes[0], outer, defined)
+                    within(nodes[0], outer)
                 else:
                     # A nest that carries a residency directive is host code that manages its own access.
                     host(nodes, id(nodes[0]) in follows or carries, outer)
-                    if len(nodes) == 1 and _kind(nodes[0]) == "Assignment_Stmt" and _kind(nodes[0].items[0]) == "Name":
-                        defined = defined | {str(nodes[0].items[0]).lower()}
 
         scan(tuple(_children(routine.execution)))
         temporaries += _temporaries(analysis, routine, procedure)
@@ -704,35 +739,29 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
             "lifetime_authority": "caller storage epoch; numerical export grants no native-effect authority"}
 
 
-def pass_scalars_by_value(extracted, directory, *, resources=(), names=None):
-    """Rewrite exported entries so chosen INTENT(IN) scalars are passed by VALUE.
+def pass_scalars_by_value(extracted, directory):
+    """Rewrite exported entries so that the scalar inputs that can be read early are passed by VALUE.
 
-    Lower-bound parameters always qualify: the caller evaluates them after it
-    binds the reached allocation. So do the scalars an entry's own procedure
-    has assigned whenever control reaches the entry (``defined_scalars`` of the
-    export). ``resources`` names further scalars, as ``module::name``, that
-    the caller guarantees are defined before any entry runs. ``names(entry)``
-    may return the names of scalar parameters that are defined whenever that
-    one entry runs. VALUE is a language-level input contract; other scalars
-    keep their guarded reference ABI: one that only a branch of a nest reads
-    may be undefined where the branch is not taken, and such a nest stays on
-    the host. Returns the export with the rewritten paths.
+    Those are the lower bounds of the bound arrays, which the caller evaluates
+    after it binds the reached allocation, and the INTEGER and REAL scalars
+    whose storage always exists (``readable_scalars`` of the export). Other
+    scalar inputs keep the reference ABI, which reads one only where the
+    original statements would; a nest in which only a branch reads such a
+    scalar stays on the host. Returns the export with the rewritten paths.
     """
     import re
     from hashlib import sha256
 
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
-    resources = set(resources)
     entries = []
     for original in extracted["entries"]:
-        own = {*(names(original) if names is not None else ()), *original.get("defined_scalars", ())}
-        values = [parameter["name"] for parameter in original["parameters"]
-                  if parameter["lower_bound_dimension"] is not None or parameter["resource"] in resources
-                  or (not parameter["rank"] and parameter["name"] in own)]
+        bounds = {parameter["name"] for parameter in original["parameters"]
+                  if parameter["lower_bound_dimension"] is not None}
         source = Path(original["input_path"])
         text = source.read_text()
-        for name in values:
+        values = []
+        for name in (*sorted(bounds), *original.get("readable_scalars", ())):
             pattern = (
                 r"(?im)^([ \t]*(?:integer(?:\s*\([^)]+\))?|real(?:\s*\([^)]+\))?|double\s+precision)"
                 r"(?:(?!\bvalue\b)[^\n])*?),\s*intent\s*\(\s*in\s*\)\s*::\s*("
@@ -740,14 +769,17 @@ def pass_scalars_by_value(extracted, directory, *, resources=(), names=None):
                 + r")\s*$"
             )
             if re.search(rf"(?im)^[ \t]*[^\n]*\bvalue\b[^\n]*::\s*{re.escape(name)}\s*$", text):
+                values.append(name)
                 continue
             text, count = re.subn(pattern, r"\1, value, intent(in) :: \2", text)
-            if count != 1:
+            if count == 1:
+                values.append(name)
+            elif name in bounds:
                 raise CompilationError("Unexpected resident scalar declaration: " + name)
         path = directory / source.name
         path.write_text(text)
         entries.append({**original, "input_path": str(path), "value_inputs": values,
-                        "value_contract": "lower bounds of the bound arrays and scalars the caller defines before any entry",
+                        "value_contract": "lower bounds of the bound arrays and scalars whose storage always exists",
                         "original_numerical_input": {"path": str(source.resolve()),
                                                      "sha256": sha256(source.read_bytes()).hexdigest()}})
     return {**extracted, "entries": entries}
@@ -860,27 +892,30 @@ def compile_resident_entries(extracted, directory, *, host_threads=4):
     host, joins the export's rejections with its source span, so the caller
     keeps that span native. For a span marked ``descends`` (a loop the host
     may run around nests, or nests that share an entry with one) the entries
-    exported for what it holds are compiled in its place: the span is listed
-    under ``descended``, and the host statements of a loop's body under
-    ``host_statements``. Writes and returns ``device-entries.json``.
+    exported for what it holds are compiled in its place, and they are kept
+    when at least one of them compiles: the span is then listed under
+    ``descended``, and the host statements of a loop's body under
+    ``host_statements``. When none compiles the span is rejected as a whole,
+    which hands its arrays to the host once instead of once per iteration; its
+    record says under ``inside`` why what it holds did not compile either.
+    Writes and returns ``device-entries.json``.
     """
     import json
 
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
-    entries, rejected, descended = [], [], []
-    opened = set()
+    entries, rejected, tried = [], [], {}
 
-    def counts(item):
-        """Not an alternative, or one of loops that all turned out not to be entries."""
+    def counts(item, opened):
+        """Not an alternative, or one of spans that all turned out not to be entries."""
         return all((item["procedure"], *span) in opened for span in item.get("alternative_of", ()))
 
     for region in extracted["entries"]:
-        if not counts(region):
+        if not counts(region, tried):
             continue
         target = directory / region["source_identity"][:16]
         span = {"procedure": region["procedure"], "first_line": region["first_line"],
-                "last_line": region["last_line"]}
+                "last_line": region["last_line"], **{key: region[key] for key in ("alternative_of",) if key in region}}
         checked = {requirement["resource"] for requirement in region.get("injective", ())}
         unavailable = ()
         try:
@@ -896,16 +931,33 @@ def compile_resident_entries(extracted, directory, *, host_threads=4):
         if failure is None:
             entries.append({"region": region, "directory": str(target), "entry": report["scoped"]})
         elif region.get("descends"):
-            # The host runs this loop; the nests in its body were exported for this case.
-            opened.add((span["procedure"], span["first_line"], span["last_line"]))
-            descended.append({**span, **failure})
+            # The host may run this loop; what its body holds was exported for this case.
+            tried[span["procedure"], span["first_line"], span["last_line"]] = (
+                {**span, **failure}, region.get("host_code", {}))
         else:
             rejected.append({**span, **failure, **region.get("host_code", {})})
-    rejected = [item for item in extracted["rejected"] if counts(item)] + rejected
+    # A span is worth opening when an entry compiled somewhere inside it.
+    fruitful = {(item["region"]["procedure"], *span) for item in entries
+                for span in item["region"].get("alternative_of", ())}
+    opened = {key for key in tried if key in fruitful}
+    failed = [*extracted["rejected"], *rejected]
+
+    def inside(key):
+        """Why what a span holds did not compile either, for the report."""
+        return sorted({": ".join([item["reason"], *(region["reason"] for region in item.get("regions", ())
+                                                    if region.get("reason"))])
+                       for item in (*failed, *(record for record, _code in tried.values()))
+                       if item["procedure"] == key[0] and list(key[1:]) in item.get("alternative_of", ())})
+
+    rejected = [item for item in failed if counts(item, opened)]
+    rejected += [{**record, **code, "inside": inside(key)} for key, (record, code) in tried.items()
+                 if key not in opened and counts(record, opened)]
+    descended = [{name: value for name, value in record.items() if name != "alternative_of"}
+                 for key, (record, _code) in tried.items() if key in opened]
     record = {"version": 1, "kind": "resident_device_entries", "source_inputs": extracted["source_inputs"],
               "entries": entries, "rejected": rejected, "descended": descended,
               "host_statements": [item for item in extracted.get("host_statements", ())
-                                  if item.get("alternative_of") and counts(item)],
+                                  if item.get("alternative_of") and counts(item, opened)],
               "gpu_execution_established": False}
     (directory / "device-entries.json").write_text(json.dumps(record, indent=2) + "\n")
     return record

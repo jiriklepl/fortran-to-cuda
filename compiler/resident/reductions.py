@@ -44,7 +44,7 @@ assigns that carry no value out of it; without it, such a scalar must be
 declared in the procedure and not be named again after the nest.
 """
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from fnmatch import fnmatchcase
 
 from fparser.two.utils import walk
@@ -284,7 +284,6 @@ class _Nest:
     body: tuple            # first and last line of the innermost prefix loop's body
     reductions: dict       # variable -> (operator, category, type text)
     temporaries: dict      # scalar the nest assigns -> type text
-    unconditional: set = field(default_factory=set)
 
 
 def _analyse(nest, scope, operators, private, lines, last_line):
@@ -380,24 +379,11 @@ def _analyse(nest, scope, operators, private, lines, last_line):
                 return f"{name} is named again after the nest and no private clause names it"
         temporaries[name] = declaration[0]
 
-    # What every iteration reads: statements of the body itself, the conditions of its IF statements and
-    # the bounds of its loops. A name that only a branch or an inner loop reads may go unread.
-    unconditional = set()
-    for item in innermost.content:
-        kind = _kind(item)
-        if kind in {"Assignment_Stmt"}:
-            unconditional.update(_names(item))
-        elif kind == "If_Stmt":
-            unconditional.update(_names(item.items[0]))
-        elif kind == "If_Construct":
-            unconditional.update(_names(_part(item, "If_Then_Stmt")))
-        elif kind == "Block_Nonlabel_Do_Construct":
-            unconditional.update(_names(_part(item, "Nonlabel_Do_Stmt")))
-    return _Nest(loops, body, described, temporaries, unconditional)
+    return _Nest(loops, body, described, temporaries)
 
 
 def _lowered(nest, info, number, lines):
-    """Text that replaces the nest, the declarations it needs and the scalars its entries may take by value."""
+    """Text that replaces the nest, and the declarations it needs."""
     first, last = _span(nest)
     original = lines[first - 1:last]
     indent = original[0][:len(original[0]) - len(original[0].lstrip())]
@@ -415,8 +401,6 @@ def _lowered(nest, info, number, lines):
         *(f"integer :: {tag}l{axis}, {tag}s{axis}, {tag}n{axis}, {copies[loop[0]]}"
           for axis, loop in enumerate(info.loops, 1)),
         *(f"{dtype} :: {copies[name]}" for name, dtype in info.temporaries.items())]
-    values = {f"{tag}total", f"{tag}used", f"{tag}last",
-              *(f"{tag}{letter}{axis}" for axis in range(1, count + 1) for letter in "lsn")}
     start, fold, merge, store, initial = [], [], [], [], []
     needs_infinity = False
     for index, (name, (operator, category, dtype)) in enumerate(reductions, 1):
@@ -427,7 +411,6 @@ def _lowered(nest, info, number, lines):
                          f"{stored}, save, target :: {partial}({SLOTS}), {final}({FINAL})"]
         if operator in {"max", "min"}:
             declarations.append(f"{dtype} :: {identity}")
-            values.add(identity)
             if category == "real":
                 needs_infinity = True
                 sign = "fort_red_negative_inf" if operator == "max" else "fort_red_positive_inf"
@@ -512,8 +495,7 @@ def _lowered(nest, info, number, lines):
     header = _span(_part(nest, "Nonlabel_Do_Stmt"))[1] - first + 1
     host += [*original[:header], indent + "  !$fort host\n", *original[header:]]
     host += put(0, ["end if"])
-    scalars = values | (info.unconditional - set(copies) - set(accumulators))
-    return {"setup": setup, "device": device, "host": host, "declarations": declarations, "scalars": scalars,
+    return {"setup": setup, "device": device, "host": host, "declarations": declarations,
             "infinity": needs_infinity, "on": f"{tag}on", "indent": indent,
             "folded": [f"{tag}q{index}" for index in range(1, len(reductions) + 1)]}
 
@@ -525,9 +507,8 @@ def lower_reductions(text, procedures):
     The new text reaches the residency domain through directives only.
     Returns it and one record per nest that only accumulates scalars: its ``procedure``
     and ``line``, and either ``reason``, why it stays as it is, or ``tag``,
-    the prefix of the names the rewrite introduced, with ``variables`` and
-    ``value_scalars``, the scalars of its nests that are defined whenever the
-    nests run. ``!$fort reduction`` lines are consumed either way.
+    the prefix of the names the rewrite introduced, with ``variables``.
+    ``!$fort reduction`` lines are consumed either way.
     """
     lines = text.splitlines(keepends=True)
     patterns = [pattern.lower() for pattern in procedures]
@@ -627,8 +608,7 @@ def lower_reductions(text, procedures):
                 declarations += part["declarations"]
                 uses_infinity |= part["infinity"]
                 lowered = True
-                records.append({**record, "tag": f"fort_red{number}_", "variables": sorted(info.reductions),
-                                "value_scalars": sorted(part["scalars"])})
+                records.append({**record, "tag": f"fort_red{number}_", "variables": sorted(info.reductions)})
             if group:
                 emit(group)
         if lowered:

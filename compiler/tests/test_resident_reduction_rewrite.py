@@ -116,8 +116,6 @@ def test_a_nest_that_only_accumulates_gets_partial_results_a_fold_and_its_origin
     rest = body[body.index("    else\n", fold):]
     assert rest.startswith("    else\n      !$fort publish if(fort_red1_wide /= 0)\n    do k = 1, nz\n      !$fort host\n")
     assert "          fastest = max(fastest, p)\n" in rest
-    # Scalars every iteration reads, and the ones the rewrite defines, are defined whenever the nests run.
-    assert {"dx", "fort_red1_total", "fort_red1_n3", "fort_red1_i1"} <= set(limits["value_scalars"])
 
 
 def test_a_single_loop_and_a_function_result_take_the_short_form():

@@ -309,7 +309,7 @@ def test_a_guard_states_what_the_loop_bounds_do_not_show(tmp_path):
     assert lines[opening + 3].strip() == "END DO"
     assert Path(entry["input_path"]).read_text().count("nx >= 2") == 0
     # The guard composes with the value ABI, which device placement needs for the lower bound.
-    item, = pass_scalars_by_value(guarded, tmp_path / "values", resources=("halo::nx",))["entries"]
+    item, = pass_scalars_by_value(guarded, tmp_path / "values")["entries"]
     report = compile_resident_entry(item["input_path"], item["entry"], tmp_path / "entry")
     assert all(region["gpu_available"] for region in report["scoped"]["region_execution"])
 
