@@ -537,7 +537,7 @@ def _resolve_procedures(analysis, procedures, *, allow_patterns=False):
     return selected
 
 
-def export_resident_entries(paths, procedures, directory, *, analysis_sources=None, allow_patterns=False):
+def export_resident_entries(paths, procedures, directory, *, allow_patterns=False):
     """Export resident numerical entries for explicit procedures or glob patterns.
 
     Besides ``entries`` and ``rejected``, the result lists ``host_statements``:
@@ -564,7 +564,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     # A main program is analysed as a procedure only when it is asked for by name.
     programs = tuple(sorted({name.lower() for name in procedures or ()
                              if re.fullmatch(r"\$program::[a-z][a-z0-9_]*", name.lower())}))
-    analysis = SourceEffects(paths, analysis_sources=analysis_sources, operations=4096, program_roots=programs)
+    analysis = SourceEffects(paths, operations=4096, program_roots=programs)
     analysis.element_fields = True
     # The body of a module function holds loop nests like any subroutine's.
     for name, routine in analysis.numerical_helpers.items():

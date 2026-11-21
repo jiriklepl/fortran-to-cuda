@@ -166,7 +166,7 @@ class Routine:
 
 
 class SourceEffects:
-    def __init__(self, paths, *, contracts=None, depth=8, procedures=None, operations=256, analysis_sources=None,
+    def __init__(self, paths, *, contracts=None, depth=8, procedures=None, operations=256,
                  summary_cache=None, program_roots=()):
         if min(depth, operations) < 1 or (procedures is not None and procedures < 1):
             raise CompilationError("source effect budgets must be positive")
@@ -194,8 +194,8 @@ class SourceEffects:
         self._analysis_started = False
         self._stable_module_allocatables = frozenset()
         self._allocation_authorizations = {}
-        self.inputs = SourceInputs(paths,analysis_sources)
-        self.sources, self.operation_count = dict(self.inputs.sources), 0
+        inputs = SourceInputs(paths)
+        self.sources, self.operation_count = inputs.sources, 0
         self.kind_expressions = []
         self.contracts = deepcopy(contracts or {})
         if not isinstance(self.contracts, dict):
@@ -213,8 +213,8 @@ class SourceEffects:
             raise CompilationError("program metadata requires exact named original program roots")
         external_nodes, program_nodes = [], []
         source_nodes = 0
-        for filename in self.inputs.paths:
-            tree = self.inputs.parse(filename)
+        for filename in inputs.paths:
+            tree = inputs.parse(filename)
             for node in _children(tree):
                 if (_kind(node) == "Main_Program" and _part(node, "Program_Stmt") is not None
                         and "$program::" + str(_part(node, "Program_Stmt").items[1]).lower() in program_roots):

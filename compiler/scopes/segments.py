@@ -112,9 +112,7 @@ def statement_span(node):
     items = [item for item in walk(node) if getattr(item, "item", None)]
     if not items:
         raise CompilationError("structured source operation lacks an exact edit span")
-    spans = [getattr(item.item, "fort_original_span", item.item.span) for item in items]
-    if any(span is None for span in spans):
-        raise CompilationError("structured source operation lacks an original edit span")
+    spans = [item.item.span for item in items]
     return min(span[0] for span in spans), max(span[1] for span in spans)
 
 
