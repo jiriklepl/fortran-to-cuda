@@ -6,8 +6,6 @@
 #include "scoped_regions.hpp"
 #include "scoped_graphs.hpp"
 #include "floating_environment.hpp"
-#define FORT_SCOPE_TEAM_OBSERVER_IMPLEMENTATION
-#include "scoped_team_observer.hpp"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -2035,7 +2033,6 @@ template<class F> int protect(F &&f) noexcept {
         diagnostic("cannot preserve the caller floating-point environment");
         return FORT_SCOPE_RESOURCE;
     }
-    fort_scoped::TeamObservation observation(FORT_SCOPE_TEAM_OBSERVE_API);
     try { f(); return FORT_SCOPE_OK; }
     catch (const Error &error) { diagnostic(error.what()); return error.status; }
     catch (const Fragmented &) { diagnostic("section fragmentation requires a scope boundary"); return FORT_SCOPE_BOUNDARY; }

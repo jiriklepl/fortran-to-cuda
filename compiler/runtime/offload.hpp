@@ -43,23 +43,6 @@ inline int thread_id() {
     return 0;
 #endif
 }
-inline int team_size() {
-#ifdef _OPENMP
-    return omp_get_num_threads();
-#else
-    return 1;
-#endif
-}
-inline bool in_parallel() {
-#ifdef _OPENMP
-    return omp_get_level() != 0;
-#else
-    return false;
-#endif
-}
-inline bool context_valid(int threads, bool collective) {
-    return collective ? in_parallel() && team_size() == threads : !in_parallel();
-}
 
 inline const std::string &cpu_identity() {
     static const std::string name = []() {
