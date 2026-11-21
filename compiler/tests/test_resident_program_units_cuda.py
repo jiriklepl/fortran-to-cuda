@@ -46,11 +46,12 @@ def test_the_time_loop_of_a_main_program_runs_its_nests_on_the_device(tmp_path):
                    for line in trace.splitlines())
     # Per sweep: the stencil, the partial maxima and the copy; four times the scaling and its maximum.
     assert launches == 3 * 40 + 2 * 4
-    # Nothing but partial results comes back inside the loop. The two fields are downloaded once, after
-    # the last launch, and only the part the device changed.
+    # Inside the loop only partial results come back, except at every tenth sweep, where a host statement
+    # sets one cell: it gets the two fields it names, and the device takes the changed one back before the
+    # next nest. After the last launch the field the device changed since is downloaded once more.
     events = [line for line in trace.splitlines()
               if line.startswith(("FORT_SCOPED launch ", "FORT_SCOPED graph_kernel ", "FORT_SCOPED download "))]
     large = [index for index, line in enumerate(events) if line.startswith("FORT_SCOPED download ")
              and int(line.split("bytes=")[1].split()[0]) > 256 * 8]
-    assert [int(events[index].split("bytes=")[1].split()[0]) for index in large] == [96 * 96 * 8] * 2
-    assert large == [len(events) - 2, len(events) - 1]
+    assert len(large) == 4 * 2 + 1
+    assert large[-1] == len(events) - 1

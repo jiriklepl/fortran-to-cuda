@@ -86,12 +86,18 @@ def test_a_main_program_with_its_time_loop_is_prepared(tmp_path):
         ("$external::damp", True), ("$program::relax", True)]
     assert [(row["procedure"], row["lowered"]) for row in prepared["array_statements"]] == [
         ("$external::damp", True), *[("$program::relax", True)] * 4]
-    # The directives before the output and the deallocation answer for the host statements there.
-    assert prepared["audit"] == []
+    # The directives before the output and the deallocation answer for the host statements there. The one
+    # cell that a plain statement sets inside the loop gets its access generated.
+    assert [(item["text"], item["arrays"], item["access"]) for item in prepared["audit"]] == [
+        ("u(n, n) = 0.5_rp * (u(n, n) + v(n - 1, n))", ["u", "v"], "arrays")]
     text = (tmp_path / "prepared/sources/relax.f90").read_text()
     sweeps = text[text.index("do sweep = 1, sweeps"):text.index("open(newunit=unit")]
     # The host runs the sweep loop; the nests in its body are entries.
     assert sweeps.count("call resident_require(fort_device_run(") >= 3
+    cell = sweeps[sweeps.index("call resident%observe([ &"):sweeps.index("call damp(u, n, top)")]
+    # v is only read there; u is read and changed, so the host holds it until the statement is through.
+    assert cell.index("resident%held(v)") < cell.index("call resident%host_modify([ &") \
+        < cell.index("u(n, n) = 0.5_rp * (u(n, n) + v(n-1, n))") < cell.index("call resident%host_done([ &")
     assert "call damp(u, n, top)" in sweeps
     # An external procedure's dummies get no TARGET: its callers have no interface to learn it from.
     damp = text[text.index("subroutine damp"):]

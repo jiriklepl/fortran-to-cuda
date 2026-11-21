@@ -43,6 +43,8 @@ program relax
     !$omp end parallel do
     u(1:n, 1:n) = v(1:n, 1:n)
     if (mod(sweep, 10) == 0) then
+      ! One cell is set by a statement that is no loop: the host does it, with the values the device has.
+      u(n, n) = 0.5_rp * (u(n, n) + v(n-1, n))
       call damp(u, n, top)
       print '(a,i0,a,es24.16,a,es24.16)', 'sweep ', sweep, ' change ', change, ' top ', top
     end if

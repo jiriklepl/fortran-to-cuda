@@ -77,9 +77,12 @@ module fort_resident_domain
     generic :: bind => bind_real32, bind_real64, bind_integer32
     procedure :: bind_field
     procedure :: observe_field
+    procedure :: held
     procedure :: observe
     procedure :: host_begin
     procedure :: host_end
+    procedure :: host_modify
+    procedure :: host_done
     procedure :: host_box_real32
     procedure :: host_box_real64
     generic :: host_box_real => host_box_real32, host_box_real64
@@ -394,16 +397,54 @@ contains
                                  FORT_SCOPE_INTEGER32,4_c_size_t,initialized,saved,origin)
   end function
 
+  ! The handle of the registered storage that holds the first of these values,
+  ! and 0 when none does. Host statements that are about to use an array ask
+  ! this way: only what entries keep on the device needs anything done, and
+  ! the question registers nothing. An empty array holds no values. A section,
+  ! or a dummy associated with part of an array, names the whole of that
+  ! array's storage, which is what its values are kept in.
+  function held(self, values) result(handle)
+    class(resident_domain), intent(in) :: self
+    type(*), target, intent(in) :: values(..)
+    integer(c_int64_t) :: handle, address, first
+    integer :: i
+    handle=0
+    if (.not. self%active) return
+    if (size(values)==0) return
+    address=transfer(c_loc(values),address)
+    do i=1,size(self%storage)
+      first=self%storage(i)%identity
+      if (address<first) cycle
+      if (address>=first+int(product(self%storage(i)%extents)*self%storage(i)%element_bytes,c_int64_t)) cycle
+      handle=self%storage(i)%handle
+      return
+    enddo
+  end function
+
+  ! The handles that name storage, each once: held gives 0 for an array that
+  ! is not on the device, and two names may share one array.
+  pure function distinct_handles(handles) result(found)
+    integer(c_int64_t), intent(in) :: handles(:)
+    integer(c_int64_t), allocatable :: found(:)
+    integer :: i
+    allocate(found(0))
+    do i=1,size(handles)
+      if (handles(i)/=0 .and. .not. any(found==handles(i))) found=[found,handles(i)]
+    enddo
+  end function
+
   subroutine observe(self, handles)
     class(resident_domain), intent(inout) :: self
-    integer(c_int64_t), target, intent(in) :: handles(:)
+    integer(c_int64_t), intent(in) :: handles(:)
+    integer(c_int64_t), allocatable, target :: bound(:)
     integer :: i
-    if (size(handles)==0) return
-    call resident_require(fort_scope_observe_v1(self%context,c_loc(handles),size(handles,kind=c_size_t)))
+    bound=distinct_handles(handles)
+    if (size(bound)==0) return
+    call resident_require(fort_scope_observe_v1(self%context,c_loc(bound),size(bound,kind=c_size_t)))
     if (.not. allocated(self%mirrors)) return
     do i=1,size(self%mirrors)
       ! A field the device wrote reaches its structures through the copy.
-      if (self%mirrors(i)%written .and. any(handles==self%mirrors(i)%handle)) &
+      if (self%mirrors(i)%written .and. any(bound==self%mirrors(i)%handle)) &
         call copy_field(self%mirrors(i),.false.)
     enddo
   end subroutine
@@ -533,6 +574,33 @@ contains
     class(resident_domain), intent(inout) :: self
     integer(c_int64_t), intent(in) :: handle
     call resident_require(fort_scope_host_end(self%context,handle))
+  end subroutine
+
+  ! Host statements are about to read and change these arrays anywhere: bring
+  ! their values back and take the device copies as outdated once host_done
+  ! has been called for the same arrays.
+  subroutine host_modify(self, handles)
+    class(resident_domain), intent(inout) :: self
+    integer(c_int64_t), intent(in) :: handles(:)
+    integer(c_int64_t), allocatable :: bound(:)
+    type(fort_scope_access) :: access
+    integer :: i
+    access%flags=ior(FORT_SCOPE_READ_ALL,FORT_SCOPE_WRITE_ALL)
+    bound=distinct_handles(handles)
+    do i=1,size(bound)
+      call self%host_begin(bound(i),access)
+    enddo
+  end subroutine
+
+  subroutine host_done(self, handles)
+    class(resident_domain), intent(inout) :: self
+    integer(c_int64_t), intent(in) :: handles(:)
+    integer(c_int64_t), allocatable :: bound(:)
+    integer :: i
+    bound=distinct_handles(handles)
+    do i=size(bound),1,-1
+      call self%host_end(bound(i))
+    enddo
   end subroutine
 
   function host_box_real32(self, values, lower, first, last, writing) result(handle)

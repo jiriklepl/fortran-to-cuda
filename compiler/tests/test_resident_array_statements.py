@@ -75,7 +75,7 @@ def test_a_one_line_if_keeps_its_condition_around_the_nest():
     ("a(2:n, 1) = a(1:n-1, 1)", "it reads other elements of a than it assigns"),
     ("total = other", "it may give total a new shape"),
     ("a = view", "view is a pointer and may share storage with another array"),
-    ("a = scale * b", "scale is not declared in this file with all its attributes"),
+    ("a = scale * b", "scale is not declared in the project's sources with all its attributes"),
     ("a(:, 1) = a(list, 1)", "an array is used as a subscript: list"),
     ("a = spread(w, 1, n)", "the intrinsic spread is not applied element by element"),
     ("a(:, 1) = b(:, 1); j = 1", "it is labelled or shares its line with another statement"),
@@ -95,6 +95,36 @@ def test_working_storage_of_the_procedure_is_not_looked_at():
     text, records = lower_array_statements(saved, ["work::step"])
     assert "flux(fort_arr1_1) = 0" in text
     assert records[0]["lowered"]
+
+
+def test_a_name_from_another_module_is_looked_up_where_it_is_declared():
+    data = """module store
+  use sizes, only: count => n
+  real(8), allocatable :: mean(:,:)
+  real(8) :: weight
+end module
+"""
+    sizes = "module sizes\n  integer :: n\n  real(8) :: other(4)\nend module\n"
+    source = """module work
+  use store
+contains
+  subroutine add(a)
+    real(8), intent(in) :: a(:,:)
+    mean = mean + a * weight
+    mean(1:count, 1) = 0
+    mean(:, 1) = other
+  end subroutine
+end module
+"""
+    text, records = lower_array_statements(data + source, ["work::add"], [sizes])
+    # mean and weight come from the module in the same file; count is n of a module in another source.
+    assert [record.get("lowered") for record in records[:2]] == [True, True]
+    assert "mean(fort_arr1_1, fort_arr1_2) = mean(fort_arr1_1, fort_arr1_2) + a(" in text
+    assert "do fort_arr2_1 = 1, count\n" in text
+    # The ONLY list of store does not pass other on, and nothing else declares it here.
+    assert records[2]["reason"] == "other is not declared in the project's sources with all its attributes"
+    # Without the other source the module that declares mean is still found, in the same text.
+    assert lower_array_statements(data + source, ["work::add"])[1][0]["lowered"]
 
 
 def test_other_statements_and_other_procedures_are_left_alone():

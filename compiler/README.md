@@ -378,7 +378,7 @@ Forms beyond plain array loops that are supported in selected procedures:
   left alone. `prepared.json` lists the statements
   under `array_statements`, `lowered` or with the `reason` they stay. A nest
   that does not compile runs on the host like the statement it came from,
-  and the audit reports it under the statement's id.
+  with the access to its arrays that any host statement gets.
 
 - **Arrays of any declared shape but one.** The arrays of a nest may be
   assumed-shape or explicit-shape dummies (with constant or run-time lower
@@ -475,18 +475,44 @@ when it ends. The count the application starts with is left alone, because it
 can decide results (a parallel random initialization does). An epoch during
 which the host still does its parallel work is begun with `keep_team=.true.`.
 
-`prepare` also audits the selected procedures. A statement there that stays
-host code and names an array some entry binds may read values that are newer
-on the device, so it is reported in `prepared["audit"]` with its procedure,
-line and text, unless a residency directive directly precedes it or all it
-does with such arrays is pass them whole to procedures that are selected
-themselves. A wrapper that is not selected and only passes its arrays on
-counts as what it calls; a section or an expression of an array is a use, not
-a hand-over. Asking for an array's bounds or allocation is not a read. The
-audit does not look into a host procedure that does anything else with an
-array it receives: such a call is a finding. A project lists the findings it
-accepts in `known_host_accesses`; with `strict_audit` any other finding stops
-the preparation.
+`prepare` also gives the host statements of the selected procedures their
+access to arrays on the device. A statement there that stays host code and
+names an array some entry binds would read values that are newer on the
+device, or change values the device then no longer has. The preparation puts
+the hand-over around it:
+
+- arrays the statement only reads are brought up to date and stay on the
+  device;
+- arrays it may change (an assignment target, input, an actual argument the
+  called procedure does not take `INTENT(IN)`) belong to the host until the
+  statement is through, and the device copy is outdated after;
+- an array it deallocates is released first.
+
+The generated block asks the domain which of the arrays it holds when the
+statement runs. An array that is empty, not allocated, or that no entry has
+used yet costs nothing, and a dummy that is part of a bound array stands for
+that array. The access of a one-line IF is taken inside its condition, and
+that of a host loop only when the loop runs at all. Where arrays cannot be
+handed over one by one (a field of an array of derived type, or statements
+that control can leave before the arrays are handed back) all device values
+are published first. A call into host code that itself reaches selected
+procedures, and a loop statement that reads an array while entries run in the
+loop, end the stay on the device instead: the entries in there need the arrays
+where the host statement needs them too.
+
+Nothing is generated for a statement that a residency directive directly
+precedes, or that only passes such arrays whole to procedures that are
+selected themselves. A wrapper that is not selected and only passes its arrays
+on counts as what it calls; a section or an expression of an array is a use,
+not a hand-over; asking for an array's bounds or allocation is not a read. A
+project names in `self_managed` the host procedures whose own code sees to the
+arrays they are handed. `prepared["audit"]` lists the statements that got
+access, each with its procedure, lines, text, arrays and `access` (`arrays`,
+or `leave` where the stay on the device ends): every one is a place where
+arrays may travel, so a statement that shows up in a hot path is worth
+selecting or rewriting. The audit looks inside the selected procedures only;
+it does not follow a module array into a host procedure that uses it without
+being handed it.
 
 `compiler/tests/apps/box` is a complete small application built this way. Its
 resident run writes the same bytes as its native run

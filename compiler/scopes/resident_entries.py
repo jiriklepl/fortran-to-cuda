@@ -16,9 +16,11 @@ from fparser.two.Fortran2003 import (
     Assignment_Stmt,
     Call_Stmt,
     Data_Ref,
+    Deallocate_Stmt,
     Intrinsic_Function_Reference,
     Name,
     Part_Ref,
+    Read_Stmt,
 )
 from fparser.two.utils import walk
 
@@ -87,6 +89,40 @@ def _holds_a_sequence(loop):
 
 def _text(node):
     return " ".join(str(node).split())
+
+
+# The inquiry that says whether an array with the attribute exists.
+_EXISTS = {"allocatable": "allocated", "pointer": "associated", "optional": "present"}
+_LEAVING = {"Return_Stmt", "Goto_Stmt", "Computed_Goto_Stmt", "Stop_Stmt", "Error_Stop_Stmt", "Exit_Stmt",
+            "Cycle_Stmt"}
+
+
+def _runs(loop):
+    """A condition under which a counted loop with no stated step runs at all, or None."""
+    if _kind(loop) != "Block_Nonlabel_Do_Construct":
+        return None
+    control = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt").items[1]
+    counted = control.items[1] if control is not None and _kind(control) == "Loop_Control" else None
+    if not counted or len(counted) != 2 or len(counted[1]) != 2:
+        return None
+    return f"({_text(counted[1][1])}) >= ({_text(counted[1][0])})"
+
+
+def _statement_form(nodes):
+    """What generated host access around host statements has to know about their shape.
+
+    ``kind`` is the kind of a single statement or ``group``. A one-line IF
+    comes with its ``condition``, the names in it and its ``action``, so that
+    the access can go inside the condition. ``leaves`` says that control can
+    leave from inside (RETURN, GOTO, EXIT ...), past whatever follows.
+    """
+    form = {"kind": _kind(nodes[0]) if len(nodes) == 1 else "group",
+            "leaves": any(_kind(item) in _LEAVING for node in nodes for item in walk(node))}
+    if form["kind"] == "If_Stmt":
+        condition, action = nodes[0].items[0], nodes[0].items[1]
+        form.update(condition=_text(condition), action=_text(action),
+                    condition_names=sorted({str(name).lower() for name in walk(condition, Name)}))
+    return form
 
 
 def _structure_fields(analysis, scope, node):
@@ -179,15 +215,50 @@ def _indirect_writes(analysis, routine, loops):
             for requirement in requirements]
 
 
+def _other_names(node):
+    """The ids of the names in ``node`` that are components or argument keywords, not variables of the scope."""
+    found = set()
+    for item in walk(node):
+        kind = _kind(item)
+        if kind == "Data_Ref":
+            found.update(id(part.items[0] if _kind(part) == "Part_Ref" else part) for part in item.items[1:])
+        elif kind == "Procedure_Designator":
+            found.add(id(item.items[2]))
+        elif kind in {"Actual_Arg_Spec", "Component_Spec"}:
+            found.add(id(item.items[0]))
+    return found
+
+
 def _array_uses(analysis, routine, nodes):
     """The arrays ``nodes`` name, the procedures they call, and whether an array is used outside a call.
 
     A whole array that is an actual argument is the called procedure's
     business. A section or an expression of it is evaluated here, so it counts
     as a use, like any other mention. Asking for an array's bounds or
-    allocation, or allocating it, reads none of its values.
+    allocation, or allocating it, reads none of its values. Also returns the
+    arrays the statements may change (an assignment target, input, an argument
+    of a procedure that does not take it INTENT(IN)) and those they deallocate.
     """
     arrays, calls, passed, elsewhere = {}, set(), set(), False
+    written, released, others = set(), set(), set()
+
+    def named(node):
+        found = (analysis._binding(routine.scope, name) for name in walk(node, Name) if id(name) not in others)
+        return {binding.root for binding in found if binding is not None and binding.rank}
+
+    def may_write(procedure, arguments):
+        """The arrays among the actual arguments that the called procedure may change."""
+        callee = analysis.routines.get(procedure) or analysis.numerical_helpers.get(procedure)
+        for position, argument in enumerate(_children(arguments) if arguments is not None else ()):
+            keyword = str(argument.items[0]).lower() if _kind(argument) == "Actual_Arg_Spec" else None
+            value = argument.items[1] if keyword is not None else argument
+            formal = None
+            if callee is not None:
+                formal = keyword if keyword is not None else (
+                    callee.arguments[position] if position < len(callee.arguments) else None)
+            binding = callee.scope.bindings.get(formal) if formal is not None else None
+            if binding is None or binding.intent != "in":
+                written.update(named(value))
 
     def whole_arguments(arguments):
         for argument in (_children(arguments) if arguments is not None else ()):
@@ -196,28 +267,43 @@ def _array_uses(analysis, routine, nodes):
                 passed.add(id(value))
 
     for node in nodes:
+        # A component or a keyword may be spelled like an array of the scope; it is not that array.
+        others = _other_names(node)
         for call in walk(node, Call_Stmt):
             whole_arguments(call.items[1])
             try:
-                calls.add(resolve_original_call(analysis, routine.scope, call).procedure)
+                procedure = resolve_original_call(analysis, routine.scope, call).procedure
+                calls.add(procedure)
             except CompilationError:
+                procedure = None
                 calls.update(analysis._candidates(routine.scope, call.items[0]) or ("$unresolved",))
+            may_write(procedure, call.items[1])
         for reference in walk(node, Part_Ref):
             candidates = analysis._candidates(routine.scope, reference.items[0]) or ()
             if len(candidates) == 1 and candidates[0] in analysis.functions \
                     and analysis._binding(routine.scope, reference.items[0]) is None:
                 calls.add(candidates[0])
                 whole_arguments(reference.items[1])
+                may_write(candidates[0], reference.items[1])
+        for statement in walk(node, Assignment_Stmt):
+            target = statement.items[0]
+            while _kind(target) in {"Part_Ref", "Data_Ref"}:
+                target = target.items[0]
+            written.update(named(target))
+        for statement in walk(node, Read_Stmt):
+            written.update(named(statement))
+        for statement in walk(node, Deallocate_Stmt):
+            released.update(named(statement))
         inquired = {id(reference.items[1].items[0]) for reference in walk(node, Intrinsic_Function_Reference)
                     if str(reference.items[0]).lower() in _INQUIRIES and reference.items[1] is not None
                     and reference.items[1].items}
         inquired |= {id(allocation.items[0]) for allocation in walk(node, Allocation)}
         for name in walk(node, Name):
             binding = analysis._binding(routine.scope, name)
-            if binding is not None and binding.rank and id(name) not in inquired:
-                arrays[binding.root] = binding.name
+            if binding is not None and binding.rank and id(name) not in inquired and id(name) not in others:
+                arrays[binding.root] = binding
                 elsewhere |= id(name) not in passed
-    return arrays, calls, elsewhere
+    return arrays, calls, elsewhere, written & set(arrays), released & set(arrays)
 
 
 def _forwarders(analysis, selected, host_statements):
@@ -233,7 +319,7 @@ def _forwarders(analysis, selected, host_statements):
         routine = analysis.routines.get(name) or analysis.numerical_helpers.get(name)
         if name in found or name in selected or routine is None or routine.execution is None:
             continue
-        _arrays, calls, elsewhere = _array_uses(analysis, routine, tuple(_children(routine.execution)))
+        _arrays, calls, elsewhere, _written, _released = _array_uses(analysis, routine, tuple(_children(routine.execution)))
         found[name] = {"only_calls": not elsewhere, "calls": sorted(calls)}
         pending.update(calls)
     return found
@@ -358,7 +444,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                     within(nodes[0], outer)
                     return
                 rejected.append({"procedure": procedure, "first_line": first, "last_line": last,
-                                 "reason": str(error), **alternative(outer)})
+                                 "reason": str(error), **alternative(outer), **host_code(nodes)})
                 return
             path = extracted.write(directory)
             structures = []
@@ -372,6 +458,8 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                             "input_path": str(path.resolve()), **extracted.public(),
                             "source_loop_spans": [list(statement_span(node)) for node in loops],
                             "structures": structures, "injective": _indirect_writes(analysis, routine, loops),
+                            # For the case that the entry does not compile and the nests stay host code.
+                            "host_code": host_code(nodes),
                             **alternative(outer)})
             if len(nodes) == 1 and _holds_a_sequence(nodes[0]):
                 # Whether the loop runs its iterations independently is decided when the entry is
@@ -389,9 +477,26 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
             scan(tuple(item for item in _children(loop) if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt"}),
                  outer)
 
+        def touched(arrays, written, released):
+            return [{"name": binding.name, "resource": root, "type": binding.dtype, "kind": binding.kind,
+                     "rank": binding.rank, "field": hasattr(binding, "component_object"),
+                     # What must hold for the array to exist when the statements start.
+                     "exists": sorted(_EXISTS[name] for name in binding.attributes if name in _EXISTS),
+                     "access": "release" if root in released else "write" if root in written else "read"}
+                    for root, binding in sorted(arrays.items())]
+
+        def host_code(nodes):
+            """How a nest that stays on the host touches arrays, for the access it then needs; {} if unknown."""
+            try:
+                arrays, _calls, _elsewhere, written, released = _array_uses(analysis, routine, nodes)
+            except CompilationError:
+                return {}
+            return {"arrays": touched(arrays, written, released), **_statement_form(nodes),
+                    **({"runs": _runs(nodes[0])} if len(nodes) == 1 and _runs(nodes[0]) else {})}
+
         def host(nodes, acknowledged, outer=()):
             """Record host code that names arrays: it runs beside entries that may hold newer values."""
-            arrays, calls, elsewhere = _array_uses(analysis, routine, nodes)
+            arrays, calls, elsewhere, written, released = _array_uses(analysis, routine, nodes)
             if arrays:
                 first = min(statement_span(node)[0] for node in nodes)
                 last = max(statement_span(node)[1] for node in nodes)
@@ -401,8 +506,8 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                                         "text": text if len(text) <= 240 else text[:237] + "...",
                                         # Stable while the statement and its procedure keep their text.
                                         "id": sha256((procedure + "\n" + text).encode()).hexdigest()[:16],
-                                        "arrays": [{"name": name, "resource": root}
-                                                   for root, name in sorted(arrays.items())],
+                                        "arrays": touched(arrays, written, released),
+                                        **_statement_form(nodes),
                                         "calls": sorted(calls), "acknowledged": acknowledged,
                                         "only_calls": not elsewhere, **alternative(outer)})
 
@@ -628,7 +733,7 @@ def compile_resident_entries(extracted, directory, *, host_threads=4):
             opened.add((span["procedure"], span["first_line"], span["last_line"]))
             descended.append({**span, **failure})
         else:
-            rejected.append({**span, **failure})
+            rejected.append({**span, **failure, **region.get("host_code", {})})
     rejected = [item for item in extracted["rejected"] if counts(item)] + rejected
     record = {"version": 1, "kind": "resident_device_entries", "source_inputs": extracted["source_inputs"],
               "entries": entries, "rejected": rejected, "descended": descended,

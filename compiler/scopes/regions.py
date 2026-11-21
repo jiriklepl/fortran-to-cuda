@@ -157,8 +157,22 @@ def _variable_names(node):
         yield from _variable_names(child)
 
 
+def _named(analysis, routine, node, arrays):
+    """Roots of the scalars, or of the arrays, that ``node`` may read.
+
+    Where the statement uses something its references cannot be resolved for
+    (an object whose association is uncertain, say), every name in it counts:
+    more than it reads, which is the safe side for liveness.
+    """
+    try:
+        return {binding.root for binding, _ in references(analysis, routine.scope, node) if bool(binding.rank) == arrays}
+    except CompilationError:
+        found = (analysis._binding(routine.scope, name) for name in walk(node, F.Name))
+        return {binding.root for binding in found if binding is not None and bool(binding.rank) == arrays}
+
+
 def _scalar_reads(analysis, routine, node):
-    result = {binding.root for binding, _ in references(analysis, routine.scope, node) if not binding.rank}
+    result = _named(analysis, routine, node, False)
     # Passing a lexical procedure to a native call may expose its captures even
     # though no scalar occurs in the actual argument text.
     for name in walk(node, F.Name):
@@ -187,8 +201,13 @@ def _host_associated_reads(analysis, routine, helper, active=frozenset()):
     for part in (_part(helper.scope.node, 'Specification_Part'), helper.execution):
         if part is None:
             continue
-        found.update(binding.root for binding, _ in references(analysis, helper.scope, part)
-                     if binding.root in roots)
+        try:
+            found.update([binding.root for binding, _ in references(analysis, helper.scope, part)
+                          if binding.root in roots])
+        except CompilationError:
+            # Something in it cannot be resolved: every name of the host that it mentions counts as read.
+            named = (analysis._binding(helper.scope, name) for name in walk(part, F.Name))
+            found.update(binding.root for binding in named if binding is not None and binding.root in roots)
         for name in walk(part, F.Name):
             child = _helper(analysis, helper, name)
             if child is not None:
@@ -640,7 +659,7 @@ def _upward_array_reads(analysis, routine, nodes):
     The numerical frontend separately proves every used output element.
     """
     def reads(node):
-        return {binding.root for binding, _ in references(analysis, routine.scope, node) if binding.rank}
+        return _named(analysis, routine, node, True)
     defined, incoming = set(), set()
     for node in nodes:
         kind = _kind(node)

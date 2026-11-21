@@ -23,8 +23,9 @@ The nest assigns element by element, in order, where the statement evaluates
 its whole right-hand side first. The two agree unless the statement reads
 elements it also assigns, so a statement is rewritten only when
 
-* every name in it is declared in the same file, as a scalar or as an array of
-  known rank, and no array is a pointer;
+* every name in it is declared in the project's sources, in the procedure, its
+  hosts or a module that reaches it through USE statements, as a scalar or as
+  an array of known rank, and no array is a pointer;
 * the assigned array appears on the right only as exactly the same elements;
 * the right-hand side combines scalars, whole arrays, array sections and array
   elements by operators and by intrinsic functions that apply element by
@@ -69,11 +70,88 @@ def _subscripts(reference):
     return list(listed.items) if _kind(listed) == "Section_Subscript_List" else [listed]
 
 
-class _Names:
-    """What the scopes of one procedure declare."""
+_USE = re.compile(r"(?i)use\b(?:\s*,\s*\w+)?\s*(?:::)?\s*(\w+)\s*(?:,\s*(only\s*:)?\s*(.*))?\Z")
 
-    def __init__(self, scope):
+
+def _imports(node):
+    """The USE statements of a scope: ``(module, only, {local name: name there})`` each."""
+    found = []
+    specification = _part(node, "Specification_Part")
+    for statement in (specification.content if specification is not None else ()):
+        if _kind(statement) != "Use_Stmt":
+            continue
+        match = _USE.match(" ".join(str(statement).split()))
+        if match is None:
+            continue
+        names = {}
+        for item in (match.group(3) or "").split(","):
+            local, _, there = (part.strip().lower() for part in item.partition("=>"))
+            if re.fullmatch(r"\w+", local) and (not there or re.fullmatch(r"\w+", there)):
+                names[local] = there or local
+        found.append((match.group(1).lower(), match.group(2) is not None, names))
+    return found
+
+
+class _Modules:
+    """What the modules of a project declare, read from their sources when a name is looked for."""
+
+    def __init__(self, own, others):
+        # The other sources are read only when a name leads out of this one.
+        self.own, self.others, self.read = own, others, {}
+
+    def _module(self, module):
+        if module not in self.read:
+            self.read[module] = None
+            pattern = re.compile(rf"(?im)^[ \t]*module[ \t]+{re.escape(module)}[ \t]*(?:!.*)?$")
+            for text in (self.own, *([] if pattern.search(self.own) else self.others)):
+                start = pattern.search(text)
+                if start is None:
+                    continue
+                stop = re.compile(r"(?im)^[ \t]*(?:contains\b|end[ \t]*module\b)").search(text, start.end())
+                if stop is None:
+                    continue
+                tree = parse_fortran(text[start.start():stop.start()] + f"end module {module}\n")
+                node = next(item for item in walk(tree) if _kind(item) == "Module")
+                specification = _part(node, "Specification_Part")
+                elsewhere = {str(name).lower() for statement in (specification.content if specification else ())
+                             if _kind(statement) in _ELSEWHERE for name in walk(statement) if _kind(name) == "Name"}
+                self.read[module] = (_declarations(node), _imports(node), elsewhere)
+                break
+        return self.read[module]
+
+    def find(self, module, name, seen=()):
+        """The declaration of ``name`` as ``module`` offers it, its own or one it passes on; None if unknown."""
+        entry = self._module(module)
+        if entry is None or module in seen:
+            return None
+        declarations, imports, elsewhere = entry
+        if name in elsewhere:
+            return None
+        if name in declarations:
+            return declarations[name]
+        return self.through(imports, name, (*seen, module))
+
+    def through(self, imports, name, seen=()):
+        for module, only, names in imports:
+            if name in names:
+                found = self.find(module, names[name], seen)
+            elif only or name in names.values():
+                continue  # Not on the list, or renamed away.
+            else:
+                found = self.find(module, name, seen)
+            if found is not None:
+                return found
+        return None
+
+
+class _Names:
+    """What the scopes of one procedure declare, and what reaches them from modules."""
+
+    def __init__(self, scope, modules):
         self.declared, self.elsewhere = {}, set()
+        self.modules = modules
+        # Innermost first: the procedure's own USE statements, then its hosts'.
+        self.imports = [item for node in (scope.node, *scope.hosts) for item in _imports(node)]
         self.own = _declarations(scope.node)
         heading = _heading(scope.node)
         # The arrays of a main program live as long as the run, like a module's.
@@ -88,12 +166,25 @@ class _Names:
                 if _kind(statement) in _ELSEWHERE:
                     self.elsewhere |= {str(name).lower() for name in walk(statement) if _kind(name) == "Name"}
 
-    def rank(self, name):
-        """The rank of ``name``, 0 for a scalar; raises when the file does not say."""
+    def find(self, name):
+        """``(type, attributes, bounds, initialized)`` of ``name``, or None when the sources do not say."""
         name = name.lower()
-        found = self.declared.get(name)
-        if found is None or name in self.elsewhere:
-            raise _Unchanged(f"{name} is not declared in this file with all its attributes")
+        if name in self.elsewhere:
+            return None
+        if name in self.declared:
+            return self.declared[name]
+        return self.modules.through(self.imports, name)
+
+    def array(self, name):
+        found = self.find(name)
+        return found is not None and found[2] is not None
+
+    def rank(self, name):
+        """The rank of ``name``, 0 for a scalar; raises when the sources do not say."""
+        name = name.lower()
+        found = self.find(name)
+        if found is None:
+            raise _Unchanged(f"{name} is not declared in the project's sources with all its attributes")
         _dtype, attributes, bounds, _initialized = found
         if bounds is None:
             return 0
@@ -108,7 +199,7 @@ class _Names:
         return rank
 
     def allocatable(self, name):
-        return "allocatable" in self.declared[name.lower()][1]
+        return "allocatable" in self.find(name)[1]
 
     def private(self, name):
         """Whether ``name`` is an array of the procedure's own, with no life beyond one call.
@@ -218,11 +309,10 @@ def _nest(statement, names, number, indent):
     target, _, value = statement.items
     kind = _kind(target)
     if kind == "Name":
-        if str(target).lower() not in names.declared or names.declared[str(target).lower()][2] is None:
+        if not names.array(str(target)):
             return None
     elif kind == "Part_Ref":
-        base = str(target.items[0]).lower()
-        if (base not in names.declared or names.declared[base][2] is None
+        if (not names.array(str(target.items[0]))
                 or not any(_kind(item) == "Subscript_Triplet" for item in _subscripts(target))):
             return None
     else:
@@ -288,10 +378,13 @@ def _assignments(nodes):
             yield node, None, node
 
 
-def lower_array_statements(text, procedures):
+def lower_array_statements(text, procedures, sources=()):
     """Rewrite the array assignments outside loops in the selected procedures of one source.
 
     ``procedures`` are ``module::name`` values or globs, as in a selection.
+    ``sources`` are the texts of the project's other sources: a name that
+    reaches the procedure through USE statements is looked up in the module
+    that declares it.
     Returns the new text and one record per array assignment found: its
     ``procedure`` and ``line``, and the ``reason`` it stays, or ``lowered``
     with ``tag``, the prefix of the nest's loop variables, the ``arrays`` it
@@ -304,13 +397,14 @@ def lower_array_statements(text, procedures):
         return text, []
     lines = text.splitlines(keepends=True)
     edits, records, number = [], [], 0
+    modules = _Modules(text, sources)
     for scope in _procedures(parse_fortran(text)):
         if not any(fnmatchcase(scope.qualified, pattern) for pattern in patterns):
             continue
         execution = _part(scope.node, "Execution_Part")
         if execution is None:
             continue
-        names, added = _Names(scope), []
+        names, added = _Names(scope, modules), []
         for node, condition, statement in _assignments(execution.content):
             first, last = _span(node)
             record = {"procedure": scope.qualified, "line": first}

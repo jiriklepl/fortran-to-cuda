@@ -159,7 +159,7 @@ def prepare_pair(tmp_path, *, between="", inside="", **selection):
     return prepared, Path(prepared["sources"][0]["resident"]).read_text()
 
 
-def test_adjacent_nests_share_an_entry_and_a_rejected_nest_publishes_first(tmp_path):
+def test_adjacent_nests_share_an_entry_and_a_rejected_nest_gets_its_arrays_first(tmp_path):
     # The assignment to n ends the group, so the loop-carried nest is compiled, and rejected, on its own.
     prepared, text = prepare_pair(tmp_path)
     summary, = prepared["selections"]
@@ -167,9 +167,16 @@ def test_adjacent_nests_share_an_entry_and_a_rejected_nest_publishes_first(tmp_p
     rejection, = summary["rejected"]
     assert "Cannot parallelize" in rejection["reason"]
     assert text.count("call resident_require(fort_device_run(") == 1
-    # The loop-carried nest stays host code and gets the device values first.
-    publish = text.index("if (resident%active) call resident%publish()")
-    assert text.index("call resident_require(fort_device_run(") < publish < text.index("b(i) = b(i-1) + a(i)", publish)
+    # The loop-carried nest stays host code. Where it runs at all, the array it reads is brought up to
+    # date, the one it changes is handed to the host for as long as the nest takes; nothing else moves.
+    tail = text[text.index("call resident_require(fort_device_run("):]
+    begin = tail.index("fort_host = resident%active .and. ((n) >= (2))")
+    observe = tail.index("call resident%observe([ &\n          resident%held(a)])")
+    modify = tail.index("call resident%host_modify([ &\n          resident%held(b)])")
+    nest = tail.index("b(i) = b(i-1) + a(i)")
+    done = tail.index("if (fort_host) call resident%host_done([ &\n          resident%held(b)])")
+    assert begin < observe < modify < nest < done
+    assert "publish" not in text
 
 
 def test_a_directive_between_two_nests_separates_their_entries_and_stays_in_place(tmp_path):
@@ -279,8 +286,8 @@ def audited(tmp_path, procedures, *, before="", **options):
 def test_the_audit_reports_host_statements_that_touch_arrays_an_entry_binds(tmp_path):
     first, second = audited(tmp_path, ("audited::step",))
     # The element copy reads a on the host right after an entry updated it on the device.
-    assert (first["procedure"], first["arrays"], first["text"], first["known"]) == (
-        "audited::step", ["a"], "b(1) = a(n)", False)
+    assert (first["procedure"], first["arrays"], first["text"], first["access"]) == (
+        "audited::step", ["a"], "b(1) = a(n)", "arrays")
     # The array then goes to a procedure that is not selected and so runs on the host.
     assert (second["arrays"], second["calls"], second["text"]) == (["a"], ["audited::finish"], "CALL finish(a)")
     # The line is that of the preprocessed source the entries were exported from.
@@ -327,14 +334,28 @@ subroutine untouched(c)""")
         "b(1) = a(n)", "CALL finish(a(2 : n))"]
 
 
-def test_known_findings_are_accepted_and_strict_mode_refuses_new_ones(tmp_path):
+def test_host_statements_get_their_access_generated(tmp_path):
     finding, = audited(tmp_path / "report", ("audited::step", "audited::finish"))
-    accepted, = audited(tmp_path / "known", ("audited::step", "audited::finish"),
-                        known_host_accesses=frozenset({finding["id"]}), strict_audit=True)
-    assert accepted["known"]
-    with pytest.raises(ValueError, match=finding["id"] + r" audited::step line \d+: b\(1\) = a\(n\)"):
-        audited(tmp_path / "strict", ("audited::step", "audited::finish"), strict_audit=True)
-    assert not (tmp_path / "strict/prepared/sources").exists()
+    assert finding["access"] == "arrays"
+    text = (tmp_path / "report/prepared/sources/audited.f90").read_text()
+    # The copy reads a and changes b; only a is an array an entry keeps on the device.
+    access = text[text.index("fort_host = resident%active"):text.index("call finish(a)")]
+    assert "if (fort_host) call resident%observe([ &\n          resident%held(a)])" in access
+    assert "host_modify" not in access
+    assert access.index("observe") < access.index("b(1) = a(n)")
+    # A directive in front of the statement says the source sees to it: then nothing is generated.
+    assert audited(tmp_path / "directive", ("audited::step", "audited::finish"), before="!$fort observe(a)") == []
+    assert "fort_host" not in (tmp_path / "directive/prepared/sources/audited.f90").read_text()
+
+
+def test_a_call_into_host_code_hands_over_what_the_callee_may_change(tmp_path):
+    first, second = audited(tmp_path, ("audited::step",))
+    assert (first["access"], second["access"], second["calls"]) == ("arrays", "arrays", ["audited::finish"])
+    text = (tmp_path / "prepared/sources/audited.f90").read_text()
+    call = text[text.index("b(1) = a(n)"):text.index("n = n + 1")]
+    # finish takes its array INTENT(INOUT): the host owns it for the call, and the device copy is stale after.
+    assert call.index("call resident%host_modify([ &") < call.index("call finish(a)") < call.index(
+        "if (fort_host) call resident%host_done([ &")
 
 
 def test_an_array_assignment_whose_nest_does_not_compile_is_the_host_statement_it_was(tmp_path):
@@ -363,18 +384,15 @@ end module
     # A 64-bit integer is not a type the entries take, so the second nest stays on the host.
     assert scaled["lowered"] is False
     assert "wide" in scaled["reason"]
-    # It is not a rejected nest, which would publish everything first: it is the statement, for the audit too.
+    # It is not listed as a rejected nest but as the statement, for the audit too, and gets the statement's
+    # access: its one array is read and changed.
     assert prepared["selections"] == [{"label": "all", "entries": 2, "nests": 2, "rejected": []}]
     finding, = prepared["audit"]
-    assert (finding["arrays"], finding["text"], finding["known"]) == (["a"], "a = a * wide", False)
+    assert (finding["arrays"], finding["text"], finding["access"]) == (["a"], "a = a * wide", "arrays")
     text = (tmp_path / "prepared/sources/sums.f90").read_text()
-    tail = text[text.rindex("    end block\n"):]
-    assert "a(fort_arr2_1) = a(fort_arr2_1) * wide" in tail
-    assert "resident%" not in tail
-    # The finding has the id the unrewritten statement has, so a recorded answer keeps applying.
-    project = ResidentProject((source,), (Selection("all", ("sums::step",)),),
-                              known_host_accesses=frozenset({finding["id"]}), strict_audit=True)
-    assert prepare(project, tmp_path / "known", fortran=fortran_compiler())["audit"][0]["known"]
+    tail = text[text.index("call resident%host_modify([ &"):]
+    assert tail.index("resident%held(a)") < tail.index("a(fort_arr2_1) = a(fort_arr2_1) * wide") \
+        < tail.index("call resident%host_done([ &")
 
 
 def test_fields_of_an_array_of_derived_type_are_bound_through_the_domain(box):
@@ -408,3 +426,79 @@ def test_a_write_through_indices_is_checked_once_per_publication_and_falls_back(
     call = inject.index("call resident_require(fort_device_run(")
     publish = inject.index("if (resident%active) call resident%publish()")
     assert call < publish < inject.index("a(points(q)%xi, points(q)%yj, points(q)%zk) = ", publish)
+
+
+def test_a_call_into_host_code_that_reaches_entries_ends_the_stay_on_the_device(tmp_path):
+    source = tmp_path / "mixed.f90"
+    source.write_text("""module mixed
+integer :: n
+contains
+subroutine step(a)
+real(8), contiguous, intent(inout) :: a(:)
+call double(a)
+call both(a)
+end subroutine
+subroutine double(a)
+real(8), contiguous, intent(inout) :: a(:)
+integer :: i
+do i = 1, n
+a(i) = 2*a(i)
+enddo
+end subroutine
+subroutine both(a)
+real(8), contiguous, intent(inout) :: a(:)
+call double(a)
+if (a(1) > 0) a(1) = 0
+end subroutine
+end module
+""")
+    project = ResidentProject((source,), (Selection("all", ("mixed::step", "mixed::double")),))
+    prepared = prepare(project, tmp_path / "prepared", fortran=fortran_compiler())
+    # both is host code that touches the array itself and also calls a selected procedure with it: giving
+    # it the array would take it from the entry inside. The values come home before the call instead.
+    finding, = prepared["audit"]
+    assert (finding["text"], finding["access"]) == ("CALL both(a)", "leave")
+    text = (tmp_path / "prepared/sources/mixed.f90").read_text()
+    step = text[text.index("subroutine step(a)"):text.index("subroutine double(a)")]
+    assert step.index("call double(a)") < step.index("if (resident%active) call resident%end_epoch()") \
+        < step.index("call both(a)")
+    assert "host_modify" not in step
+
+
+
+def test_generated_access_asks_whether_an_array_exists_and_knows_a_component_from_an_array(tmp_path):
+    source = tmp_path / "sums.f90"
+    source.write_text("""module sums
+type record
+real(8) :: total
+end type
+integer :: n
+real(8), allocatable :: total(:)
+type(record) :: kept
+contains
+subroutine step(a, with)
+real(8), contiguous, intent(inout) :: a(:)
+logical, intent(in) :: with
+integer :: i
+if (with) then
+do i = 1, n
+total(i) = total(i) + a(i)
+enddo
+end if
+kept%total = a(1)
+n = n + int(total(1))
+end subroutine
+end module
+""")
+    prepared = prepare(ResidentProject((source,), (Selection("all", ("sums::step",)),)), tmp_path / "prepared",
+                       fortran=fortran_compiler())
+    component, array = prepared["audit"]
+    # ELMM has both: a module array and a component of a derived type with the same name.
+    assert (component["text"], component["arrays"]) == ("kept % total = a(1)", ["a"])
+    assert (array["text"], array["arrays"]) == ("n = n + INT(total(1))", ["total"])
+    text = (tmp_path / "prepared/sources/sums.f90").read_text()
+    access = text[text.index("kept%total = a(1)"):text.index("n = n + int(total(1))")]
+    # The array is allocated only in runs that use it; binding it otherwise would stop the run.
+    assert "logical :: fort_host, fort_host1\n" in access
+    assert "fort_host1 = allocated(total)\n" in access
+    assert "if (fort_host1) call resident%observe([ &\n" in access

@@ -171,32 +171,128 @@ def entry_call_block(region, entry, domain, held=None):
     return "\n".join(code) + "\n"
 
 
+_OPENING = {"group", "If_Then_Stmt", "Else_If_Stmt", "Associate_Stmt"}
+
+
 def published_native_block(domain):
     """A rejected span: publish the domain's device values, then run the original statements."""
     return (f"    block\n      use {domain.module}, only: {domain.object}\n"
             f"      if ({domain.object}%active) call {domain.object}%publish()\n@ORIGINAL@\n    end block\n")
 
 
-def splice_resident_entries(packages, directory, *, domain, native=None, held=None):
+def host_access_block(code, bound, domain):
+    """The block around host statements that touch arrays entries keep on the device.
+
+    ``code`` describes the statements as the export does: their ``arrays``
+    with how each is used, their ``kind``, whether control ``leaves`` from
+    inside, a ``runs`` condition of a loop, and for a one-line IF its
+    ``condition`` and ``action``. ``bound`` holds the resources entries bind;
+    other arrays need nothing. Arrays that are only read are brought up to
+    date and stay on the device; arrays that may change are handed to the
+    host until the statements are through; a deallocated array is released
+    first. Returns None when no array is bound, and a block that publishes
+    everything where the precise way is not open: a field of an array of
+    derived type, or statements that control can leave before the arrays are
+    handed back. The block asks the domain which of the arrays it holds when
+    the statements run, so an array that is empty, or that no entry has used
+    yet, costs nothing. ``@ORIGINAL@`` marks the statements.
+    """
+    arrays = [item for item in code.get("arrays", ()) if item["resource"] in bound]
+    if "arrays" not in code:
+        return published_native_block(domain)
+    if not arrays:
+        return None
+    if code.get("leave"):
+        # Entries run somewhere inside these statements, beside host code that uses the same arrays: no
+        # hand-over of arrays covers that. The values come back and stay until the application enters again.
+        return (f"    block\n      use {domain.module}, only: {domain.object}\n"
+                f"      if ({domain.object}%active) call {domain.object}%end_epoch()\n    end block\n")
+    modes = {mode: [item for item in arrays if item["access"] == mode] for mode in ("read", "write", "release")}
+    # The opening statements of a construct take their access before the construct, and cannot hand
+    # anything back after it.
+    opening = code.get("kind") in _OPENING
+    precise = all(not item["field"] for item in arrays) \
+        and not (modes["write"] and (code.get("leaves") or opening)) \
+        and all(item["type"] == "real" for item in modes["release"]) \
+        and all(len(item.get("exists", ())) <= 1 for item in arrays)
+    condition = code.get("condition")
+    inner = condition is not None and not {item["name"].lower() for item in arrays} & set(code["condition_names"])
+    margin = "      " if inner else "    "
+    if not precise:
+        body = [f"{margin}block", f"{margin}  use {domain.module}, only: {domain.object}",
+                f"{margin}  if ({domain.object}%active) call {domain.object}%publish()", "@ORIGINAL@", f"{margin}end block"]
+        if opening:
+            body = [*body[:3], body[4]]
+    else:
+        def handles(items):
+            # Asked of the domain, not registered: an array no entry has used yet has nothing on the device.
+            return ", &\n".join(f"{margin}      {domain.object}%held({item['name']})" for item in items)
+
+        def calls(action, items, when):
+            """One call for the arrays that always exist, and one each for those that may not."""
+            groups = [[item for item in items if not item.get("exists")],
+                      *([item] for item in items if item.get("exists"))]
+            return [f"{margin}  if ({when[id(group[0])] if group[0].get('exists') else when[None]}) "
+                    f"call {domain.object}%{action}([ &\n{handles(group)}])" for group in groups if group]
+
+        active = f"{domain.object}%active" + (f" .and. ({code['runs']})" if code.get("runs") else "")
+        # An array that is not allocated, associated or present has nothing on the device and cannot be bound.
+        # Whether it exists is asked once: the statements may allocate it.
+        maybe = [item for item in arrays if item.get("exists") and item["access"] != "release"]
+        when = {None: f"{domain.prefix}_host",
+                **{id(item): f"{domain.prefix}_host{number}" for number, item in enumerate(maybe, 1)}}
+        body = [f"{margin}block", f"{margin}  use {domain.module}, only: {domain.object}",
+                f"{margin}  logical :: {', '.join(when.values())}",
+                f"{margin}  {domain.prefix}_host = {active}",
+                *(f"{margin}  {when[id(item)]} = {item['exists'][0]}({item['name']})" for item in maybe),
+                *(f"{margin}  {when[id(item)]} = {when[id(item)]} .and. {domain.prefix}_host" for item in maybe)]
+        # RELEASE takes the arrays themselves; the other two take their handles.
+        body += [f"{margin}  if ({domain.prefix}_host"
+                 + "".join(f" .and. {inquiry}({item['name']})" for inquiry in item.get("exists", ()))
+                 + f") call {domain.object}%release_real({item['name']})" for item in modes["release"]]
+        body += calls("observe", modes["read"], when) + calls("host_modify", modes["write"], when)
+        body += [] if opening else ["@ORIGINAL@"]
+        body += calls("host_done", modes["write"], when)
+        body += [f"{margin}end block"]
+    if inner:
+        # The access belongs to the action: a condition that is rarely true must not bring arrays back.
+        body = [f"    if ({condition}) then", *[line.replace("@ORIGINAL@", "@ACTION@") for line in body], "    end if"]
+    return "\n".join(body) + "\n"
+
+
+def splice_resident_entries(packages, directory, *, domain, native=None, held=None, host=()):
     """Write each source with its compiled spans replaced by entry calls.
 
     ``packages`` are records from ``compile_resident_entries``. A rejected span
     is edited only when another span of the same procedure compiled; a
-    procedure with no entry at all is left to its caller. ``native(region,
+    procedure with no entry at all is left to its caller. It gets the host
+    access its arrays need (see ``host_access_block``). ``native(region,
     original)`` may return the complete replacement for a rejected span, or
     None for the default. ``held`` names arrays the domain already holds a
-    handle for (see ``entry_call_block``). Sources are checked against the
-    hashes the export recorded. Writes and returns ``source-edits.json``.
+    handle for (see ``entry_call_block``). ``host`` lists host statements, as
+    the export records them, that get the same access around them. Sources
+    are checked against the hashes the export recorded. Writes and returns
+    ``source-edits.json``.
     """
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
     edits, expected = {}, {}
+    bound = {resource["resource"] for package in packages for item in package["entries"]
+             for resource in item["region"]["resources"] if resource.get("rank", 1)}
+    for statement in host:
+        block = host_access_block(statement, bound, domain)
+        if block is not None:
+            # A block without the statements goes in front of them.
+            last = statement["last_line"] if "@ORIGINAL@" in block or "@ACTION@" in block else statement["first_line"] - 1
+            edits.setdefault(statement["source"], []).append(
+                (statement["first_line"], last, block, None, statement.get("action")))
     for package in packages:
         expected.update(package["source_inputs"])
         for item in package["entries"]:
             region = item["region"]
             edits.setdefault(region["source"], []).append(
-                (region["first_line"], region["last_line"], entry_call_block(region, item["entry"], domain, held), None))
+                (region["first_line"], region["last_line"], entry_call_block(region, item["entry"], domain, held), None,
+                 None))
         for region in package["rejected"]:
             sources = {entry["region"]["source"] for entry in package["entries"]
                        if entry["region"]["procedure"] == region["procedure"]}
@@ -204,8 +300,10 @@ def splice_resident_entries(packages, directory, *, domain, native=None, held=No
                 continue
             if len(sources) != 1:
                 raise ValueError("Ambiguous resident native source")
-            edits.setdefault(next(iter(sources)), []).append(
-                (region["first_line"], region["last_line"], published_native_block(domain), region))
+            block = host_access_block(region, bound, domain)
+            if block is not None or native is not None:
+                edits.setdefault(next(iter(sources)), []).append(
+                    (region["first_line"], region["last_line"], block or "@ORIGINAL@\n", region, region.get("action")))
     records = []
     for source, replacements in edits.items():
         path = Path(source)
@@ -215,9 +313,11 @@ def splice_resident_entries(packages, directory, *, domain, native=None, held=No
         replacements.sort(key=lambda item: item[:3])
         if any(a[1] >= b[0] for a, b in zip(replacements, replacements[1:], strict=False)):
             raise ValueError("Overlapping resident source replacements")
-        for first, last, code, rejected in reversed(replacements):
+        for first, last, code, rejected, action in reversed(replacements):
             original = "".join(lines[first - 1:last])
             custom = native(rejected, original) if rejected is not None and native is not None else None
+            if action is not None:
+                code = code.replace("@ACTION@", "      " + action)
             lines[first - 1:last] = [custom if custom is not None else code.replace("@ORIGINAL@", original.rstrip())]
         target = directory / path.name
         target.write_text("".join(lines))

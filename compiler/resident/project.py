@@ -89,9 +89,9 @@ class ResidentProject:
     handle expression for arrays the domain binds itself. ``addressable`` lists
     the sources whose arrays get the TARGET attribute a binding needs, as
     paths or, where a file name is unique, as names; None means every source.
-    ``known_host_accesses`` holds the ids of audit findings (see ``audit``)
-    the application has accepted; with ``strict_audit`` any other finding is
-    an error instead of a line in the report.
+    ``self_managed`` names procedures outside the selections that see to the
+    arrays they are handed themselves (with residency code of their own), so a
+    call to one needs no access around it (see ``audit``).
     """
 
     sources: tuple[Path, ...]
@@ -103,10 +103,21 @@ class ResidentProject:
     native: Callable[[dict, str], str | None] | None = None
     held: Mapping[tuple[str, str], str] = field(default_factory=dict)
     addressable: tuple[str | Path, ...] | None = None
-    known_host_accesses: frozenset[str] = frozenset()
-    strict_audit: bool = False
+    self_managed: tuple[str, ...] = ()
 
 
+
+
+class _Lazy:
+    """A list that is made when it is first gone through."""
+
+    def __init__(self, make):
+        self.make, self.items = make, None
+
+    def __iter__(self):
+        if self.items is None:
+            self.items = self.make()
+        return iter(self.items)
 
 
 def _rewrite(name, text):
@@ -123,32 +134,45 @@ def _rewrite(name, text):
     return text
 
 
-def audit(extracted, packages, selected, known=frozenset()):
+def audit(extracted, packages, selected, self_managed=()):
     """Host statements of the selected procedures that touch an array an entry binds.
 
     Compiled entries keep such an array's newest values on the device, so a
-    host statement in the same procedure that names it may see stale values
-    unless the host copy was brought up to date first. A statement is not
-    reported when a residency directive directly precedes it or sits inside
-    it, or when all it does with arrays is pass them whole to procedures that
-    are selected themselves, directly or through wrappers that only pass them
-    on. Each finding carries ``known``: whether its id is in the accepted set.
+    host statement in the same procedure that names it needs them brought
+    back first, and the device needs to hear of what the statement changes.
+    The preparation generates that around each statement listed here (see
+    ``resident_splice.host_access_block``). A statement is not listed when a
+    residency directive directly precedes it or sits inside it (the source
+    sees to it), or when all it does with arrays is pass them whole to
+    procedures that are selected themselves, that are named ``self_managed``,
+    or that only pass them on to such procedures. ``access`` is ``arrays`` for
+    access to the arrays the statement names, and ``leave`` where no access to
+    arrays can be right and the values stop being kept on the device instead:
+    a call into host code that itself reaches selected procedures, and a loop
+    statement that reads an array while entries run in the loop.
 
-    The audit looks inside the selected procedures only. It does not follow an
-    array into a host procedure that receives it as an argument, and it cannot
-    see directives that an edit adds later; both show up as findings to accept.
+    The list is for reading: each entry is a place where arrays may travel.
+    The audit looks inside the selected procedures only. It does not follow a
+    module array into a host procedure that uses it without being handed it.
     """
     bound = {resource["resource"] for package in packages for item in package["entries"]
              for resource in item["region"]["resources"] if resource["rank"]}
     forwarders = extracted.get("forwarders", {})
 
     def covered(call, visiting=()):
-        """A selected procedure, or a wrapper whose arrays all end up in selected ones."""
-        if any(fnmatchcase(call, pattern) for pattern in selected):
+        """A selected procedure, one that sees to its arrays itself, or a wrapper around such procedures."""
+        if any(fnmatchcase(call, pattern) for pattern in (*selected, *self_managed)):
             return True
         wrapper = forwarders.get(call)
         return bool(wrapper and wrapper["only_calls"] and call not in visiting
                     and all(covered(item, (*visiting, call)) for item in wrapper["calls"]))
+
+    def reaches(call, visiting=()):
+        if any(fnmatchcase(call, pattern) for pattern in selected):
+            return True
+        wrapper = forwarders.get(call)
+        return bool(wrapper and call not in visiting
+                    and any(reaches(item, (*visiting, call)) for item in wrapper["calls"]))
 
     findings = []
     for statement in extracted["host_statements"]:
@@ -162,7 +186,12 @@ def audit(extracted, packages, selected, known=frozenset()):
                          "source": statement["source"],
                          "first_line": statement["first_line"], "last_line": statement["last_line"],
                          "arrays": arrays, "calls": statement["calls"], "text": statement["text"],
-                         "known": statement["id"] in known})
+                         # A call into host code that itself reaches selected procedures cannot simply be
+                         # given the arrays: the entries in there need them on the device. Nor can a loop
+                         # statement that reads an array while entries run in its loop.
+                         "access": "leave" if statement["kind"] == "Nonlabel_Do_Stmt" or any(
+                             reaches(call) for call in statement["calls"]) else "arrays",
+                         "statement": statement})
     return findings
 
 
@@ -250,7 +279,9 @@ def prepare(project, directory, *, fortran, host_threads=4):
     array_statements = []
     for original in originals:
         text = current[original].read_text()
-        rewritten, records = lower_array_statements(text, patterns)
+        rewritten, records = lower_array_statements(
+            text, patterns, _Lazy(lambda skip=original: [path.read_text() for other, path in current.items()
+                                                         if other != skip]))
         if rewritten != text:
             path = directory / "rewritten" / current[original].name
             path.parent.mkdir(exist_ok=True)
@@ -319,7 +350,8 @@ def prepare(project, directory, *, fortran, host_threads=4):
             mine = [item for item in package["rejected"] if item["procedure"] == record["procedure"]
                     and record["tag"] in "\n".join(lines[item["first_line"] - 1:item["last_line"]])]
             if mine:
-                record.update(lowered=False, reason="; ".join(sorted({item["reason"] for item in mine})))
+                record.update(lowered=False, reason="; ".join(sorted({item["reason"] for item in mine})),
+                              nests=[{**item, "source": str(current[record["source"]])} for item in mine])
                 package = {**package, "rejected": [item for item in package["rejected"] if item not in mine]}
         nests = sum(len(item["region"]["source_loop_spans"]) for item in package["entries"])
         if nests < selection.minimum_nests:
@@ -338,25 +370,23 @@ def prepare(project, directory, *, fortran, host_threads=4):
     # Host statements in the body of a loop count where the host runs the loop, not where it is an entry.
     reached = [item for item in extracted["host_statements"] if not item.get("alternative_of")]
     reached += [item for package in packages for item in package.get("host_statements", ())]
-    findings = audit({**extracted, "host_statements": reached}, packages, patterns, project.known_host_accesses)
+    findings = audit({**extracted, "host_statements": reached}, packages, patterns, project.self_managed)
     bound = {resource["name"].lower().split("%")[0] for package in packages for item in package["entries"]
              for resource in item["region"]["resources"] if resource["rank"]}
+    # Each of them gets the access it needs generated around it.
+    accessed = [{**finding.pop("statement"), "leave": finding["access"] == "leave"} for finding in findings]
     for record in array_statements:
+        nests = record.pop("nests", ())
         named = sorted(bound.intersection(record.get("arrays", ()))) if record.get("lowered") is False else []
         if named:
             # The same finding, with the same id, that the statement gives where it is not rewritten.
             identity = sha256((record["procedure"] + "\n" + record["text"]).encode()).hexdigest()[:16]
             findings.append({"id": identity, "procedure": record["procedure"], "source": str(current[record["source"]]),
                              "first_line": record["line"], "last_line": record["line"], "arrays": named, "calls": [],
-                             "text": record["text"], "known": identity in project.known_host_accesses})
-    unknown = [item for item in findings if not item["known"]]
-    if unknown and project.strict_audit:
-        raise ValueError("Host statements touch arrays that entries keep on the device, with no residency "
-                         "directive before them:\n" + "\n".join(
-                             f"  {item['id']} {item['procedure']} line {item['first_line']}: {item['text']}"
-                             for item in unknown))
+                             "text": record["text"], "access": "arrays"})
+            accessed += nests
     spliced = splice_resident_entries(packages, directory / "spliced", domain=project.domain, native=project.native,
-                                      held=project.held)
+                                      held=project.held, host=accessed)
     replaced = {item["original"]["path"]: Path(item["replacement"]["path"]) for item in spliced["sources"]}
     texts, touched = {}, set()
     for original in originals:
