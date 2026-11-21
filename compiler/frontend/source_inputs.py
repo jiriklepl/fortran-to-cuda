@@ -119,21 +119,6 @@ class SourceInputs:
 
 
 
-    def verify(self):
-        """Standalone input validation is always fresh, even for frozen copies."""
-        self.verify_live()
-
-    def verify_live(self):
-        try:
-            for path,digest in {**self.sources,**self.dependencies}.items():
-                if sha256(Path(path).read_bytes()).hexdigest()!=digest:
-                    raise CompilationError("configured source changed while artifacts were being prepared: "+path)
-            for item in self.entries.values():
-                if sha256(Path(item["path"]).read_bytes()).hexdigest()!=item["sha256"]:
-                    raise CompilationError("configured analysis source changed while artifacts were being prepared")
-        except OSError as error:
-            raise CompilationError("configured source became unavailable while artifacts were being prepared") from error
-
     def public(self):
         if not self.entries:
             return None

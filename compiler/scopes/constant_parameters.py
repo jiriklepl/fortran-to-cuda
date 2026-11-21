@@ -52,7 +52,6 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape, *, cap
         selected.append(binding)
     if not selected:
         return ConstantParameters({}, (), (), "")
-    analysis._require_original(routine.qualified)
     names, ordered, active = {}, [], set()
     captures, capture_authority = [], []
     visits = 0
@@ -67,13 +66,11 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape, *, cap
         scope = binding.declaring_scope
         owner = getattr(scope, "qualified", getattr(scope, "module", None))
         procedure = analysis.numerical_helpers.get(owner)
-        module = analysis.modules.get(owner)
-        role = (analysis._numerical_roles.get(owner) if procedure is not None
-                else analysis._source_module_roles.get(owner))
-        original_scope = procedure.scope if procedure is not None else module
-        if (scope is None or scope is not original_scope or role is None
-                or scope.node is not role[0] or str(scope.node) != role[-1]
-                or scope.bindings.get(binding.name) is not binding or not isinstance(owner, str)
+        declaring = procedure.scope if procedure is not None else analysis.modules.get(owner)
+        # Only a constant that a module or a procedure declares is outlined: not one of a BLOCK,
+        # and not an ASSOCIATE name for one.
+        if (scope is None or scope is not declaring
+                or scope.bindings.get(binding.name) is not binding
                 or binding.root != owner + "::" + binding.name):
             raise CompilationError("inline constant requires its original declaring scope")
         for node in _children(_part(scope.node, "Specification_Part")):

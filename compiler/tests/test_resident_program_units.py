@@ -3,6 +3,7 @@ import pytest
 
 from compiler.resident.project import ResidentProject, Selection, prepare
 from compiler.resident.reductions import lower_reductions
+from compiler.scopes.resident_entries import export_resident_entries
 from compiler.tests.resident_application_support import fortran_compiler, relax_project
 
 pytestmark = pytest.mark.skipif(fortran_compiler() is None, reason="GNU Fortran is required for preprocessing")
@@ -103,6 +104,42 @@ def test_a_main_program_with_its_time_loop_is_prepared(tmp_path):
     damp = text[text.index("subroutine damp"):]
     assert "TARGET" not in damp.split("integer :: i, j")[0]
     assert "ALLOCATABLE, TARGET :: u" in text
+
+
+def test_a_call_in_a_main_program_finds_its_procedure(tmp_path):
+    source = tmp_path / "drive.f90"
+    source.write_text("""module helpers
+contains
+subroutine show(a, n)
+integer, intent(in) :: n
+real(8), intent(in) :: a(n)
+print *, sum(a)
+end subroutine
+end module
+program drive
+use helpers
+implicit none
+integer, parameter :: n = 100
+real(8) :: a(n), b(n)
+integer :: i, step
+a = 1
+b = 0
+do step = 1, 3
+  do i = 2, n - 1
+    b(i) = 0.5d0 * (a(i-1) + a(i+1))
+  end do
+  call show(b, n)
+  do i = 2, n - 1
+    a(i) = b(i)
+  end do
+end do
+end program
+""")
+    exported = export_resident_entries([source], ["$program::drive"], tmp_path / "exported")
+    call, = (item for item in exported["host_statements"] if item["kind"] == "Call_Stmt")
+    # The procedure only reads its array, so the call needs no more of it than a call in a procedure would.
+    assert call["calls"] == ["helpers::show"]
+    assert [(row["name"], row["access"]) for row in call["arrays"]] == [("b", "read")]
 
 
 def test_an_accumulation_inside_a_loop_is_rewritten_only_where_its_order_is_stated():

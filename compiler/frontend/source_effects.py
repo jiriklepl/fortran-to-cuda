@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 from contextlib import suppress
-from copy import copy, deepcopy
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from weakref import WeakValueDictionary
@@ -19,7 +19,6 @@ from fparser.two.utils import Base, walk
 
 from compiler.frontend.lowering import _intrinsic_kind_imports, _KindScope
 from compiler.frontend.source_inputs import SourceInputs
-from compiler.frontend.source_syntax import SourceSyntaxSnapshot
 from compiler.frontend.summary_cache import SummaryCache
 from compiler.ir import CompilationError, SourceLocation
 
@@ -191,7 +190,7 @@ class SourceEffects:
         self._worksharing_completions = {}
         self._worksharing_native_completions = {}
         self._source_scopes, self._associate_scopes, self._block_scopes = {}, {}, {}
-        self._block_scope_roles = {}
+        self.resolved_calls = {}
         self._analysis_started = False
         self._stable_module_allocatables = frozenset()
         self._allocation_authorizations = {}
@@ -280,69 +279,9 @@ class SourceEffects:
                 # intrinsic export before the complete module import graph
                 # exposed a conflict. Never retain that provisional width.
                 binding.kind = None
-        self._source_roles = {name: (routine.execution, self._routine_signature(routine), str(routine.execution))
-                              for name, routine in self.routines.items()}
-        self._numerical_roles = {name: (routine.scope.node, self._routine_signature(routine), str(routine.scope.node))
-                                 for name, routine in self.numerical_helpers.items()}
         from compiler.frontend.component_bindings import register_associates
         for routine in self.numerical_helpers.values():
             register_associates(self, routine)
-        self._source_module_roles = {name: (scope.node, str(scope.node)) for name, scope in self.modules.items()}
-        self._source_module_bindings = {binding.root: (binding, _canonical(binding.public()))
-                                        for scope in self.modules.values() for binding in scope.bindings.values()}
-        from compiler.frontend.source_objects import register_source_object_authority
-        register_source_object_authority(self)
-        from compiler.frontend.source_functions import register_source_function_authority
-        register_source_function_authority(self)
-        self._source_provenance = {}
-        self._source_object_calls = {}
-        for routine in self.numerical_helpers.values():
-            for ordinal, node in enumerate(walk(routine.scope.node)):
-                if _kind(node) == "Call_Stmt":
-                    self._source_object_calls[id(node)] = (node, str(node), routine.scope, ordinal)
-                item = getattr(node, "item", None)
-                if item is not None:
-                    self._source_provenance[id(node)] = (node, item, item.span,
-                                                         getattr(item, "fort_original_span", None))
-        self._source_syntax = SourceSyntaxSnapshot(
-            [*(scope.node for scope in self.modules.values()),
-             *(routine.scope.node for routine in self.numerical_helpers.values())])
-
-
-
-    def verify_source(self):
-        """Check that the source files still hold the text that was parsed."""
-        self.inputs.verify()
-
-
-
-    def private_projection(self):
-        """A copy whose own attributes may be set; it shares the declarations and the syntax."""
-        result = copy(self)
-        result._local_allocation_proofs = {}
-        result._local_allocation_context = None
-        result._original_sequence_exits = {}
-        result._original_reached_positions = {}
-        result._original_reached_positions_owner = None
-        result._library_storage_calls = {}
-        result._library_storage_calls_owner = None
-        result._opaque_library_state_proofs = {}
-        result._metadata_constructor_proofs = {}
-        result._entry_preservations = {}
-        result._entry_preservations_owner = None
-        result._descriptor_blocks = {}
-        result._descriptor_blocks_owner = None
-        result._descriptor_team_proofs = {}
-        result._descriptor_terminating_calls = {}
-        result._owned_record_regions = {}
-        result._owned_record_regions_owner = None
-        result._original_worksharing_storage = {}
-        result._original_worksharing_storage_owner = None
-        result._original_worksharing_storage_receipts = {}
-        result._descriptor_functions = dict(self._descriptor_functions)
-        return result
-
-
 
     def _register_routine(self, parent, node, *, source_kind="module"):
         _attach_execution_directives(node)
@@ -454,27 +393,6 @@ class SourceEffects:
                 reason = reason or "external descriptor or shape requires a proven explicit interface"
         return {"available": reason is None, "kind": "source-proven implicit interface" if reason is None else "explicit interface required",
                 "reason": reason, "caller_interface_proof": False, "keyword_arguments": False}
-
-    def _routine_signature(self, routine):
-        return _canonical({"arguments": routine.arguments, "issues": routine.issues, "source_kind": routine.source_kind,
-                           "bindings": {name: binding.public() for name, binding in routine.scope.bindings.items()},
-                           "lexical_procedures": dict(routine.scope.procedures),
-                           "intrinsic_procedures": dict(routine.scope.intrinsic_procedures),
-                           "intrinsic_wildcards": sorted(routine.scope.intrinsic_wildcards),
-                           "intrinsic_exclusions": {module: sorted(names) for module, names in
-                                                    routine.scope.intrinsic_exclusions.items()},
-                           "imports": routine.scope.imports,
-                           "wildcard_exclusions": {module: sorted(names) for module, names in
-                                                   routine.scope.wildcard_exclusions.items()},
-                           "ambiguous_imports": sorted(routine.scope.ambiguous_imports),
-                           "logical_bound_nodes": {name: [str(node) if node is not None else None for node in binding.lower_bound_nodes]
-                                                   for name, binding in routine.scope.bindings.items()}})
-
-
-
-
-
-
 
     def _import_kinds(self, scope, active=frozenset(), *, _lookups=None):
         if _lookups is None:
@@ -1000,55 +918,3 @@ class SourceEffects:
     def source_scope_for(self, node, default=None):
         from compiler.frontend.component_bindings import source_scope_for
         return source_scope_for(self, node, default)
-
-
-    def _require_original_global(self, *, _syntax=None):
-        """Check shared original files, provenance and module syntax freshly."""
-        self.verify_source()
-        syntax = _syntax if _syntax is not None else self._source_syntax.checkpoint()
-        if any(getattr(node, "item", None) is not item or item.span != span
-               or getattr(item, "fort_original_span", None) != original_span
-               for node, item, span, original_span in self._source_provenance.values()):
-            raise CompilationError("structured effects require unchanged original source span authority")
-        if any(name not in self.modules or self.modules[name].node is not node or not syntax.unchanged(node)
-               for name, (node, _text) in getattr(self, "_source_module_roles", {}).items()):
-            raise CompilationError("structured effects require unchanged original source-backed module authority")
-        return syntax
-
-    def _require_original_routine(self, requested, *, _syntax):
-        """Check one exact routine inside an immediate authenticated demand."""
-        routine = self.routines.get(requested)
-        original = self._source_roles.get(requested)
-        numerical = self._numerical_roles.get(requested)
-        if (routine is None or original is None or routine.execution is not original[0]
-                or self._routine_signature(routine) != original[1] or not _syntax.unchanged(routine.execution)
-                or numerical is None or routine.scope.node is not numerical[0]
-                or not _syntax.unchanged(routine.scope.node)):
-            raise CompilationError("structured effects require original source-backed procedure authority")
-        return routine
-
-    def _require_original(self, requested, *, _syntax=None):
-        """Only original parsed source, not lookalike ASTs, grants authority."""
-        syntax = self._require_original_global(_syntax=_syntax)
-        return self._require_original_routine(requested, _syntax=syntax)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -570,8 +570,6 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     for name, routine in analysis.numerical_helpers.items():
         if routine.source_kind == "function" and name not in analysis.routines:
             analysis.routines[name] = routine
-            analysis._source_roles[name] = (routine.execution, analysis._routine_signature(routine),
-                                            str(routine.execution))
     # So does the body of a main program that was asked for. Its variables live as long as the run, like a
     # module's; the analysis keeps a program frame for call ownership only until it is selected here.
     for name in programs:
@@ -583,8 +581,6 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
             for binding in routine.scope.bindings.values():
                 if not binding.rank:
                     binding.attributes = binding.attributes - {"save"}
-            analysis._source_roles[name] = (routine.execution, analysis._routine_signature(routine),
-                                            str(routine.execution))
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
     resolved_procedures = _resolve_procedures(analysis, procedures, allow_patterns=allow_patterns)
@@ -731,7 +727,6 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
 
         scan(tuple(_children(routine.execution)))
         temporaries += _temporaries(analysis, routine, procedure)
-    analysis.verify_source()
     return {"version": 2, "kind": "caller_owned_resident_entries", "source_inputs": analysis.sources,
             "entries": entries, "rejected": rejected, "grouping_rejections": grouping_rejections,
             "host_statements": host_statements, "temporaries": temporaries,

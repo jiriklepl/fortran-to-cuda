@@ -293,10 +293,6 @@ def _helper_closure(analysis, routine, loops):
                 raise CompilationError("recursive inline numerical helper closure is unsupported")
             if helper.qualified in result:
                 continue
-            original = analysis._numerical_roles.get(helper.qualified)
-            if (original is None or helper.scope.node is not original[0]
-                    or analysis._routine_signature(helper) != original[1] or str(helper.scope.node) != original[2]):
-                raise CompilationError("inline numerical helper requires original source-backed procedure authority")
             statement = _part(helper.scope.node, "Subroutine_Stmt") or _part(helper.scope.node, "Function_Stmt")
             if not any(str(prefix).lower() == "pure" for prefix in _children(statement.items[0])):
                 raise CompilationError("inline numerical helper needs explicit PURE and transitive numerical proof")
@@ -742,12 +738,6 @@ def allocation_guard(analysis, routine, binding, preceding):
 
 def extract_region(analysis, routine, node, *, preceding=(), following=(), cyclic_following=()):
     """Construct a bounded candidate from serial counted loops of the original procedure."""
-    analysis.verify_source()
-    role = analysis._source_roles.get(routine.qualified)
-    if (analysis.routines.get(routine.qualified) is not routine or role is None
-            or routine.execution is not role[0] or analysis._routine_signature(routine) != role[1]
-            or str(routine.execution) != role[2]):
-        raise CompilationError("inline extraction requires the original source-backed routine")
     # The original procedure keeps its declarations and initialization. Only
     # declarations actually borrowed by this region need numerical support.
     # Implicit typing, interfaces and uncertain imports still cannot establish
@@ -959,7 +949,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     # Following native statements need a read/liveness proof, not numerical
     # eligibility. Original fixed metadata fields can carry index reads here
     # without becoming captures or authorizing their own GPU computation.
-    following_analysis = analysis.private_projection()
+    following_analysis = copy.copy(analysis)
     following_analysis._native_metadata = True
     live_scalars = (_upward_reads(following_analysis, routine, following)
                     | _upward_reads(following_analysis, routine, cyclic_following))
@@ -1321,7 +1311,6 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                                    *declarations, *"\n".join(body).splitlines(),
                                    *(["contains", *"\n".join(helper_sources).splitlines()] if helper_sources else []),
                                    "end subroutine", "end module"])) + "\n"
-    analysis.verify_source()
     return RegionExtraction(source_nodes, span, source, module + "::" + procedure, tuple(parameters),
                             tuple(sorted(captures.values(), key=lambda item: item.root)), frozenset(writes),
                             tuple(binding.name for binding in private.values() if not binding.rank), tuple(guards), identity, completion,

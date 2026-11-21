@@ -8,7 +8,6 @@ claim physical transfer coordinates without a runtime descriptor proof.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from types import MappingProxyType
 
 from compiler.ir import CompilationError, SourceLocation
 
@@ -163,9 +162,6 @@ class OriginalCallBudgetExceeded(CompilationError):
     """Original association inspection exceeded a bounded source scan."""
 
 
-_ORIGINAL_CALL_ISSUER = object()
-
-
 @dataclass(frozen=True)
 class OriginalActualType:
     dtype: str
@@ -209,15 +205,6 @@ class ResolvedOriginalCall:
     target: str
     source_kind: str
     callee: object = field(compare=False, repr=False)
-    _caller: object = field(compare=False, repr=False)
-    _analysis: object = field(compare=False, repr=False)
-    _scope: object = field(compare=False, repr=False)
-    _original: object = field(compare=False, repr=False)
-    _scopes: tuple = field(compare=False, repr=False)
-    _roles: object = field(compare=False, repr=False)
-    _schemas: tuple = field(compare=False, repr=False)
-    _limits: tuple = field(compare=False, repr=False)
-    _issuer: object = field(compare=False, repr=False)
 
     def public(self):
         return {"schema_version": 1, "procedure": self.procedure, "target": self.target,
@@ -229,55 +216,41 @@ class ResolvedOriginalCall:
                 "effect_authority": False, "capture_authority": False, "alias_authority": False,
                 "completion_authority": False, "execution_authority": False}
 
-    def validate(self, analysis, scope, original):
-        from compiler.frontend.source_functions import _original, _validate_scope, _validate_scope_roles
-        from compiler.frontend.source_objects import _members, _TypeBuilder
-
-        if (self._issuer is not _ORIGINAL_CALL_ISSUER or analysis is not self._analysis
-                or scope is not self._scope or original is not self._original
-                or getattr(analysis, "_original_call_associations", {}).get((id(analysis), id(original))) is not self):
-            raise CompilationError("original call requires exact issued source association")
-        if self._limits != (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit):
-            raise CompilationError("original call association inspection budgets changed")
-        analysis.verify_source()
-        if (_original(analysis, self._caller.qualified) is not self._caller
-                or _original(analysis, self.procedure) is not self.callee):
-            raise CompilationError("original call procedure authority changed")
-        for retained in self._scopes:
-            _validate_scope(analysis, retained)
-        _validate_scope_roles(analysis, self._roles, {id(scope) for scope in self._scopes})
-        builder = _TypeBuilder(analysis)
-        for schema in self._schemas:
-            record = builder.scope(schema.scope)[5].get(schema.name)
-            if (record is None or record[0] is not schema or record[1] is not schema.node
-                    or record[2] != str(schema.node) or record[3] != _members(schema)):
-                raise CompilationError("original call declaring type authority changed")
-        return self
-
 
 class _OriginalTypes:
     """Bounded declaration/type inspection; no layout, payload or index evaluation."""
-    def __init__(self, analysis):
-        from compiler.frontend.source_objects import _TypeBuilder
+    def __init__(self, analysis, caller_scope):
+        self.analysis, self.caller_scope = analysis, caller_scope
+        self.visits = self.type_lookups = 0
 
-        self.analysis, self.scopes, self.schemas = analysis, {}, {}
-        self.visits = 0
-        reader = self
-
-        class Types(_TypeBuilder):
-            def scope(self, scope):
-                reader.scope(scope)
-                return super().scope(scope)
-
-        self.types = Types(analysis)
-
-    def scope(self, scope):
-        from compiler.frontend.source_functions import _validate_scope
-
-        if scope is not None and id(scope) not in self.scopes:
-            _validate_scope(self.analysis, scope)
-            self.scopes[id(scope)] = scope
-        return scope
+    def resolve(self, scope, name, active=()):
+        """The derived type that a name means in a scope, through USE and host association."""
+        if scope is None or (id(scope), name) in active:
+            return None
+        self.type_lookups += 1
+        if self.type_lookups > self.analysis.procedure_limit or len(active) >= self.analysis.depth_limit:
+            raise CompilationError("source object type resolution budget exhausted")
+        local = getattr(scope, "component_types", {}).get(name)
+        if local is not None:
+            return local
+        sources = self.analysis.use_sources(scope, name)
+        if sources is None:
+            return None
+        found = {}
+        for module, remote in sources:
+            owner = self.analysis.modules.get(module)
+            if owner is None:
+                return None
+            if not self.analysis._exported(owner, remote):
+                if scope.imports.get(name) == (module, remote):
+                    return None
+                continue
+            result = self.resolve(owner, remote, (*active, (id(scope), name)))
+            if result is not None:
+                found[id(result.node)] = result
+        if found:
+            return next(iter(found.values())) if len(found) == 1 else None
+        return self.resolve(scope.parent, name, (*active, (id(scope), name))) if scope.parent else None
 
     def schema(self, scope, dtype):
         from compiler.frontend.component_bindings import _typename
@@ -287,14 +260,12 @@ class _OriginalTypes:
             if dtype not in {"real", "integer", "logical"}:
                 raise CompilationError("original call requires a known nonpolymorphic declared type")
             return None
-        schema = self.types.resolve(scope, name)
+        schema = self.resolve(scope, name)
         if schema is None or schema.reason:
             raise CompilationError("original call declaring type is unavailable or unsupported")
-        self.schemas[id(schema)] = schema
         return schema
 
     def declared(self, binding):
-        self.scope(binding.declaring_scope)
         if binding.declaring_scope.bindings.get(binding.name) is not binding:
             raise CompilationError("original call requires an exact declared binding")
         return OriginalActualType(binding.dtype, binding.kind, binding.rank, binding,
@@ -367,7 +338,6 @@ class _OriginalTypes:
 
     def actual(self, scope, node, depth=0):
         self.tick(depth)
-        self.scope(scope)
         if _kind(node) in {"Name", "Part_Ref", "Data_Ref"}:
             storage = self.storage(scope, node, depth)
             if storage is not None:
@@ -409,7 +379,6 @@ class _OriginalTypes:
 
     def associate(self, callee, actuals):
         result = []
-        self.scope(callee.scope)
         for formal, actual in zip(callee.arguments, actuals, strict=True):
             declaration = callee.scope.bindings[formal]
             expected = self.declared(declaration)
@@ -427,56 +396,20 @@ class _OriginalTypes:
         return tuple(result)
 
 
-def _resolve_original_invocation(analysis, scope, original, *, function=False):
-    from compiler.frontend.source_functions import _original, _scope_roles, _validate_resolution, _walk
-
-    analysis.verify_source()
-    allowed = {"Part_Ref", "Function_Reference", "Structure_Constructor", "Intrinsic_Function_Reference"} if function else {"Call_Stmt"}
-    if _kind(original) not in allowed:
-        raise CompilationError("original association requires the corresponding CALL or function syntax")
-    existing = getattr(analysis, "_original_call_associations", {}).get((id(analysis), id(original)))
-    if existing is not None:
-        return existing.validate(analysis, scope, original)
-    # Find the exact enclosing original routine, including lexical ASSOCIATE
-    # scopes. No projected statement or equal-text clone can issue authority.
-    pending, caller = scope, None
-    while pending is not None:
-        caller = next((routine for routine in analysis.numerical_helpers.values()
-                       if routine.scope is pending), None)
-        if caller is not None:
-            break
-        pending = pending.parent
-    if (caller is None or _original(analysis, caller.qualified) is not caller
-            or not any(node is original for node in _walk(caller.execution))
-            or analysis.source_scope_for(original, caller.scope) is not scope):
-        raise CompilationError("original call requires its exact original statement and lexical scope")
-    roles = MappingProxyType(_scope_roles(analysis))
-    reader = _OriginalTypes(analysis)
-    reader.caller_scope = scope
-    _validate_resolution(analysis, scope, _walk(original), tick=lambda _kind: reader.tick(0),
-                         _scope_validator=reader.scope)
-    callee, actuals, associations, arguments = _resolve_candidates(
-        analysis, scope, original, reader.associate, function=function)
-    if _original(analysis, callee.qualified) is not callee:
-        raise CompilationError("original call requires its exact original callee")
-    proof = ResolvedOriginalCall(callee.qualified, callee.arguments, actuals, associations, arguments,
-                                str(original.items[0]), callee.source_kind, callee, caller, analysis, scope,
-                                original, tuple(reader.scopes.values()), roles, tuple(reader.schemas.values()),
-                                (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit),
-                                _ORIGINAL_CALL_ISSUER)
-    registry = getattr(analysis, "_original_call_associations", None)
-    if registry is None:
-        registry = analysis._original_call_associations = {}
-    registry[id(analysis), id(original)] = proof
-    try:
-        return proof.validate(analysis, scope, original)
-    except BaseException:
-        del registry[id(analysis), id(original)]
-        raise
-
-
 def resolve_original_call(analysis, scope, call_node):
-    """Match an unchanged original CALL without granting physical mapping."""
-    return _resolve_original_invocation(analysis, scope, call_node)
+    """Match a CALL statement of a procedure to the one procedure that it calls.
 
-
+    ``scope`` is the scope the statement stands in. The answer is kept per statement.
+    """
+    if _kind(call_node) != "Call_Stmt":
+        raise CompilationError("original association requires the corresponding CALL syntax")
+    if scope is None or analysis.source_scope_for(call_node) is not scope:
+        raise CompilationError("original call requires its exact original statement and lexical scope")
+    resolved = analysis.resolved_calls.get(id(call_node))
+    if resolved is None:
+        reader = _OriginalTypes(analysis, scope)
+        callee, actuals, associations, arguments = _resolve_candidates(analysis, scope, call_node, reader.associate)
+        resolved = analysis.resolved_calls[id(call_node)] = ResolvedOriginalCall(
+            callee.qualified, callee.arguments, actuals, associations, arguments, str(call_node.items[0]),
+            callee.source_kind, callee)
+    return resolved

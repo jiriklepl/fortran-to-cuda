@@ -976,7 +976,6 @@ python -m pytest compiler/tests/test_resident_application.py
 ```
 
 Shared numerical fixtures live in `tests/support/`. Read-only generated-source
-checks may reuse immutable source text and serialized manifests. Mutation and
-authority tests construct fresh analysis, builders and proofs; they must not
-borrow shared mutable frontend objects. CUDA fixtures reuse the original driver
-and strict arithmetic checks through `tests/support/numerical_cuda.py`.
+checks may reuse immutable source text and serialized manifests. CUDA fixtures
+reuse the original driver and strict arithmetic checks through
+`tests/support/numerical_cuda.py`.

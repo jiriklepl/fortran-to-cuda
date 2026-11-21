@@ -12,7 +12,7 @@ import re
 from copy import copy
 from dataclasses import dataclass, field
 
-from fparser.two.utils import Base, walk
+from fparser.two.utils import Base
 
 from compiler.ir import CompilationError, SourceLocation
 
@@ -303,8 +303,6 @@ def register_associates(analysis, routine):
         analysis._source_scopes, analysis._associate_scopes = {}, {}
     if not hasattr(analysis, "_block_scopes"):
         analysis._block_scopes = {}
-    if not hasattr(analysis, "_block_scope_roles"):
-        analysis._block_scope_roles = {}
 
     def visit(node, scope, path):
         analysis._source_scopes[id(node)] = scope
@@ -327,8 +325,6 @@ def register_associates(analysis, routine):
                     entered = True
                 else:
                     visit(item, child if entered else scope, (*path, index))
-            analysis._block_scope_roles[id(node)] = (child, node, scope,
-                tuple((item, analysis._source_scopes[id(item)]) for item in walk(node) if isinstance(item, Base)))
             return
         if _kind(node) == "Associate_Construct":
             header = next((item for item in _children(node) if _kind(item) == "Associate_Stmt"), None)
