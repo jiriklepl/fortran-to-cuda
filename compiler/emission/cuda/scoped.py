@@ -305,8 +305,6 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
     # A region may be independent only for some values of the entry's scalars. For others the entry does
     # nothing and says so; its caller still has the original statements.
     assumptions = [expression for region in plan.regions for expression in region.assumptions]
-    if assumptions and config.collective:
-        raise CompilationError("an entry whose independence depends on its scalar values has no team form")
     lines += [f"    if (!{render_expression(expression)}) return FORT_SCOPE_DECLINED;" for expression in assumptions]
     lines += [f"    {cpp_type(s)} {s.cpp_name};" for s in host_symbols(function, plan)]
     for s in arrays:
