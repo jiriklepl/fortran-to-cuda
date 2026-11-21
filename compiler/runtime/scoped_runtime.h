@@ -283,8 +283,6 @@ int fort_scope_domain_workspace_release_v1(fort_scope_domain_t domain, uint64_t 
 int fort_scope_serial_caller(void);
 /* Metadata-only check of the ORIGINAL calling thread's IEEE control state. */
 int fort_scope_numerical_environment_supported(void);
-/* Read the context ordinal without initializing or selecting a CUDA device. */
-int fort_scope_device_get(fort_scope_t context, int *device);
 /* Configure before CUDA initialization. Budget counts full-layout payloads
  * plus cached context scratch, independently of the sections transferred. */
 int fort_scope_set_device_budget(fort_scope_t context, size_t bytes);

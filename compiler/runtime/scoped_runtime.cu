@@ -2241,12 +2241,6 @@ extern "C" int fort_scope_serial_caller(void) {
 extern "C" int fort_scope_numerical_environment_supported(void) {
     return fort_runtime::numerical_environment_supported() ? 1 : 0;
 }
-extern "C" int fort_scope_device_get(fort_scope_t h, int *out) {
-    return with(h, [&](Context &c) {
-        require(out, FORT_SCOPE_ARGUMENT, "missing context device output");
-        *out = c.device;
-    }, Change::None);
-}
 extern "C" int fort_scope_set_device_budget(fort_scope_t h, size_t bytes) {
     return with(h, [&](Context &c) {
         if(c.borrowed_domain && c.ready) {

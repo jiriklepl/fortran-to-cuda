@@ -145,7 +145,6 @@ module fort_scoped_memory
   public :: fort_scope_device_budget_default_v1, fort_scope_domain_budget_get_v1
   public :: fort_scope_scratch_acquire_v1, fort_scope_scratch_release_v1, fort_scope_scratch_stats_get_v1
   public :: fort_scope_set_transfers, fort_scope_transfer_stats_get_v1
-  public :: fort_scope_device_get
   public :: fort_scope_serial_caller
   public :: fort_scope_numerical_environment_supported
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
@@ -238,12 +237,6 @@ module fort_scoped_memory
       integer(c_int) :: status
     end function
 
-    function fort_scope_device_get(context, device) bind(C) result(status)
-      import c_int, c_int64_t
-      integer(c_int64_t), value :: context
-      integer(c_int), intent(out) :: device
-      integer(c_int) :: status
-    end function
     function fort_scope_serial_caller() bind(C) result(serial)
       import c_int
       integer(c_int) :: serial
