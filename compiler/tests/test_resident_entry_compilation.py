@@ -89,12 +89,8 @@ def test_in_process_compilation_writes_what_the_command_line_writes(tmp_path):
         assert (tmp_path / "direct" / name).read_bytes() == (tmp_path / "cli" / name).read_bytes(), name
 
 
-def test_a_collective_entry_is_requested_explicitly(tmp_path):
+def test_an_entry_needs_a_positive_thread_budget(tmp_path):
     entry, = export(tmp_path, ("fields::step",))["entries"]
-    serial = compile_resident_entry(entry["input_path"], entry["entry"], tmp_path / "serial")
-    team = compile_resident_entry(entry["input_path"], entry["entry"], tmp_path / "team", collective=True)
-    assert "team" not in serial["scoped"]
-    assert team["scoped"]["team"]["available"]
     with pytest.raises(CompilationError, match="thread budget"):
         compile_resident_entry(entry["input_path"], entry["entry"], tmp_path / "invalid", host_threads=0)
     assert not (tmp_path / "invalid").exists()

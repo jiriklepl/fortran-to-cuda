@@ -61,14 +61,10 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
     view_type = f"fort_scope_view_v{root_view_abi}"
     view_layout_type = f"fort_scope_view_layout_v{root_view_abi}"
     view_get = f"fort_scope_view_get_v{root_view_abi}"
-    if root_views and config.collective:
-        raise CompilationError("borrowed section workers require a serial host coordinator")
     arrays = tuple(s for s in function.parameters if s.rank)
     scalars = tuple(s for s in function.parameters if not s.rank)
     if any(s.intent != "in" for s in scalars):
         raise CompilationError("shared numerical entries require read-only scalar parameters")
-    if config.collective and any(s.by_value for s in scalars):
-        raise CompilationError("VALUE shared entries require a serial host coordinator")
     identity = f"entry-abi:{ENTRY_ABI_VERSION}:{function.module.lower()}::{function.name.lower()}:{plan!r}"
     identity += ":dependency-task-graph-v1"
     if function.requires_numerical_environment:
@@ -142,8 +138,6 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
                   for e in (*box.lower, *box.upper))
         for r in plan.regions
     }
-    if config.collective:
-        lines.insert(5, '#include "scoped_team_observer.hpp"')
     lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
               f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});", "}"]
     captures = {}
@@ -236,7 +230,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
         close()
         return groups
 
-    merged_launches = [] if config.collective or root_views else launch_groups(plan)
+    merged_launches = [] if root_views else launch_groups(plan)
     for group in merged_launches:
         lines.extend(generate_group_kernel(group, array_views=root_views))
     lines += [f'extern "C" int {c_name}({", ".join(signature)}) {{',
@@ -404,7 +398,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
             result += [f"FORT_SHARED_CHECK(fort_access.add({array_argument(s)}, {prefix}));"]
         return result
 
-    def host(step, executable, *, serial_work_tracking=True):
+    def host(step, executable):
         touched = set(step.read_symbols) | set(step.write_symbols)
         # Layout acquisition above has already checked this array-bearing
         # entry's context. Pure local integer/logical setup has no coherent
@@ -423,7 +417,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
                     local_setup = False
                     break
         if local_setup:
-            return [*(["fort_entry_work_started=true;"] if serial_work_tracking else []), *executable]
+            return ["fort_entry_work_started=true;", *executable]
         result = ["{", f"    fort_scoped::{batch_type}<{capacity}> fort_host(fort_context);"]
         for s in arrays:
             if s in touched:
@@ -431,7 +425,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
                 result += [f"    fort_scope_access fort_effect_{s.id}{{}}; fort_effect_{s.id}.flags = {flags};",
                            f"    FORT_SHARED_CHECK(fort_host.add({array_argument(s)}, fort_effect_{s.id}));"]
         return [*result, "    FORT_SHARED_CHECK(fort_host.begin(false));", "    fort_host.executing();",
-                *(["    fort_entry_work_started=true;"] if serial_work_tracking else []),
+                "    fort_entry_work_started=true;",
                 *indent(executable), "    FORT_SHARED_CHECK(fort_host.finish());", "}"]
 
     graph_launch_groups = {}
@@ -538,179 +532,12 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
               *(["    }();", "    if (fort_entry_result && fort_entry_work_started)",
                  '        return fort_scope_execution_error(fort_context, "borrowed numerical entry failed after execution started; unsafe replay prohibited");',
                  "    return fort_entry_result;"]), "}"]
-    team_name = c_name + "_team"
-    if config.collective:
-        conditions = {}
-
-        def collect_conditions(current):
-            for step in current.steps:
-                if isinstance(step, ConditionalRegion):
-                    conditions[id(step)] = "condition_" + str(len(conditions))
-                    collect_conditions(step.then_plan)
-                    collect_conditions(step.else_plan)
-
-        collect_conditions(plan)
-        state_name = name + "_team_state"
-        lines += [f"struct {state_name} {{", "    int status = FORT_SCOPE_OK;",
-                  "    bool cpu_active = false;", "    bool work_started = false;"]
-        if function.requires_numerical_environment:
-            lines += ["    bool environment_supported = true;"]
-        lines += [f"    bool {field} = false;" for field in conditions.values()]
-        for s in arrays:
-            lines += [f"    {cpp_type(s)} *{s.cpp_name} = nullptr;"]
-            lines += [f"    std::size_t {dimension_name(s, axis+1)} = 0;" for axis in range(s.rank)]
-        lines += [f"    {cpp_type(s)} {s.cpp_name}{{}};" for s in locals_]
-        lines += ["};", f'extern "C" int {team_name}({", ".join(signature)}) {{',
-                  "#ifdef _OPENMP",
-                  f"    if (omp_get_level() != 1 || omp_get_num_threads() != {config.host_threads})",
-                  '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "qualified numerical companion requires its fixed level-one team");',
-                  "#else",
-                  '    return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "qualified numerical companion requires OpenMP support");',
-                  "#endif",
-                  "    fort_scoped::TeamObservation fort_entry_observe(FORT_SCOPE_TEAM_OBSERVE_ENTRY);",
-                  f"    {state_name} local_state{{}};", f"    {state_name} *shared = nullptr;",
-                  "    #pragma omp single copyprivate(shared)", "    { shared = &local_state; }"]
-        if function.requires_numerical_environment:
-            lines += ["    if (!fort_runtime::numerical_environment_supported()) {",
-                      "        #pragma omp atomic write", "        shared->environment_supported = false;", "    }",
-                      "    #pragma omp barrier"]
-        lines += ["    #pragma omp master", "    {", "        shared->status = [&]() -> int {"]
-        if function.requires_numerical_environment:
-            lines += ["            if (!shared->environment_supported)",
-                      '                return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported team numerical environment for real short reduction");']
-        lines += [
-                  "            if (fort_scope_abi_version() != FORT_SCOPE_ABI_VERSION)",
-                  '                return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "incompatible shared runtime ABI");',
-                  "            if (fort_mode < 0 || fort_mode > 1)",
-                  '                return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "unknown shared execution mode");']
-        for s in scalars:
-            lines += [f"            if (!fort_scalar_{s.cpp_name})",
-                      '                return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "null shared scalar argument");']
-        for i, s in enumerate(arrays):
-            for other in arrays[:i]:
-                if s in writes or other in writes:
-                    lines += [f"            if ({s.cpp_name}_handle == {other.cpp_name}_handle)",
-                              '                return fort_scope_report_error(FORT_SCOPE_ALIAS, "writable entry arguments alias");']
-            lines += ["            {", "                fort_scope_layout layout{};",
-                      f"                FORT_SHARED_CHECK(fort_scope_layout_get(fort_context, {s.cpp_name}_handle, &layout));",
-                      f"                if (layout.rank != {s.rank} || layout.type != {TYPES[s.dtype][0]} ||",
-                      f"                    layout.element_bytes != sizeof({cpp_type(s)}))",
-                      '                    return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "entry layout/type mismatch");',
-                      f"                shared->{s.cpp_name} = static_cast<{cpp_type(s)} *>(layout.host);"]
-            lines += [f"                shared->{dimension_name(s, axis+1)} = layout.extents[{axis}];"
-                      for axis in range(s.rank)]
-            lines += ["            }"]
-        for s in arrays:
-            if s.intent == "out":
-                lines += [f"            FORT_SHARED_CHECK(fort_scope_forget_definition(fort_context, {s.cpp_name}_handle));"]
-        lines += ["            return FORT_SCOPE_OK;", "        }();", "    }", "    #pragma omp barrier",
-                  "    if (shared->status == FORT_SCOPE_OK) {"]
-        lines += [f"        const {cpp_type(s)} &{s.cpp_name} = *fort_scalar_{s.cpp_name};" for s in scalars]
-        for s in arrays:
-            lines += [f"        auto *{s.cpp_name} = shared->{s.cpp_name};",
-                      f"        {cpp_type(s)} *{s.cpp_name}_device = nullptr;"]
-            lines += [f"        const auto {dimension_name(s, axis+1)} = shared->{dimension_name(s, axis+1)};"
-                      for axis in range(s.rank)]
-        lines += [f"        auto &{s.cpp_name} = shared->{s.cpp_name};" for s in locals_]
-        lines += ["        const bool fort_gpu_requested = fort_mode == 1;"]
-
-        def coordinate(body):
-            # All members must enter the uniform status guard before master
-            # can publish a failure. Otherwise a late reader could skip the
-            # operation's barriers after seeing the newly written status.
-            return ["#pragma omp barrier", "#pragma omp master", "{", "    shared->status = [&]() -> int {",
-                    f'        fort_scoped::TracePosition fort_coordinate_trace(fort_context, "{procedure_id}", "");',
-                    *indent(body, 2), "        return FORT_SCOPE_OK;", "    }();",
-                    "    if (shared->status == FORT_SCOPE_OK && shared->work_started) {",
-                    "        int device = -1;",
-                    "        shared->status = fort_scope_device_get(fort_context, &device);", "    }",
-                    "    if (shared->status != FORT_SCOPE_OK && shared->work_started &&",
-                    "        shared->status != FORT_SCOPE_EXECUTION)",
-                    "        shared->status = fort_scope_execution_error(fort_context, fort_scope_error());",
-                    "}", "#pragma omp barrier"]
-
-        def team_execution(current):
-            result = []
-            for step in current.steps:
-                result += ["if (shared->status == FORT_SCOPE_OK) {"]
-                if isinstance(step, ConditionalRegion):
-                    condition = "shared->" + conditions[id(step)]
-                    preparation = [*prefetch(expression_reads((step.condition,))),
-                                   f"{condition} = {render_expression(step.condition)};"]
-                    result += indent(coordinate(preparation))
-                    # Nested branches need distinct fields: a fast participant
-                    # must not replace a choice before its peers observe it.
-                    result += ["    if (shared->status == FORT_SCOPE_OK) {", f"        if ({condition}) {{",
-                               *indent(team_execution(step.then_plan), 3), "        } else {",
-                               *indent(team_execution(step.else_plan), 3), "        }", "    }"]
-                elif isinstance(step, (HostBlock, SequentialRegion)):
-                    executable = ([render_assignment(a) for a in step.assignments]
-                                  if isinstance(step, HostBlock) else sequential_block(step.body, 0, [0]))
-                    if set(step.write_symbols) & set(arrays):
-                        executable = ["shared->work_started = true;", *executable]
-                    result += indent(coordinate(host(step, executable, serial_work_tracking=False)))
-                elif isinstance(step, ParallelRegion):
-                    # Only master's batch is populated. Its lifetime spans
-                    # the CPU worker barrier; begin owns the materialized
-                    # regions, so temporary descriptor arrays can expire.
-                    result += ["    fort_scoped::TeamObservation fort_worker_observe(FORT_SCOPE_TEAM_OBSERVE_CPU_WORKER);",
-                               f"    fort_scoped::{batch_type}<{capacity}> fort_access(fort_context);"]
-                    body = ["shared->cpu_active = false;", *bounds(step),
-                            "if (!fort_internal_total) return FORT_SCOPE_OK;",
-                            *descriptors(units[step.id])[1:]]
-                    gpu_choice = "false" if protected[step.id] else "fort_gpu_requested"
-                    body += [f"bool fort_gpu = {gpu_choice};"]
-                    if protected[step.id]:
-                        body += [f'if (fort_gpu_requested) offload::decision_trace("{function.name}", "native-scoped-protected-scalar", 0, 1);']
-                    body += [trace_worker(step), *queued_task(step, accepted=(
-                        "shared->work_started = true;", "return FORT_SCOPE_OK;")),
-                             "int fort_status = fort_access.begin(fort_gpu);",
-                             "if (fort_gpu && (fort_status == FORT_SCOPE_RESOURCE || fort_status == FORT_SCOPE_BOUNDARY)) {",
-                             f'    offload::decision_trace("{function.name}", fort_status == FORT_SCOPE_RESOURCE ? "native-scoped-resource" : "native-scoped-boundary", 0, 1);',
-                             "    fort_gpu = false;", "    " + trace_cpu(step), "    fort_status = fort_access.begin(false);", "}",
-                             "FORT_SHARED_CHECK(fort_status);", "fort_scoped::GPUCall fort_gpu_call(fort_context);",
-                             "if (fort_gpu) {", "    fort_status = fort_gpu_call.begin();",
-                             "    if (fort_status == FORT_SCOPE_RESOURCE) {",
-                             "        fort_access.cancel(); fort_gpu = false;", "        " + trace_cpu(step),
-                             f'        offload::decision_trace("{function.name}", "native-scoped-gpu-setup", 0, 1);',
-                             "        fort_status = fort_access.begin(false);", "    }",
-                             "    FORT_SHARED_CHECK(fort_status);", "}"]
-                    for s in arrays:
-                        body += [f"if (fort_gpu) {s.cpp_name}_device = static_cast<{cpp_type(s)} *>(fort_access.device({s.cpp_name}_handle));"]
-                    body += ["shared->work_started = true;", "fort_access.executing();", "if (fort_gpu) {",
-                        "    {", "        fort_scoped::TeamObservation fort_compute_observe(FORT_SCOPE_TEAM_OBSERVE_COMPUTE);", *indent(generate_launch(
-                        step, stream="static_cast<cudaStream_t>(fort_gpu_call.stream)", profile=False,
-                        prepared_bounds=True,
-                        error_check='if (const auto error = cudaGetLastError(); error != cudaSuccess) return fort_scope_execution_error(fort_context, cudaGetErrorString(error));',
-                        launch_record="FORT_SHARED_CHECK(fort_scope_note_launch(fort_context));"), 2), "    }",
-                        "    FORT_SHARED_CHECK(fort_access.finish());", "} else {",
-                        "    shared->cpu_active = true;", "}"]
-                    result += indent(coordinate(body))
-                    arguments = worker_arguments + "".join(f", {s.cpp_name}" for s in captures[step.id])
-                    result += ["    if (shared->status == FORT_SCOPE_OK && shared->cpu_active) {",
-                               "        fort_scoped::TeamObservation fort_compute_observe(FORT_SCOPE_TEAM_OBSERVE_COMPUTE);",
-                               f"        cpu_{step.id}({arguments}, offload::thread_id(), offload::team_size());",
-                               "        #pragma omp barrier", "    } else {", "        #pragma omp barrier", "    }",
-                               "    #pragma omp master", "    {",
-                               "        if (shared->status == FORT_SCOPE_OK && shared->cpu_active) {",
-                               f'            fort_scoped::TracePosition fort_cpu_commit_trace(fort_context, "{procedure_id}", "{implementation_ids[step.id, "generated_cpu"]}");',
-                               "            shared->status = fort_access.finish();", "        }", "    }", "    #pragma omp barrier",
-                               "    fort_worker_observe.record_as(shared->cpu_active ? FORT_SCOPE_TEAM_OBSERVE_CPU_WORKER : FORT_SCOPE_TEAM_OBSERVE_GPU_WORKER);"]
-                else:
-                    raise TypeError(step)
-                result += ["}"]
-            return result
-
-        lines += indent(team_execution(plan), 2)
-        lines += ["    }", "    const int fort_result = shared->status;",
-                  "    #pragma omp barrier", "    return fort_result;", "}"]
     lines += ["}", "#undef FORT_SHARED_CHECK", ""]
     parameters = ["fort_context", "fort_mode", *[array_argument(s) for s in arrays], *[s.cpp_name for s in scalars]]
-    public = "  public :: run, run_team, configure" if config.collective else "  public :: run, configure"
     view_import = ", " + view_type if root_views else ""
     fortran = [f"module {name}", "  use iso_c_binding",
                *(["  use fort_scoped_memory, only: " + view_type] if root_views else []),
-               "  implicit none", "  private", public, "  interface"]
+               "  implicit none", "  private", "  public :: run, configure", "  interface"]
     fortran += _fortran_list("function run(", parameters, f") bind(C, name='{c_name}') result(fort_status)", 4)
     fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool" + view_import, "      integer(c_int) :: fort_status",
                 "      integer(c_int64_t), value :: fort_context", "      integer(c_int), value :: fort_mode"]
@@ -718,15 +545,6 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
                  f"      integer(c_int64_t), value :: {s.cpp_name}_handle") for s in arrays]
     fortran += [f"      {TYPES[s.dtype][1]}, intent(in)" + (", value" if s.by_value else "") + f" :: {s.cpp_name}" for s in scalars]
     fortran += ["    end function"]
-    if config.collective:
-        fortran += _fortran_list("function run_team(", parameters,
-                                 f") bind(C, name='{team_name}') result(fort_status)", 4)
-        fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool",
-                    "      integer(c_int) :: fort_status", "      integer(c_int64_t), value :: fort_context",
-                    "      integer(c_int), value :: fort_mode"]
-        fortran += [f"      integer(c_int64_t), value :: {s.cpp_name}_handle" for s in arrays]
-        fortran += [f"      {TYPES[s.dtype][1]}, intent(in) :: {s.cpp_name}" for s in scalars]
-        fortran += ["    end function"]
     fortran += [f"    function configure(fort_context) bind(C, name='{configure_name}') result(fort_status)",
                 "      import :: c_int, c_int64_t", "      integer(c_int) :: fort_status",
                 "      integer(c_int64_t), value :: fort_context", "    end function",
@@ -749,7 +567,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
             "check": "fort_scope_numerical_environment_supported",
             "rounding": "round to nearest", "exceptions": "host traps disabled",
             "caller_contract": "floating-point exception flags are not observed",
-            "check_position": "before entry work; every run, all collective participants",
+            "check_position": "before entry work; every run",
             "unsupported": "pre-work boundary; original-source caller executes its coherent native operation",
             "generated_cpu_fallback": "does not replace the original source for unsupported environments",
         },
@@ -797,7 +615,6 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
         "groups": list(graph_launch_groups.values()),
         "selection": "device-mode tasks enqueue; host-mode tasks acquire host effects",
         "submission": "context queue spans numerical calls; conflicting host tasks drain dependencies",
-        "collective": "enqueue on original team master; existing team barriers remain",
         "parameter_lifetime": "runtime owns nonempty task values and effects until submission",
         "fusion": "fresh dependence proofs before graph launch planning"}
     if root_views:
@@ -810,16 +627,4 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
             parameter["passing"] = f"root_view_v{root_view_abi}"
         if root_view_abi == 2:
             report["borrowed_views"]["rank_reduction"] = "retained logical axes map to original full-layout pitches; fixed axes select one coordinate"
-    if config.collective:
-        report["team"] = {
-            "available": True, "entry_abi_version": 1, "entry": team_name,
-            "fortran_procedure": "run_team", "argument_order": report["argument_order"],
-            "participation": "qualified_full_team", "expected_omp_level": 1,
-            "host_threads": config.host_threads, "coordinator": "master",
-            "captures": "same context, mode, whole shared buffers and immutable scalar bindings on all participants",
-            "caller_preflight": "allocation and exact descriptor agreement before numerical association; checked controls and complete ordered definition validation before work",
-            "cpu_workers": "all existing team members with tid/team; no nested team",
-            "locals": "shared coordinator preparation; borrowed scalar references",
-            "status": "uniform after matching barriers; no replay after execution starts",
-        }
     return ScopedEmission(numerical_source_prologue() + "\n".join(lines), "\n".join(fortran), report)

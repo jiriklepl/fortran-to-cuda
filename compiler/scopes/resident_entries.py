@@ -780,7 +780,7 @@ def pass_scalars_by_value(extracted, directory):
     return {**extracted, "entries": entries}
 
 
-def compile_resident_entry(source, entry, directory, *, host_threads=4, collective=False, injective=()):
+def compile_resident_entry(source, entry, directory, *, host_threads=4, injective=()):
     """Compile one entry for forced device placement and write its sources.
 
     The directory receives the entry's sources, the runtime headers they
@@ -799,7 +799,7 @@ def compile_resident_entry(source, entry, directory, *, host_threads=4, collecti
     from compiler.offload.config import OffloadConfig
 
     try:
-        config = OffloadConfig(host_threads, collective, "direct")
+        config = OffloadConfig(host_threads, "direct")
     except ValueError as error:
         raise CompilationError(str(error)) from error
     options = CompilerOptions(opt_level=1, fallback="error", scope_transfers="direct",
