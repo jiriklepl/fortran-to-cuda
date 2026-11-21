@@ -691,3 +691,30 @@ def test_a_condition_that_only_says_a_loop_is_too_short_is_no_condition(tmp_path
     # In place the nest conflicts with itself whenever it has two iterations: that stays a rejection.
     assert summary["entries"] == 0
     assert "Cannot parallelize" in "".join(item["reason"] + "".join(item.get("inside", ())) for item in summary["rejected"])
+
+
+def test_an_entry_takes_an_assumed_shape_array_only_when_it_is_contiguous(tmp_path):
+    source = tmp_path / "strides.f90"
+    source.write_text("""module strides
+integer :: n
+contains
+subroutine add(u, w)
+real(8), intent(inout) :: u(:)
+real(8), contiguous, intent(in) :: w(:)
+integer :: i
+do i = 1, n
+u(i) = u(i) + w(i)
+enddo
+end subroutine
+end module
+""")
+    prepare(ResidentProject((source,), (Selection("all", ("strides::add",), minimum_nests=1),)), tmp_path / "prepared",
+            fortran=fortran_compiler())
+    text = (tmp_path / "prepared/sources/strides.f90").read_text()
+    # u may be every second element of its caller's array: bound by its first element and its extent, it
+    # would be taken for the elements next to each other. w says that it is not such a section.
+    assert "fort_resident = resident%active .and. is_contiguous(u)\n" in text
+    assert "is_contiguous(w)" not in text
+    call = text[text.index("fort_resident = resident%active"):]
+    assert call.index("call resident_require(fort_device_run(") < call.index("      else\n") < call.index(
+        "if (resident%active) call resident%publish()") < call.index("u(i) = u(i) + w(i)")

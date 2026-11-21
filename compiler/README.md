@@ -370,7 +370,11 @@ Forms beyond plain array loops that are supported in selected procedures:
   bounds), allocatable dummies, and module arrays; the entry gets their
   bounds at each call. An assumed-size array (`a(*)`) has no extent the
   device copy could take, and a pointer array may share storage with another:
-  nests that use either stay on the host, with that reason.
+  nests that use either stay on the host, with that reason. An assumed-shape
+  dummy that is not declared `CONTIGUOUS` may be a strided section of its
+  caller's array, which cannot be bound by a first element and extents: the
+  entry call asks `is_contiguous` each time, and the original statements run,
+  after the device values are published, when the answer is no.
 
 - **Loops around nests.** A loop is either the outer loop of a nest or a
   loop that runs around nests: an iteration, a time loop, a sweep. It may be

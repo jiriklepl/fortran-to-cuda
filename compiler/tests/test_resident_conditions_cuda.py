@@ -1,4 +1,4 @@
-"""An entry compiled for some values of its scalars runs on the device for those and declines the others."""
+"""An entry runs on the device where what it was compiled for holds when it is called, and the host runs the rest."""
 import os
 import shutil
 import subprocess
@@ -24,6 +24,13 @@ u(i,j,to) = 0.5d0 * u(i,j,to) + 0.125d0 * (u(i-1,j,from) + u(i+1,j,from) + u(i,j
 enddo
 enddo
 end subroutine
+subroutine double(v)
+real(8), intent(inout) :: v(:)
+integer :: i
+do i = 1, size(v)
+v(i) = 2 * v(i)
+enddo
+end subroutine
 end module
 """
 
@@ -31,10 +38,11 @@ MAIN = """
 program march
   use levels
   implicit none
-  real(8), allocatable :: u(:,:,:)
+  real(8), allocatable :: u(:,:,:), line(:)
   integer :: step, i, j, old, new
   n = 40
-  allocate(u(0:n+1, 0:n+1, 2))
+  allocate(u(0:n+1, 0:n+1, 2), line(n))
+  line = 1
   do j = 0, n+1
     do i = 0, n+1
       u(i,j,1) = sin(0.2d0*i) * cos(0.1d0*j)
@@ -52,8 +60,11 @@ program march
   ! One level blended with itself: every point reads neighbours that the same nest changes.
   call blend(u, 1, 1)
   call blend(u, 2, 1)
+  ! A whole array, and every second element of it.
+  call double(line)
+  call double(line(1:n:2))
   !$fort leave
-  print '(2es24.16)', sum(u(:,:,1)), sum(u(:,:,2))
+  print '(3es24.16)', sum(u(:,:,1)), sum(u(:,:,2)), sum(line)
   !$fort close
 end program
 """
@@ -70,7 +81,7 @@ def test_the_entry_runs_for_the_values_it_was_compiled_for_and_the_host_for_the_
     module, source = tmp_path / "levels.f90", tmp_path / "march.f90"
     module.write_text(MODULE)
     source.write_text(MAIN)
-    project = ResidentProject((module, source), (Selection("all", ("levels::blend",), minimum_nests=1),))
+    project = ResidentProject((module, source), (Selection("all", ("levels::*",), minimum_nests=2),))
     prepared = prepare(project, tmp_path / "prepared", fortran=fortran)
     binaries = build(prepared, tmp_path / "built", name="march", programs={"march": source}, fortran=fortran,
                      cxx=host, nvcc=nvcc, architecture=probe.stdout.splitlines()[0].strip().replace(".", ""),
@@ -88,4 +99,5 @@ def test_the_entry_runs_for_the_values_it_was_compiled_for_and_the_host_for_the_
     assert output == run("march-native")[0]
     launches = sum(line.startswith(("FORT_SCOPED launch ", "FORT_SCOPED graph_kernel ")) for line in trace.splitlines())
     # Seven calls with two different levels run on the device; the one with equal levels runs on the host.
-    assert launches == 7
+    # So does the doubling of a strided section, which the entry could only take for adjacent elements.
+    assert launches == 7 + 1

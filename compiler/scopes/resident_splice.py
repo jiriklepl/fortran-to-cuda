@@ -79,7 +79,10 @@ def entry_call_block(region, entry, domain, held=None):
     every element at most once, across all its nests; if they do not, the
     device values are published and the original statements run. The same
     happens where an entry that was compiled for some values of its scalars
-    only (its ``conditions``) says that it was called with others.
+    only (its ``conditions``) says that it was called with others, and where
+    an assumed-shape dummy that is not declared CONTIGUOUS is associated with
+    storage that is not: an array is bound by the address of its first
+    element and its extents.
     """
     bindings = {binding["resource"]: binding for binding in region["resources"]}
     written = set(region.get("written_resources", ()))
@@ -89,6 +92,13 @@ def entry_call_block(region, entry, domain, held=None):
     for check in checks:
         checked_arrays.setdefault(check["resource"], []).append(check)
     actual, registration, handles, by_resource, kinds = {}, [], [], {}, set()
+    # Dummies that may be associated with a strided section, by what their declaration says.
+    strided = sorted({binding["name"] for binding in bindings.values()
+                      if binding.get("intent") and "contiguous" not in binding.get("attributes", ())
+                      and any(axis["kind"] == "Assumed_Shape_Spec" for axis in binding.get("shape", ()))
+                      and "%" not in binding["name"]
+                      and any(parameter["resource"] == binding["resource"] and parameter["rank"]
+                              for parameter in region["parameters"])})
     for parameter in region["parameters"]:
         binding = bindings[parameter["resource"]]
         name = binding["name"]
@@ -143,7 +153,7 @@ def entry_call_block(region, entry, domain, held=None):
             f"      use {domain.module}, only: {domain.object}, {domain.check}",
             "      use " + entry["fortran_module"] + f", only: {run} => run",
             *(["      integer(c_int64_t) :: " + ",".join(handles)] if handles else [])]
-    if not structures and not checks and not conditional:
+    if not structures and not checks and not conditional and not strided:
         code += [f"      if ({domain.object}%active) then", *guards, *registration, *call,
                  "      else", "@ORIGINAL@", "      endif", "    end block"]
         return "\n".join(code) + "\n"
@@ -162,7 +172,8 @@ def entry_call_block(region, entry, domain, held=None):
     if counted:
         code.append("      if (" + " .and. ".join(f"size({name}) > 0" for name in counted) + ") then")
     code.append(f"      {resident} = {domain.object}%active"
-                + "".join(f" .and. size({name}) > 0" for name in others))
+                + "".join(f" .and. size({name}) > 0" for name in others)
+                + "".join(f" .and. is_contiguous({name})" for name in strided))
     code += [f"      if ({resident}) then", *guards, *registration]
     if checks:
         indices = sorted({by_resource[root] for check in checks for root in check["index_resources"]
