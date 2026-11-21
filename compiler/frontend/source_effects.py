@@ -7,26 +7,16 @@ not mistaken for physical transfer coordinates. Unknown effects are boundaries.
 
 from __future__ import annotations
 
-import json
 import re
 from contextlib import suppress
-from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from weakref import WeakValueDictionary
 
 from fparser.two.utils import Base, walk
 
 from compiler.frontend.lowering import _intrinsic_kind_imports, _KindScope
 from compiler.frontend.source_inputs import SourceInputs
-from compiler.frontend.summary_cache import SummaryCache
 from compiler.ir import CompilationError, SourceLocation
-
-_DEFAULT_SUMMARY_CACHE = SummaryCache()
-
-
-def _canonical(value):
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def _kind(node):
@@ -166,48 +156,18 @@ class Routine:
 
 
 class SourceEffects:
-    def __init__(self, paths, *, contracts=None, depth=8, procedures=None, operations=256,
-                 summary_cache=None, program_roots=()):
+    def __init__(self, paths, *, depth=8, procedures=None, operations=256, program_roots=()):
         if min(depth, operations) < 1 or (procedures is not None and procedures < 1):
             raise CompilationError("source effect budgets must be positive")
         self.depth_limit, self.procedure_limit, self.operation_limit = depth, procedures if procedures is not None else 1, operations
-        self.modules, self.routines, self.summaries = {}, {}, {}
+        self.modules, self.routines = {}, {}
         self.functions = set()
         self.numerical_helpers = {}
-        self._closures = {}
-        self._native_sections = {}
-        self._structures, self._segments, self._descriptor_proofs = {}, {}, {}
-        # Active source contracts retain exact graph objects. Bounded strong
-        # cache eviction must not mint a second identity for those contracts;
-        # unreferenced graphs can still disappear with their cache entries.
-        self._live_structures = WeakValueDictionary()
-        self._joined_completions = {}
-        self._native_environments, self._native_environment_states = {}, {}
-        self._native_predicates = {}
-        self._native_functions = {}
-        self._descriptor_functions = {}
-        self._numerical_completions = {}
-        self._worksharing_completions = {}
-        self._worksharing_native_completions = {}
-        self._source_scopes, self._associate_scopes, self._block_scopes = {}, {}, {}
+        self._source_scopes = {}
         self.resolved_calls = {}
-        self._analysis_started = False
-        self._stable_module_allocatables = frozenset()
-        self._allocation_authorizations = {}
         inputs = SourceInputs(paths)
-        self.sources, self.operation_count = inputs.sources, 0
+        self.sources = inputs.sources
         self.kind_expressions = []
-        self.contracts = deepcopy(contracts or {})
-        if not isinstance(self.contracts, dict):
-            raise CompilationError("effect contracts must be an object")
-        try:
-            _canonical(self.contracts)
-        except (TypeError, ValueError) as error:
-            raise CompilationError("effect contracts require finite JSON facts") from error
-        self._summary_cache = _DEFAULT_SUMMARY_CACHE if summary_cache is None else SummaryCache(summary_cache)
-        self._cache_started = self._summary_cache.stats
-        self._cache_rejections = 0
-        self._closure_authority = None
         if (type(program_roots) is not tuple or any(type(name) is not str or not name.startswith("$program::")
                 or not re.fullmatch(r"[a-z][a-z0-9_]*", name.removeprefix("$program::")) for name in program_roots)):
             raise CompilationError("program metadata requires exact named original program roots")

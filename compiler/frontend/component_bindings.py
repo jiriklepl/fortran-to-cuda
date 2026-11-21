@@ -60,20 +60,6 @@ class ComponentAccess:
                 "evaluation": "original reached source point; no selector evaluation during analysis"}
 
 
-@dataclass(frozen=True)
-class AssociationScope:
-    available: bool
-    scope: object = field(default=None, compare=False, repr=False)
-    selectors: tuple[ComponentAccess, ...] = ()
-    reason: str | None = None
-    scope_id: str | None = None
-
-    def public(self):
-        return {"available": self.available, "scope_id": self.scope_id, "reason": self.reason,
-                "selectors": [selector.public() for selector in self.selectors],
-                "selector_evaluation": "original ASSOCIATE entry; aliases do not escape their lexical body"}
-
-
 def register_types(analysis, scope, spec):
     """Retain schemas, including unsupported fields, without global rejection."""
     schemas = {}
@@ -296,13 +282,8 @@ def source_scope_for(analysis, node, default=None):
 
 
 def register_associates(analysis, routine):
-    """Index lexical scopes; rejected selectors remain local boundary records."""
+    """Index lexical scopes; an ASSOCIATE with a selector that is not a plain scalar variable gets none."""
     from compiler.frontend.source_effects import Scope
-
-    if not hasattr(analysis, "_source_scopes"):
-        analysis._source_scopes, analysis._associate_scopes = {}, {}
-    if not hasattr(analysis, "_block_scopes"):
-        analysis._block_scopes = {}
 
     def visit(node, scope, path):
         analysis._source_scopes[id(node)] = scope
@@ -317,7 +298,6 @@ def register_associates(analysis, routine):
                     binding.kind = owner.kinds.integer(selector, SourceLocation(str(owner.path)))
                 except CompilationError:
                     binding.kind = None
-            analysis._block_scopes[id(node)] = child
             entered = False
             for index, item in enumerate(_children(node)):
                 if _kind(item) == "Block_Stmt":
@@ -331,7 +311,6 @@ def register_associates(analysis, routine):
             child = Scope(scope.module, scope.path, node, scope, kinds=scope.kinds)
             child.qualified = routine.qualified + "$associate:" + ".".join(map(str, path))
             child.component_types = {}
-            selectors = []
             try:
                 if header is None:
                     raise CompilationError("source ASSOCIATE has no original selector list")
@@ -357,12 +336,10 @@ def register_associates(analysis, routine):
                     projected.name = alias
                     projected.associate_selector = selector
                     child.bindings[alias] = projected
-                    selectors.append(access)
-                result = AssociationScope(True, child, tuple(selectors), scope_id=child.qualified)
-            except CompilationError as error:
-                result = AssociationScope(False, reason=str(error), scope_id=child.qualified)
-            analysis._associate_scopes[id(node)] = result
-            if result.available:
+                available = True
+            except CompilationError:
+                available = False
+            if available:
                 for index, item in enumerate(_children(node)):
                     # Selector expressions execute in the enclosing scope.
                     visit(item, scope if item is header else child, (*path, index))
