@@ -220,7 +220,7 @@ def test_a_line_snapshot_becomes_a_whole_snapshot_that_a_directive_releases():
     assert "tmp((i+ii),j,k)" in compact or "tmp(ii,j,k)" in compact
     assert "tmp=u(:,j,k)" not in compact
     # The snapshot's device copy is retired before the procedure returns and deallocates it.
-    assert rewritten.index("    !$fort release(tmp)\n") < rewritten.lower().rindex("end subroutine smooth")
+    assert rewritten.index("    deallocate(tmp)\n") < rewritten.lower().rindex("end subroutine smooth")
 
 
 CONFIGURED = """module numerics
@@ -312,3 +312,4 @@ def test_a_guard_states_what_the_loop_bounds_do_not_show(tmp_path):
     item, = pass_scalars_by_value(guarded, tmp_path / "values", resources=("halo::nx",))["entries"]
     report = compile_resident_entry(item["input_path"], item["entry"], tmp_path / "entry")
     assert all(region["gpu_available"] for region in report["scoped"]["region_execution"])
+

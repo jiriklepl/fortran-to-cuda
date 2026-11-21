@@ -499,6 +499,20 @@ selecting or rewriting. The audit looks inside the selected procedures only;
 it does not follow a module array into a host procedure that uses it without
 being handed it.
 
+A selected procedure's temporary arrays get storage that the domain lends. An
+array that the procedure allocates and deallocates in each call would cost a
+device allocation per call and, at its `DEALLOCATE`, a wait for everything
+queued that still uses it. Where the array is a local REAL array of rank three
+that entries keep on the device, with one `ALLOCATE` and one `DEALLOCATE` among
+the procedure's own statements, it becomes a contiguous pointer and the two
+statements ask the domain: while values are kept on the device it hands out
+host and device storage that stays from call to call, one piece per place in
+the source and shape; otherwise the array is allocated as before. The exchange
+is made only where a pointer behaves like the allocatable did: the array is
+used by its elements, sections and bounds, or passed whole to a procedure that
+takes an ordinary array, and the procedure has no RETURN and no internal
+procedures. `prepared["temporaries"]` lists the arrays.
+
 `compiler/tests/apps/box` is a complete small application built this way. Its
 resident run writes the same bytes as its native run
 (`test_resident_application_cuda.py`).

@@ -299,8 +299,9 @@ def promote_line_snapshots(
 ) -> tuple[str, list[dict]]:
     """Lift 1D line-copy buffers (``tmp = arr(:,j,k)``) into 3D snapshots.
 
-    The snapshot is a local allocatable that the entries bind, so a
-    ``!$fort release`` directive retires it before the procedure returns.
+    The snapshot is a local allocatable that the procedure allocates at its
+    start and deallocates at its end: a temporary whose storage the domain
+    lends (see ``resident_splice.lend_storage``).
     """
     tree = parse_fortran(source_text)
     edits: list[dict] = []
@@ -452,7 +453,7 @@ def promote_line_snapshots(
         ending = re.search(rf"(?im)^[ \t]*end\s*subroutine(?:\s+{re.escape(rname)})?\b", body)
         if ending is None:
             raise ValueError(f"Missing procedure end in {rname}")
-        release_block = f"\n    !$fort release({tmp_name})\n"
+        release_block = f"\n    deallocate({tmp_name})\n"
         body = body[: ending.start()] + release_block + body[ending.start() :]
         text = text[:r_lo] + body + text[r_hi:]
         edits.append({"routine": rname, "snapshot": tmp_name, "source_array": arr_name})

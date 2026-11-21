@@ -12,6 +12,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from fparser.two.Fortran2003 import (
+    Allocate_Stmt,
     Allocation,
     Assignment_Stmt,
     Call_Stmt,
@@ -306,6 +307,95 @@ def _array_uses(analysis, routine, nodes):
     return arrays, calls, elsewhere, written & set(arrays), released & set(arrays)
 
 
+def _temporaries(analysis, routine, procedure):
+    """The temporary arrays of a procedure: locals it allocates and deallocates once, in its own statements.
+
+    Between the two statements such an array belongs to one call, and its
+    values are dead before and after. That is all the domain needs to know to
+    lend storage that stays from call to call (see ``resident_splice.lend_storage``),
+    which takes a pointer in place of the allocatable. The exchange is exact
+    only where the array is used like any array: by its elements and sections,
+    by its bounds, or passed whole to a procedure that takes an ordinary array.
+    Listed are REAL arrays of rank three, the shape the domain lends. A
+    procedure with a RETURN, with internal procedures, or with a temporary used
+    in any other way gets none.
+    """
+    node = routine.scope.node
+    execution = routine.execution
+    if any(_kind(item) == "Internal_Subprogram_Part" for item in _children(node)) \
+            or any(_kind(item) in {"Return_Stmt", "Goto_Stmt", "Computed_Goto_Stmt"} for item in walk(execution)):
+        return []
+    candidates = {name: binding for name, binding in routine.scope.bindings.items()
+                  if binding.rank == 3 and binding.dtype == "real" and binding.kind in {4, 8} and binding.intent is None
+                  and "allocatable" in binding.attributes
+                  and not binding.attributes & {"save", "pointer", "target", "optional", "parameter"}
+                  and name not in routine.arguments}
+    if not candidates:
+        return []
+    statements = {"Allocate_Stmt": {}, "Deallocate_Stmt": {}}
+    top = {id(item) for item in _children(execution)}
+    allowed, refused = set(), set()
+    for statement in walk(execution, (Allocate_Stmt, Deallocate_Stmt)):
+        kind = _kind(statement)
+        if kind == "Allocate_Stmt":
+            objects = [item for item in walk(statement, Allocation)]
+            named = [str(item.items[0]).lower() for item in objects]
+            plain = statement.items[0] is None and statement.items[2] is None and all(
+                item.items[1] is not None and len(_children(item.items[1])) == 3 for item in objects)
+        else:
+            listed = statement.items[0]
+            parts = [listed] if _kind(listed) == "Name" else list(_children(listed))
+            named = [str(item).lower() for item in parts]
+            plain = statement.items[1] is None and all(_kind(item) == "Name" for item in parts)
+        mine = [name for name in named if name in candidates]
+        if not mine:
+            continue
+        # One statement allocates or deallocates temporaries only, at the top of the procedure's statements.
+        if not plain or len(mine) != len(named) or id(statement) not in top or any(
+                name in statements[kind] for name in mine):
+            refused.update(mine)
+            continue
+        for name in mine:
+            statements[kind][name] = statement
+        allowed.update(id(item) for item in walk(statement, Name))
+    for reference in walk(execution, Part_Ref):
+        allowed.add(id(reference.items[0]))
+    for reference in walk(execution, Intrinsic_Function_Reference):
+        if str(reference.items[0]).lower() in {"lbound", "ubound", "size", "shape"} and reference.items[1] is not None:
+            allowed.update(id(item) for item in _children(reference.items[1])[:1])
+    for call in walk(execution, Call_Stmt):
+        try:
+            callee = analysis.routines.get(resolve_original_call(analysis, routine.scope, call).procedure)
+        except CompilationError:
+            callee = None
+        for position, argument in enumerate(_children(call.items[1]) if call.items[1] is not None else ()):
+            formal = callee.arguments[position] if callee is not None and position < len(callee.arguments) else None
+            binding = callee.scope.bindings.get(formal) if formal is not None else None
+            if _kind(argument) == "Name" and binding is not None and binding.rank \
+                    and not binding.attributes & {"allocatable", "pointer"}:
+                allowed.add(id(argument))
+    for name in walk(execution, Name):
+        if str(name).lower() in candidates and id(name) not in allowed:
+            refused.add(str(name).lower())
+    found = []
+    for name, binding in sorted(candidates.items()):
+        allocate, deallocate = statements["Allocate_Stmt"].get(name), statements["Deallocate_Stmt"].get(name)
+        if name in refused or allocate is None or deallocate is None \
+                or statement_span(allocate)[1] >= statement_span(deallocate)[0]:
+            continue
+        found.append({"procedure": procedure, "source": str(routine.scope.path), "name": binding.name,
+                      "resource": binding.root, "kind": binding.kind,
+                      "allocate": list(statement_span(allocate)), "deallocate": list(statement_span(deallocate))})
+    # Arrays that share a statement go together or not at all.
+    kept = {item["name"].lower() for item in found}
+    for kind in statements:
+        for name, statement in statements[kind].items():
+            partners = {other for other, node in statements[kind].items() if node is statement}
+            if name in kept and not partners <= kept:
+                kept -= partners
+    return [item for item in found if item["name"].lower() in kept]
+
+
 def _forwarders(analysis, selected, host_statements):
     """Procedures outside the selection that host statements call, and whether each only passes arrays on.
 
@@ -399,7 +489,7 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
     resolved_procedures = _resolve_procedures(analysis, procedures, allow_patterns=allow_patterns)
-    entries, rejected, grouping_rejections, host_statements = [], [], [], []
+    entries, rejected, grouping_rejections, host_statements, temporaries = [], [], [], [], []
     for procedure in resolved_procedures:
         routine = analysis.routines[procedure]
 
@@ -533,10 +623,11 @@ def export_resident_entries(paths, procedures, directory, *, analysis_sources=No
                     host(nodes, id(nodes[0]) in follows or carries, outer)
 
         scan(tuple(_children(routine.execution)))
+        temporaries += _temporaries(analysis, routine, procedure)
     analysis.verify_source()
     return {"version": 2, "kind": "caller_owned_resident_entries", "source_inputs": analysis.sources,
             "entries": entries, "rejected": rejected, "grouping_rejections": grouping_rejections,
-            "host_statements": host_statements,
+            "host_statements": host_statements, "temporaries": temporaries,
             "forwarders": _forwarders(analysis, set(resolved_procedures), host_statements),
             "lifetime_authority": "caller storage epoch; numerical export grants no native-effect authority"}
 

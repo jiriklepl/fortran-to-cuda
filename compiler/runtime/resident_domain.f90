@@ -95,6 +95,12 @@ module fort_resident_domain
     procedure :: release_work_real32_3
     procedure :: release_work_real64_3
     generic :: release_work_real_3 => release_work_real32_3, release_work_real64_3
+    procedure :: work_real32_3
+    procedure :: work_real64_3
+    generic :: work => work_real32_3, work_real64_3
+    procedure :: work_done_real32_3
+    procedure :: work_done_real64_3
+    generic :: work_done => work_done_real32_3, work_done_real64_3
     procedure :: publish
     procedure :: end_epoch
     procedure :: close
@@ -279,8 +285,9 @@ contains
         collision=.true.
         return
       endif
+      ! Storage the domain keeps may be bound like any array by the code it is lent to.
       if (self%storage(i)%element_type /= element_type .or. self%storage(i)%element_bytes /= element_bytes .or. &
-          (self%storage(i)%persistent .neqv. persistent)) then
+          (persistent .and. .not. self%storage(i)%persistent)) then
         call report_storage_conflict(self,self%storage(i),extents,element_type,element_bytes,persistent,origin)
         error stop 'storage contract changed inside an epoch'
       endif
@@ -696,7 +703,8 @@ contains
     do i=1,size(self%work3_f32)
       if (self%work3_f32(i)%site/=site) cycle
       if (any(lbound(self%work3_f32(i)%values)/=lower).or.any(ubound(self%work3_f32(i)%values)/=upper)) cycle
-      if (self%work3_f32(i)%borrowed) error stop 'overlapping use of a compiler workspace slot'
+      ! Another call that is still under way, of a recursive procedure, has this one.
+      if (self%work3_f32(i)%borrowed) cycle
       ! An earlier invocation may still read this allocation on the device. Its
       ! values are dead; they stay until this invocation's writes replace them
       ! in queue order, so that reusing a slot does not submit the queue.
@@ -744,7 +752,7 @@ contains
     do i=1,size(self%work3)
       if (self%work3(i)%site/=site) cycle
       if (any(lbound(self%work3(i)%values)/=lower).or.any(ubound(self%work3(i)%values)/=upper)) cycle
-      if (self%work3(i)%borrowed) error stop 'overlapping use of a compiler workspace slot'
+      if (self%work3(i)%borrowed) cycle
       ! An earlier invocation may still read this allocation on the device. Its
       ! values are dead; they stay until this invocation's writes replace them
       ! in queue order, so that reusing a slot does not submit the queue.
@@ -777,6 +785,74 @@ contains
       return
     enddo
     error stop 'foreign compiler workspace release'
+  end subroutine
+
+  ! A temporary array of a procedure, in place of its ALLOCATE: storage that
+  ! stays from one call to the next while values are kept on the device, so
+  ! that a call neither allocates on the device nor waits for the queue when
+  ! it is through, and an ordinary allocation otherwise. site names the place
+  ! in the source; each shape asked for there has storage of its own.
+  subroutine work_real32_3(self,site,lower,upper,values)
+    class(resident_domain), intent(inout) :: self
+    integer(c_int64_t), intent(in) :: site
+    integer, intent(in) :: lower(3),upper(3)
+    real(c_float), pointer, contiguous, intent(out) :: values(:,:,:)
+    if (self%active .and. all(upper>=lower)) then
+      call self%acquire_work_real32_3(site,lower,upper,values)
+    else
+      allocate(values(lower(1):upper(1),lower(2):upper(2),lower(3):upper(3)))
+    endif
+  end subroutine
+
+  ! In place of the DEALLOCATE of such an array: lent storage goes back to
+  ! the domain with its values dead, anything else is deallocated.
+  subroutine work_done_real32_3(self,values)
+    class(resident_domain), intent(inout) :: self
+    real(c_float), pointer, contiguous, intent(inout) :: values(:,:,:)
+    integer :: i
+    if (allocated(self%work3_f32)) then
+      do i=1,size(self%work3_f32)
+        if (.not.associated(values,self%work3_f32(i)%values)) cycle
+        self%work3_f32(i)%borrowed=.false.
+        nullify(values)
+        return
+      enddo
+    endif
+    deallocate(values)
+  end subroutine
+
+  ! A temporary array of a procedure, in place of its ALLOCATE: storage that
+  ! stays from one call to the next while values are kept on the device, so
+  ! that a call neither allocates on the device nor waits for the queue when
+  ! it is through, and an ordinary allocation otherwise. site names the place
+  ! in the source; each shape asked for there has storage of its own.
+  subroutine work_real64_3(self,site,lower,upper,values)
+    class(resident_domain), intent(inout) :: self
+    integer(c_int64_t), intent(in) :: site
+    integer, intent(in) :: lower(3),upper(3)
+    real(c_double), pointer, contiguous, intent(out) :: values(:,:,:)
+    if (self%active .and. all(upper>=lower)) then
+      call self%acquire_work_real64_3(site,lower,upper,values)
+    else
+      allocate(values(lower(1):upper(1),lower(2):upper(2),lower(3):upper(3)))
+    endif
+  end subroutine
+
+  ! In place of the DEALLOCATE of such an array: lent storage goes back to
+  ! the domain with its values dead, anything else is deallocated.
+  subroutine work_done_real64_3(self,values)
+    class(resident_domain), intent(inout) :: self
+    real(c_double), pointer, contiguous, intent(inout) :: values(:,:,:)
+    integer :: i
+    if (allocated(self%work3)) then
+      do i=1,size(self%work3)
+        if (.not.associated(values,self%work3(i)%values)) cycle
+        self%work3(i)%borrowed=.false.
+        nullify(values)
+        return
+      enddo
+    endif
+    deallocate(values)
   end subroutine
 
   subroutine publish(self)

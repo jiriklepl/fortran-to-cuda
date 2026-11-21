@@ -96,8 +96,13 @@ program test
     endif
     if (handle/=original.or..not.c_associated(address,c_loc(work))) error stop 'not reused'
     if (trim(mode)=='overlap') then
+      ! A call that is still under way has the storage: a second one, of a recursive procedure, gets its own.
       call owner%acquire_work_real64_3(17_c_int64_t,lbound(output),ubound(output),other)
-      error stop 'overlap accepted'
+      if (associated(other,work)) error stop 'storage lent twice'
+      call owner%release_work_real64_3(17_c_int64_t,other)
+      call owner%release_work_real64_3(17_c_int64_t,work)
+      print '(a)','PASS second use of a site'
+      stop
     endif
     call resident_require(enqueue(owner%context,handle,result_handle,real(i,c_double)))
     call owner%release_work_real64_3(17_c_int64_t,work)
@@ -169,9 +174,9 @@ def test_domain_owned_workspace(tmp_path):
     assert "PASS domain-owned workspace" in result.stdout
     downloads = re.findall(r"FORT_SCOPED download .*?bytes=(\d+)", result.stderr)
     assert [int(n) for n in downloads] == [257 * 13 * 3 * 8] * 2
-    rejected = subprocess.run([str(binary), "overlap"], text=True, capture_output=True, timeout=30)
-    assert rejected.returncode != 0
-    assert "overlapping use of a compiler workspace slot" in rejected.stderr
+    nested = subprocess.run([str(binary), "overlap"], text=True, capture_output=True, timeout=30)
+    assert nested.returncode == 0, nested.stdout + nested.stderr
+    assert "PASS second use of a site" in nested.stdout
     rejected = subprocess.run([str(binary), "status"], text=True, capture_output=True, check=False, timeout=30)
     assert rejected.returncode != 0
     assert "Resident runtime failed: UNINITIALIZED (status 7)" in rejected.stderr

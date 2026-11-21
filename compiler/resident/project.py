@@ -28,7 +28,12 @@ from compiler.scopes.resident_entries import (
     guard_entries,
     pass_scalars_by_value,
 )
-from compiler.scopes.resident_splice import ResidentDomain, addressable_arrays, splice_resident_entries
+from compiler.scopes.resident_splice import (
+    ResidentDomain,
+    addressable_arrays,
+    lend_storage,
+    splice_resident_entries,
+)
 
 # The domain of an application that keeps no residency state of its own; the
 # runtime provides this module (``resident_application.f90``).
@@ -209,10 +214,12 @@ def prepare(project, directory, *, fortran, host_threads=4):
     stays a call; ``array_statements``, the array assignments outside loops in
     the selected procedures, each ``lowered`` to its loop nest or with the
     ``reason`` it stays host code (see ``compiler.resident.array_statements``);
-    and ``reductions``, the loop nests that only
+    ``reductions``, the loop nests that only
     accumulate scalars, each with ``compiled`` or the ``reason`` it stays on
-    the host (see ``compiler.resident.reductions``). The directory must not
-    exist.
+    the host (see ``compiler.resident.reductions``); and ``temporaries``, the
+    arrays a selected procedure allocates and deallocates in each call, whose
+    storage the domain lends instead (see ``resident_splice.lend_storage``).
+    The directory must not exist.
     """
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
@@ -367,9 +374,16 @@ def prepare(project, directory, *, fortran, host_threads=4):
         packages.append(package)
         summaries.append(summary)
 
+    # Temporary arrays of the selected procedures that entries keep on the device: the domain lends their
+    # storage, so their ALLOCATE and DEALLOCATE are no host statements that need anything.
+    resources = {resource["resource"] for package in packages for item in package["entries"]
+                 for resource in item["region"]["resources"] if resource["rank"]}
+    temporaries = [item for item in extracted.get("temporaries", ()) if item["resource"] in resources]
+    lent = {(item["source"], *item[key]) for item in temporaries for key in ("allocate", "deallocate")}
     # Host statements in the body of a loop count where the host runs the loop, not where it is an entry.
     reached = [item for item in extracted["host_statements"] if not item.get("alternative_of")]
     reached += [item for package in packages for item in package.get("host_statements", ())]
+    reached = [item for item in reached if (item["source"], item["first_line"], item["last_line"]) not in lent]
     findings = audit({**extracted, "host_statements": reached}, packages, patterns, project.self_managed)
     bound = {resource["name"].lower().split("%")[0] for package in packages for item in package["entries"]
              for resource in item["region"]["resources"] if resource["rank"]}
@@ -393,6 +407,14 @@ def prepare(project, directory, *, fortran, host_threads=4):
         before = str(current[original].resolve())
         texts[original] = replaced.get(before, current[original]).read_text()
         if before in replaced or project.rewrites.get(original.name) or original in specialized:
+            touched.add(original)
+    by_source = {}
+    for item in temporaries:
+        by_source.setdefault(item["source"], {}).setdefault(item["procedure"], []).append(item["name"])
+    for original in originals:
+        names = by_source.get(str(current[original].resolve())) or by_source.get(str(current[original]))
+        if names:
+            texts[original], _lent = lend_storage(texts[original], project.domain, names)
             touched.add(original)
     for record in lowered:
         if not record.get("compiled"):
@@ -447,6 +469,7 @@ def prepare(project, directory, *, fortran, host_threads=4):
               "array_statements": [{key: str(value) if key == "source" else value for key, value in record.items()
                                     if key not in {"tag", "arrays", "text"}} for record in array_statements],
               "reductions": [{key: str(value) if key == "source" else value for key, value in record.items()
-                              if key not in {"tag", "value_scalars"}} for record in reductions]}
+                              if key not in {"tag", "value_scalars"}} for record in reductions],
+              "temporaries": [{"procedure": item["procedure"], "name": item["name"]} for item in temporaries]}
     (directory / "prepared.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
