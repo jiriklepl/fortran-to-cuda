@@ -502,3 +502,30 @@ end module
     assert "logical :: fort_host, fort_host1\n" in access
     assert "fort_host1 = allocated(total)\n" in access
     assert "if (fort_host1) call resident%observe([ &\n" in access
+
+
+def test_host_statements_on_one_line_share_their_access(tmp_path):
+    source = tmp_path / "pair.f90"
+    source.write_text("""module pair
+integer :: n
+contains
+subroutine both(a, b)
+real(8), contiguous, intent(inout) :: a(:), b(:)
+integer :: i
+do i = 1, n
+a(i) = a(i) + b(i)
+enddo
+a(1) = b(n); b(1) = a(n)
+end subroutine
+end module
+""")
+    prepared = prepare(ResidentProject((source,), (Selection("all", ("pair::both",)),)), tmp_path / "prepared",
+                       fortran=fortran_compiler())
+    assert [item["text"] for item in prepared["audit"]] == ["a(1) = b(n)", "b(1) = a(n)"]
+    text = (tmp_path / "prepared/sources/pair.f90").read_text()
+    # One block around the line: each array is read by one statement and changed by the other.
+    assert text.count("a(1) = b(n); b(1) = a(n)") == 1
+    line = text[text.index("fort_host = resident%active"):]
+    assert line.index("call resident%host_modify([ &\n          resident%held(a), &\n          resident%held(b)])") \
+        < line.index("a(1) = b(n); b(1) = a(n)") < line.index("call resident%host_done([ &")
+    assert "observe" not in line[:line.index("call resident%host_done([ &")]

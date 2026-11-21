@@ -260,6 +260,33 @@ def host_access_block(code, bound, domain):
     return "\n".join(body) + "\n"
 
 
+def _on_shared_lines(statements):
+    """Host statements that stand on the same source lines as one: their block goes around those lines once."""
+    order = ("read", "write", "release")
+    merged = []
+    for statement in sorted(statements, key=lambda item: (item["source"], item["first_line"], item["last_line"])):
+        last = merged[-1] if merged else None
+        if last is None or last["source"] != statement["source"] or statement["first_line"] > last["last_line"]:
+            merged.append(statement)
+            continue
+        both = {**last, "last_line": max(last["last_line"], statement["last_line"]),
+                # A statement that opens a construct still cannot have anything handed back after it.
+                "kind": next((item["kind"] for item in (last, statement) if item.get("kind") in _OPENING), "statements"),
+                "leaves": bool(last.get("leaves") or statement.get("leaves")),
+                "leave": bool(last.get("leave") or statement.get("leave"))}
+        for key in ("condition", "action", "condition_names", "runs", "arrays"):
+            both.pop(key, None)
+        if "arrays" in last and "arrays" in statement:
+            arrays = {}
+            for item in (*last["arrays"], *statement["arrays"]):
+                known = arrays.get(item["resource"])
+                if known is None or order.index(item["access"]) > order.index(known["access"]):
+                    arrays[item["resource"]] = item
+            both["arrays"] = [arrays[resource] for resource in sorted(arrays)]
+        merged[-1] = both
+    return merged
+
+
 def splice_resident_entries(packages, directory, *, domain, native=None, held=None, host=()):
     """Write each source with its compiled spans replaced by entry calls.
 
@@ -270,7 +297,8 @@ def splice_resident_entries(packages, directory, *, domain, native=None, held=No
     original)`` may return the complete replacement for a rejected span, or
     None for the default. ``held`` names arrays the domain already holds a
     handle for (see ``entry_call_block``). ``host`` lists host statements, as
-    the export records them, that get the same access around them. Sources
+    the export records them, that get the same access around them; those that
+    share source lines get it together. Sources
     are checked against the hashes the export recorded. Writes and returns
     ``source-edits.json``.
     """
@@ -279,7 +307,7 @@ def splice_resident_entries(packages, directory, *, domain, native=None, held=No
     edits, expected = {}, {}
     bound = {resource["resource"] for package in packages for item in package["entries"]
              for resource in item["region"]["resources"] if resource.get("rank", 1)}
-    for statement in host:
+    for statement in _on_shared_lines(host):
         block = host_access_block(statement, bound, domain)
         if block is not None:
             # A block without the statements goes in front of them.
