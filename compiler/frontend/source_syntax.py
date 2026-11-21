@@ -1,7 +1,6 @@
 """Original-syntax authority without recursively formatting Fortran trees.
 
-Mutable parser inputs are checked afresh at each demand. Active compilation
-sessions seal their originals and then authenticate node identity directly.
+Parser inputs are checked afresh at each demand.
 Namespace, binding, configuration and source-file checks remain with callers.
 """
 
@@ -14,7 +13,6 @@ from operator import and_, attrgetter, eq, is_
 from fparser.common.readfortran import FortranReaderBase
 from fparser.two.utils import Base, BlockBase
 
-from compiler.frontend.sealed_syntax import FrozenList
 from compiler.ir import CompilationError
 
 
@@ -87,7 +85,6 @@ class SourceSyntaxSnapshot:
 
     def __init__(self, roots, *, limit=4_194_304):
         self._roots = tuple(roots)
-        self._sealed = False
         self._nodes = {}
         self._layouts = {}
         self._active = set()
@@ -116,7 +113,7 @@ class SourceSyntaxSnapshot:
             return
         if kind in (str, int, bool, bytes, type(None)):
             return
-        if kind in (tuple, list, FrozenList):
+        if kind in (tuple, list):
             if id(value) in active:
                 raise CompilationError("original source syntax contains a cycle")
             active.add(id(value))
@@ -163,13 +160,6 @@ class SourceSyntaxSnapshot:
 
     def checkpoint(self):
         return _SyntaxCheckpoint(self)
-
-    @property
-    def immutable(self):
-        """All authenticated original syntax and source spans reject writes."""
-        return self._sealed
-
-
 
     def _layout(self, node, *, cache=True):
         """Group immutable baseline records; never cache a validation result."""
@@ -224,7 +214,7 @@ class _SyntaxCheckpoint:
         self._changed = set()
 
     def unchanged(self, node):
-        """Check original identity and, when mutable, its current descendants."""
+        """Check original identity and its current descendants."""
         if node is None:
             # An original empty procedure has no Execution_Part. Callers
             # separately check that this is still its registered execution.
@@ -237,8 +227,6 @@ class _SyntaxCheckpoint:
         state = self._snapshot._nodes.get(key)
         if state is None or state.original is not node or type(node) is not state.kind:
             return False
-        if self._snapshot._sealed:
-            return True
         layout = self._snapshot._layout(node)
         unchanged = layout.unchanged()
         if unchanged:

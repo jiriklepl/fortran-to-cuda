@@ -450,9 +450,7 @@ def _resolve_original_invocation(analysis, scope, original, *, function=False):
             or not any(node is original for node in _walk(caller.execution))
             or analysis.source_scope_for(original, caller.scope) is not scope):
         raise CompilationError("original call requires its exact original statement and lexical scope")
-    roles = _scope_roles(analysis)
-    if isinstance(roles, dict):
-        roles = MappingProxyType(roles)
+    roles = MappingProxyType(_scope_roles(analysis))
     reader = _OriginalTypes(analysis)
     reader.caller_scope = scope
     _validate_resolution(analysis, scope, _walk(original), tick=lambda _kind: reader.tick(0),

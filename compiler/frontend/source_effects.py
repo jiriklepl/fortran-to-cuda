@@ -167,19 +167,6 @@ class Routine:
 
 
 class SourceEffects:
-    def __getattribute__(self, name):
-        value = object.__getattribute__(self, name)
-        if name == "__dict__" and value.get("_source_session") is not None:
-            from types import MappingProxyType
-            return MappingProxyType(value)
-        return value
-
-    def __getstate__(self):
-        return dict(object.__getattribute__(self, "__dict__"))
-
-
-
-
     def __init__(self, paths, *, contracts=None, depth=8, procedures=None, operations=256, analysis_sources=None,
                  summary_cache=None, program_roots=()):
         if min(depth, operations) < 1 or (procedures is not None and procedures < 1):
@@ -324,28 +311,14 @@ class SourceEffects:
 
 
     def verify_source(self):
-        """Authenticate this exact session, or freshly validate standalone inputs."""
-        session = getattr(self, "_source_session", None)
-        if session is not None:
-            session.verify(self)
-        else:
-            self.inputs.verify()
+        """Check that the source files still hold the text that was parsed."""
+        self.inputs.verify()
 
 
 
-    def private_projection(self, *, routines=False):
-        """Fork mutable analysis state without lending original declaration authority.
-
-        A routine override uses a small explicit map over the immutable session
-        registry. Ordinary metadata/native forks continue to share the original
-        graph; their cache/token isolation remains the caller's responsibility.
-        """
-        from compiler.frontend.source_session import ProjectedRoutines
+    def private_projection(self):
+        """A copy whose own attributes may be set; it shares the declarations and the syntax."""
         result = copy(self)
-        from compiler.frontend.authority_context import fork_derivations
-        fork_derivations(result)
-        object.__setattr__(result, "_source_authority_reader", False)
-        object.__setattr__(result, "_source_authority_context", None)
         result._local_allocation_proofs = {}
         result._local_allocation_context = None
         result._original_sequence_exits = {}
@@ -367,15 +340,6 @@ class SourceEffects:
         result._original_worksharing_storage_owner = None
         result._original_worksharing_storage_receipts = {}
         result._descriptor_functions = dict(self._descriptor_functions)
-        session = getattr(self, "_source_session", None)
-        if session is not None:
-            session.verify(self)
-            if isinstance(self.routines, ProjectedRoutines):
-                result.routines = copy(self.routines)
-            elif routines:
-                result.routines = ProjectedRoutines(self.routines)
-        elif routines:
-            result.routines = dict(self.routines)
         return result
 
 
@@ -492,10 +456,6 @@ class SourceEffects:
                 "reason": reason, "caller_interface_proof": False, "keyword_arguments": False}
 
     def _routine_signature(self, routine):
-        session = getattr(self, "_source_session", None)
-        if session is not None and session.contains(routine):
-            session.verify(self)
-            return self._numerical_roles[routine.qualified][1]
         return _canonical({"arguments": routine.arguments, "issues": routine.issues, "source_kind": routine.source_kind,
                            "bindings": {name: binding.public() for name, binding in routine.scope.bindings.items()},
                            "lexical_procedures": dict(routine.scope.procedures),
@@ -1046,13 +1006,7 @@ class SourceEffects:
         """Check shared original files, provenance and module syntax freshly."""
         self.verify_source()
         syntax = _syntax if _syntax is not None else self._source_syntax.checkpoint()
-        if getattr(self, "_source_session", None) is not None:
-            self._source_session.verify(self)
-            return syntax
-        # Sealing authenticated these same item identities and source spans,
-        # then made them immutable. Only mutable standalone analyses need a
-        # fresh full provenance walk; file and namespace checks remain fresh.
-        if not self._source_syntax.immutable and any(getattr(node, "item", None) is not item or item.span != span
+        if any(getattr(node, "item", None) is not item or item.span != span
                or getattr(item, "fort_original_span", None) != original_span
                for node, item, span, original_span in self._source_provenance.values()):
             raise CompilationError("structured effects require unchanged original source span authority")
@@ -1063,8 +1017,6 @@ class SourceEffects:
 
     def _require_original_routine(self, requested, *, _syntax):
         """Check one exact routine inside an immediate authenticated demand."""
-        if getattr(self, "_source_session", None) is not None:
-            return self._source_session.routine(self, requested)
         routine = self.routines.get(requested)
         original = self._source_roles.get(requested)
         numerical = self._numerical_roles.get(requested)

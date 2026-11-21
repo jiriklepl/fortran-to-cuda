@@ -82,12 +82,6 @@ class _TypeBuilder:
         record = self.analysis._source_object_scopes.get(id(scope))
         if record is None:
             raise CompilationError("source object requires original declaration scope authority")
-        session = getattr(self.analysis, "_source_session", None)
-        if session is not None:
-            session.verify(self.analysis)
-            if not session.contains(scope):
-                raise CompilationError("source object declaration scope changed")
-            return record
         if id(scope) in self.checked:
             return record
         self.checked.add(id(scope))
@@ -106,11 +100,8 @@ class _TypeBuilder:
         local = getattr(scope, "component_types", {}).get(name)
         if local is not None:
             original = record[5].get(name)
-            session = getattr(self.analysis, "_source_session", None)
             if (original is None or original[0] is not local or original[1] is not local.node
-                    or (session is None and (original[2] != str(local.node)
-                                             or original[3] != _members(local)))
-                    or (session is not None and not session.contains(local))):
+                    or original[2] != str(local.node) or original[3] != _members(local)):
                 raise CompilationError("source object type schema changed")
             return local
         sources = self.analysis.use_sources(scope, name)

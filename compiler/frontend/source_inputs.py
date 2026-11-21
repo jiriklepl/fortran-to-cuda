@@ -32,7 +32,6 @@ class SourceInputs:
             self._texts={path:data.decode().replace("\r\n", "\n").replace("\r", "\n") for path,data in raw.items()}
         except (OSError, UnicodeError) as error:
             raise CompilationError("original analysis source is unavailable") from error
-        self._external_readers=set()
         self.entries={}
         self.dependencies={}
         self.configuration=None
@@ -106,13 +105,6 @@ class SourceInputs:
             tree = ParserFactory().create(std="f2008")(reader)
         except FortranSyntaxError as error:
             raise CompilationError(f"invalid Fortran syntax: {error}", SourceLocation(str(path))) from error
-        # fparser expands raw Fortran INCLUDE through an independent live
-        # reader. Standalone analysis keeps that behavior, but such bytes are
-        # not the captured root text and cannot authorize an immutable session.
-        readers = [getattr(getattr(node, "item", None), "reader", None) for node in walk(tree)]
-        readers.append(getattr(reader, "reader", None))
-        self._external_readers.update(str(getattr(item, "id", "external include"))
-                                      for item in readers if item is not None and item is not reader)
         record=self.entries.get(str(original))
         if record:
             for node in walk(tree):

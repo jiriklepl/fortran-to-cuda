@@ -320,17 +320,6 @@ def _exception_observers(analysis):
     conservatively prevents admission of these new numerical closures. A user
     procedure with the same spelling is not an intrinsic observer.
     """
-    session = getattr(analysis, "_source_session", None)
-    original_session = False
-    if session is not None:
-        session.verify(analysis)
-        routines = analysis.routines
-        original_session = (routines is session.roots["routines"]
-                            or getattr(routines, "base", None) is session.roots["routines"]
-                            and not routines.overrides)
-        cached = getattr(analysis, "_original_exception_observers", None)
-        if original_session and cached is not None and cached[0] is session:
-            return cached[1]
     observers = []
     procedures = {**analysis.routines, **analysis.numerical_helpers}
     for qualified, routine in procedures.items():
@@ -343,10 +332,7 @@ def _exception_observers(analysis):
                         and parts[1] in {"ieee_arithmetic", "ieee_exceptions"}
                         and parts[2] in {"ieee_get_flag", "ieee_get_status"}):
                     observers.append(qualified + " calls " + target)
-    result = tuple(sorted(set(observers)))
-    if original_session:
-        analysis._original_exception_observers = session, result
-    return result
+    return tuple(sorted(set(observers)))
 
 
 def _validate_real_varargs(analysis, routine, node):
