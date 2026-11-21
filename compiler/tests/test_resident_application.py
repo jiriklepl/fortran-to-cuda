@@ -529,3 +529,87 @@ end module
     assert line.index("call resident%host_modify([ &\n          resident%held(a), &\n          resident%held(b)])") \
         < line.index("a(1) = b(n); b(1) = a(n)") < line.index("call resident%host_done([ &")
     assert "observe" not in line[:line.index("call resident%host_done([ &")]
+
+
+MARCH = """module march
+integer :: n, steps
+contains
+subroutine run(a, b, c)
+real(8), contiguous, intent(inout) :: a(:,:), b(:,:), c(:,:,:)
+real(8) :: rate
+integer :: step, i, j
+rate = 0.1d0
+do step = 1, steps
+do j = 1, n
+do i = 1, n
+if (b(i,j) > 0) a(i,j) = a(i,j) + (b(i-1,j) + b(i+1,j) - 2 * a(i,j)) / rate
+enddo
+enddo
+enddo
+{more}
+end subroutine
+end module
+"""
+
+
+def marched(tmp_path, more=""):
+    tmp_path.mkdir(exist_ok=True)
+    source = tmp_path / "march.f90"
+    source.write_text(MARCH.format(more=more))
+    prepared = prepare(ResidentProject((source,), (Selection("all", ("march::run",)),)), tmp_path / "prepared",
+                       fortran=fortran_compiler())
+    return prepared, (tmp_path / "prepared/sources/march.f90").read_text()
+
+
+def test_the_host_runs_a_loop_that_repeats_one_nest(tmp_path):
+    prepared, text = marched(tmp_path)
+    summary, = prepared["selections"]
+    # The steps are no dimension of the nest: each one assigns the same elements. The host counts them
+    # and the nest in the body is the entry.
+    assert (summary["entries"], summary["nests"], summary["rejected"]) == (1, 1, [])
+    assert [(item["first_line"], item["last_line"]) for item in summary["descended"]] == [(11, 17)]
+    loop = text[text.index("do step = 1, steps"):]
+    assert loop.index("do step = 1, steps") < loop.index("call resident_require(fort_device_run(") < loop.index(
+        "\nenddo\n\nend subroutine")
+    assert "publish" not in text
+
+
+def test_a_loop_whose_variable_places_what_is_assigned_is_a_dimension_of_its_nest(tmp_path):
+    # Planes that each depend on the one before: the loop over them is part of the nest, which does not
+    # compile as a whole. Whether the host should launch plane after plane is not decided by rejecting it.
+    prepared, text = marched(tmp_path, more="""do step = 2, steps
+do j = 1, n
+do i = 1, n
+c(i,j,step) = c(i,j,step-1) + a(i,j)
+enddo
+enddo
+enddo""")
+    summary, = prepared["selections"]
+    assert (summary["entries"], summary["nests"]) == (1, 1)
+    assert [(item["first_line"], item["last_line"]) for item in summary["rejected"]] == [(18, 24)]
+    # Next to each other the two loops are one entry at first; it does not compile, and each is looked at
+    # on its own, so the loop that repeats its nest does not go down with the other.
+    assert [(item["first_line"], item["last_line"]) for item in summary["descended"]] == [(11, 24), (11, 17)]
+    assert text.count("call resident_require(fort_device_run(") == 1
+
+
+def test_a_scalar_the_procedure_has_assigned_is_read_at_the_call(tmp_path):
+    # Only a branch of the nest divides by rate. Read at the call, a scalar must be defined even where no
+    # iteration takes the branch: the assignment at the top of the procedure says that it is.
+    prepared, _text = marched(tmp_path / "assigned")
+    assert prepared["selections"][0]["rejected"] == []
+    # Assigned in a branch of its own, or not here at all, it may be undefined where the nest starts.
+    plain = MARCH.format(more="")
+    module_scalar = plain.replace("real(8) :: rate\n", "").replace("rate = 0.1d0\n", "").replace(
+        "integer :: n, steps\n", "integer :: n, steps\nreal(8) :: rate\n")
+    for number, text in enumerate((plain.replace("rate = 0.1d0", "if (n > 3) rate = 0.1d0"),
+                                   plain.replace("rate = 0.1d0", "if (n > 3) then\nrate = 0.1d0\nelse\nn = n\nend if"),
+                                   module_scalar)):
+        directory = tmp_path / str(number)
+        directory.mkdir()
+        source = directory / "march.f90"
+        source.write_text(text)
+        prepared = prepare(ResidentProject((source,), (Selection("all", ("march::run",)),)), directory / "prepared",
+                           fortran=fortran_compiler())
+        reasons = [region["reason"] for item in prepared["selections"][0]["rejected"] for region in item["regions"]]
+        assert reasons == ["CUDA value capture would evaluate a protected scalar"], text

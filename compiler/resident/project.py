@@ -50,7 +50,8 @@ class Selection:
     a condition the application's activation implies and the loop bounds do not
     show (see ``guard_entries``). ``value_scalars`` are module scalars
     (``module::name``) that are defined before any entry runs and so may be
-    passed by value. ``minimum_nests`` is the number of source loop nests that
+    passed by value; a scalar that the procedure of a nest assigns itself
+    before the nest needs no naming. ``minimum_nests`` is the number of source loop nests that
     must end up compiled; fewer is an error, so lost coverage is not silent.
     With ``native_rejections`` off, a nest the compiler rejects is left exactly
     as it is, for code the activation condition makes unreachable. ``assume``
@@ -343,11 +344,20 @@ def prepare(project, directory, *, fortran, host_threads=4):
             if record["compiled"]:
                 continue
             lines = current[record["source"]].read_text().splitlines()
-            mine = [item for item in package["rejected"] if item["procedure"] == record["procedure"]
-                    and record["tag"] in "\n".join(lines[item["first_line"] - 1:item["last_line"]])]
-            record["reason"] = "; ".join(sorted({item["reason"] for item in mine})) or "its nests were not exported"
+
+            def belongs(item, record=record, lines=lines):
+                return item["procedure"] == record["procedure"] and record["tag"] in "\n".join(
+                    lines[item["first_line"] - 1:item["last_line"]])
+
+            mine = [item for item in package["rejected"] if belongs(item)]
+            # A nest that was tried piece by piece says why at its outermost loop; the pieces only add
+            # that they do not stand on their own.
+            opened = [item for item in package.get("descended", ()) if belongs(item)]
+            record["reason"] = "; ".join(sorted({item["reason"] for item in opened or mine})) \
+                or "its nests were not exported"
             package = {**package, "entries": [item for item in package["entries"] if item not in own],
-                       "rejected": [item for item in package["rejected"] if item not in mine]}
+                       "rejected": [item for item in package["rejected"] if item not in mine],
+                       "descended": [item for item in package.get("descended", ()) if item not in opened]}
         # The nest of an array assignment that did not compile stays in place and runs on the host, as the
         # statement did: it is host code for the audit, not a rejected nest.
         for record in array_statements:

@@ -372,18 +372,36 @@ Forms beyond plain array loops that are supported in selected procedures:
   device copy could take, and a pointer array may share storage with another:
   nests that use either stay on the host, with that reason.
 
-- **Loops around nests.** A loop whose body holds a loop nest beside other
-  statements is either a nest itself or a loop that runs around nests, such as
-  an iteration or a time loop. It is first taken as a nest. When it cannot be
+- **Loops around nests.** A loop is either the outer loop of a nest or a
+  loop that runs around nests, such as an iteration or a time loop. It may be
+  the second kind when its body holds a loop nest beside other statements, or
+  one nest that every iteration applies to the same array elements (no
+  subscript of an assigned array depends on the loop's variable). Such a loop
+  is first taken as a nest. When it cannot be
   one (it calls a procedure, carries a directive, or its iterations depend on
   each other), the host runs the loop and the nests in its body are entries,
   called once per iteration; `prepared.json` lists such a loop under the
-  selection's `descended` when the dependence analysis decided it. An array
+  selection's `descended` when the dependence analysis decided it. Nests that
+  share an entry with such a loop are tried one by one when the entry does
+  not compile, and are listed there as well. A loop whose variable does place
+  what is assigned, such as a sweep through planes that each depend on the one
+  before, stays one nest and is rejected as a whole. An array
   assignment in such a body is written as its nest like one outside every
   loop. A nest in such a body that only accumulates scalars is rewritten only
   where an OpenMP `reduction` clause or `!$fort reduction` marks it, whatever
   it accumulates: unmarked, it may be the private accumulation of each
   iteration of a nest.
+
+- **Scalars that only a branch reads.** An entry gets its scalar inputs by
+  reference and reads one only where the original statements would, because a
+  scalar that only a branch of a nest reads may be undefined where no
+  iteration takes the branch; a nest with such an input stays on the host.
+  That is not needed, and the scalar is passed by value, where the procedure
+  itself has assigned it whenever control reaches the nest: by an assignment
+  statement before the nest in the procedure's own sequence of statements, or
+  in the sequence of a construct or host-run loop the nest is in. An
+  assignment inside a branch counts for the rest of that branch only. Module
+  scalars that are set elsewhere are named in the selection's `value_scalars`.
 
 - **Loop variables that are read after their loop.** The host variable of a
   compiled nest keeps its old value, so the entry call is followed by the
