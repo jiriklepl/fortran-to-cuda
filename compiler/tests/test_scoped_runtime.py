@@ -151,7 +151,6 @@ def runtime(tmp_path_factory):
     lib.fort_scope_error.restype = c.c_char_p
     signatures = {
         "create": [c.c_int, c.POINTER(TOKEN)],
-        "serial_caller": [],
         "register": [TOKEN, TOKEN, TOKEN, c.POINTER(Layout), c.c_int, c.POINTER(TOKEN)],
         "register_sections": [TOKEN, TOKEN, TOKEN, c.POINTER(Layout), c.POINTER(Section), SIZE, c.POINTER(TOKEN)],
         "forget_definition": [TOKEN, TOKEN],
@@ -166,11 +165,6 @@ def runtime(tmp_path_factory):
     for name, signature in signatures.items():
         getattr(lib, "fort_scope_" + name).argtypes = signature
     return lib
-
-
-@pytest.mark.native
-def test_source_caller_without_openmp_support_selects_native(runtime):
-    assert runtime.fort_scope_serial_caller() == 0
 
 
 @pytest.mark.native
@@ -538,8 +532,7 @@ def test_definition_change_retains_physical_values_and_reuses_allocation(runtime
 
 
 @pytest.mark.native
-@pytest.mark.parametrize("partial", [False, True])
-def test_definition_kill_cannot_lose_executed_gpu_prefix_on_native_boundary(runtime, partial):
+def test_definition_kill_cannot_lose_executed_gpu_prefix_on_native_boundary(runtime):
     """Reject undefined reads while preserving physical state for source fallback.
 
     Ordinary intrinsic INTENT(OUT) has no physical entry operation. A later
@@ -557,12 +550,7 @@ def test_definition_kill_cannot_lose_executed_gpu_prefix_on_native_boundary(runt
         device[i] = 3000 + i
     scope.gpu_end(buffer)
     before = scope.stats()
-    if partial:
-        forgotten = access(read=[([2], [6])])
-        runtime.fort_scope_forget_sections_v1.argtypes = [TOKEN, TOKEN, c.POINTER(Section), SIZE]
-        scope.check(runtime.fort_scope_forget_sections_v1(scope.handle, buffer, forgotten.reads, forgotten.read_count))
-    else:
-        scope.check(runtime.fort_scope_forget_definition(scope.handle, buffer))
+    scope.check(runtime.fort_scope_forget_definition(scope.handle, buffer))
     assert scope.stats().download_bytes == before.download_bytes
     assert scope.stats().waits == before.waits
     forbidden = access(read=[([3], [4])])

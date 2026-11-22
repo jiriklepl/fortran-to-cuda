@@ -9,7 +9,6 @@ import subprocess
 import pytest
 
 from compiler.tests.test_scoped_runtime import RUNTIME, SIZE, TOKEN, Access, Layout, Scope, Stats, access
-from compiler.tests.test_scoped_views import View, view
 
 
 class Binding(c.Structure):
@@ -23,7 +22,7 @@ def acquisition(tmp_path_factory):
     if not compiler:
         pytest.skip("g++ unavailable")
     glue = directory / "entry.cpp"
-    glue.write_text('''#include "view_entry.hpp"
+    glue.write_text('''#include "scoped_entry.hpp"
 extern "C" int entry_read(fort_scope_t context, const fort_buffer_t *handles, size_t count) {
     fort_scoped::AccessBatch<128> task(context);
     fort_scope_access reads{}; reads.flags=FORT_SCOPE_READ_ALL;
@@ -60,21 +59,6 @@ extern "C" int entry_export(fort_scope_t context, fort_buffer_t handle, fort_sco
     status=task.add(handle,reads); if(status) return status;
     return task.export_bindings(out,capacity,count);
 }
-extern "C" int entry_view_export(fort_scope_t context,const fort_scope_view_v1 *first,
-                                  const fort_scope_view_v1 *second,size_t *coordinates) {
-    fort_scoped::ViewAccessBatch<2> task(context);
-    fort_scope_access reads{}; reads.flags=FORT_SCOPE_READ_ALL;
-    int status=task.add(first,reads); if(status) return status;
-    status=task.add(second,reads); if(status) return status;
-    fort_scope_plan_binding bindings[2]{}; size_t count=0;
-    status=task.export_bindings(bindings,2,&count); if(status) return status;
-    if(count!=1 || bindings[0].access.read_count!=2) return -1;
-    for(size_t i=0;i<2;++i) {
-        coordinates[2*i]=bindings[0].access.reads[i].lower[0];
-        coordinates[2*i+1]=bindings[0].access.reads[i].upper[0];
-    }
-    return task.add(first,reads)==FORT_SCOPE_STATE ? FORT_SCOPE_OK : -2;
-}
 ''')
     target = directory / "runtime.so"
     result = subprocess.run([
@@ -102,7 +86,6 @@ extern "C" int entry_view_export(fort_scope_t context,const fort_scope_view_v1 *
     lib.entry_read.argtypes = [TOKEN, c.POINTER(TOKEN), SIZE]
     lib.entry_rebegin.argtypes = lib.entry_cancel.argtypes = [TOKEN, TOKEN]
     lib.entry_export.argtypes = [TOKEN, TOKEN, c.POINTER(Binding), SIZE, c.POINTER(SIZE)]
-    lib.entry_view_export.argtypes = [TOKEN, c.POINTER(View), c.POINTER(View), c.POINTER(SIZE)]
     return lib
 
 
@@ -342,7 +325,7 @@ def test_zero_size_resources_and_empty_tasks_do_not_allocate_or_wait(acquisition
 
 
 @pytest.mark.native
-def test_exported_bindings_are_canonical_and_view_sections_remain_exact(acquisition):
+def test_exported_bindings_are_canonical(acquisition):
     scope = Scope(acquisition)
     _, handle = register(scope, 1)
     bindings = (Binding * 2)()
@@ -353,9 +336,5 @@ def test_exported_bindings_are_canonical_and_view_sections_remain_exact(acquisit
     assert count.value == 1
     assert bindings[0].buffer == handle.value
     assert bindings[0].access.flags == 1
-    first, second = view(handle, [0], [2]), view(handle, [4], [2])
-    coordinates = (SIZE * 4)()
-    scope.check(acquisition.entry_view_export(scope.handle, c.byref(first), c.byref(second), coordinates))
-    assert list(coordinates) == [0, 2, 4, 6]
     assert scope.stats().allocations == scope.stats().waits == 0
     scope.close()

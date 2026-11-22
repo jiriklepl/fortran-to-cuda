@@ -134,9 +134,9 @@ def _tiled_body(region: ParallelRegion) -> list[str]:
     return lines
 
 
-def _kernel_parameters(region: ParallelRegion, *, array_views: bool = False) -> list[str]:
+def _kernel_parameters(region: ParallelRegion) -> list[str]:
     schedule = region_schedule(region)
-    parameters = [cpp_declaration(argument, array_views=array_views) for argument in abi_arguments(region_symbols(region))]
+    parameters = [cpp_declaration(argument) for argument in abi_arguments(region_symbols(region))]
     for axis in range(len(region.loops)):
         parameters.extend(
             [
@@ -160,15 +160,15 @@ def _signature(prefix: str, parameters: list[str]) -> list[str]:
     return lines
 
 
-def generate_kernel(region: ParallelRegion, *, array_views: bool = False) -> list[str]:
+def generate_kernel(region: ParallelRegion) -> list[str]:
     schedule = region_schedule(region)
-    lines = _signature(f"static __global__ void {kernel_name(region)}", _kernel_parameters(region, array_views=array_views))
+    lines = _signature(f"static __global__ void {kernel_name(region)}", _kernel_parameters(region))
     lines.extend(_tiled_body(region) if schedule.tile_sizes else _untiled_body(region))
     lines.extend(["}", ""])
     return lines
 
 
-def generate_group_kernel(regions, *, array_views: bool = False) -> list[str]:
+def generate_group_kernel(regions) -> list[str]:
     """One kernel that runs several untiled regions, for regions that do not depend on each other.
 
     Every thread takes its share of the points of each member in turn, so the
@@ -181,7 +181,7 @@ def generate_group_kernel(regions, *, array_views: bool = False) -> list[str]:
     for position, region in enumerate(regions):
         if region_schedule(region).tile_sizes:
             raise ValueError("A group kernel takes untiled regions only")
-        own = _kernel_parameters(region, array_views=array_views)
+        own = _kernel_parameters(region)
         lines.extend(_signature(
             f"static __device__ __forceinline__ void {points_name(region)}",
             [*own, "const std::size_t fort_internal_grid_stride", "std::size_t fort_internal_point"],

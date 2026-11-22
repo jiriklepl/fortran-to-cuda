@@ -55,12 +55,7 @@ TYPES = {
 ENTRY_ABI_VERSION = 3
 
 
-def generate_scoped(function, plan, config, common_header, *, root_views=False, root_view_abi=1):
-    if root_view_abi not in {1, 2}:
-        raise CompilationError("unsupported borrowed numerical view ABI")
-    view_type = f"fort_scope_view_v{root_view_abi}"
-    view_layout_type = f"fort_scope_view_layout_v{root_view_abi}"
-    view_get = f"fort_scope_view_get_v{root_view_abi}"
+def generate_scoped(function, plan, config, common_header):
     arrays = tuple(s for s in function.parameters if s.rank)
     scalars = tuple(s for s in function.parameters if not s.rank)
     if any(s.intent != "in" for s in scalars):
@@ -70,8 +65,6 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
     if function.requires_numerical_environment:
         identity += ":numerical-environment:nearest-nontrapping-v1"
     digest = sha256(identity.encode()).hexdigest()[:12]
-    if root_views:
-        digest = sha256((digest + f":root-view-v{root_view_abi}").encode()).hexdigest()[:12]
     name = "fort_shared_" + digest
     c_name = "cpp_" + name
     from compiler.scopes.provenance import Provenance
@@ -96,16 +89,11 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
     transfer_reason = {"auto": "transfer_estimates_unavailable", "pipelined": "pipelined_not_available"}.get(config.scope_transfers)
     scalar_signature = [(f"const {cpp_type(s)} fort_value_{s.cpp_name}" if s.by_value else
                          f"const {cpp_type(s)} *fort_scalar_{s.cpp_name}") for s in scalars]
-    def array_parameter(symbol):
-        return (f"const {view_type} *{symbol.cpp_name}_view" if root_views else
-                f"fort_buffer_t {symbol.cpp_name}_handle")
-
     def array_argument(symbol):
-        return symbol.cpp_name + ("_view" if root_views else "_handle")
+        return symbol.cpp_name + "_handle"
 
-    batch_type = "ViewAccessBatch" if root_views else "AccessBatch"
     signature = ["fort_scope_t fort_context", "int fort_mode",
-                 *[array_parameter(s) for s in arrays], *scalar_signature]
+                 *[f"fort_buffer_t {array_argument(s)}" for s in arrays], *scalar_signature]
     abi = abi_arguments(function.parameters)
     worker_arguments = ", ".join(a.name for a in abi)
     capacity = max(len(arrays), 1)
@@ -114,8 +102,6 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
              '#define FORT_SHARED_CHECK(expr) do { int fort_check_result = (expr); if (fort_check_result) return fort_check_result; } while (false)',
              f"namespace generated_kernels::{name} {{", "using namespace indexing;"]
     lines.insert(0, "#include <type_traits>")
-    if root_views:
-        lines.insert(5, '#include "view_entry.hpp"')
     invariants = set(function.parameters)
 
     def collect(current):
@@ -153,10 +139,10 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
         # a guarded invariant load. Protected inputs need observable reads at
         # their original use sites, including in outlined OpenMP workers.
         worker_signature = ", ".join(
-            cpp_declaration(a, array_views=root_views) if a.symbol.rank else
+            cpp_declaration(a) if a.symbol.rank else
             f"const {'volatile ' if a.symbol in protected[region.id] else ''}{cpp_type(a.symbol)} &{a.name}"
             for a in abi)
-        lines.extend(generate_kernel(region, array_views=root_views))
+        lines.extend(generate_kernel(region))
         lines.extend(_cpu_worker(units[region.id], worker_signature + extra_signature, f"cpu_{region.id}"))
 
     def launch_groups(current):
@@ -230,9 +216,9 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
         close()
         return groups
 
-    merged_launches = [] if root_views else launch_groups(plan)
+    merged_launches = launch_groups(plan)
     for group in merged_launches:
-        lines.extend(generate_group_kernel(group, array_views=root_views))
+        lines.extend(generate_group_kernel(group))
     lines += [f'extern "C" int {c_name}({", ".join(signature)}) {{',
               f'    fort_scoped::TracePosition fort_entry_trace(fort_context, "{procedure_id}", "");',
               *(["    bool fort_entry_work_started=false;",
@@ -265,42 +251,19 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
     layout_setup = []
     for i, a in enumerate(arrays):
         for b in arrays[:i]:
-            if not root_views and (a in writes or b in writes):
+            if a in writes or b in writes:
                 lines += [f"    if ({a.cpp_name}_handle == {b.cpp_name}_handle)",
                           '        return fort_scope_report_error(FORT_SCOPE_ALIAS, "writable entry arguments alias");']
         field = a.cpp_name + "_layout"
-        if root_views:
-            value_type = ("const " if a.intent == "in" else "") + cpp_type(a)
-            layout_setup += [f"    {view_layout_type} {field}{{}};",
-                             f"    FORT_SHARED_CHECK({view_get}(fort_context, {a.cpp_name}_view, &{field}));",
-                             f"    const fort_buffer_t {a.cpp_name}_handle = {a.cpp_name}_view->buffer;",
-                             f"    if ({field}.root.type != {TYPES[a.dtype][0]} || {field}.root.element_bytes != sizeof({cpp_type(a)}) ||",
-                             f"        {field}{'.root' if root_view_abi == 1 else ''}.rank != {a.rank})",
-                             '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "entry view layout/type mismatch");',
-                             f"    for (std::size_t axis=0; axis<{a.rank}; ++axis)",
-                             f"        if ({field}.lower_bounds[axis] != 1)",
-                             '            return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "numerical view requires its prepared one-based dummy bounds");',
-                             f"    fort_scoped::RootView<{value_type}, {a.rank}> {a.cpp_name}({field}, static_cast<{value_type} *>({field}.root.host));",
-                             f"    fort_scoped::RootView<{value_type}, {a.rank}> {a.cpp_name}_device;"]
-        else:
-            layout_setup += [f"    fort_scope_layout {field}{{}};",
-                  f"    FORT_SHARED_CHECK(fort_scope_layout_get(fort_context, {a.cpp_name}_handle, &{field}));",
-                  f"    if ({field}.rank != {a.rank} || {field}.type != {TYPES[a.dtype][0]} ||",
-                  f"        {field}.element_bytes != sizeof({cpp_type(a)}))",
-                  '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "entry layout/type mismatch");',
-                  f"    auto *{a.cpp_name} = static_cast<{cpp_type(a)} *>({field}.host);",
-                  f"    {cpp_type(a)} *{a.cpp_name}_device = nullptr;"]
+        layout_setup += [f"    fort_scope_layout {field}{{}};",
+              f"    FORT_SHARED_CHECK(fort_scope_layout_get(fort_context, {a.cpp_name}_handle, &{field}));",
+              f"    if ({field}.rank != {a.rank} || {field}.type != {TYPES[a.dtype][0]} ||",
+              f"        {field}.element_bytes != sizeof({cpp_type(a)}))",
+              '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "entry layout/type mismatch");',
+              f"    auto *{a.cpp_name} = static_cast<{cpp_type(a)} *>({field}.host);",
+              f"    {cpp_type(a)} *{a.cpp_name}_device = nullptr;"]
         layout_setup += [f"    const std::size_t {dimension_name(a,k+1)} = {field}.extents[{k}];" for k in range(a.rank)]
     setup += layout_setup
-    alias_setup = []
-    if root_views:
-        alias_setup += ["    {", f"        fort_scoped::ViewAccessBatch<{capacity}> fort_aliases(fort_context);"]
-        for array in arrays:
-            flags = "FORT_SCOPE_WRITE_ALL | FORT_SCOPE_OVERWRITE_ALL" if array in writes or array.intent == "out" else "FORT_SCOPE_READ_ALL"
-            alias_setup += [f"        fort_scope_access fort_alias_{array.cpp_name}{{}}; fort_alias_{array.cpp_name}.flags={flags};",
-                            f"        FORT_SHARED_CHECK(fort_aliases.add({array.cpp_name}_view, fort_alias_{array.cpp_name}));"]
-        alias_setup += ["    }"]
-        setup += alias_setup
     lines += setup
     # A region may be independent only for some values of the entry's scalars. For others the entry does
     # nothing and says so; its caller still has the original statements.
@@ -309,16 +272,14 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
     lines += [f"    {cpp_type(s)} {s.cpp_name};" for s in host_symbols(function, plan)]
     for s in arrays:
         if s.intent == "out":
-            forget = (f"fort_scoped::forget_view(fort_context, {s.cpp_name}_view)" if root_views else
-                      f"fort_scope_forget_definition(fort_context, {s.cpp_name}_handle)")
-            lines += [f"    FORT_SHARED_CHECK({forget});"]
+            lines += [f"    FORT_SHARED_CHECK(fort_scope_forget_definition(fort_context, {s.cpp_name}_handle));"]
     lines += ["    const bool fort_gpu_requested = fort_mode == 1;"]
 
     def prefetch(symbols):
         ordered = [s for s in arrays if s in symbols]
         if not ordered:
             return []
-        result = ["{", f"    fort_scoped::{batch_type}<{capacity}> fort_metadata(fort_context);",
+        result = ["{", f"    fort_scoped::AccessBatch<{capacity}> fort_metadata(fort_context);",
                   "    fort_scope_access fort_read{}; fort_read.flags = FORT_SCOPE_READ_ALL;"]
         for s in ordered:
             result += [f"    FORT_SHARED_CHECK(fort_metadata.add({array_argument(s)}, fort_read));"]
@@ -349,7 +310,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
         return [*result, *checked_product("fort_internal_total", factors)]
 
     def descriptors(unit):
-        result = [f"fort_scoped::{batch_type}<{capacity}> fort_access(fort_context);", "bool fort_valid = true;"]
+        result = [f"fort_scoped::AccessBatch<{capacity}> fort_access(fort_context);", "bool fort_valid = true;"]
         checked = any(isinstance(node, ArrayAccess)
                       for fp in unit.footprints for box in (*fp.reads, *fp.writes)
                       for expression in (*box.lower, *box.upper) for node in walk_expr(expression))
@@ -416,7 +377,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
                     break
         if local_setup:
             return ["fort_entry_work_started=true;", *executable]
-        result = ["{", f"    fort_scoped::{batch_type}<{capacity}> fort_host(fort_context);"]
+        result = ["{", f"    fort_scoped::AccessBatch<{capacity}> fort_host(fort_context);"]
         for s in arrays:
             if s in touched:
                 flags = (1 if s in step.read_symbols else 0) | (2 if s in step.write_symbols else 0)
@@ -439,7 +400,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
             "fallback": "original task only before enqueue; accepted work is never replayed"}
         return generate_graph_group((step,), units=units, arrays=arrays, capacity=capacity,
             bounds=bounds, descriptors=descriptors, array_argument=array_argument,
-            root_views=root_views, group_key=key, fallback=(), enqueue=True,
+            group_key=key, fallback=(), enqueue=True,
             accepted=accepted, condition="fort_gpu", prepared_access="fort_access")
 
     def merged_launch(group, fallback):
@@ -453,7 +414,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
                     f'"{implementation_ids[group[0].id, "cuda"]}");')
         return generate_graph_group(group, units=units, arrays=arrays, capacity=capacity,
             bounds=bounds, descriptors=descriptors, array_argument=array_argument,
-            root_views=root_views, group_key=key, fallback=fallback, enqueue=True,
+            group_key=key, fallback=fallback, enqueue=True,
             accepted=("fort_entry_work_started = true;",), condition="fort_gpu_requested",
             merged=True, prologue=(position,))
 
@@ -501,10 +462,7 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
                         "        fort_status = fort_access.begin(false);", "    }", "    FORT_SHARED_CHECK(fort_status);", "}"]
                 for s in arrays:
                     pointer = f"static_cast<{cpp_type(s)} *>(fort_access.device({s.cpp_name}_handle))"
-                    value_type = ("const " if s.intent == "in" else "") + cpp_type(s)
-                    device = (f"fort_scoped::RootView<{value_type}, {s.rank}>({s.cpp_name}_layout, {pointer})"
-                              if root_views else pointer)
-                    body += [f"if (fort_gpu) {s.cpp_name}_device = {device};"]
+                    body += [f"if (fort_gpu) {s.cpp_name}_device = {pointer};"]
                 body += ["fort_access.executing();", *(["fort_entry_work_started=true;"]), "if (fort_gpu) {", *indent(generate_launch(
                     step, stream="static_cast<cudaStream_t>(fort_gpu_call.stream)", profile=False, prepared_bounds=True,
                     error_check='if (const auto error = cudaGetLastError(); error != cudaSuccess) return fort_scope_execution_error(fort_context, cudaGetErrorString(error));',
@@ -532,15 +490,12 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
                  "    return fort_entry_result;"]), "}"]
     lines += ["}", "#undef FORT_SHARED_CHECK", ""]
     parameters = ["fort_context", "fort_mode", *[array_argument(s) for s in arrays], *[s.cpp_name for s in scalars]]
-    view_import = ", " + view_type if root_views else ""
     fortran = [f"module {name}", "  use iso_c_binding",
-               *(["  use fort_scoped_memory, only: " + view_type] if root_views else []),
                "  implicit none", "  private", "  public :: run, configure", "  interface"]
     fortran += _fortran_list("function run(", parameters, f") bind(C, name='{c_name}') result(fort_status)", 4)
-    fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool" + view_import, "      integer(c_int) :: fort_status",
+    fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool", "      integer(c_int) :: fort_status",
                 "      integer(c_int64_t), value :: fort_context", "      integer(c_int), value :: fort_mode"]
-    fortran += [(f"      type({view_type}), intent(in) :: {s.cpp_name}_view" if root_views else
-                 f"      integer(c_int64_t), value :: {s.cpp_name}_handle") for s in arrays]
+    fortran += [f"      integer(c_int64_t), value :: {s.cpp_name}_handle" for s in arrays]
     fortran += [f"      {TYPES[s.dtype][1]}, intent(in)" + (", value" if s.by_value else "") + f" :: {s.cpp_name}" for s in scalars]
     fortran += ["    end function"]
     fortran += [f"    function configure(fort_context) bind(C, name='{configure_name}') result(fort_status)",
@@ -615,14 +570,4 @@ def generate_scoped(function, plan, config, common_header, *, root_views=False, 
         "submission": "context queue spans numerical calls; conflicting host tasks drain dependencies",
         "parameter_lifetime": "runtime owns nonempty task values and effects until submission",
         "fusion": "fresh dependence proofs before graph launch planning"}
-    if root_views:
-        report["borrowed_views"] = {"abi_version": root_view_abi, "validation": view_get,
-                                   "layout": "full-root byte pitches; formal logical dimensions and coordinates",
-                                   "logical_bounds": "prepared one-based numerical ABI; original indices remain in source-proven normalized scalars",
-                                   "definitions": "exact partial view discard at original entry",
-                                   "aliases": "disjoint writable views; exact bounded read unions"}
-        for parameter in report["array_parameters"]:
-            parameter["passing"] = f"root_view_v{root_view_abi}"
-        if root_view_abi == 2:
-            report["borrowed_views"]["rank_reduction"] = "retained logical axes map to original full-layout pitches; fixed axes select one coordinate"
     return ScopedEmission(numerical_source_prologue() + "\n".join(lines), "\n".join(fortran), report)

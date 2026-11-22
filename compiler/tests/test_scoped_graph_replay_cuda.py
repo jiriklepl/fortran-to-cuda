@@ -146,12 +146,9 @@ int main(int argc,char **argv) {
         for(int i=0;i<8;++i) assert(f.host_out[i]==3*(i+2));
         check(fort_scope_close(f.context)); return 0;
     }
-    if(!std::strcmp(mode,"forget") || !std::strcmp(mode,"forget_partial")) {
+    if(!std::strcmp(mode,"forget")) {
         const auto before=f.stats();
-        if(!std::strcmp(mode,"forget_partial")) {
-            size_t lo[1]={2},hi[1]={6}; fort_scope_section removed{lo,hi};
-            check(fort_scope_forget_sections_v1(f.context,f.b,&removed,1));
-        } else check(fort_scope_forget_definition(f.context,f.b));
+        check(fort_scope_forget_definition(f.context,f.b));
         assert(f.stats().download_bytes==before.download_bytes && f.stats().waits==before.waits);
         fort_scope_access read{}; read.flags=FORT_SCOPE_READ_ALL;
         assert(fort_scope_host_begin(f.context,f.b,&read)==FORT_SCOPE_UNINITIALIZED);
@@ -240,7 +237,7 @@ def cuda_graph_executable(tmp_path_factory):
 
 @pytest.mark.cuda
 @pytest.mark.parametrize("mode", ["replay", "rebind", "topology", "partial", "invalid", "create_failure",
-                                 "update_failure", "launch_failure", "direct_failure", "one_shot", "long_group", "forget", "forget_partial"])
+                                 "update_failure", "launch_failure", "direct_failure", "one_shot", "long_group", "forget"])
 def test_real_cuda_graph_execution(cuda_graph_executable, mode):
     result = subprocess.run([str(cuda_graph_executable), mode], capture_output=True, text=True,
                             env={**os.environ, "FORT_RUNTIME_TRACE": "1"}, timeout=30)

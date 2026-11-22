@@ -103,56 +103,6 @@ typedef struct fort_scope_layout {
     const int64_t *lower_bounds;
     uint64_t generation;
 } fort_scope_layout;
-/* Additive borrowed views. Origins are physical root coordinates; extents and
- * lower bounds belong to the original child dummy. No compact allocation or
- * pointer registration is created. Descriptor pointers remain caller-owned. */
-#define FORT_SCOPE_VIEW_ABI_VERSION 1
-typedef struct fort_scope_view_v1 {
-    uint32_t version, rank;
-    fort_buffer_t buffer;
-    uint64_t generation;
-    const size_t *origins, *extents;
-    const int64_t *lower_bounds;
-} fort_scope_view_v1;
-typedef struct fort_scope_view_layout_v1 {
-    fort_scope_layout root;
-    const size_t *origins, *extents, *byte_strides;
-    const int64_t *lower_bounds;
-    size_t elements, byte_offset;
-} fort_scope_view_layout_v1;
-/* Pure descriptor validation, including checked existing INTEGER ABI bounds.
- * Empty views perform no address arithmetic. No CUDA initialization occurs. */
-int fort_scope_view_get_v1(fort_scope_t context, const fort_scope_view_v1 *view,
-                            fort_scope_view_layout_v1 *layout);
-/* Rank-reduced rectangular views. Origins have root_rank elements, while axes,
- * extents and lower_bounds have rank elements. Each retained dummy dimension
- * maps to one distinct zero-based root axis; other axes select one element.
- * Root pitches and allocation identity remain unchanged. Version 1 remains
- * available for existing independently generated companions. */
-#define FORT_SCOPE_VIEW_ABI_VERSION_V2 2
-typedef struct fort_scope_view_v2 {
-    uint32_t version, rank, root_rank, reserved;
-    fort_buffer_t buffer;
-    uint64_t generation;
-    const size_t *origins, *extents;
-    const int64_t *lower_bounds;
-    const uint32_t *axes;
-} fort_scope_view_v2;
-typedef struct fort_scope_view_layout_v2 {
-    fort_scope_layout root;
-    uint32_t rank, reserved;
-    const size_t *origins, *extents, *root_byte_strides;
-    const int64_t *lower_bounds;
-    const uint32_t *axes;
-    size_t elements, byte_offset;
-} fort_scope_view_layout_v2;
-int fort_scope_view_get_v2(fort_scope_t context, const fort_scope_view_v2 *view,
-                            fort_scope_view_layout_v2 *layout);
-/* Partial INTENT(OUT) changes definitions only inside the supplied root boxes.
- * All three coverage sets are prepared before committing; fragmentation leaves
- * them unchanged. Existing allocation and unrelated current values survive. */
-int fort_scope_forget_sections_v1(fort_scope_t context, fort_buffer_t buffer,
-                                  const fort_scope_section *sections, size_t count);
 /* Compiler-established exact upward reads at the reached original operation,
  * after its guards and original descriptor checks. This is a precondition of
  * well-defined original execution, never a prefix/halo or alias proof. Only
@@ -278,9 +228,6 @@ int fort_scope_domain_abandon_v1(fort_scope_domain_t domain);
 int fort_scope_domain_workspace_reserve_v1(fort_scope_domain_t domain, size_t bytes, uint64_t *lease);
 int fort_scope_domain_workspace_resize_v1(fort_scope_domain_t domain, uint64_t lease, size_t bytes);
 int fort_scope_domain_workspace_release_v1(fort_scope_domain_t domain, uint64_t lease);
-/* No CUDA initialization or descriptor access. Source scopes retain native
- * collective execution in active teams or if runtime OpenMP support is absent. */
-int fort_scope_serial_caller(void);
 /* Metadata-only check of the ORIGINAL calling thread's IEEE control state. */
 int fort_scope_numerical_environment_supported(void);
 /* Configure before CUDA initialization. Budget counts full-layout payloads

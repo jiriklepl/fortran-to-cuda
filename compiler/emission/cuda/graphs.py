@@ -76,7 +76,6 @@ def generate_graph_group(
     bounds,
     descriptors,
     array_argument,
-    root_views,
     group_key,
     fallback,
     enqueue=False,
@@ -210,14 +209,7 @@ def generate_graph_group(
             "}",
         ]
         pointer = f"fort_graph_pointers[{slot}]"
-        if root_views:
-            value_type = ("const " if symbol.intent == "in" else "") + cpp_type(symbol)
-            value = (
-                f"fort_scoped::RootView<{value_type}, {symbol.rank}>({symbol.cpp_name}_layout, "
-                f"static_cast<{cpp_type(symbol)} *>({pointer}))"
-            )
-        else:
-            value = f"static_cast<{cpp_type(symbol)} *>({pointer})"
+        value = f"static_cast<{cpp_type(symbol)} *>({pointer})"
         pointers += [f"if ({active_condition}) {symbol.cpp_name}_device = {value};"]
     if requested:
         reserves += [

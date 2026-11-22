@@ -73,28 +73,6 @@ module fort_scoped_memory
     type(c_ptr) :: host=c_null_ptr, extents=c_null_ptr, lower_bounds=c_null_ptr
     integer(c_int64_t) :: generation=0
   end type
-  type, bind(C), public :: fort_scope_view_v1
-    integer(c_int32_t) :: version=1, rank=0
-    integer(c_int64_t) :: buffer=0, generation=0
-    type(c_ptr) :: origins=c_null_ptr, extents=c_null_ptr, lower_bounds=c_null_ptr
-  end type
-  type, bind(C), public :: fort_scope_view_layout_v1
-    type(fort_scope_layout) :: root
-    type(c_ptr) :: origins=c_null_ptr, extents=c_null_ptr, byte_strides=c_null_ptr, lower_bounds=c_null_ptr
-    integer(c_size_t) :: elements=0, byte_offset=0
-  end type
-  type, bind(C), public :: fort_scope_view_v2
-    integer(c_int32_t) :: version=2, rank=0, root_rank=0, reserved=0
-    integer(c_int64_t) :: buffer=0, generation=0
-    type(c_ptr) :: origins=c_null_ptr, extents=c_null_ptr, lower_bounds=c_null_ptr, axes=c_null_ptr
-  end type
-  type, bind(C), public :: fort_scope_view_layout_v2
-    type(fort_scope_layout) :: root
-    integer(c_int32_t) :: rank=0, reserved=0
-    type(c_ptr) :: origins=c_null_ptr, extents=c_null_ptr, root_byte_strides=c_null_ptr
-    type(c_ptr) :: lower_bounds=c_null_ptr, axes=c_null_ptr
-    integer(c_size_t) :: elements=0, byte_offset=0
-  end type
   type, bind(C), public :: fort_scope_stats
     integer(c_int64_t) :: uploads=0, downloads=0, upload_bytes=0, download_bytes=0
     integer(c_int64_t) :: allocations=0, allocated_bytes=0, peak_device_bytes=0
@@ -138,14 +116,11 @@ module fort_scoped_memory
   public :: fort_scope_register_sections, fort_scope_forget_definition, fort_scope_discard_v1
   public :: fort_scope_recycle_v1
   public :: fort_scope_retire_v1
-  public :: fort_scope_view_get_v1, fort_scope_view_get_v2
-  public :: fort_scope_forget_sections_v1
   public :: fort_scope_admit_source_reads_v1
   public :: fort_scope_set_device_budget
   public :: fort_scope_device_budget_default_v1, fort_scope_domain_budget_get_v1
   public :: fort_scope_scratch_acquire_v1, fort_scope_scratch_release_v1, fort_scope_scratch_stats_get_v1
   public :: fort_scope_set_transfers, fort_scope_transfer_stats_get_v1
-  public :: fort_scope_serial_caller
   public :: fort_scope_numerical_environment_supported
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
   public :: fort_scope_access_begin_v1
@@ -194,28 +169,7 @@ module fort_scoped_memory
     end function
 
 
-    function fort_scope_view_get_v1(context, view, layout) bind(C) result(status)
-      import c_int, c_int64_t, fort_scope_view_v1, fort_scope_view_layout_v1
-      integer(c_int64_t), value :: context
-      type(fort_scope_view_v1), intent(in) :: view
-      type(fort_scope_view_layout_v1), intent(out) :: layout
-      integer(c_int) :: status
-    end function
-    function fort_scope_view_get_v2(context, view, layout) bind(C) result(status)
-      import c_int, c_int64_t, fort_scope_view_v2, fort_scope_view_layout_v2
-      integer(c_int64_t), value :: context
-      type(fort_scope_view_v2), intent(in) :: view
-      type(fort_scope_view_layout_v2), intent(out) :: layout
-      integer(c_int) :: status
-    end function
     function fort_scope_admit_source_reads_v1(context, buffer, sections, count) bind(C) result(status)
-      import c_int, c_int64_t, c_ptr, c_size_t
-      integer(c_int64_t), value :: context, buffer
-      type(c_ptr), value :: sections
-      integer(c_size_t), value :: count
-      integer(c_int) :: status
-    end function
-    function fort_scope_forget_sections_v1(context, buffer, sections, count) bind(C) result(status)
       import c_int, c_int64_t, c_ptr, c_size_t
       integer(c_int64_t), value :: context, buffer
       type(c_ptr), value :: sections
@@ -237,10 +191,6 @@ module fort_scoped_memory
       integer(c_int) :: status
     end function
 
-    function fort_scope_serial_caller() bind(C) result(serial)
-      import c_int
-      integer(c_int) :: serial
-    end function
     function fort_scope_numerical_environment_supported() bind(C) result(supported)
       import c_int
       integer(c_int) :: supported
