@@ -939,3 +939,48 @@ end module
     twice = text[text.index("subroutine twice"):]
     assert "resident" not in twice
     assert "do i = 1, 2\ncall scale(a)\nenddo" in twice
+
+
+STAGES = """module stages
+integer :: n
+contains
+subroutine advance(a, b, rho, stage, dt)
+real(8), contiguous, intent(inout) :: a(:)
+real(8), contiguous, intent(in) :: b(:)
+real(8), intent(in) :: rho(3), dt
+integer, intent(in) :: stage
+integer :: i
+do i = 1, n
+a(i) = a(i) + b(i) * rho(stage) * dt + rho(stage) * rho(1)
+enddo
+n = n + 0
+do i = 1, n
+if (b(i) > 0) a(i) = a(i) * rho(stage + 1)
+enddo
+n = n + 0
+do i = 1, 3
+a(i) = a(i) + rho(i) * rho(stage)
+enddo
+end subroutine
+end module
+"""
+
+
+def test_an_element_that_is_one_value_for_the_entry_is_read_at_the_call(tmp_path):
+    source = tmp_path / "stages.f90"
+    source.write_text(STAGES)
+    prepare(ResidentProject((source,), (Selection("all", ("stages::advance",), minimum_nests=3),)),
+            tmp_path / "prepared", fortran=fortran_compiler())
+    text = (tmp_path / "prepared/sources/stages.f90").read_text()
+    first, second, third = text.split("n = n + 0\n")
+    # The coefficients of a stage are two values for the whole nest. The call reads them, after asking for
+    # the array's values in case an entry elsewhere keeps it on the device; the array itself is not bound.
+    assert first.index("call resident%observe([resident%held(rho)])") < first.index("resident%bind_real64(a,")
+    assert "          dt, &\n          rho(stage), &\n          rho(1), &\n          n))" in first
+    assert "bind_real64(rho," not in first
+    # An element under a condition may not be reached, and one that changes with the loop is no single
+    # value: these nests take the array.
+    assert "bind_real64(rho," in second
+    assert "rho(stage + 1), &" not in second
+    assert "bind_real64(rho," in third
+    assert "observe" not in third

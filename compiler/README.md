@@ -438,6 +438,13 @@ Forms beyond plain array loops that are supported in selected procedures:
   (`bind_field`), gathered when the field is first bound and written back to
   the structures at the next publication or `!$fort observe(points(:)%field)`.
   Nests over different lists get entries of their own.
+- **Elements that are one value for a nest.** A table of coefficients read as
+  `rho(stage)`, where the nests do not change `stage`, is one number for the
+  whole entry. The call reads it on the host and passes it; the array gets no
+  place on the device and is not bound, so a named constant or an expression
+  may be the actual argument behind it. This is done for an array of which
+  the nests of an entry use nothing but such elements, each reached in every
+  iteration, and which is not allocatable, a pointer or optional.
 - **Writes through index values.** A nest such as
   `a(idx(i)) = a(idx(i)) + v(i)`, or the same with index fields of a list, is
   independent across iterations exactly when its subscripts name a different

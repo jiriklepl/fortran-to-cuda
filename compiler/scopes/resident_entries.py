@@ -28,7 +28,7 @@ from fparser.two.utils import walk
 
 from compiler.frontend.call_bindings import resolve_original_call
 from compiler.frontend.component_bindings import component_access
-from compiler.frontend.source_effects import SourceEffects, _children, _kind
+from compiler.frontend.source_effects import Binding, SourceEffects, _children, _kind
 from compiler.ir import CompilationError
 from compiler.scopes.numerical import resource_binding
 from compiler.scopes.region_context import original_region_context
@@ -583,6 +583,107 @@ def _host_procedures(analysis, selected):
     return scan, records
 
 
+_CONDITIONAL = {"If_Construct", "If_Stmt", "Case_Construct", "Where_Construct", "Where_Stmt", "Forall_Construct",
+                "Forall_Stmt", "Select_Type_Construct"}
+_PLAIN = {"Name", "Int_Literal_Constant", "Level_2_Expr", "Level_2_Unary_Expr", "Add_Operand", "Mult_Operand",
+          "Parenthesis", "Section_Subscript_List", "str", "NoneType"}
+
+
+def _fixed_elements(analysis, routine, nodes):
+    """Elements of arrays that nests only read, at subscripts that stay the same while the nests run.
+
+    Such an element is one value for the whole entry: the call can read it on
+    the host and pass it, and the array needs no place on the device. That
+    holds for an array every reference to which, in ``nodes``, is an element
+    whose subscripts are made of integer constants and of scalars the nests
+    do not assign, and that the nests neither assign nor pass on. The read
+    moves ahead of the nests, so the element must be reached in every
+    iteration (it stands under no condition) and the array must always be
+    there (not allocatable, a pointer or optional). Returns the references,
+    grouped by array resource.
+    """
+    try:
+        arrays, _calls, elsewhere, written, released = _array_uses(analysis, routine, nodes)
+    except CompilationError:
+        return {}
+    assigned = set()
+    for node in nodes:
+        for statement in walk(node, Assignment_Stmt):
+            if _kind(statement.items[0]) == "Name":
+                assigned.add(str(statement.items[0]).lower())
+        for loop in walk(node):
+            if _kind(loop) == "Block_Nonlabel_Do_Construct":
+                assigned.add(_counted(loop)[0])
+    found, refused = {}, set()
+    for node in nodes:
+        for reference in walk(node, Part_Ref):
+            binding = analysis._binding(routine.scope, reference.items[0]) if _kind(reference.items[0]) == "Name" else None
+            if binding is None or not binding.rank:
+                continue
+            root = binding.root
+            subscripts = reference.items[1]
+            parts = list(_children(subscripts)) if _kind(subscripts) == "Section_Subscript_List" else [subscripts]
+            fixed = len(parts) == binding.rank and all(
+                _kind(item) in _PLAIN and (_kind(item) != "Name" or (
+                    str(item).lower() not in assigned and (scalar := analysis._binding(routine.scope, item)) is not None
+                    and not scalar.rank and scalar.dtype == "integer"))
+                for part in parts for item in walk(part))
+            above, conditional = reference.parent, False
+            while above is not None and above not in nodes:
+                conditional = conditional or _kind(above) in _CONDITIONAL
+                above = getattr(above, "parent", None)
+            if fixed and not conditional and above is not None:
+                found.setdefault(root, []).append(reference)
+            else:
+                refused.add(root)
+    return {root: references for root, references in found.items()
+            if root not in refused and root not in written and root not in released
+            and (arrays[root].dtype, arrays[root].kind) in {("real", 4), ("real", 8), ("integer", 4)}
+            and not hasattr(arrays[root], "component_object")
+            and not arrays[root].attributes & {"allocatable", "pointer", "optional"}
+            # Every mention of the array is one of these elements.
+            and sum(1 for node in nodes for name in walk(node, Name)
+                    if (seen := analysis._binding(routine.scope, name)) is not None and seen.root == root) == len(references)}
+
+
+def _as_values(analysis, routine, elements):
+    """Put a scalar in place of each of the ``elements`` in the parse tree; returns how to undo it, and the scalars.
+
+    The scalars are local to the procedure for as long as they stand in the
+    tree: an entry exported meanwhile takes them as inputs. Each maps, by
+    resource, to the element it stands for as the source writes it.
+    """
+    changes, values, texts = [], {}, {}
+    for _root, references in sorted(elements.items()):
+        for reference in references:
+            text = _text(reference)
+            name = texts.setdefault(text.lower().replace(" ", ""), f"fort_fixed_{len(texts) + 1}")
+            binding = analysis._binding(routine.scope, reference.items[0])
+            routine.scope.bindings[name] = Binding(name, routine.scope.qualified + "::" + name, binding.dtype, binding.kind, 0)
+            values[routine.scope.qualified + "::" + name] = text
+            parent, new = reference.parent, Name(name)
+            new.parent = parent
+            if isinstance(getattr(parent, "items", None), tuple) and any(item is reference for item in parent.items):
+                before = parent.items
+                parent.items = tuple(new if item is reference else item for item in before)
+                changes.append((parent, "items", before))
+            else:
+                before = list(parent.content)
+                parent.content[:] = [new if item is reference else item for item in before]
+                changes.append((parent, "content", before))
+
+    def undo():
+        for parent, attribute, before in reversed(changes):
+            if attribute == "items":
+                parent.items = before
+            else:
+                parent.content[:] = before
+        for name in texts.values():
+            routine.scope.bindings.pop(name, None)
+
+    return undo, values
+
+
 def _readable(analysis, routine, parameter):
     """Whether a scalar input can be read wherever its nest is reached, whatever the nest then does with it.
 
@@ -790,12 +891,20 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                              if first <= statement_span(node)[0]
                              and statement_span(node)[1] <= last)
             loops = [node for node in nodes if _kind(node) == "Block_Nonlabel_Do_Construct"]
+            # Elements that are one value for the whole entry are read at the call and passed as scalars.
+            fixed = _fixed_elements(analysis, routine, selected) if len(loops) == len(nodes) else {}
+            undo, values = _as_values(analysis, routine, fixed)
             try:
                 context = original_region_context(routine, selected, analysis=analysis)
                 extracted = extract_region(analysis, routine, selected,
                                            preceding=context.preceding, following=context.following,
                                            cyclic_following=context.cyclic_following)
+                path = extracted.write(directory)
+                public = extracted.public()
+                readable = sorted(parameter.name for parameter in extracted.parameters
+                                  if _readable(analysis, routine, parameter))
             except CompilationError as error:
+                undo()
                 # A larger interface can expose an unsupported association
                 # even when its individual source nests remain exportable.
                 if len(nodes) > 1 and len(loops) == len(nodes):
@@ -815,10 +924,12 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                                  "first_line": first, "last_line": last,
                                  "reason": str(error), **alternative(outer), **host_code(nodes)})
                 return
-            path = extracted.write(directory)
+            undo()
+            arrays_named = {root: str(references[0].items[0]) for root, references in fixed.items()}
             structures = []
-            # Variables that a USE renamed: the call names them as the nests do.
-            spelled = {}
+            # Variables that a USE renamed: the call names them as the nests do. An element passed as a
+            # value is named as the nests write it.
+            spelled = dict(values)
             for node in nodes:
                 for name in walk(node, Name):
                     binding = analysis._binding(routine.scope, name)
@@ -828,7 +939,7 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                 structures.append({"name": spelled.get(root, root.rsplit("::", 1)[-1]), "resource": root})
             runs = _runs(analysis, routine, nodes)
             entries.append({"procedure": procedure, "source": str(routine.scope.path),
-                            "input_path": str(path.resolve()), **extracted.public(),
+                            "input_path": str(path.resolve()), **public,
                             "source_loop_spans": [list(statement_span(node)) for node in loops],
                             "structures": structures, "injective": _indirect_writes(analysis, routine, loops),
                             # For the case that the entry does not compile and the nests stay host code.
@@ -836,8 +947,9 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                             # Where no nest has an iteration, there is nothing to bind and nothing to launch.
                             **({"runs": runs} if runs else {}),
                             **({"spelled": spelled} if spelled else {}),
-                            "readable_scalars": sorted(parameter.name for parameter in extracted.parameters
-                                                       if _readable(analysis, routine, parameter)),
+                            # Arrays whose elements the call reads on the host: their values must be there.
+                            **({"observed": sorted({arrays_named[root] for root in fixed})} if fixed else {}),
+                            "readable_scalars": readable,
                             **alternative(outer)})
             if len(nodes) == 1 and _around_nests(nodes[0]):
                 # Whether the loop runs its iterations independently is decided when the entry is

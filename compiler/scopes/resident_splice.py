@@ -135,6 +135,11 @@ def entry_call_block(region, entry, domain, held=None):
                                 f"          origin='{origin}')")
         else:
             actual[parameter["name"]] = name
+    if region.get("observed"):
+        # The call reads elements of these arrays on the host. Should entries keep one on the device, its
+        # values come back first.
+        registration.insert(0, f"        call {domain.object}%observe([" + ", ".join(
+            f"{domain.object}%held({name})" for name in region["observed"]) + "])")
     run = f"{domain.prefix}_device_run"
     arguments = [f"{domain.object}%context", "FORT_SCOPE_GPU"] + [actual[name] for name in entry["argument_order"][2:]]
     guards = ["        if (.not. (" + guard + ")) error stop 'resident numerical geometry changed'"
