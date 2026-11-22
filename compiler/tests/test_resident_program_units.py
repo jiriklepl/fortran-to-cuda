@@ -175,4 +175,3 @@ end module
     # The count of a row stays the statement it was.
     assert "if (a(i,j) > 0) count = count + 1" in text
     assert "total = total + fort_red1_q1(fort_red1_slot)" in text
-

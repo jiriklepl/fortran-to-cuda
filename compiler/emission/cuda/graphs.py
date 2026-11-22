@@ -73,20 +73,18 @@ def generate_graph_group(
     capacity,
     bounds,
     descriptors,
-    array_argument,
     group_key,
     fallback,
-    enqueue=False,
     accepted=(),
     condition="fort_gpu_requested",
     prepared_access=None,
     merged=False,
     prologue=(),
 ):
-    """Emit a preexecution attempt with stable argument/effect storage.
+    """Emit an attempt to queue the regions' launches, with stable argument and effect storage.
 
     A rejected attempt falls through to the original per-task implementation.
-    Graph submission errors after execution starts are terminal runtime errors.
+    Errors after the launches are queued are terminal runtime errors.
     ``prepared_access`` names an access batch that the enclosing scope has
     already filled for the one queued task, next to that task's bounds. The
     attempt then exports those effects and computes neither again.
@@ -95,11 +93,9 @@ def generate_graph_group(
     independent; ``accepted`` then runs only if something was queued.
     ``prologue`` lines open the attempt.
     """
-    if enqueue and len(regions) != 1 and not merged:
+    if len(regions) != 1 and not merged:
         raise ValueError("Deferred enqueue accepts exactly one checked task")
-    if prepared_access is not None and not enqueue:
-        raise ValueError("Only a deferred enqueue shares its caller's access batch")
-    if merged and (not enqueue or prepared_access is not None or len(regions) < 2
+    if merged and (prepared_access is not None or len(regions) < 2
                    or len({region_schedule(region).cuda_threads for region in regions}) != 1):
         raise ValueError("A merged launch queues several regions with one block size")
     declarations = [*prologue] + ([
@@ -142,7 +138,7 @@ def generate_graph_group(
             + ", ".join(f"&{prefix}_values.value_{index}" for index in range(len(arguments)))
             + "};",
         ]
-        if enqueue and not merged:
+        if not merged:
             declarations += [
                 f"const std::size_t {prefix}_argument_sizes[] = {{"
                 + ", ".join(f"sizeof({prefix}_values.value_{index})" for index in range(len(arguments)))
@@ -213,8 +209,6 @@ def generate_graph_group(
     submit = (
         f"if (!fort_graph_count) return FORT_SCOPE_OK;\n"
         f"return fort_scope_graph_enqueue_v1(fort_context, {group_key}ULL, fort_graph_tasks, fort_graph_0_argument_sizes);"
-        if enqueue
-        else f"return fort_scope_graph_execute_v1(fort_context, {group_key}ULL, fort_graph_tasks, fort_graph_count);"
     )
     if merged:
         threads = region_schedule(regions[0]).cuda_threads

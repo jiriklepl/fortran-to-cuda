@@ -8,7 +8,7 @@ import pytest
 from compiler.emission import read_common_header
 from compiler.emission.common.c_family import render_expression
 from compiler.ir import Binary, Literal, Reference, ScalarType, Symbol
-from compiler.numerical_contract import cuda_compile_options, require_explicit_cuda_environment
+from compiler.numerical_contract import cuda_compile_options
 
 
 @pytest.mark.parametrize(("left", "right"), [
@@ -34,7 +34,8 @@ def test_cuda_exact_division_matches_original_bits_across_exponents_and_special_
     nvcc, host = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++")
     if not nvcc or not host:
         pytest.skip("CUDA and C++ compiler required")
-    require_explicit_cuda_environment()
+    if os.environ.get("NVCC_PREPEND_FLAGS") or os.environ.get("NVCC_APPEND_FLAGS"):
+        pytest.skip("NVCC options from the environment would change what is compiled")
     (tmp_path / "runtime.hpp").write_text(read_common_header())
     source = tmp_path / "division.cu"
     source.write_text(r'''

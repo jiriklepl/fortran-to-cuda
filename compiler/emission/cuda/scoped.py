@@ -381,8 +381,8 @@ def generate_scoped(function, plan, config, common_header):
         key = int(sha256(f"{name}:graph:{step.id}".encode()).hexdigest()[:16], 16)
         graph_launch_groups[key] = {"key": key, "regions": [step.id]}
         return generate_graph_group((step,), units=units, arrays=arrays, capacity=capacity,
-            bounds=bounds, descriptors=descriptors, array_argument=array_argument,
-            group_key=key, fallback=(), enqueue=True,
+            bounds=bounds, descriptors=descriptors,
+            group_key=key, fallback=(),
             accepted=accepted, condition="fort_gpu", prepared_access="fort_access")
 
     def merged_launch(group, fallback):
@@ -391,8 +391,8 @@ def generate_scoped(function, plan, config, common_header):
         position = (f'fort_scoped::TracePosition fort_worker_trace(fort_context, "{procedure_id}", '
                     f'"{implementation_ids[group[0].id, "cuda"]}");')
         return generate_graph_group(group, units=units, arrays=arrays, capacity=capacity,
-            bounds=bounds, descriptors=descriptors, array_argument=array_argument,
-            group_key=key, fallback=fallback, enqueue=True,
+            bounds=bounds, descriptors=descriptors,
+            group_key=key, fallback=fallback,
             accepted=("fort_entry_work_started = true;",), condition="fort_gpu_requested",
             merged=True, prologue=(position,))
 

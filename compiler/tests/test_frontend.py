@@ -353,7 +353,6 @@ def test_marker_comments_remain_discovery_metadata_without_a_file_header(tmp_pat
     assert candidate.annotated
 
 
-
 @pytest.mark.parametrize("component", ["u", "v", "w"])
 def test_repository_stencils_lower_to_four_ordered_loop_regions(component: str) -> None:
     root = Path(__file__).resolve().parents[2]

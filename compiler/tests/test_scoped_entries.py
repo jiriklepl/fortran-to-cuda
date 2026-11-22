@@ -400,8 +400,6 @@ def test_native_continuation_after_gpu_work_without_replay(generated, monkeypatc
     assert list(out) == [99, *[2*i for i in range(1, 16)]]
 
 
-
-
 @pytest.mark.cuda
 def test_unavailable_cuda_continues_natively_without_replay(generated):
     directory, _, reports, _ = generated

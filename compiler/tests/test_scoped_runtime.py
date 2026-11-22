@@ -484,7 +484,6 @@ end program
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-
 @pytest.mark.native
 def test_partial_initialization_never_copies_or_reads_undefined_halos(runtime):
     scope = Scope(runtime)
@@ -603,7 +602,6 @@ def test_read_only_fragmentation_reconciliation_retains_original_current_copy(ru
     assert runtime.fort_scope_wait(scope.handle) == 2
 
 
-
 @pytest.mark.native
 def test_definition_change_cannot_cancel_a_prepared_operation(runtime):
     scope = Scope(runtime)
@@ -626,7 +624,6 @@ def test_invalid_partial_initialization_is_rejected_before_registration(runtime)
     scope.check(status)
     assert runtime.fort_scope_host_begin(scope.handle, buffer, c.byref(access(flags=1))) == 7
     scope.close()
-
 
 
 @pytest.mark.native

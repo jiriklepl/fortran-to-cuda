@@ -7,6 +7,9 @@ from fparser.two.utils import Base
 from compiler.frontend.source_effects import _children, _kind
 from compiler.ir import CompilationError
 
+# The nodes one context may look at.
+_VISITS = 65536
+
 
 @dataclass(frozen=True)
 class OriginalRegionContext:
@@ -14,18 +17,11 @@ class OriginalRegionContext:
     following: tuple
     cyclic_following: tuple
 
-    def public(self):
-        return {name: [str(node) for node in getattr(self, name)]
-                for name in ("preceding", "following", "cyclic_following")}
 
+def original_region_context(routine, sources):
+    """What lies before and after the selected statements in their procedure.
 
-def original_region_context(routine, sources, *, consume=None, analysis=None):
-    """What lies before and after the selected statements in their procedure."""
-    return _derive_original_region_context(routine, sources, consume=consume)
-
-
-def _derive_original_region_context(routine, sources, *, consume=None):
-    """Keep excluded suffixes and backedges as distinct original paths.
+    Keeps excluded suffixes and backedges as distinct original paths.
 
     Prepared coordinates establish order, including included source that has no
     editable original span. This helper grants no definition or capture facts.
@@ -35,9 +31,7 @@ def _derive_original_region_context(routine, sources, *, consume=None):
     def tick():
         nonlocal visits
         visits += 1
-        if consume is not None:
-            consume(1)
-        if visits > 65536:
+        if visits > _VISITS:
             raise CompilationError("original numerical context source-scan budget exhausted")
 
     # Only this ordering query owns the memo. Retain each object as well as
@@ -63,7 +57,7 @@ def _derive_original_region_context(routine, sources, *, consume=None):
             current, descendants = pending.pop()
             key = id(current)
             if descendants is None:
-                tick()  # A memo lookup is still charged to both work budgets.
+                tick()  # A memo lookup is charged to the budget as well.
                 if key in spans_by_node:
                     continue
                 if key in active:

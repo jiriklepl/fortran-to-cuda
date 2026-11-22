@@ -23,7 +23,6 @@ from .anchors import _get_parser, _logical_lines, _split_top_level_args, parse_f
 
 _PARAMETERS = re.compile(r"(?i)^\s*integer\b[^!:]*\bparameter\b[^!:]*::(.*)$")
 _LITERAL = re.compile(r"[+-]?\d+\Z")
-_COMPARISONS = {"==": True, ".EQ.": True, "/=": False, ".NE.": False}
 # Every comparison of two known integers is decided, not only the equalities a condition may state.
 _RELATIONS = {"==": operator.eq, ".EQ.": operator.eq, "/=": operator.ne, ".NE.": operator.ne,
               "<": operator.lt, ".LT.": operator.lt, "<=": operator.le, ".LE.": operator.le,

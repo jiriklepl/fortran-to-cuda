@@ -20,57 +20,11 @@ def _children(node):
     return getattr(node, "content", getattr(node, "items", ())) or ()
 
 
-
-
-@dataclass(frozen=True)
-class SourceDependency:
-    resource: str
-    kind: str
-    binding: object = field(compare=False, repr=False)
-
-    def public(self):
-        return {"resource": self.resource, "kind": self.kind}
-
-
-
-
-
-
-
-
-
-
-
-
-@dataclass(frozen=True)
-class SourceCallArgument:
-    position: int
-    formal: str
-    keyword: str | None
-    actual: object = field(compare=False, repr=False)
-
-    def public(self):
-        return {"position": self.position, "formal": self.formal, "keyword": self.keyword,
-                "actual": str(self.actual)}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def _arrange(callee, original, *, function=False):
-    values, arguments, keyword_seen, position = {}, [], False, 0
-    for original_position, item in enumerate(original):
-        keyword = str(item.items[0]) if _kind(item) in ({"Actual_Arg_Spec", "Component_Spec"}
-                                                       if function else {"Actual_Arg_Spec"}) else None
+def _arrange(callee, original):
+    """The actuals of a CALL in the order of the callee's dummies, ``None`` for an absent optional one."""
+    values, keyword_seen, position = {}, False, 0
+    for item in original:
+        keyword = str(item.items[0]) if _kind(item) == "Actual_Arg_Spec" else None
         actual = item.items[1] if keyword is not None else item
         if keyword is not None:
             keyword_seen = True
@@ -87,26 +41,31 @@ def _arrange(callee, original, *, function=False):
         if formal in values:
             raise CompilationError("duplicate source-call argument: " + formal)
         values[formal] = actual
-        arguments.append(SourceCallArgument(original_position, formal, keyword, actual))
     for formal in callee.arguments:
         binding = callee.scope.bindings.get(formal)
         if binding is None:
             raise CompilationError("source-call formal declaration is unavailable: " + formal)
         if formal not in values and "optional" not in binding.attributes:
             raise CompilationError("required source-call argument is missing: " + formal)
-    return tuple(values.get(formal) for formal in callee.arguments), tuple(arguments)
+    return tuple(values.get(formal) for formal in callee.arguments)
 
 
+_SUPPORTED = frozenset({("integer", 4, 0), ("integer", 8, 0),
+                        ("real", 4, 0), ("real", 8, 0)})
 
 
+def scalar_numeric_result(operator, left, right):
+    """Return the supported target ABI signature or decline the operation.
 
-
-
-
-
-
-
-
+    Fortran 2023 10.1.5.1 and 10.1.9.3 determine type and kind independently
+    of evaluation. In particular REAL ** INTEGER keeps the REAL kind, while
+    two INTEGER kinds use the greater exponent range, including for **.
+    This service never folds, rewrites or authorizes evaluating an expression.
+    """
+    if operator not in {"+", "-", "*", "/", "**"} or left not in _SUPPORTED or right not in _SUPPORTED:
+        return None
+    reals = [value[1] for value in (left, right) if value[0] == "real"]
+    return ("real", max(reals), 0) if reals else ("integer", max(left[1], right[1]), 0)
 
 
 def _match_signature(declaration, signature):
@@ -115,33 +74,28 @@ def _match_signature(declaration, signature):
         raise CompilationError("source-call type, kind or rank mismatch: " + declaration.name)
 
 
-def _resolve_candidates(analysis, scope, call_node, associate, *, function=False):
+def _resolve_candidates(analysis, scope, call_node, associate):
+    """The one procedure a CALL can mean whose dummies its actuals associate with."""
     target, arguments = call_node.items
-    targets = {"Name", "Type_Name"} if function else {"Name"}
-    if function and _kind(call_node) == "Intrinsic_Function_Reference":
-        targets.add("Intrinsic_Name")
-    if _kind(target) not in targets:
+    if _kind(target) != "Name":
         raise CompilationError("indirect calls are scope boundaries")
     original = tuple(_children(arguments))
     matches, errors = [], []
     candidates = analysis._candidates(scope, target)
-    pool = ({name: routine for name, routine in analysis.numerical_helpers.items()
-             if routine.source_kind in {"function", "internal_function"}} if function else analysis.routines)
-    unavailable = [procedure for procedure in candidates if procedure not in pool]
+    unavailable = [procedure for procedure in candidates if procedure not in analysis.routines]
     if unavailable:
         raise CompilationError("source call interface closure unavailable: " + ", ".join(unavailable))
     for procedure in candidates:
-        callee = pool[procedure]
+        callee = analysis.routines[procedure]
         try:
             if callee.source_kind == "external":
-                interface = analysis.external_interface(callee)
-                if not interface["available"]:
-                    raise CompilationError(interface["reason"] + ": " + procedure)
+                reason = analysis.external_interface(callee)
+                if reason is not None:
+                    raise CompilationError(reason + ": " + procedure)
                 if any(_kind(item) == "Actual_Arg_Spec" for item in original):
                     raise CompilationError("external keyword arguments require a proven explicit interface: " + procedure)
-            actuals, original_arguments = _arrange(callee, original, function=function)
-            associations = associate(callee, actuals)
-            matches.append((callee, actuals, associations, original_arguments))
+            associate(callee, _arrange(callee, original))
+            matches.append(callee)
         except OriginalCallBudgetExceeded:
             raise
         except CompilationError as error:
@@ -151,9 +105,6 @@ def _resolve_candidates(analysis, scope, call_node, associate, *, function=False
             raise errors[0]
         raise CompilationError("source call is unresolved or ambiguous: " + str(target))
     return matches[0]
-
-
-
 
 
 # This association layer retains original source semantics only. In particular,
@@ -169,52 +120,6 @@ class OriginalActualType:
     rank: int
     binding: object = field(default=None, compare=False, repr=False)
     schema: object = field(default=None, compare=False, repr=False)
-
-    def public(self):
-        return {"type": self.dtype, "kind": self.kind, "rank": self.rank,
-                "storage_resource": self.binding.root if self.binding is not None else None,
-                "declaring_type": ({"module": self.schema.scope.module, "name": self.schema.name}
-                                   if self.schema is not None else None)}
-
-
-@dataclass(frozen=True)
-class OriginalArgumentAssociation:
-    formal: str
-    actual: object = field(compare=False, repr=False)
-    formal_binding: object = field(compare=False, repr=False)
-    actual_type: OriginalActualType | None
-
-    @property
-    def binding(self):
-        return self.actual_type.binding if self.actual_type is not None else None
-
-    def public(self):
-        return {"formal": self.formal, "actual": str(self.actual) if self.actual is not None else None,
-                "formal_descriptor": self.formal_binding.public(),
-                "actual_type": self.actual_type.public() if self.actual_type is not None else None,
-                "entry_definition_kill": self.formal_binding.intent == "out"}
-
-
-@dataclass(frozen=True)
-class ResolvedOriginalCall:
-    procedure: str
-    formals: tuple[str, ...]
-    actuals: tuple = field(compare=False, repr=False)
-    associations: tuple[OriginalArgumentAssociation, ...]
-    original_arguments: tuple[SourceCallArgument, ...]
-    target: str
-    source_kind: str
-    callee: object = field(compare=False, repr=False)
-
-    def public(self):
-        return {"schema_version": 1, "procedure": self.procedure, "target": self.target,
-                "source_kind": self.source_kind, "formal_arguments": list(self.formals),
-                "actual_arguments": [str(actual) if actual is not None else None for actual in self.actuals],
-                "original_arguments": [item.public() for item in self.original_arguments],
-                "associations": [item.public() for item in self.associations],
-                "actual_evaluation": "unchanged original call position and guards",
-                "effect_authority": False, "capture_authority": False, "alias_authority": False,
-                "completion_authority": False, "execution_authority": False}
 
 
 class _OriginalTypes:
@@ -364,40 +269,37 @@ class _OriginalTypes:
             if typed.dtype in {"integer", "real"} and typed.kind in {4, 8} and not typed.rank:
                 return OriginalActualType(typed.dtype, typed.kind, 0)
         if len(items) == 3 and str(items[1]) in {"+", "-", "*", "/", "**"}:
-            from compiler.frontend.source_scalar_types import scalar_numeric_result
-
             left, right = (self.actual(scope, child, depth + 1) for child in (items[0], items[2]))
             signature = scalar_numeric_result(str(items[1]), (left.dtype, left.kind, left.rank),
                                               (right.dtype, right.kind, right.rank))
             if signature is not None:
                 return OriginalActualType(*signature)
         if _kind(node) in {"Int_Literal_Constant", "Real_Literal_Constant", "Logical_Literal_Constant"}:
-            signature = self.analysis._signature(scope, node)
-            if signature is not None and signature[1] is not None:
+            signature = self.analysis._literal_signature(scope, node)
+            if signature[1] is not None:
                 return OriginalActualType(*signature)
         raise CompilationError("original call actual type requires separate source expression authority: " + str(node))
 
     def associate(self, callee, actuals):
-        result = []
+        """Check that each actual associates with its dummy: type, kind, rank and, where written, storage."""
         for formal, actual in zip(callee.arguments, actuals, strict=True):
             declaration = callee.scope.bindings[formal]
             expected = self.declared(declaration)
-            typed = self.actual(self.caller_scope, actual) if actual is not None else None
-            if typed is not None:
-                if expected.schema is not None:
-                    if expected.schema is not typed.schema or expected.rank != typed.rank:
-                        raise CompilationError("source-call canonical declaring type or rank mismatch: " + formal)
-                else:
-                    _match_signature(declaration, (typed.dtype, typed.kind, typed.rank))
-                if typed.binding is None and (declaration.intent in {"out", "inout"}
-                                              or declaration.attributes & {"pointer", "allocatable"}):
-                    raise CompilationError("source-call writable or descriptor actual requires original storage: " + formal)
-            result.append(OriginalArgumentAssociation(formal, actual, declaration, typed))
-        return tuple(result)
+            if actual is None:
+                continue
+            typed = self.actual(self.caller_scope, actual)
+            if expected.schema is not None:
+                if expected.schema is not typed.schema or expected.rank != typed.rank:
+                    raise CompilationError("source-call canonical declaring type or rank mismatch: " + formal)
+            else:
+                _match_signature(declaration, (typed.dtype, typed.kind, typed.rank))
+            if typed.binding is None and (declaration.intent in {"out", "inout"}
+                                          or declaration.attributes & {"pointer", "allocatable"}):
+                raise CompilationError("source-call writable or descriptor actual requires original storage: " + formal)
 
 
 def resolve_original_call(analysis, scope, call_node):
-    """Match a CALL statement of a procedure to the one procedure that it calls.
+    """The procedure, a ``Routine`` of the analysis, that a CALL statement of a procedure calls.
 
     ``scope`` is the scope the statement stands in. The answer is kept per statement.
     """
@@ -405,11 +307,8 @@ def resolve_original_call(analysis, scope, call_node):
         raise CompilationError("original association requires the corresponding CALL syntax")
     if scope is None or analysis.source_scope_for(call_node) is not scope:
         raise CompilationError("original call requires its exact original statement and lexical scope")
-    resolved = analysis.resolved_calls.get(id(call_node))
-    if resolved is None:
-        reader = _OriginalTypes(analysis, scope)
-        callee, actuals, associations, arguments = _resolve_candidates(analysis, scope, call_node, reader.associate)
-        resolved = analysis.resolved_calls[id(call_node)] = ResolvedOriginalCall(
-            callee.qualified, callee.arguments, actuals, associations, arguments, str(call_node.items[0]),
-            callee.source_kind, callee)
-    return resolved
+    callee = analysis.resolved_calls.get(id(call_node))
+    if callee is None:
+        callee = analysis.resolved_calls[id(call_node)] = _resolve_candidates(
+            analysis, scope, call_node, _OriginalTypes(analysis, scope).associate)
+    return callee

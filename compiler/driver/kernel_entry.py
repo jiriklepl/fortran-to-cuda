@@ -23,8 +23,8 @@ def compile_kernel_entry(source_file, kernel, *, options: CompilerOptions, offlo
 
 
 def kernel_entry_outputs(sources, *, common_header="common_functions.cuh"):
-    """The files of a compiled entry, by name; ``common_header=None`` omits that header."""
-    outputs = {} if common_header is None else {common_header: read_common_header()}
+    """The files of a compiled entry, by name."""
+    outputs = {common_header: read_common_header()}
     outputs.update(sources.artifacts)
     return outputs
 

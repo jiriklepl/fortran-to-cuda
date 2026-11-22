@@ -81,8 +81,6 @@ def test_same_iteration_definition_does_not_require_an_incoming_replica(tmp_path
     assert result.writes
 
 
-
-
 def test_physical_affine_signed_permutation_matches_enumerated_accesses(tmp_path):
     analysis = analyze(tmp_path, RANK2, "do j=1,m\ndo i=2,n\na(n-i+2,j+1)=b(j,i)\nend do\nend do")
     scalars, dimensions = {"n": 5, "m": 3}, {"a": (6, 5), "b": (5, 6)}
@@ -143,21 +141,12 @@ def test_private_affine_index_is_resolved(tmp_path):
     assert points(result.writes[0], {"n": 4}, {}) == {(2,), (3,), (4,), (5,)}
 
 
-
-
-
-
 def test_conditional_writes_preserve_holes_and_mark_upper_bounds(tmp_path):
     body = "do i=1,n\nif (b(i)>0) then\na(i)=b(i)\nend if\nend do"
     analysis = analyze(tmp_path, RANK1, body)
     destination = footprint(analysis, "a")
     assert not destination.exact
     assert destination.writes
-
-
-
-
-
 
 
 def test_zero_divisor_is_rejected(tmp_path):

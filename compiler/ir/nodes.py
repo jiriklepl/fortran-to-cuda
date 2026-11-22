@@ -47,7 +47,6 @@ class PrivateArrayOrigin:
     schema_version: int = 1
 
 
-
 @dataclass(frozen=True)
 class Symbol:
     id: int

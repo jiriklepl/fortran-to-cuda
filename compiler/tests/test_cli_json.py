@@ -11,7 +11,6 @@ ROOT = Path(__file__).resolve().parents[2]
 OUTPUTS = {"shared_entry.cu", "shared_interface.f90", "scoped-runtime.json", "common_functions.cuh"}
 
 
-
 def compile_report(tmp_path, body, *arguments, entry="advance"):
     source = tmp_path / "input.f90"
     source.write_text(

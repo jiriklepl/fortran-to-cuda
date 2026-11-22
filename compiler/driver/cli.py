@@ -62,11 +62,6 @@ def _parse_args() -> argparse.Namespace:
         help="Common functions header output filename (default: common_functions.cuh).",
     )
     parser.add_argument(
-        "--no-common-header",
-        action="store_true",
-        help="Skip writing the common_functions.cuh header.",
-    )
-    parser.add_argument(
         "--opt-level",
         type=int,
         choices=(0, 1),
@@ -166,7 +161,7 @@ def main() -> None:
         function, plan, sources = compile_kernel_entry(
             source_file, args.kernel, options=options, offload_config=_offload_config(args),
             common_header=args.common_header)
-        outputs = kernel_entry_outputs(sources, common_header=None if args.no_common_header else args.common_header)
+        outputs = kernel_entry_outputs(sources, common_header=args.common_header)
     except CompilationError as error:
         if args.json and not args.list_candidates:
             print(

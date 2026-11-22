@@ -34,4 +34,3 @@ def relax_project():
     """A solver written as one main program and one external procedure, both selected."""
     return ResidentProject(sources=(RELAX,), selections=(
         Selection("all", ("$program::relax", "$external::damp"), minimum_nests=12),))
-

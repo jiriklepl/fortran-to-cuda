@@ -16,9 +16,7 @@ from compiler.ir import (
     Binary,
     Block,
     CompilationError,
-    ExecutionPlan,
     Expr,
-    FunctionIR,
     If,
     IntrinsicCall,
     Literal,
@@ -150,12 +148,8 @@ class _AffineRegionModel:
 
     region: ParallelRegion
     events: tuple[_Event, ...]
-    reads: isl.UnionMap
-    writes: isl.UnionMap
-    schedule: isl.UnionMap
     parallel: isl.UnionMap
     conflicts: tuple[tuple[str, isl.UnionMap], ...]
-    physical_affine: bool
     # What a parameter of the relations stands for, where that is a value known when the region starts.
     known: tuple[tuple[str, Expr], ...] = ()
 
@@ -274,14 +268,10 @@ def _region_model(
     defined: set[Symbol],
     later: Block,
     *,
-    context=None,
-    consume=None,
     injective=frozenset(),
     assume=(),
 ) -> _AffineRegionModel:
-    context = isl.DEFAULT_CONTEXT if context is None else context
-    tick = (lambda: None) if consume is None else consume
-    tick()
+    context = isl.DEFAULT_CONTEXT
     loops, body = _mapped_prefix(loop)
     assignments = tuple(_assignments(body))
     sequential = tuple(_all_loops(body))
@@ -302,7 +292,6 @@ def _region_model(
     events: list[_Event] = []
     axis_number = 0
     conservative = False
-    physical_affine = True
     parameters: set[str] = set()
     iterators: dict[Symbol, Affine] = {}
 
@@ -322,14 +311,9 @@ def _region_model(
                 captured.add(symbol)
 
     def affine_or_unknown(expression, values, active, location):
-        nonlocal physical_affine
-        if consume is not None:
-            for _node in walk_expr(expression):
-                tick()
         try:
             value = affine_expression(expression, values, active, location)
         except CompilationError:
-            physical_affine = False
             return None
         parameters.update(name for name, _ in value.terms if not name.startswith("q"))
         return value
@@ -435,7 +419,6 @@ def _region_model(
         definitions = dict(definitions)
         available = set(available)
         for index, statement in enumerate(block.statements):
-            tick()
             path = (*position, str(index))
             if isinstance(statement, Assignment):
                 check_reads(statement_reads(statement), available, statement.location)
@@ -578,11 +561,9 @@ def _region_model(
 
     specifications = []
     for index, event in enumerate(events):
-        tick()
         active = event.active
         for access_kind, accesses in (("read", event.reads), ("write", event.writes)):
             for access in accesses:
-                tick()
                 resolved = tuple(_resolve(expr, event.expressions) for expr in access.indices)
                 indices = tuple(
                     affine_or_unknown(expr, event.environment, active, event.origin.location) for expr in access.indices
@@ -609,7 +590,6 @@ def _region_model(
         return f"S{index}[{','.join(events[index].coordinates)}]"
 
     def union_map(parts):
-        tick()
         return isl.UnionMap.read_from_str(context, parameter_text + "{ " + "; ".join(parts) + " }")
 
     # Non-affine coordinates are conservatively unconstrained. An identical
@@ -752,8 +732,7 @@ def _region_model(
     )
     known = (*((f"p{symbol.id}", Reference(symbol)) for symbol in sorted(start_values, key=lambda s: s.id)),
              *((name, expression) for expression, name in unknown.items()))
-    return _AffineRegionModel(region, tuple(events), reads, writes, schedule, parallel,
-                              tuple(conflicts.items()), physical_affine and not conservative, known)
+    return _AffineRegionModel(region, tuple(events), parallel, tuple(conflicts.items()), known)
 
 
 def _region(region_id, loop, environment, defined, later, injective=frozenset()):
@@ -786,14 +765,3 @@ def prove_region(region_id, loop, environment, defined, later, *, injective=froz
         return ParallelProof(failure=error.failure)
 
 
-def build_execution_plan(function: FunctionIR, *, options=None) -> ExecutionPlan:
-    # Historical module-level entry point; planning itself is independent of ISL.
-    from .planning import build_execution_plan as build
-
-    return build(function, options=options)
-
-
-def format_plan(plan: ExecutionPlan) -> str:
-    from .planning import format_plan as render
-
-    return render(plan)

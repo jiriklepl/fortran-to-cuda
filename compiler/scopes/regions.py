@@ -11,7 +11,7 @@ from __future__ import annotations
 import copy
 import math
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from hashlib import sha256
 from pathlib import Path
 
@@ -26,80 +26,17 @@ from compiler.scopes.segments import directive, fortran_lines, grouped_nodes, st
 
 
 @dataclass(frozen=True)
-class OriginalNumericalPrecondition:
-    """Typed conditional geometry, issued only by original tile extraction.
-
-    Evaluate activation domains in order before rendering/evaluating the
-    predicate. Fortran logical conjunction is not a short-circuit substitute.
-    This record alone is not authority: its owning preparation authenticates
-    the exact original nodes and operands.
-    """
-    role: str
-    operands: tuple
-    activation_domains: tuple = ()
-    _source_nodes: tuple = field(default=(), compare=False, repr=False)
-    _runtime_expression: str = field(default="", repr=False)
-
-
-    @property
-    def dependencies(self):
-        result = {}
-
-        def collect(bound):
-            for item in bound.dependencies:
-                result[item.resource, item.kind] = item
-            for child in bound.children:
-                collect(child)
-
-        for bound in self.operands:
-            collect(bound)
-        for domain in self.activation_domains:
-            collect(domain.lower)
-            collect(domain.upper)
-        return tuple(result.values())
-
-
-    def public(self):
-        return {"role": self.role, "operands": [item.public() for item in self.operands],
-                "activation_domains": [item.public() for item in self.activation_domains],
-                "dependencies": [item.public() for item in self.dependencies],
-                "original_source_sha256": sha256("\0".join(map(str, self._source_nodes)).encode()).hexdigest(),
-                "original_runtime_predicate": self._runtime_expression,
-                "evaluation": "ordered original activation domains before checked INTEGER64 predicate",
-                "on_false": "publish and close before unchanged original whole group",
-                "definitions_conditional_on_true": True}
-
-
-@dataclass(frozen=True)
 class RegionExtraction:
-    nodes: tuple
     span: tuple[int, int]
     source: str
     entry: str
     parameters: tuple[Parameter, ...]
     bindings: tuple[Binding, ...]
     written_resources: frozenset[str]
-    private_scalars: tuple[str, ...]
-    allocation_guards: tuple[dict, ...]
     source_identity: str
-    completion: dict
     runtime_guards: tuple[str, ...] = ()
-    numerical_helpers: tuple[str, ...] = ()
-    tile_domains: tuple[dict, ...] = ()
-    private_arrays: tuple[str, ...] = ()
-    operation_kind: str = "numerical_loop"
-    numerical_environment_required: bool = False
-    immutable_constants: tuple[str, ...] = ()
-    immutable_scalar_captures: tuple[str, ...] = ()
-    scalar_element_captures: tuple = ()
-    immutable_array_reads: tuple[str, ...] = ()
-    preconditions: tuple[OriginalNumericalPrecondition, ...] = ()
     # Loops without statements that leave the DO variables read after the region with their final values.
     final_iterators: tuple[str, ...] = ()
-
-    @property
-    def requires_numerical_environment(self):
-        return self.numerical_environment_required or bool(self.numerical_helpers)
 
     def write(self, directory: Path) -> Path:
         """Publish once, rejecting an accidental identity/content collision."""
@@ -111,31 +48,13 @@ class RegionExtraction:
         return path
 
     def public(self):
-        return {"schema_version": 1, "source_identity": self.source_identity, "entry": self.entry,
-                "operation_kind": self.operation_kind,
+        return {"source_identity": self.source_identity, "entry": self.entry,
                 "first_line": self.span[0], "last_line": self.span[1],
                 "resources": [binding.public() for binding in self.bindings],
                 "parameters": [{"name": item.name, "resource": item.resource, "rank": item.rank,
-                                "lower_bound_dimension": item.lower_bound_dimension,
-                                "runtime_lower_bound": item.runtime_lower_bound} for item in self.parameters],
-                "written_resources": sorted(self.written_resources), "private_scalars": list(self.private_scalars),
-                "allocation_guards": list(self.allocation_guards), "completion": dict(self.completion),
-                "runtime_guards": list(self.runtime_guards), "numerical_helpers": list(self.numerical_helpers),
-                "tile_domains": list(self.tile_domains),
-                "source_preconditions": [item.public() for item in self.preconditions],
-                "private_arrays": list(self.private_arrays), "final_iterators": list(self.final_iterators),
-                "immutable_constants": list(self.immutable_constants),
-                "immutable_scalar_captures": list(self.immutable_scalar_captures),
-                "scalar_element_captures": [item.public() for item in self.scalar_element_captures],
-                "immutable_array_reads": list(self.immutable_array_reads),
-                "managed_projection": {"excluded_immutable_array_reads": list(self.immutable_array_reads),
-                    "proof_identities": sorted({item.association_identity for item in self.scalar_element_captures}),
-                    "original_effects": "unchanged original source summary; excluded reads use original immutable Fortran storage"},
-                "numerical_environment": ({"required": True, "rounding": "round to nearest",
-                                            "exceptions": "host traps disabled", "check": "at the original reached region",
-                                            "fallback": "unchanged original native span"} if self.requires_numerical_environment else {"required": False}),
-                "storage_owner": "original procedure; saved storage and initialization are not cloned",
-                "numerical_legality": "requires ordinary frontend and dependence proofs"}
+                                "lower_bound_dimension": item.lower_bound_dimension} for item in self.parameters],
+                "written_resources": sorted(self.written_resources),
+                "runtime_guards": list(self.runtime_guards), "final_iterators": list(self.final_iterators)}
 
 
 def _variable_names(node):
@@ -574,28 +493,25 @@ def _untile(analysis, routine, loop, helpers):
             break
         current = body[0]
     if len(chain) < 2 or len(chain) % 2:
-        return loop, (), (), ()
+        return loop, (), ()
     dimensions = len(chain) // 2
     outer, inner = chain[:dimensions], chain[dimensions:]
-    domains, guards, preconditions, activation = [], [], [], []
+    domains, guards = [], []
 
-    def bound(value):
-        from compiler.frontend.call_bindings import SourceDependency
-        from compiler.frontend.native_sections import NativeBound
+    def check(value):
+        """A bound that is not a variable is a constant of the INTEGER ABI."""
         from compiler.ir import SourceLocation
         binding = analysis._binding(routine.scope, value) if _kind(value) == "Name" else None
         if binding is not None and "parameter" not in binding.attributes:
-            return NativeBound("scalar", resource=binding.root,
-                               dependencies=(SourceDependency(binding.root, "scalar_read", binding),))
+            return
         constant = routine.scope.kinds.integer(value, SourceLocation(str(routine.scope.path)))
         if not -(2**31) <= constant < 2**31:
             raise CompilationError("inline tile bound exceeds the INTEGER ABI")
-        return NativeBound("literal", value=constant)
     for tile, cells in zip(outer, inner, strict=True):
         tile_name, tile_bounds = _iterator(tile)
         index_name, cell_bounds = _iterator(cells)
         if len(tile_bounds) != 3 or len(cell_bounds) != 2:
-            return loop, (), (), ()
+            return loop, (), ()
         lower, upper, step = tile_bounds
         for value in (lower, upper, step):
             if _kind(value) == "Name":
@@ -604,20 +520,20 @@ def _untile(analysis, routine, loop, helpers):
                 from compiler.ir import SourceLocation
                 constant = routine.scope.kinds.integer(value, SourceLocation(str(routine.scope.path)))
                 if not -(2**31) <= constant < 2**31:
-                    return loop, (), (), ()
+                    return loop, (), ()
             except CompilationError:
-                return loop, (), (), ()
+                return loop, (), ()
         if str(cell_bounds[0]).lower() != tile_name:
-            return loop, (), (), ()
+            return loop, (), ()
         ceiling = cell_bounds[1]
         if _kind(ceiling) != "Intrinsic_Function_Reference" or str(ceiling.items[0]).lower() != "min":
-            return loop, (), (), ()
+            return loop, (), ()
         if _intrinsic_shadowed(analysis, routine, "min"):
             raise CompilationError("inline tile clipping intrinsic is shadowed")
         arguments = _children(ceiling.items[1])
         expected = {str(F.Level_2_Expr(f"{tile_name}+{step}-1")).lower(), str(upper).lower()}
         if len(arguments) != 2 or {str(value).lower() for value in arguments} != expected:
-            return loop, (), (), ()
+            return loop, (), ()
         for value in (lower, upper, step):
             if _kind(value) == "Name":
                 binding = analysis._binding(routine.scope, value)
@@ -630,16 +546,9 @@ def _untile(analysis, routine, loop, helpers):
         predicates = [f"int({step},kind=c_int64_t) > 0_c_int64_t",
                       f"int({upper},kind=c_int64_t) + int({step},kind=c_int64_t) <= 2147483647_c_int64_t"]
         guards += predicates
-        header = next(child for child in _children(tile) if _kind(child) == "Nonlabel_Do_Stmt")
-        preconditions += [OriginalNumericalPrecondition("positive_tile_step", (bound(step),), tuple(activation),
-                                                       (header, step), predicates[0]),
-                          OriginalNumericalPrecondition("tile_integer_range", (bound(upper), bound(step)),
-                                                       tuple(activation), (header, upper, step), predicates[1])]
-        from compiler.frontend.native_sections import NativeIteration
-        activation.append(NativeIteration(bound(lower), bound(upper)))
-        domains.append({"tile_iterator": tile_name, "iterator": index_name,
-                        "lower": str(lower), "upper": str(upper), "tile_size": str(step),
-                        "coverage": "positive disjoint clipped tiles cover the original rectangular domain"})
+        for value in (step, upper, lower):
+            check(value)
+        domains.append({"tile_iterator": tile_name, "iterator": index_name, "lower": str(lower), "upper": str(upper)})
     tile_names = {domain["tile_iterator"] for domain in domains}
     numerical_body = tuple(child for child in _children(inner[-1])
                            if _kind(child) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"})
@@ -657,7 +566,7 @@ def _untile(analysis, routine, loop, helpers):
         replacement.item = header.item
         clone.content = [replacement, *result, ending]
         result = (clone,)
-    return result[0], tuple(guards), tuple(domains), tuple(preconditions)
+    return result[0], tuple(guards), tuple(domains)
 
 
 def _upward_reads(analysis, routine, nodes):
@@ -800,8 +709,8 @@ def _allocated_names(node):
     return result
 
 
-def allocation_guard(analysis, routine, binding, preceding):
-    """Identify original allocation sites, leaving current existence to a guard.
+def _check_allocation(analysis, routine, binding, preceding):
+    """Require an original allocation site of a local array before the region, leaving its existence to a guard.
 
     A conditional allocation need not execute on this invocation.  Fresh
     ALLOCATED/bounds checks at the reached point establish the actual descriptor;
@@ -816,23 +725,9 @@ def allocation_guard(analysis, routine, binding, preceding):
         raise CompilationError("inline local allocation may escape or have uncertain association")
     if _intrinsic_shadowed(analysis, routine, "allocated"):
         raise CompilationError("inline allocation guard intrinsic is shadowed")
-    sites = []
-    for node in preceding:
-        for item in walk(node):
-            if _kind(item) == "Allocate_Stmt" and binding.name in _allocated_names(item):
-                try:
-                    first, last = statement_span(item)
-                except CompilationError:
-                    # An action statement in a single-line IF has no own
-                    # reader item; its enclosing original IF owns the span.
-                    first, last = statement_span(node)
-                sites.append({"first_line": first, "last_line": last})
-    if not sites:
+    if not any(_kind(item) == "Allocate_Stmt" and binding.name in _allocated_names(item)
+               for node in preceding for item in walk(node)):
         raise CompilationError("inline local allocation lacks a preceding original allocation site: " + binding.root)
-    return {"resource": binding.root, "kind": "original local allocation with reached descriptor guard",
-            "allocation_sites": sites, "allocation_proven": False,
-            "runtime_guard": "ALLOCATED then checked original LBOUND/UBOUND/SIZE",
-            "lifetime": "reached bounded region; allocation changes and unknown effects end ownership"}
 
 
 def extract_region(analysis, routine, node, *, preceding=(), following=(), cyclic_following=()):
@@ -852,8 +747,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         # A detached DO alone does not prove either serial participation or the
         # complete parallel region; retain the original operation in that case.
         raise CompilationError("inline OpenMP association requires its complete original source region")
-    source_nodes = tuple(node) if isinstance(node, (tuple, list)) else (node,)
-    nodes = source_nodes
+    nodes = tuple(node)
     if not nodes:
         raise CompilationError("inline numerical region is empty")
     selected_span = (min(statement_span(item)[0] for item in nodes),
@@ -889,33 +783,28 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     if directive(nodes[0]) is not None:
         # A loop under an OpenMP directive is the work of a whole team; only serial loops are extracted.
         raise CompilationError("inline OpenMP association requires its complete original source region")
-    if True:
-        if not all(_kind(item) == "Block_Nonlabel_Do_Construct" for item in nodes):
-            raise CompilationError("inline numerical region requires serial counted DO loops")
-        if len(nodes) > 1:
-            # Membership and sorted line numbers do not prove a serial group:
-            # selecting two loops must not discard an intervening native call,
-            # assignment or branch. Require their exact consecutive siblings.
-            wanted = tuple(id(item) for item in nodes)
+    if not all(_kind(item) == "Block_Nonlabel_Do_Construct" for item in nodes):
+        raise CompilationError("inline numerical region requires serial counted DO loops")
+    if len(nodes) > 1:
+        # Membership and sorted line numbers do not prove a serial group:
+        # selecting two loops must not discard an intervening native call,
+        # assignment or branch. Require their exact consecutive siblings.
+        wanted = tuple(id(item) for item in nodes)
 
-            def consecutive(sequence):
-                effective = tuple(item for item in sequence
-                                  if _kind(item) != "Comment" or directive(item) is not None)
-                identities = tuple(id(item) for item in effective)
-                if any(identities[start:start + len(wanted)] == wanted
-                       for start in range(len(identities) - len(wanted) + 1)):
-                    return True
-                return any(consecutive(_children(item)) for item in effective
-                           if _kind(item) in {"If_Construct", "Associate_Construct", "Block_Construct",
-                                              "Block_Nonlabel_Do_Construct"})
+        def consecutive(sequence):
+            effective = tuple(item for item in sequence
+                              if _kind(item) != "Comment" or directive(item) is not None)
+            identities = tuple(id(item) for item in effective)
+            if any(identities[start:start + len(wanted)] == wanted
+                   for start in range(len(identities) - len(wanted) + 1)):
+                return True
+            return any(consecutive(_children(item)) for item in effective
+                       if _kind(item) in {"If_Construct", "Associate_Construct", "Block_Construct",
+                                          "Block_Nonlabel_Do_Construct"})
 
-            if not consecutive(_children(routine.execution)):
-                raise CompilationError("serial numerical group requires consecutive original sibling loops")
-        completion = {"available": True, "caller_contract": "serial_source_scope",
-                      "reason": "original serial counted loops complete in source order before continuation"}
-        loops = nodes
-    if not loops:
-        raise CompilationError("inline numerical region has no counted loops")
+        if not consecutive(_children(routine.execution)):
+            raise CompilationError("serial numerical group requires consecutive original sibling loops")
+    loops = nodes
     original_nodes = {id(item) for item in walk(routine.execution)}
     for item in (*nodes, *preceding, *following, *cyclic_following):
         if id(item) in original_nodes:
@@ -933,18 +822,16 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         if not related:
             raise CompilationError("inline extraction nodes must belong to the original execution")
     helpers = _helper_closure(analysis, routine, loops)
+    bodies = [(routine, loop) for loop in loops] + [(helper, helper.execution) for helper in helpers.values()]
     vector_reduction = any(_kind(item) == "Intrinsic_Function_Reference"
                            and str(item.items[0]).lower() in {"sum", "dot_product"}
-                           for owner, body in [(routine, loop) for loop in loops]
-                           + [(helper, helper.execution) for helper in helpers.values()]
-                           for item in walk(body))
+                           for _owner, body in bodies for item in walk(body))
     if (helpers or vector_reduction) and (observers := _exception_observers(analysis)):
         raise CompilationError("source-observable floating-point exception flags prevent GPU helper closure: "
                                + "; ".join(observers))
     admitted = {"Execution_Part", "Block_Nonlabel_Do_Construct", "Nonlabel_Do_Stmt", "End_Do_Stmt", "Assignment_Stmt", "Call_Stmt",
                 "If_Stmt", "If_Construct", "If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt", "Comment",
                 "Continue_Stmt"}
-    bodies = [(routine, loop) for loop in loops] + [(helper, helper.execution) for helper in helpers.values()]
     for owner, loop in bodies:
         if helpers or vector_reduction:
             _validate_real_varargs(analysis, owner, loop)
@@ -1099,12 +986,10 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     private = {root: used[root] for root in sorted(scalar_writes | local_arrays)}
     occupied = {binding.name for binding in used.values()}
     occupied.update(name for helper in helpers.values() for name in helper.scope.bindings)
-    elements, immutable_reads, element_references = (), set(), {}
     from compiler.scopes.constant_parameters import outline_constants
-    constants = outline_constants(analysis, routine, used.values(), occupied, _fixed_shape,
-                                  capture_scalar_parameters=False)
+    constants = outline_constants(analysis, routine, used.values(), occupied, _fixed_shape)
     captures = {root: binding for root, binding in used.items()
-                if root not in private and root not in immutable_reads and "parameter" not in binding.attributes}
+                if root not in private and "parameter" not in binding.attributes}
     captures.update((binding.root, binding) for binding in constants.scalar_captures)
     # A short local array that the region only reads holds the values the procedure gave it before: they come
     # to the entry one scalar per element, and each iteration puts them into its own copy of the array.
@@ -1127,7 +1012,6 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             captures[element.root] = element
             values.append(element)
         valued[root] = (binding, values)
-    guards = []
     for binding in captures.values():
         if binding.attributes & {"pointer", "optional", "volatile", "asynchronous", "value"}:
             raise CompilationError("inline capture association is uncertain: " + binding.root)
@@ -1142,7 +1026,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         elif (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1)}:
             raise CompilationError("unsupported inline numerical capture type: " + binding.root)
         if "allocatable" in binding.attributes and binding.root.startswith(routine.qualified + "::"):
-            guards.append(allocation_guard(analysis, routine, binding, preceding))
+            _check_allocation(analysis, routine, binding, preceding)
     if not any(binding.rank for binding in captures.values()):
         raise CompilationError("inline numerical candidate has no array resources")
     if len(captures) > 64:
@@ -1229,8 +1113,6 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         if not isinstance(value, Base):
             return value
         kind = _kind(value)
-        if id(value) in element_references:
-            return F.Name(element_references[id(value)].name)
         if kind == "Assignment_Stmt" and owner is routine:
             target = value.items[0]
             base = target.items[0] if _kind(target) == "Part_Ref" else target
@@ -1377,8 +1259,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                                   for qualified, helper in sorted(helpers.items()))
     identity = sha256((analysis.sources[str(routine.scope.path)] + "\0" + routine.qualified + "\0" +
                        str(span) + "\0" + "\n".join(map(str, nodes)) + "\0" + helper_identity
-                       + ("\0" + constants.identity if constants.identity else "")
-                       + ("\0" + "\0".join(item.identity for item in elements) if elements else "")).encode()).hexdigest()
+                       + ("\0" + constants.identity if constants.identity else "")).encode()).hexdigest()
     module, procedure = "fort_inline_" + identity[:12], "region"
     parameters, declarations = [], list(constants.declarations)
 
@@ -1400,21 +1281,15 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         if binding.rank:
             for axis in range(1, binding.rank + 1):
                 lower = lowers[name, axis]
-                parameters.append(Parameter(lower, binding.root, 0, axis, True))
+                parameters.append(Parameter(lower, binding.root, 0, axis))
                 declarations.append(f"integer, intent(in) :: {lower}")
-    for item in elements:
-        parameters.append(Parameter(item.name, item.resource, 0))
-        dtype = "integer" if item.dtype == "integer" else f"real({item.kind})"
-        declarations.append(f"{dtype}, intent(in) :: {item.name}")
     declarations += [f"{numerical_type(binding)} :: {binding.name}" +
                      ("(" + ",".join(_fixed_shape(routine, binding)) + ")" if binding.rank else "")
                      for binding in sorted(private.values(), key=lambda item: item.name)]
     normalized = [_untile(analysis, routine, loop, helpers) for loop in loops]
-    runtime_guards = tuple(dict.fromkeys(guard for _, guards, _, _ in normalized for guard in guards))
-    tile_domains = tuple(domain for _, _, domains, _ in normalized for domain in domains)
-    preconditions = tuple(guard for _, _, _, guards in normalized for guard in guards)
+    runtime_guards = tuple(dict.fromkeys(guard for _, guards, _ in normalized for guard in guards))
     body = []
-    for (loop, _, _, _), original in zip(normalized, loops, strict=True):
+    for (loop, _, _), original in zip(normalized, loops, strict=True):
         text = str(transformed(loop))
         given = [f"{element.name} = {capture_names[element.root]}" for _root, (array, values) in sorted(valued.items())
                  for element in values if re.search(rf"(?i)(?<![\w%]){re.escape(array.name)}\s*\(", text)]
@@ -1494,13 +1369,6 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                                    *declarations, *"\n".join(body).splitlines(),
                                    *(["contains", *"\n".join(helper_sources).splitlines()] if helper_sources else []),
                                    "end subroutine", "end module"])) + "\n"
-    return RegionExtraction(source_nodes, span, source, module + "::" + procedure, tuple(parameters),
+    return RegionExtraction(span, source, module + "::" + procedure, tuple(parameters),
                             tuple(sorted(captures.values(), key=lambda item: item.root)), frozenset(writes),
-                            tuple(binding.name for binding in private.values() if not binding.rank), tuple(guards), identity, completion,
-                            runtime_guards=runtime_guards, numerical_helpers=tuple(helpers), tile_domains=tile_domains,
-                            private_arrays=tuple(binding.name for binding in private.values() if binding.rank),
-                            numerical_environment_required=vector_reduction,
-                            immutable_constants=constants.resources,
-                            immutable_scalar_captures=tuple(binding.root for binding in constants.scalar_captures),
-                            scalar_element_captures=elements, immutable_array_reads=tuple(sorted(immutable_reads)),
-                            preconditions=preconditions, final_iterators=final_iterators)
+                            identity, runtime_guards=runtime_guards, final_iterators=final_iterators)

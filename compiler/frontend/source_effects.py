@@ -86,8 +86,6 @@ def _attach_execution_directives(node):
     execution.content[:0] = trailing
 
 
-
-
 @dataclass
 class Binding:
     name: str
@@ -129,7 +127,6 @@ class Scope:
     wildcard_exclusions: dict[str, set[str]] = field(default_factory=dict)
     ambiguous_imports: set[str] = field(default_factory=set)
     generics: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
-    unresolved_imports: list[str] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
     default_public: bool = True
     access: dict[str, bool] = field(default_factory=dict)
@@ -140,7 +137,6 @@ class Scope:
     procedures: dict[str, str] = field(default_factory=dict)
     intrinsic_procedures: dict[str, str] = field(default_factory=dict)
     intrinsic_wildcards: set[str] = field(default_factory=set)
-    intrinsic_exclusions: dict[str, set[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -153,13 +149,37 @@ class Routine:
     source_kind: str = "module"
 
 
+# The IEEE procedures that two intrinsic modules export as one: a USE of each under one local name is no ambiguity.
+_IEEE_EXCEPTIONS = {
+    "ieee_get_halting_mode", "ieee_set_halting_mode", "ieee_all", "ieee_usual",
+    "ieee_invalid", "ieee_overflow", "ieee_divide_by_zero", "ieee_underflow", "ieee_inexact",
+}
+
+
+def _ieee_export(identity):
+    """The one identity of an IEEE exception procedure exported by both modules, or None."""
+    pieces = identity.split("::")
+    if len(pieces) == 3 and pieces[0] == "$intrinsic" and pieces[1] in {"ieee_exceptions", "ieee_arithmetic"} \
+            and pieces[2] in _IEEE_EXCEPTIONS:
+        return "$intrinsic::ieee_exceptions::" + pieces[2]
+    return None
+
+
+# How deep lookups through USE and host association, and helper calls, may nest.
+_DEPTH = 8
 
 
 class SourceEffects:
-    def __init__(self, paths, *, depth=8, procedures=None, operations=256, program_roots=()):
-        if min(depth, operations) < 1 or (procedures is not None and procedures < 1):
+    def __init__(self, paths, *, operations=4096, program_roots=()):
+        """Analyse the sources at ``paths``.
+
+        ``operations`` bounds the type inspection of one call's actual
+        arguments; ``program_roots`` names the main programs (``$program::name``)
+        whose bodies are analysed as procedures.
+        """
+        if operations < 1:
             raise CompilationError("source effect budgets must be positive")
-        self.depth_limit, self.procedure_limit, self.operation_limit = depth, procedures if procedures is not None else 1, operations
+        self.depth_limit, self.procedure_limit, self.operation_limit = _DEPTH, 1, operations
         self.modules, self.routines = {}, {}
         self.functions = set()
         self.numerical_helpers = {}
@@ -194,12 +214,8 @@ class SourceEffects:
                 if module in self.modules:
                     raise CompilationError(f"duplicate source module {module}")
                 self.modules[module] = Scope(module, filename, node)
-        if procedures is None:
-            # One bound covers all original callees, declarations and exact
-            # factory callsites, including unregistered external/program
-            # units. Reuse the complete parser walk already required above.
-            # Explicit procedure caps remain independent diagnostic limits.
-            self.procedure_limit = max(1, source_nodes)
+        # One bound for the procedures and declarations a lookup may pass: the size of the sources.
+        self.procedure_limit = max(1, source_nodes)
         for scope in self.modules.values():
             scope.issues = self._specification(scope)
             if scope.module == "argument":
@@ -330,7 +346,7 @@ class SourceEffects:
 
     @staticmethod
     def external_interface(routine):
-        """Admit only source-proven ordinary implicit-interface Fortran ABIs.
+        """Why an external procedure's implicit interface is not known well enough to call, or None.
 
         Available implementation source is not itself an explicit caller
         interface. Descriptor dummies, keyword calls and changed calling
@@ -351,8 +367,7 @@ class SourceEffects:
                         _kind(axis) == "Assumed_Size_Spec" and index == binding.rank-1)
                     for index, axis in enumerate(binding.shape_nodes))):
                 reason = reason or "external descriptor or shape requires a proven explicit interface"
-        return {"available": reason is None, "kind": "source-proven implicit interface" if reason is None else "explicit interface required",
-                "reason": reason, "caller_interface_proof": False, "keyword_arguments": False}
+        return reason
 
     def _import_kinds(self, scope, active=frozenset(), *, _lookups=None):
         if _lookups is None:
@@ -546,27 +561,18 @@ class SourceEffects:
                     # storage which could shadow a host capture. Their calls
                     # still require explicit numerical/effect support below.
                     unrestricted = symbols is None or str(only).upper().replace(" ", "") != ",ONLY:"
-                    renamed = set()
                     if symbols is not None:
                         for item in symbols.items:
                             local, remote = ((str(item.items[1]).lower(), str(item.items[2]).lower())
                                              if _kind(item) == "Rename" else (str(item).lower(), str(item).lower()))
-                            if _kind(item) == "Rename":
-                                renamed.add(remote)
                             identity = "$intrinsic::" + module + "::" + remote
                             previous = scope.intrinsic_procedures.get(local)
-                            if previous is not None and previous != identity:
-                                from compiler.frontend.native_environment import canonical_intrinsic_export
-                                if (canonical_intrinsic_export(previous) is None
-                                        or canonical_intrinsic_export(previous) != canonical_intrinsic_export(identity)):
-                                    scope.ambiguous_imports.add(local)
+                            if previous is not None and previous != identity and (
+                                    _ieee_export(previous) is None or _ieee_export(previous) != _ieee_export(identity)):
+                                scope.ambiguous_imports.add(local)
                             scope.intrinsic_procedures[local] = identity
                     if unrestricted:
                         scope.intrinsic_wildcards.add(module)
-                        if module in scope.intrinsic_exclusions:
-                            scope.intrinsic_exclusions[module].intersection_update(renamed)
-                        else:
-                            scope.intrinsic_exclusions[module] = renamed
                     continue
                 if module in _KindScope.intrinsic_kinds and str(nature).lower() != "non_intrinsic":
                     continue
@@ -592,8 +598,6 @@ class SourceEffects:
                     else:
                         scope.wildcards.append(module)
                         scope.wildcard_exclusions[module] = renamed
-                if module not in self.modules:
-                    scope.unresolved_imports.append(module)
             elif name == "Interface_Block":
                 start = _part(node, "Interface_Stmt")
                 abstract = start.items[0] == "ABSTRACT"
@@ -811,17 +815,6 @@ class SourceEffects:
             return "source module name argument collides with canonical dummy resources: " + binding.root
         return None
 
-    def _actual_binding(self, scope, node):
-        if _kind(node) == "Name":
-            return self._binding(scope, node)
-        if _kind(node) == "Data_Ref":
-            from compiler.frontend.component_bindings import component_access
-            access = component_access(self, scope, node)
-            if access is not None and not access.indices:
-                return access.binding
-        return None
-
-
     def _unknown_exports(self, scope):
         # An unavailable wildcard USE can supply a procedure with the same
         # spelling as an intrinsic. A known local argument says nothing about
@@ -832,48 +825,18 @@ class SourceEffects:
             scope = scope.parent
         return False
 
-    def _signature(self, scope, node, _depth=0):
-        """Prove a bounded actual's type without evaluating its expression.
-
-        Scalar arithmetic keeps its original Fortran call position and effects.
-        This does not authorize reassociation, early bound evaluation or a
-        writable temporary actual; those remain separate call proofs.
-        """
-        if _depth > self.depth_limit:
-            return None
-        binding = self._actual_binding(scope, node)
-        if binding:
-            return binding.signature()
-        items = _children(node)
-        if _kind(node) == "Parenthesis":
-            return self._signature(scope, items[1], _depth + 1)
-        if len(items) == 2 and str(items[0]) in {"+", "-"}:
-            child = self._signature(scope, items[1], _depth + 1)
-            return child if child in {("integer", 4, 0), ("integer", 8, 0),
-                                      ("real", 4, 0), ("real", 8, 0)} else None
-        if len(items) == 3 and str(items[1]) in {"+", "-", "*", "/", "**"}:
-            from compiler.frontend.source_scalar_types import scalar_numeric_result
-
-            left = self._signature(scope, items[0], _depth + 1)
-            right = self._signature(scope, items[2], _depth + 1)
-            return scalar_numeric_result(str(items[1]), left, right)
-        if _kind(node) in {"Int_Literal_Constant", "Real_Literal_Constant", "Logical_Literal_Constant"}:
-            dtype = {"Int_Literal_Constant": "integer", "Real_Literal_Constant": "real",
-                     "Logical_Literal_Constant": "logical"}[_kind(node)]
-            width = 8 if dtype == "real" and "d" in node.items[0].lower() else 4
-            if node.items[1] is not None:
-                try:
-                    width = scope.kinds.integer(node.items[1], SourceLocation(str(scope.path)))
-                except CompilationError:
-                    width = None
-            return dtype, width, 0
-        return None
-
-
-
-
-
-
+    @staticmethod
+    def _literal_signature(scope, node):
+        """The type, kind and rank of a literal constant; the kind is None where it cannot be evaluated."""
+        dtype = {"Int_Literal_Constant": "integer", "Real_Literal_Constant": "real",
+                 "Logical_Literal_Constant": "logical"}[_kind(node)]
+        width = 8 if dtype == "real" and "d" in node.items[0].lower() else 4
+        if node.items[1] is not None:
+            try:
+                width = scope.kinds.integer(node.items[1], SourceLocation(str(scope.path)))
+            except CompilationError:
+                width = None
+        return dtype, width, 0
 
     def source_scope_for(self, node, default=None):
         from compiler.frontend.component_bindings import source_scope_for

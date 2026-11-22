@@ -27,11 +27,3 @@ class Provenance:
                 "batch_worker_attribution": "unavailable unless the individual implementation is explicitly tagged",
                 "initial_context_creation": "unknown until the original source coordinator binds its owner",
                 "execution_error_attribution": "unavailable; existing numerical error reporting is unchanged"}
-
-
-
-
-
-
-
-

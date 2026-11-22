@@ -13,5 +13,3 @@ def _fortran_list(prefix: str, values: list[str], suffix: str, indentation: int)
     if suffix:
         lines.append(" " * indentation + suffix)
     return lines
-
-

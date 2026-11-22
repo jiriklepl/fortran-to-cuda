@@ -34,7 +34,6 @@ def access(analysis, scope, node):
                                 consumer_scope=scope)
     if binding.rank or binding.dtype not in {'integer', 'real', 'logical'}:
         raise CompilationError('native metadata field requires fixed scalar numeric storage')
-    binding.native_metadata_object = root
     binding.component_object = root
     binding.name = str(node).lower()
     return ComponentAccess(binding, root, node, (member,), indices)

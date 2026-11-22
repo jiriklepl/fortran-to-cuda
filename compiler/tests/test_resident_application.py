@@ -477,7 +477,6 @@ end module
     assert "host_modify" not in step
 
 
-
 def test_generated_access_asks_whether_an_array_exists_and_knows_a_component_from_an_array(tmp_path):
     source = tmp_path / "sums.f90"
     source.write_text("""module sums

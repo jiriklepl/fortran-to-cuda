@@ -23,7 +23,6 @@ from compiler.ir import CompilationError, SourceLocation
 class ConstantParameters:
     names: dict[str, str]
     declarations: tuple[str, ...]
-    resources: tuple[str, ...]
     identity: str
     scalar_captures: tuple[Binding, ...] = ()
 
@@ -32,7 +31,7 @@ class _UnsupportedInitializer(CompilationError):
     """An original initializer is outside the outlined constant language."""
 
 
-def outline_constants(analysis, routine, bindings, occupied, fixed_shape, *, capture_scalar_parameters=False):
+def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
     """Resolve a bounded declaration closure through original lexical imports."""
     selected = []
     for binding in bindings:
@@ -51,7 +50,7 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape, *, cap
                 pass
         selected.append(binding)
     if not selected:
-        return ConstantParameters({}, (), (), "")
+        return ConstantParameters({}, (), "")
     names, ordered, active = {}, [], set()
     captures, capture_authority = [], []
     visits = 0
@@ -186,13 +185,6 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape, *, cap
                                  + analysis.sources[str(scope.path)])
 
     for binding in sorted(selected, key=lambda item: item.root):
-        if capture_scalar_parameters and not binding.rank:
-            # The original Fortran compiler has already materialized this
-            # immutable value. A flat atomic alternative passes it read-only
-            # through the established scalar ABI; it never re-evaluates a
-            # PARAMETER expression as a leading executable HostBlock.
-            capture(binding)
-            continue
         previous_names, previous_ordered = dict(names), list(ordered)
         previous_active, previous_occupied = set(active), set(occupied)
         try:
@@ -214,5 +206,4 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape, *, cap
     # initializers can differ even when their original edit target is unchanged.
     authority = "\0".join([*(root + "\0" + text for root, text in ordered), *capture_authority])
     identity = sha256(authority.encode()).hexdigest()
-    return ConstantParameters(names, tuple(text for _, text in ordered),
-                              tuple(root for root, _ in ordered), identity, tuple(captures))
+    return ConstantParameters(names, tuple(text for _, text in ordered), identity, tuple(captures))

@@ -542,7 +542,7 @@ def _array_uses(analysis, routine, nodes):
                     may_write(procedure, call.items[1], int(object_first))
                 continue
             try:
-                procedure = resolve_original_call(analysis, routine.scope, call).procedure
+                procedure = resolve_original_call(analysis, routine.scope, call).qualified
                 calls.add(procedure)
             except CompilationError:
                 procedure = None
@@ -827,7 +827,7 @@ def _temporaries(analysis, routine, procedure):
             allowed.update(id(item) for item in _children(reference.items[1])[:1])
     for call in walk(execution, Call_Stmt):
         try:
-            callee = analysis.routines.get(resolve_original_call(analysis, routine.scope, call).procedure)
+            callee = resolve_original_call(analysis, routine.scope, call)
         except CompilationError:
             callee = None
         for position, argument in enumerate(_children(call.items[1]) if call.items[1] is not None else ()):
@@ -858,7 +858,7 @@ def _temporaries(analysis, routine, procedure):
     return [item for item in found if item["name"].lower() in kept]
 
 
-def _resolve_procedures(analysis, procedures, *, allow_patterns=False):
+def _resolve_procedures(analysis, procedures):
     available = sorted(analysis.routines)
     if procedures is None:
         return available
@@ -866,8 +866,7 @@ def _resolve_procedures(analysis, procedures, *, allow_patterns=False):
     seen = set()
     for spec in procedures:
         pattern = spec.lower()
-        is_pattern = allow_patterns or any(ch in pattern for ch in "*?[")
-        if is_pattern:
+        if any(ch in pattern for ch in "*?["):
             matches = [name for name in available if fnmatchcase(name, pattern)]
             if not matches:
                 raise CompilationError("Resident procedure pattern matched no routines: " + spec)
@@ -884,7 +883,7 @@ def _resolve_procedures(analysis, procedures, *, allow_patterns=False):
     return selected
 
 
-def export_resident_entries(paths, procedures, directory, *, allow_patterns=False):
+def export_resident_entries(paths, procedures, directory):
     """Export resident numerical entries for explicit procedures or glob patterns.
 
     Besides ``entries`` and ``rejected``, the result lists ``host_statements``:
@@ -911,7 +910,7 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
     # A main program is analysed as a procedure only when it is asked for by name.
     programs = tuple(sorted({name.lower() for name in procedures or ()
                              if re.fullmatch(r"\$program::[a-z][a-z0-9_]*", name.lower())}))
-    analysis = SourceEffects(paths, operations=4096, program_roots=programs)
+    analysis = SourceEffects(paths, program_roots=programs)
     analysis.element_fields = True
     # The body of a module function holds loop nests like any subroutine's.
     for name, routine in analysis.numerical_helpers.items():
@@ -930,10 +929,10 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                     binding.attributes = binding.attributes - {"save"}
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
-    resolved_procedures = _resolve_procedures(analysis, procedures, allow_patterns=allow_patterns)
-    entries, rejected, grouping_rejections, host_statements, temporaries = [], [], [], [], []
+    resolved_procedures = _resolve_procedures(analysis, procedures)
+    entries, rejected, host_statements, temporaries = [], [], [], []
     host_procedure, host_procedures = _host_procedures(analysis, set(resolved_procedures))
-    def export(procedure, entries, rejected, grouping_rejections, host_statements, temporaries, splitting=None):
+    def export(procedure, entries, rejected, host_statements, temporaries, splitting=None):
         """Export what one procedure holds. With ``splitting``, only the nests of those spans, each on its own."""
         routine = analysis.routines[procedure]
 
@@ -967,7 +966,7 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
             fixed = _fixed_elements(analysis, routine, selected) if len(loops) == len(nodes) else {}
             undo, values = _as_values(analysis, routine, fixed)
             try:
-                context = original_region_context(routine, selected, analysis=analysis)
+                context = original_region_context(routine, selected)
                 extracted = extract_region(analysis, routine, selected,
                                            preceding=context.preceding, following=context.following,
                                            cyclic_following=context.cyclic_following)
@@ -980,16 +979,12 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                 # A larger interface can expose an unsupported association
                 # even when its individual source nests remain exportable.
                 if len(nodes) > 1 and len(loops) == len(nodes):
-                    grouping_rejections.append({"procedure": procedure, "first_line": first,
-                                                "last_line": last, "reason": str(error)})
                     for node in nodes:
                         emit((node,), sequence, outer)
                     return
                 if len(nodes) == 1 and _around_nests(nodes[0]):
                     # Not a nest but a loop around nests, such as an iteration or a time loop: the
                     # host runs it, and what stands in its body is looked at in its own right.
-                    grouping_rejections.append({"procedure": procedure, "first_line": first,
-                                                "last_line": last, "reason": str(error)})
                     within(nodes[0], outer)
                     return
                 rejected.append({"procedure": procedure, "source": str(routine.scope.path),
@@ -1146,21 +1141,19 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
         temporaries += _temporaries(analysis, routine, procedure)
 
     for procedure in resolved_procedures:
-        export(procedure, entries, rejected, grouping_rejections, host_statements, temporaries)
+        export(procedure, entries, rejected, host_statements, temporaries)
 
     def retry(procedure, first, last):
         """The nests of a span that was exported as one entry, each as an entry of its own."""
-        more = {"entries": [], "rejected": [], "grouping_rejections": [], "host_statements": []}
+        more = {"entries": [], "rejected": [], "host_statements": []}
         export(procedure, *more.values(), [], splitting={(first, last)})
         return {"source_inputs": analysis.sources, **more}
 
     return {"version": 2, "kind": "caller_owned_resident_entries", "source_inputs": analysis.sources,
-            "entries": entries, "rejected": rejected, "grouping_rejections": grouping_rejections,
-            "host_statements": host_statements, "temporaries": temporaries, "retry": retry,
+            "entries": entries, "rejected": rejected, "host_statements": host_statements, "temporaries": temporaries, "retry": retry,
             "forwarders": {name: {**record, "outside": {
                 root: {key: value for key, value in item.items() if key != "binding"}
-                for root, item in record["outside"].items()}} for name, record in sorted(host_procedures.items())},
-            "lifetime_authority": "caller storage epoch; numerical export grants no native-effect authority"}
+                for root, item in record["outside"].items()}} for name, record in sorted(host_procedures.items())}}
 
 
 def pass_scalars_by_value(extracted, directory):
@@ -1204,7 +1197,6 @@ def pass_scalars_by_value(extracted, directory):
         path = directory / source.name
         path.write_text(text)
         entries.append({**original, "input_path": str(path), "value_inputs": values,
-                        "value_contract": "lower bounds of the bound arrays and scalars whose storage always exists",
                         "original_numerical_input": {"path": str(source.resolve()),
                                                      "sha256": sha256(source.read_bytes()).hexdigest()}})
     return {**extracted, "entries": entries}
@@ -1328,7 +1320,6 @@ def compile_resident_entries(extracted, directory, *, host_threads=4, expand=Non
     record = {"version": 1, "kind": "resident_device_entries", "source_inputs": extracted["source_inputs"],
               "entries": entries, "rejected": rejected, "descended": descended,
               "host_statements": [item for item in (*extracted.get("host_statements", ()), *expanded["host_statements"])
-                                  if item.get("alternative_of") and counts(item, opened)],
-              "gpu_execution_established": False}
+                                  if item.get("alternative_of") and counts(item, opened)]}
     (directory / "device-entries.json").write_text(json.dumps(record, indent=2) + "\n")
     return record

@@ -101,11 +101,7 @@ def _unpack_3d_nest(nest_node):
     return v2, b2, v1, b1, v0, b0, assigns2 + assigns1 + _loop_statements(loops1[0])
 
 
-def inline_tile_scratch_nests(
-    source_text: str,
-    *,
-    target_routines: set[str] | None = None,
-) -> tuple[str, list[dict]]:
+def inline_tile_scratch_nests(source_text: str) -> tuple[str, list[dict]]:
     """Inline 3D producer-consumer private tile scratch arrays into pointwise loops."""
     lines = source_text.splitlines(keepends=True)
     tree = parse_fortran(source_text)
@@ -114,8 +110,6 @@ def inline_tile_scratch_nests(
     for routine in (n for n in walk(tree) if type(n).__name__ == "Subroutine_Subprogram"):
         header = next(n for n in routine.content if type(n).__name__ == "Subroutine_Stmt")
         rname = str(header.items[1]).lower()
-        if target_routines is not None and rname not in target_routines:
-            continue
         execution = next((n for n in routine.content if type(n).__name__ == "Execution_Part"), None)
         if execution is None:
             continue
@@ -196,15 +190,6 @@ def inline_tile_scratch_nests(
                         cons_local_idx[lvar] = (ivar, off)
                         continue
                 cons_body_stmts.append(stmt)
-
-            # Map producer loop var -> consumer loop var via matching outer loop variable
-            outer_to_cvar = {}
-            for cvar, cb in ((c_var0, c_b0), (c_var1, c_b1), (c_var2, c_b2)):
-                for ovar in outer_vars:
-                    if re.search(rf"\b{re.escape(ovar)}\b", str(cb[0]), re.IGNORECASE):
-                        outer_to_cvar[ovar] = cvar
-            if len(outer_to_cvar) != 3:
-                outer_to_cvar = {o_var0: c_var0, o_var1: c_var1, o_var2: c_var2}
 
             prod_to_cons_var = {p_var0: c_var0, p_var1: c_var1, p_var2: c_var2}
             ordered_p_axes = [p_var0, p_var1, p_var2]
@@ -292,11 +277,7 @@ def inline_tile_scratch_nests(
     return "".join(lines), metadata
 
 
-def promote_line_snapshots(
-    source_text: str,
-    *,
-    routine_name: str | None = None,
-) -> tuple[str, list[dict]]:
+def promote_line_snapshots(source_text: str) -> tuple[str, list[dict]]:
     """Lift 1D line-copy buffers (``tmp = arr(:,j,k)``) into 3D snapshots.
 
     The snapshot is a local allocatable that the procedure allocates at its
@@ -311,8 +292,6 @@ def promote_line_snapshots(
     for routine in (n for n in walk(tree) if type(n).__name__ == "Subroutine_Subprogram"):
         header = next(n for n in routine.content if type(n).__name__ == "Subroutine_Stmt")
         rname = str(header.items[1]).lower()
-        if routine_name is not None and rname != routine_name.lower():
-            continue
         # Look for 1D declaration using ubound(<arr>, <dim>)
         found = False
         for decl in walk(routine):
@@ -341,9 +320,6 @@ def promote_line_snapshots(
                     break
             if found:
                 break
-
-    if routine_name is not None and not candidate_routines:
-        raise ValueError(f"Expected 1D line-snapshot buffer in {routine_name}")
 
     for rname, dtype_str, tmp_name, arr_name, lo_expr in reversed(candidate_routines):
         r_lo, r_hi = find_routine_span(text, rname)

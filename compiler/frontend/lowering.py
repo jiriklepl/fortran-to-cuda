@@ -287,9 +287,6 @@ class _Lowerer:
         self.vector_elements = 0
         self.constant_initialization = False
         self.requires_numerical_environment = False
-        # Installed only by the exact source-issued line-snapshot entry below.
-        # Ordinary fixed vectors retain their existing constant-index contract.
-        self.line_constant_lookups = {}
 
     def location(self, node: Any, stack: tuple[str, ...] = ()) -> SourceLocation:
         for child in walk(node):
@@ -841,7 +838,6 @@ class _Lowerer:
                 private_index = any(
                     type(access).__name__ == "Part_Ref"
                     and isinstance(bindings.get(str(access.items[0]).lower()), (_PrivateArray, _ConstantArray))
-                    and id(access) not in self.line_constant_lookups
                     and any(type(name).__name__ == "Name" and str(name).lower() == str(iterator_node).lower()
                             for name in walk(access.items[1]))
                     for child in loop_nodes[1:-1] for access in walk(child)
@@ -1529,33 +1525,6 @@ class _Lowerer:
             if isinstance(symbol, (_PrivateArray, _ConstantArray)):
                 constants = tuple(constant_integer(index, location) for index in indices)
                 if any(index is None for index in constants):
-                    if isinstance(symbol, _ConstantArray) and id(node) in self.line_constant_lookups:
-                        authorized, obligation = self.line_constant_lookups[id(node)]
-                        if authorized is not node or len(indices) != 1:
-                            raise CompilationError("line constant lookup lost its exact source occurrence", location)
-                        start, stop = obligation.index_bounds
-                        lower, upper = symbol.bounds[0]
-                        if symbol.rank != 1 or not lower <= start <= stop <= upper or stop - start >= 256:
-                            raise CompilationError("line constant lookup exceeds its original vector bounds", location)
-                        index_symbol = self.new_symbol(_Declaration(
-                            "fort_line_constant_index", ScalarType.INTEGER, 0, None, location,
-                            "fort_line_constant_index"))
-                        value_symbol = self.new_symbol(_Declaration(
-                            "fort_line_constant_value", symbol.dtype, 0, None, location,
-                            "fort_line_constant_value"))
-                        self.pending.append(Assignment(Reference(index_symbol), indices[0], location))
-                        # The exact source relation proves membership. Keep the
-                        # selected initializer in its branch: MERGE would eagerly
-                        # evaluate both expression arguments in the current ABI.
-                        selected = Block((Assignment(Reference(value_symbol), symbol.element((stop,), location),
-                                                     location),))
-                        for index in range(stop - 1, start - 1, -1):
-                            selected = Block((If(
-                                Binary("==", Reference(index_symbol), Literal(str(index), ScalarType.INTEGER)),
-                                Block((Assignment(Reference(value_symbol), symbol.element((index,), location),
-                                                  location),)), selected, location),))
-                        self.pending.extend(selected.statements)
-                        return Reference(value_symbol)
                     if isinstance(symbol, _PrivateArray) and symbol.rank == 1 and id(node) != self.target_node \
                             and symbol.bounds[0][1] - symbol.bounds[0][0] < 16:
                         # A read of a short private vector at an index known only when it runs: the element
@@ -1752,21 +1721,3 @@ def discover_file(path: str | Path) -> tuple[ProcedureCandidate, ...]:
             )
         )
     return tuple(candidates)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

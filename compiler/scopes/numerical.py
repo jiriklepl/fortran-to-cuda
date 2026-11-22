@@ -20,9 +20,6 @@ class Parameter:
     resource: str
     rank: int
     lower_bound_dimension: int | None = None
-    runtime_lower_bound: bool = False
-
-
 
 
 def resource_binding(analysis, routine, resource):
@@ -67,5 +64,3 @@ def resource_binding(analysis, routine, resource):
         if binding and binding.root == resource:
             return binding
     raise CompilationError("numerical source resource is unavailable in original procedure: " + resource)
-
-

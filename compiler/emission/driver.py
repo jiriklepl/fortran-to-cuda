@@ -14,12 +14,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class GeneratedSources:
-    # Scoped entries publish only their shared ABI and runtime artifacts.
-    # None means this ABI was not generated, rather than an empty source file.
-    cuda: str | None = None
-    cpp: str | None = None
-    fortran: str | None = None
-    offload: dict | None = None
+    """The files of an entry by name, and the report of its shared ABI."""
     artifacts: dict[str, str] = field(default_factory=dict)
     scoped: dict | None = None
     numerical_contract: dict = field(default_factory=numerical_build_contract)
@@ -42,5 +37,4 @@ def generate_sources(
     shared = generate_scoped(function, plan, config, common_header)
     artifacts.update({"shared_entry.cu": shared.cuda, "shared_interface.f90": shared.fortran,
                       "scoped-runtime.json": json.dumps(runtime, indent=2) + "\n"})
-    scoped = {**shared.report, "runtime": runtime, "numerical_contract": numerical_build_contract()}
-    return GeneratedSources(artifacts=artifacts, scoped=scoped)
+    return GeneratedSources(artifacts=artifacts, scoped={**shared.report, "runtime": runtime})

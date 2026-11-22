@@ -109,4 +109,3 @@ end module
     result = export_resident_entries([source], ["sized::step"], tmp_path / "entries")
     assert not result["entries"]
     assert result["rejected"][0]["reason"] == "an assumed-size array has no extent to keep on the device: a"
-

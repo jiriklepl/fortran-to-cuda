@@ -121,8 +121,6 @@ def test_success_preserves_model_precision_and_existing_entry_points(indirect):
     assert result.region == plan.regions[0]
     assert result.region.report.conservative is indirect
     assert f"dependence model: {'conservative' if indirect else 'exact'}" in format_plan(plan)
-    assert dependence.build_execution_plan(function) == plan
-    assert dependence.format_plan(plan) == format_plan(plan)
 
 
 @pytest.mark.parametrize(

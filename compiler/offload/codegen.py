@@ -21,4 +21,3 @@ def query_expression(expression):
     if isinstance(expression, IntrinsicCall) and expression.name.lower() in {"min", "max"}:
         return f"std::{expression.name.lower()}({{{', '.join(query_expression(v) for v in expression.arguments)}}})"
     raise ValueError(f"Unsafe cost expression: {expression!r}")
-

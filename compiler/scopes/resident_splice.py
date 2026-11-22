@@ -399,8 +399,7 @@ def splice_resident_entries(packages, directory, *, domain, native=None, held=No
         target.write_text("".join(lines))
         records.append({"original": _identity(path), "replacement": _identity(target),
                         "region_count": len(replacements)})
-    result = {"version": 1, "kind": "resident_source_edits", "sources": records,
-              "activation_authority": "the caller's residency domain; native call effects are not inferred here"}
+    result = {"version": 1, "kind": "resident_source_edits", "sources": records}
     (directory / "source-edits.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
 

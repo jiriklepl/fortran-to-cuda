@@ -104,8 +104,6 @@ class ResidentProject:
     addressable: tuple[str | Path, ...] | None = None
 
 
-
-
 class _Lazy:
     """A list that is made when it is first gone through."""
 

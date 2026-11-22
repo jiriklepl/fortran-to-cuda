@@ -47,8 +47,6 @@ def directive(node):
     return text[5:].strip() if text.startswith("!$omp") else None
 
 
-
-
 def grouped_nodes(nodes):
     """Keep whole joined groups as one native scheduling operation."""
     expanded = []
@@ -114,23 +112,3 @@ def statement_span(node):
         raise CompilationError("structured source operation lacks an exact edit span")
     spans = [item.item.span for item in items]
     return min(span[0] for span in spans), max(span[1] for span in spans)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

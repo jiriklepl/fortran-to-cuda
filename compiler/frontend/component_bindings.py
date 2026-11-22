@@ -190,7 +190,6 @@ def _field_binding(analysis, scope, parent, member, node, *, consumer_scope=None
     binding = Binding(str(node).lower(), parent.root + "%" + member, base, width, len(axes), parent.intent,
                       frozenset(flags | inherited), tuple(lowers), tuple(axis.items[0] for axis in axes), axes)
     binding.component_object = getattr(parent, "component_object", parent)
-    binding.component_selector = node
     return binding, schema.scope
 
 
@@ -224,7 +223,6 @@ def _element_field(analysis, scope, node):
                       lower_bounds=root.lower_bounds, lower_bound_nodes=root.lower_bound_nodes,
                       shape_nodes=root.shape_nodes)
     binding.component_object = root
-    binding.component_selector = node
     return ComponentAccess(binding, root, node, (str(member).lower(),), indices)
 
 
@@ -334,7 +332,6 @@ def register_associates(analysis, routine):
                         raise CompilationError("duplicate source ASSOCIATE alias: " + alias)
                     projected = copy(binding)
                     projected.name = alias
-                    projected.associate_selector = selector
                     child.bindings[alias] = projected
                 available = True
             except CompilationError:
