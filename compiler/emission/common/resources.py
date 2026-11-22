@@ -16,14 +16,9 @@ def read_common_header() -> str:
     units = "\n".join(
         [runtime.joinpath(name).read_text(encoding="utf-8") for name in ("numeric.hpp", "timing.hpp")] + [storage]
     )
-    section_copy = runtime.joinpath("section_copy.hpp").read_text(encoding="utf-8")
-    floating_environment = runtime.joinpath("floating_environment.hpp").read_text(encoding="utf-8")
-    experimental = [runtime.joinpath(name).read_text(encoding="utf-8")
-                    .replace('#include "section_copy.hpp"', section_copy)
-                    .replace('#include "floating_environment.hpp"', floating_environment)
-                    for name in ("offload.hpp",)]
-    units += "\n" + floating_environment
-    units += "\n#ifdef FORT_OFFLOAD_ENABLED\n" + "\n".join(experimental) + "\n#endif\n"
+    units += "\n" + runtime.joinpath("floating_environment.hpp").read_text(encoding="utf-8")
+    offload = runtime.joinpath("offload.hpp").read_text(encoding="utf-8")
+    units += "\n#ifdef FORT_OFFLOAD_ENABLED\n" + offload + "\n#endif\n"
     return numerical_source_prologue() + base.replace("// FORT_RUNTIME_UNITS", units)
 
 

@@ -1,4 +1,4 @@
-"""Physical transfer footprints and safe partitions of already-proved plans.
+"""Physical footprints of the regions of an already-proved plan.
 
 This module never uses dependence-report coordinates as memory addresses: the
 dependence proof may replace nonlinear subscripts with injective surrogates.
@@ -22,9 +22,7 @@ from compiler.ir import (
     Binary,
     Block,
     CompilationError,
-    ExecutionPlan,
     Expr,
-    FunctionIR,
     If,
     IntrinsicCall,
     Literal,
@@ -41,7 +39,6 @@ from compiler.ir import (
     walk_expr,
 )
 from compiler.ir.integers import constant_integer
-from compiler.ir.intrinsics import REAL_MATH
 
 
 @dataclass(frozen=True)
@@ -77,144 +74,12 @@ class Footprint:
     read_units: tuple[int, ...] = ()
     write_units: tuple[int, ...] = ()
 
-    @property
-    def uploads(self) -> tuple[Box, ...]:
-        """Reads plus values needed to preserve conditional or unknown writes."""
-        preserve = self.writes if not self.exact or self.full_write else ()
-        return _merge_boxes((*self.reads, *preserve))
-
-    @property
-    def downloads(self) -> tuple[Box, ...]:
-        return self.writes
-
-    @property
-    def full_upload(self) -> bool:
-        return self.full_read or self.full_write
-
 
 @dataclass(frozen=True)
 class Unit:
     index: int
     region: ParallelRegion
     footprints: tuple[Footprint, ...]
-    work_per_iteration: int | None
-    work_is_upper_bound: bool = False
-    work_estimate_reason: str | None = None
-
-
-@dataclass(frozen=True)
-class Interval:
-    """A contiguous [start, stop) group retaining source kernel order."""
-
-    start: int
-    stop: int
-    footprints: tuple[Footprint, ...]
-
-
-
-@dataclass(frozen=True)
-class ChunkArray:
-    symbol: Symbol
-    dimension: int
-    coefficient: int
-    read_lower_offset: Expr | None
-    read_upper_offset: Expr | None
-    write_lower_offset: Expr | None
-    write_upper_offset: Expr | None
-
-
-@dataclass(frozen=True)
-class ChunkPlan:
-    axis: int
-    arrays: tuple[ChunkArray, ...]
-    domains: tuple[Loop, ...]
-
-
-@dataclass(frozen=True)
-class OffloadAnalysis:
-    available: bool
-    reason: str | None
-    units: tuple[Unit, ...] = ()
-    intervals: tuple[Interval, ...] = ()
-    chunk: ChunkPlan | None = None
-    chunk_reason: str | None = None
-
-    def to_dict(self) -> dict:
-        """Small explanatory JSON contract, not serialized compiler IR."""
-
-        def box_record(box):
-            return {
-                "lower": [_expression_text(value) for value in box.lower],
-                "upper": [_expression_text(value) for value in box.upper],
-                "active_units": list(box.active_units),
-            }
-
-        def footprint_record(footprint):
-            element_bytes = {
-                ScalarType.REAL: 8, ScalarType.REAL32: 4,
-                ScalarType.INTEGER: 4, ScalarType.LOGICAL: 1,
-            }[footprint.symbol.dtype]
-
-            def transfer_record(*, upload):
-                full = footprint.full_upload if upload else footprint.full_write
-                boxes = footprint.uploads if upload else footprint.downloads
-                if full:
-                    elements = " * ".join(f"size({footprint.symbol.name},{axis})"
-                                          for axis in range(1, footprint.symbol.rank + 1))
-                else:
-                    elements = " + ".join(
-                        "(" + " * ".join(
-                            f"max(0,({_expression_text(hi)})-({_expression_text(lo)})+1)"
-                            for lo, hi in zip(box.lower, box.upper, strict=True)
-                        ) + ")" for box in boxes
-                    ) or "0"
-                return {
-                    "available": True,
-                    "resolved_at": "runtime_after_domain_and_allocation_guards",
-                    "basis": "whole_array" if full else "physical_rectangles",
-                    "element_bytes": element_bytes,
-                    "byte_count_upper_bound": f"{element_bytes} * ({elements})",
-                    "rectangles": [] if full else [box_record(box) for box in boxes],
-                    "active_units": sorted(set(footprint.read_units + footprint.write_units if full and upload
-                                               else footprint.write_units if full
-                                               else (unit for box in boxes for unit in box.active_units))),
-                }
-
-            return {
-                "symbol": footprint.symbol.name,
-                "reads": [box_record(box) for box in footprint.reads],
-                "writes": [box_record(box) for box in footprint.writes],
-                "full_read": footprint.full_read,
-                "full_write": footprint.full_write,
-                "exact": footprint.exact,
-                "reason": footprint.reason,
-                "read_units": list(footprint.read_units),
-                "write_units": list(footprint.write_units),
-                "transfer_volume": {"upload": transfer_record(upload=True),
-                                    "download": transfer_record(upload=False)},
-            }
-
-        return {
-            "available": self.available,
-            "reason": self.reason,
-            "units": [
-                {
-                    "index": unit.index,
-                    "region": unit.region.id,
-                    "work_per_iteration": unit.work_per_iteration,
-                    "work_is_upper_bound": unit.work_is_upper_bound,
-                    "work_estimate_reason": unit.work_estimate_reason,
-                    "footprints": [footprint_record(value) for value in unit.footprints],
-                }
-                for unit in self.units
-            ],
-            "intervals": [{"start": value.start, "stop": value.stop,
-                           "launches_max": value.stop - value.start,
-                           "transfers": [footprint_record(item) for item in value.footprints]}
-                          for value in self.intervals],
-            "chunk_axis": None if self.chunk is None else self.chunk.axis,
-            "chunk_reason": self.chunk_reason,
-        }
 
 
 def _integer(value: int) -> Literal:
@@ -422,10 +287,6 @@ def _merge_footprints(footprints):
 
 def _unit_footprints(unit, parameters):
     accesses: list[Footprint] = []
-    work = 0
-    upper_bound = False
-    retained_loop = False
-    scalar_math = False
     # A same-point read after an unconditional assignment in this iteration
     # consumes the value just produced by the kernel, not an incoming replica.
     # Keep exact expressions, not bounding boxes: reversed/shifted accesses can
@@ -456,21 +317,14 @@ def _unit_footprints(unit, parameters):
             defined_points.append(access)
 
     def reads(expression, definitions, conditional, unknown):
-        nonlocal work, scalar_math
         for node in walk_expr(expression):
             if isinstance(node, ArrayAccess):
                 record(node, "read", definitions, conditional, unknown)
-            elif isinstance(node, IntrinsicCall) and node.name.lower() in REAL_MATH | {"atan2"}:
-                scalar_math = True
-            elif isinstance(node, (Binary, Unary, IntrinsicCall)):
-                work += 1
 
     def visit(block, definitions, conditional=False, unknown=False):
-        nonlocal work, upper_bound, retained_loop
         definitions = dict(definitions)
         for statement in block.statements:
             if isinstance(statement, Assignment):
-                work += 1
                 reads(statement.value, definitions, conditional, unknown)
                 if isinstance(statement.target, ArrayAccess):
                     for expression in statement.target.indices:
@@ -497,7 +351,6 @@ def _unit_footprints(unit, parameters):
                         definitions.pop(symbol, None)
             elif isinstance(statement, If):
                 defined_points.clear()
-                upper_bound = True
                 reads(statement.condition, definitions, conditional, unknown)
                 visit(statement.then_body, definitions, True, unknown)
                 visit(statement.else_body, definitions, True, unknown)
@@ -506,7 +359,6 @@ def _unit_footprints(unit, parameters):
                 defined_points.clear()
             else:
                 defined_points.clear()
-                retained_loop = True
                 reads(statement.lower, definitions, conditional, True)
                 reads(statement.upper, definitions, conditional, True)
                 if not isinstance(statement.step, int):
@@ -518,89 +370,7 @@ def _unit_footprints(unit, parameters):
         return definitions
 
     visit(unit.region.body, {})
-    return replace(
-        unit,
-        footprints=_merge_footprints(accesses),
-        work_per_iteration=None if retained_loop or scalar_math else max(work, 1),
-        work_is_upper_bound=upper_bound or retained_loop,
-        work_estimate_reason=("retained-loop work is unknown" if retained_loop else
-                              "scalar math has no static work count" if scalar_math else None),
-    )
-
-
-def _offset_extreme(offsets, name):
-    values = tuple(dict.fromkeys(offsets))
-    if not values:
-        return None
-    constants = tuple(_constant(value) for value in values)
-    if all(value is not None for value in constants):
-        return _integer((min if name == "min" else max)(constants))
-    return values[0] if len(values) == 1 else IntrinsicCall(name, values, ScalarType.INTEGER)
-
-
-def _chunk_plan(units, parameters):
-    first = units[0].region.loops
-
-    def domain(loops):
-        return tuple(
-            (
-                _canonical(loop.lower, parameters),
-                _canonical(loop.upper, parameters),
-                loop.step if isinstance(loop.step, int) else _constant(loop.step),
-            )
-            for loop in loops
-        )
-
-    common = domain(first)
-    if any(domain(unit.region.loops) != common for unit in units):
-        return None, "chunking requires equal mapped domains across all units"
-    if any(stride not in {-1, 1} for _, _, stride in common):
-        return None, "chunking requires constant signed-unit strides"
-    if any(unit.work_per_iteration is None for unit in units):
-        return None, "retained loops are outside the bounded chunk prototype"
-    footprints = _merge_footprints(value for unit in units for value in unit.footprints)
-    if any(value.full_read or value.full_write for value in footprints):
-        return None, "chunking requires rectangular physical footprints for every array"
-    # Prefer the outer source dimension: slabs then retain inner contiguous work.
-    for axis in range(len(first)):
-        arrays, valid = [], True
-        for footprint in footprints:
-            boxes = (*footprint.reads, *footprint.writes)
-            mappings = []
-            for box in boxes:
-                found = [(dimension, value) for dimension, value in enumerate(box.axes) if value.axis == axis]
-                if len(found) != 1:
-                    valid = False
-                    break
-                mappings.append(found[0])
-            if not valid or not mappings:
-                valid = False
-                break
-            dimension, mapping = mappings[0]
-            if any((dim, value.coefficient) != (dimension, mapping.coefficient) for dim, value in mappings):
-                valid = False
-                break
-            # Identical slab coordinates across reads/writes prevent every
-            # cross-window RAW, WAR and WAW, even between ordered kernels.
-            if footprint.writes and any(value.offset != mapping.offset for _, value in mappings):
-                valid = False
-                break
-            read_offsets = [box.axes[dimension].offset for box in footprint.reads]
-            write_offsets = [box.axes[dimension].offset for box in footprint.writes]
-            arrays.append(
-                ChunkArray(
-                    footprint.symbol,
-                    dimension,
-                    mapping.coefficient,
-                    _offset_extreme(read_offsets, "min"),
-                    _offset_extreme(read_offsets, "max"),
-                    _offset_extreme(write_offsets, "min"),
-                    _offset_extreme(write_offsets, "max"),
-                )
-            )
-        if valid and arrays:
-            return ChunkPlan(axis, tuple(arrays), first), None
-    return None, "no common slab axis without cross-chunk written-array dependence"
+    return replace(unit, footprints=_merge_footprints(accesses))
 
 
 def _protected_scalar_inputs(region, parameters):
@@ -646,74 +416,3 @@ def _protected_scalar_inputs(region, parameters):
         header(loop, False)
     visit(region.body)
     return {symbol for symbol in protected - unconditional if not symbol.by_value}, protected | unconditional
-
-
-def analyze_offload(function: FunctionIR, plan: ExecutionPlan, *, max_interval: int = 4) -> OffloadAnalysis:
-    """Analyze an already validated plan without changing default compilation.
-
-    Feed an unfused plan to retain source units. A failed optional analysis is
-    not a numerical rejection: the caller retains its ordinary/native path.
-    """
-    if not 1 <= max_interval <= 4:
-        raise ValueError("offload intervals must be bounded between one and four units")
-    if not plan.steps or any(not isinstance(step, ParallelRegion) for step in plan.steps):
-        return OffloadAnalysis(False, "offload partitioning requires a nonempty flat all-device execution plan")
-    parameters = frozenset(function.parameters)
-    used_scalar_inputs = set()
-    for region in plan.steps:
-        if any(symbol not in parameters for symbol in (*region.read_symbols, *region.write_symbols)):
-            return OffloadAnalysis(False, "array storage must be backed by entry parameters")
-        if any(not symbol.rank and symbol not in parameters for symbol in region.captured_symbols):
-            return OffloadAnalysis(False, "scalar state crossing a region boundary is unsupported")
-        if any(symbol in parameters and not symbol.rank for symbol in block_writes(region.body)):
-            return OffloadAnalysis(False, "offload inputs must remain immutable across units")
-        protected, used = _protected_scalar_inputs(region, parameters)
-        used_scalar_inputs.update(used)
-        if protected:
-            names = ", ".join(symbol.name for symbol in sorted(protected, key=lambda symbol: symbol.id))
-            return OffloadAnalysis(
-                False, "scalar inputs may be protected by conditional or empty retained-loop control: " + names
-            )
-        for loop in region.loops:
-            bounds = (loop.lower, loop.upper)
-            if not all(_safe_query(expression, parameters) for expression in bounds):
-                return OffloadAnalysis(False, "mapped bounds require descriptor sizes or immutable scalar arithmetic")
-            if not isinstance(loop.step, int) and not _safe_query(loop.step, parameters):
-                return OffloadAnalysis(False, "mapped strides require immutable scalar arithmetic")
-    unused = {symbol for symbol in parameters if not symbol.rank and not symbol.by_value} - used_scalar_inputs
-    if unused:
-        names = ", ".join(symbol.name for symbol in sorted(unused, key=lambda symbol: symbol.id))
-        return OffloadAnalysis(False, "unused scalar inputs are not safe through the numerical value ABI: " + names)
-    units = tuple(
-        _unit_footprints(Unit(index, region, (), None), parameters) for index, region in enumerate(plan.steps)
-    )
-    spans = {
-        (start, stop)
-        for start in range(len(units))
-        for stop in range(start + 1, min(len(units), start + max_interval) + 1)
-    }
-    spans.add((0, len(units)))
-    intervals = tuple(
-        Interval(start, stop, _merge_footprints(value for unit in units[start:stop] for value in unit.footprints))
-        for start, stop in sorted(spans)
-    )
-    chunk, chunk_reason = _chunk_plan(units, parameters)
-    return OffloadAnalysis(True, None, units, intervals, chunk, chunk_reason)
-
-
-def _expression_text(expression):
-    if isinstance(expression, Literal):
-        return expression.value
-    if isinstance(expression, Reference):
-        return expression.symbol.name
-    if isinstance(expression, ArrayAccess):
-        return f"{expression.symbol.name}({','.join(_expression_text(value) for value in expression.indices)})"
-    if isinstance(expression, Size):
-        return f"size({expression.symbol.name},{expression.dimension})"
-    if isinstance(expression, Unary):
-        return f"({expression.operator}{_expression_text(expression.operand)})"
-    if isinstance(expression, Binary):
-        return f"({_expression_text(expression.left)} {expression.operator} {_expression_text(expression.right)})"
-    if isinstance(expression, IntrinsicCall):
-        return f"{expression.name}({','.join(_expression_text(value) for value in expression.arguments)})"
-    raise TypeError(f"unsupported query expression: {expression!r}")

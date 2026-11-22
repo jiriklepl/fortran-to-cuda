@@ -1,25 +1,5 @@
-"""Optional ordinary-call offload analysis; numerical legality remains separate."""
+"""Physical footprints of plan regions; numerical legality remains separate."""
 
-from .analysis import (
-    AxisMapping,
-    Box,
-    ChunkArray,
-    ChunkPlan,
-    Footprint,
-    Interval,
-    OffloadAnalysis,
-    Unit,
-    analyze_offload,
-)
+from .analysis import AxisMapping, Box, Footprint, Unit
 
-__all__ = [
-    "AxisMapping",
-    "Box",
-    "ChunkArray",
-    "ChunkPlan",
-    "Footprint",
-    "Interval",
-    "OffloadAnalysis",
-    "Unit",
-    "analyze_offload",
-]
+__all__ = ["AxisMapping", "Box", "Footprint", "Unit"]

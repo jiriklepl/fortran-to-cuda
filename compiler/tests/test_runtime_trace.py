@@ -27,14 +27,6 @@ int main() {
     std::vector<std::thread> threads;
     for (int thread = 0; thread < 8; ++thread) {
         threads.emplace_back([&, thread] {
-            offload::Data data;
-            data.guarded_inputs_checked = true;
-            data.units.resize(3);
-            data.units[0].source_region = 2;
-            data.units[1].source_region = 5;
-            data.units[2].source_region = 9;
-            offload::Plan plan;
-            plan.choices.push_back({0, 3, false});
             while (!ready.load()) std::this_thread::yield();
             for (int i = 0; i < 2000; ++i) {
                 if (thread % 2) {
@@ -42,7 +34,6 @@ int main() {
                     storage::trace("release");
                 } else {
                     offload::decision_trace_single("sample", "native", 0, 3);
-                    offload::plan_trace("sample", data, offload::Profile{}, plan);
                 }
             }
         });
@@ -59,9 +50,6 @@ int main() {
         "FORT_RUNTIME pool_alloc bytes=34881600": 8000,
         "FORT_RUNTIME release": 8000,
         "FORT_OFFLOAD entry=sample mode=native gpu_units=0 cpu_units=3 unit_kind=regions": 8000,
-        "FORT_OFFLOAD_ACTIVE entry=sample regions=2,5,9": 8000,
-        "FORT_OFFLOAD_INTERVAL entry=sample begin=0 end=3 mode=native work=0 launches=0 "
-        "upload_bytes=0 download_bytes=0 estimate_seconds=-1 volume_valid=1": 8000,
     })
     for enabled in ("1", "0"):
         result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30,

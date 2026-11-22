@@ -110,7 +110,7 @@ def generate_scoped(function, plan, config, common_header):
                 collect(step.else_plan)
 
     collect(plan)
-    units = {r.id: _unit_footprints(Unit(i, r, (), None), frozenset(invariants))
+    units = {r.id: _unit_footprints(Unit(i, r, ()), frozenset(invariants))
              for i, r in enumerate(plan.regions)}
     protected = {r.id: _protected_scalar_inputs(r, frozenset(function.parameters))[0]
                  for r in plan.regions}
