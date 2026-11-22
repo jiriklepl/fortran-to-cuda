@@ -398,8 +398,9 @@ Forms beyond plain array loops that are supported in selected procedures:
   `descended`; a loop with many short iterations then costs a launch for
   each. Where none compiles, the loop is rejected as a whole, with the
   reasons of what it holds under `inside`, and its arrays go to the host
-  once. Nests that share an entry with such a loop are tried one by one in
-  the same way when the entry does not compile. An array
+  once. Nests that share an entry are tried one by one in the same way when
+  the entry does not compile: one of them may be all that stands in the way
+  of the others. An array
   assignment in such a body is written as its nest like one outside every
   loop. A nest in such a body that only accumulates scalars is rewritten only
   where an OpenMP `reduction` clause or `!$fort reduction` marks it, whatever

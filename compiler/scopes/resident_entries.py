@@ -869,7 +869,8 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
     resolved_procedures = _resolve_procedures(analysis, procedures, allow_patterns=allow_patterns)
     entries, rejected, grouping_rejections, host_statements, temporaries = [], [], [], [], []
     host_procedure, host_procedures = _host_procedures(analysis, set(resolved_procedures))
-    for procedure in resolved_procedures:
+    def export(procedure, entries, rejected, grouping_rejections, host_statements, temporaries, splitting=None):
+        """Export what one procedure holds. With ``splitting``, only the nests of those spans, each on its own."""
         routine = analysis.routines[procedure]
 
         def emit(nodes, sequence, outer=()):
@@ -891,6 +892,13 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                              if first <= statement_span(node)[0]
                              and statement_span(node)[1] <= last)
             loops = [node for node in nodes if _kind(node) == "Block_Nonlabel_Do_Construct"]
+            if splitting is not None:
+                if (first, last) in splitting and len(loops) > 1:
+                    for node in loops:
+                        emit((node,), sequence, (*outer, (first, last)))
+                    return
+                if not outer:
+                    return
             # Elements that are one value for the whole entry are read at the call and passed as scalars.
             fixed = _fixed_elements(analysis, routine, selected) if len(loops) == len(nodes) else {}
             undo, values = _as_values(analysis, routine, fixed)
@@ -956,12 +964,6 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                 # compiled. In case it does not, its body is exported as well, to be used then.
                 entries[-1]["descends"] = True
                 within(nodes[0], (*outer, (first, last)))
-            elif len(loops) > 1 and any(_around_nests(node) for node in loops):
-                # One of the nests that share this entry may be such a loop. In case the entry does not
-                # compile because of it, each nest is exported on its own as well.
-                entries[-1]["descends"] = True
-                for node in loops:
-                    emit((node,), sequence, (*outer, (first, last)))
 
         def alternative(outer):
             """Marks what is used only where the loops of the given spans did not compile as entries."""
@@ -1040,6 +1042,8 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
 
         def host(nodes, acknowledged, outer=()):
             """Record host code that touches arrays: it runs beside entries that may hold newer values."""
+            if splitting is not None and not outer:
+                return
             used = uses(nodes)
             if used["arrays"] or used.get("reached") or used.get("opaque"):
                 first = min(statement_span(node)[0] for node in nodes)
@@ -1076,9 +1080,19 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
 
         scan(tuple(_children(routine.execution)))
         temporaries += _temporaries(analysis, routine, procedure)
+
+    for procedure in resolved_procedures:
+        export(procedure, entries, rejected, grouping_rejections, host_statements, temporaries)
+
+    def retry(procedure, first, last):
+        """The nests of a span that was exported as one entry, each as an entry of its own."""
+        more = {"entries": [], "rejected": [], "grouping_rejections": [], "host_statements": []}
+        export(procedure, *more.values(), [], splitting={(first, last)})
+        return {"source_inputs": analysis.sources, **more}
+
     return {"version": 2, "kind": "caller_owned_resident_entries", "source_inputs": analysis.sources,
             "entries": entries, "rejected": rejected, "grouping_rejections": grouping_rejections,
-            "host_statements": host_statements, "temporaries": temporaries,
+            "host_statements": host_statements, "temporaries": temporaries, "retry": retry,
             "forwarders": {name: {**record, "outside": {
                 root: {key: value for key, value in item.items() if key != "binding"}
                 for root, item in record["outside"].items()}} for name, record in sorted(host_procedures.items())},
@@ -1164,7 +1178,7 @@ def compile_resident_entry(source, entry, directory, *, host_threads=4, injectiv
     return report
 
 
-def compile_resident_entries(extracted, directory, *, host_threads=4):
+def compile_resident_entries(extracted, directory, *, host_threads=4, expand=None):
     """Compile every exported entry; keep those whose regions all run on the device.
 
     An entry that the compiler rejects, or that would leave a region on the
@@ -1177,19 +1191,24 @@ def compile_resident_entries(extracted, directory, *, host_threads=4):
     ``host_statements``. When none compiles the span is rejected as a whole,
     which hands its arrays to the host once instead of once per iteration; its
     record says under ``inside`` why what it holds did not compile either.
-    Writes and returns ``device-entries.json``.
+    Nests that share an entry which does not compile are tried one by one in
+    the same way: ``expand(region)`` exports them when that happens (see the
+    ``retry`` of an export), and returns their entries, rejections and host
+    statements. Writes and returns ``device-entries.json``.
     """
     import json
 
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
     entries, rejected, tried = [], [], {}
+    pending, expanded = list(extracted["entries"]), {"rejected": [], "host_statements": []}
 
     def counts(item, opened):
         """Not an alternative, or one of spans that all turned out not to be entries."""
         return all((item["procedure"], *span) in opened for span in item.get("alternative_of", ()))
 
-    for region in extracted["entries"]:
+    while pending:
+        region = pending.pop(0)
         if not counts(region, tried):
             continue
         target = directory / region["source_identity"][:16]
@@ -1213,13 +1232,21 @@ def compile_resident_entries(extracted, directory, *, host_threads=4):
             # The host may run this loop; what its body holds was exported for this case.
             tried[span["procedure"], span["first_line"], span["last_line"]] = (
                 {**span, **failure}, region.get("host_code", {}))
+        elif expand is not None and len(region["source_loop_spans"]) > 1:
+            # One nest may be all that stands in the way of the others: each is exported on its own now.
+            more = expand(region)
+            tried[span["procedure"], span["first_line"], span["last_line"]] = (
+                {**span, **failure}, region.get("host_code", {}))
+            pending[:0] = more["entries"]
+            for key in expanded:
+                expanded[key] += more[key]
         else:
             rejected.append({**span, **failure, **region.get("host_code", {})})
     # A span is worth opening when an entry compiled somewhere inside it.
     fruitful = {(item["region"]["procedure"], *span) for item in entries
                 for span in item["region"].get("alternative_of", ())}
     opened = {key for key in tried if key in fruitful}
-    failed = [*extracted["rejected"], *rejected]
+    failed = [*extracted["rejected"], *expanded["rejected"], *rejected]
 
     def inside(key):
         """Why what a span holds did not compile either, for the report."""
@@ -1231,11 +1258,12 @@ def compile_resident_entries(extracted, directory, *, host_threads=4):
     rejected = [item for item in failed if counts(item, opened)]
     rejected += [{**record, **code, "inside": inside(key)} for key, (record, code) in tried.items()
                  if key not in opened and counts(record, opened)]
+    rejected.sort(key=lambda item: (item["source"], item["first_line"], item["last_line"]))
     descended = [{name: value for name, value in record.items() if name != "alternative_of"}
                  for key, (record, _code) in tried.items() if key in opened]
     record = {"version": 1, "kind": "resident_device_entries", "source_inputs": extracted["source_inputs"],
               "entries": entries, "rejected": rejected, "descended": descended,
-              "host_statements": [item for item in extracted.get("host_statements", ())
+              "host_statements": [item for item in (*extracted.get("host_statements", ()), *expanded["host_statements"])
                                   if item.get("alternative_of") and counts(item, opened)],
               "gpu_execution_established": False}
     (directory / "device-entries.json").write_text(json.dumps(record, indent=2) + "\n")

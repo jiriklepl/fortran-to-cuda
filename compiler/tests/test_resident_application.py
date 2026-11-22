@@ -986,3 +986,38 @@ def test_an_element_that_is_one_value_for_the_entry_is_read_at_the_call(tmp_path
     assert "rho(stage + 1), &" not in second
     assert "bind_real64(rho," in third
     assert "observe" not in third
+
+
+def test_nests_that_share_an_entry_with_one_that_does_not_compile_are_entries_of_their_own(tmp_path):
+    source = tmp_path / "three.f90"
+    source.write_text("""module three
+integer :: n
+contains
+subroutine all(a, b, c)
+real(8), contiguous, intent(inout) :: a(:), b(:), c(:)
+integer :: i
+do i = 1, n
+a(i) = a(i) + 1
+enddo
+do i = 2, n
+b(i) = b(i-1) + a(i)
+enddo
+do i = 1, n
+c(i) = 2 * c(i)
+enddo
+end subroutine
+end module
+""")
+    prepared = prepare(ResidentProject((source,), (Selection("all", ("three::all",), minimum_nests=2),)),
+                       tmp_path / "prepared", fortran=fortran_compiler())
+    summary, = prepared["selections"]
+    # Next to each other the three nests are one entry at first. The second carries a dependence from one
+    # iteration to the next, so the entry does not compile; the first and the third do on their own.
+    assert (summary["entries"], summary["nests"]) == (2, 2)
+    assert [(item["first_line"], item["last_line"]) for item in summary["descended"]] == [(9, 17)]
+    rejection, = summary["rejected"]
+    assert (rejection["first_line"], rejection["last_line"]) == (12, 14)
+    text = (tmp_path / "prepared/sources/three.f90").read_text()
+    assert text.count("call resident_require(fort_device_run(") == 2
+    middle = text[text.index("fort_host = resident%active .and. ((n) >= (2))"):]
+    assert middle.index("resident%held(a)") < middle.index("b(i) = b(i-1) + a(i)") < middle.index("host_done")

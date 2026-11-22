@@ -13,6 +13,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 from hashlib import sha256
+from itertools import count
 from pathlib import Path
 
 from compiler.resident.array_statements import lower_array_statements
@@ -393,8 +394,15 @@ def prepare(project, directory, *, fortran, host_threads=4):
         group = {**extracted, "entries": [item for item in extracted["entries"] if selected(item)],
                  "rejected": [item for item in extracted["rejected"] if selected(item)]}
         group = pass_scalars_by_value(group, directory / (selection.label + "-values"))
+        retried = count(1)
+
+        def expand(region, label=selection.label, retried=retried):
+            """The nests of an entry that did not compile, each exported as an entry of its own."""
+            more = extracted["retry"](region["procedure"], region["first_line"], region["last_line"])
+            return pass_scalars_by_value(more, directory / f"{label}-values-{next(retried)}")
+
         package = compile_resident_entries(group, directory / (selection.label + "-entries"),
-                                           host_threads=host_threads)
+                                           host_threads=host_threads, expand=expand)
         # A rewritten reduction runs on the device only when all three of its nests compiled. Otherwise
         # its original nest runs, and what the rewrite added is left out of the entries and the report.
         for record in lowered:
