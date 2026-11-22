@@ -357,15 +357,21 @@ contains
     if (found==0) write(error_unit,'(a)') '  registered: by storage this domain has no record of'
   end subroutine
 
+  ! An array is taken by the address of its first element and its extents. The
+  ! procedures that take application arrays do not declare them CONTIGUOUS:
+  ! for an actual argument it cannot see to be contiguous, a compiler may then
+  ! hand over a packed copy, whose address is not the array's and dies with
+  ! the call. Whether the array is contiguous is asked when it is bound.
   function bind_real32(self, values, lower, initialized, persistent, origin) result(handle)
     class(resident_domain), intent(inout) :: self
-    real(c_float), contiguous, target, intent(in) :: values(..)
+    real(c_float), target, intent(in) :: values(..)
     integer, intent(in) :: lower(:)
     logical, intent(in) :: initialized
     logical, optional, intent(in) :: persistent
     character(*), optional, intent(in) :: origin
     integer(c_int64_t) :: handle
     logical :: saved
+    if (.not. is_contiguous(values)) error stop 'a strided array section cannot be kept on the device'
     saved=.false.
     if (present(persistent)) saved=persistent
     handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
@@ -374,13 +380,14 @@ contains
 
   function bind_real64(self, values, lower, initialized, persistent, origin) result(handle)
     class(resident_domain), intent(inout) :: self
-    real(c_double), contiguous, target, intent(in) :: values(..)
+    real(c_double), target, intent(in) :: values(..)
     integer, intent(in) :: lower(:)
     logical, intent(in) :: initialized
     logical, optional, intent(in) :: persistent
     character(*), optional, intent(in) :: origin
     integer(c_int64_t) :: handle
     logical :: saved
+    if (.not. is_contiguous(values)) error stop 'a strided array section cannot be kept on the device'
     saved=.false.
     if (present(persistent)) saved=persistent
     handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
@@ -389,13 +396,14 @@ contains
 
   function bind_integer32(self, values, lower, initialized, persistent, origin) result(handle)
     class(resident_domain), intent(inout) :: self
-    integer(c_int), contiguous, target, intent(in) :: values(..)
+    integer(c_int), target, intent(in) :: values(..)
     integer, intent(in) :: lower(:)
     logical, intent(in) :: initialized
     logical, optional, intent(in) :: persistent
     character(*), optional, intent(in) :: origin
     integer(c_int64_t) :: handle
     logical :: saved
+    if (.not. is_contiguous(values)) error stop 'a strided array section cannot be kept on the device'
     saved=.false.
     if (present(persistent)) saved=persistent
     handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
@@ -610,7 +618,7 @@ contains
 
   function host_box_real32(self, values, lower, first, last, writing) result(handle)
     class(resident_domain), intent(inout) :: self
-    real(c_float), contiguous, target, intent(in) :: values(:,:,:)
+    real(c_float), target, intent(in) :: values(:,:,:)
     integer, intent(in) :: lower(3), first(3), last(3)
     logical, intent(in) :: writing
     integer(c_int64_t) :: handle
@@ -632,7 +640,7 @@ contains
 
   function host_box_real64(self, values, lower, first, last, writing) result(handle)
     class(resident_domain), intent(inout) :: self
-    real(c_double), contiguous, target, intent(in) :: values(:,:,:)
+    real(c_double), target, intent(in) :: values(:,:,:)
     integer, intent(in) :: lower(3), first(3), last(3)
     logical, intent(in) :: writing
     integer(c_int64_t) :: handle
@@ -654,7 +662,7 @@ contains
 
   subroutine release_real32(self, values)
     class(resident_domain), intent(inout) :: self
-    real(c_float), contiguous, target, intent(in) :: values(..)
+    real(c_float), target, intent(in) :: values(..)
     integer(c_int64_t) :: allocation_id
     logical, allocatable :: keep(:)
     integer :: i
@@ -672,7 +680,7 @@ contains
 
   subroutine release_real64(self, values)
     class(resident_domain), intent(inout) :: self
-    real(c_double), contiguous, target, intent(in) :: values(..)
+    real(c_double), target, intent(in) :: values(..)
     integer(c_int64_t) :: allocation_id
     logical, allocatable :: keep(:)
     integer :: i
