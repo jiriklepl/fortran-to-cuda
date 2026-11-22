@@ -83,10 +83,6 @@ def generate_scoped(function, plan, config, common_header):
     def trace_cpu(region):
         return f'fort_worker_trace.implementation("{implementation_ids[region.id, "generated_cpu"]}");'
     configure_name = c_name + "_configure"
-    transfer_modes = {"direct": "FORT_SCOPE_TRANSFERS_DIRECT", "pinned": "FORT_SCOPE_TRANSFERS_PINNED",
-                      "pipelined": "FORT_SCOPE_TRANSFERS_PIPELINED", "auto": "FORT_SCOPE_TRANSFERS_AUTO",
-                      "coalesced": "FORT_SCOPE_TRANSFERS_COALESCED"}
-    transfer_reason = {"auto": "transfer_estimates_unavailable", "pipelined": "pipelined_not_available"}.get(config.scope_transfers)
     scalar_signature = [(f"const {cpp_type(s)} fort_value_{s.cpp_name}" if s.by_value else
                          f"const {cpp_type(s)} *fort_scalar_{s.cpp_name}") for s in scalars]
     def array_argument(symbol):
@@ -125,7 +121,7 @@ def generate_scoped(function, plan, config, common_header):
         for r in plan.regions
     }
     lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
-              f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});", "}"]
+              "    return fort_scope_set_transfers(fort_context, FORT_SCOPE_TRANSFERS_DIRECT);", "}"]
     captures = {}
     locals_ = host_symbols(function, plan)
     for region in plan.regions:
@@ -524,34 +520,6 @@ def generate_scoped(function, plan, config, common_header):
             "unsupported": "pre-work boundary; original-source caller executes its coherent native operation",
             "generated_cpu_fallback": "does not replace the original source for unsupported environments",
         },
-        "transfer_configuration": {"abi_version": 1, "requested": config.scope_transfers,
-                                   "selected": ("runtime" if config.scope_transfers == "coalesced" else
-                                                "pinned" if config.scope_transfers == "pinned" else "direct"),
-                                   "reason": transfer_reason, "available_modes": ["direct", "pinned", "coalesced"],
-                                   "entry": configure_name, "fortran_procedure": "configure",
-                                   "argument_order": ["context"],
-                                   "position": "once per owning context before registration",
-                                   "execution": "synchronous", "pinned_budget_bytes": 64 * 1024 * 1024,
-                                   "budget_scope": "process-wide including cached staging",
-                                   "resource_fallback": "direct before this copy is enqueued; numerical work is never replayed",
-                                   "runtime_stats": "fort_scope_transfer_stats_get_v1",
-                                   "physical_copy_calibration": {
-                                       "abi_version": 3, "available": False,
-                                       "selection": "AUTO selects supported complete Compact predictions below half the direct prediction",
-                                       "missing_evidence": "direct physical copies",
-                                   },
-                                   "coalesced": {
-                                       "experimental": True, "direction": "upload only; outputs remain exact",
-                                       "minimum_physical_copies": 2, "maximum_extra_bytes_fraction": 0.125,
-                                       "source_requirement": "whole canonical source resource is defined and host current",
-                                       "coordinates": "unchanged full-array layout and logical indices",
-                                       "pinning": False,
-                                       "initial_effective_mode": "direct",
-                                       "selected": "runtime eligibility per upload",
-                                       "fallback": "exact direct transfer",
-                                       "fallback_reason": "coalesced_upload_ineligible",
-                                       "trace_events": {"upload_coalesced": "actual physical span bytes",
-                                                        "upload_requested": "required section bytes"}}},
         "runtime_provenance": provenance.public(),
         "host_threads": config.host_threads,
         "definition_changes": [s.name for s in arrays if s.intent == "out"],

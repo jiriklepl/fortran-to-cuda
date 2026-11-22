@@ -112,7 +112,7 @@ Export the independently compiled runtime and its versioned manifest:
 python -m compiler --emit-scoped-runtime --json --output-dir out/scoped
 ```
 
-The output contains `scoped_runtime.h`, `scoped_entry.hpp`, `section_copy.hpp`, `staging.hpp`,
+The output contains `scoped_runtime.h`, `scoped_entry.hpp`, `section_copy.hpp`,
 `scoped_regions.hpp`, `scoped_cuda_resources.hpp`,
 `scoped_runtime.cu`, `fort_scoped_memory.f90`, and `scoped-runtime.json`. Compile and link the CUDA
 runtime once per executable with host OpenMP support (`-Xcompiler=-fopenmp`) and compile the common Fortran interface before its
@@ -169,18 +169,6 @@ before a host write. Independent CPU work does not force a device wait. All-nati
 Execution failures poison the context, preventing unsafe replay; abandoning a
 failed context releases resources without claiming valid host results.
 
-Scoped transfers default to `direct`. The opt-in `pinned` control packs exact
-sections into reusable pinned staging, copies against the existing full-layout
-device buffers, waits for completion, and unpacks only downloaded sections.
-Logical indices and array pitches are unchanged. This control is synchronous;
-it does not claim transfer/kernel overlap. Two staging slots, streams and events
-share the common staging pool's 64 MiB pinned budget, including active,
-allocating and cached storage. A scoped copy acquires a short lease without
-waiting for another caller to release budget, and releases it before native
-procedure execution. A pre-copy resource failure uses direct transfers with an
-explicit reason; a failure after enqueue poisons the context and cannot replay
-numerical work.
-
 The command queue holds launches back so that several go to the device as one
 CUDA graph, which costs the host less per launch. What is held back is work the
 device is not doing, and after a host read of device values the device has
@@ -189,15 +177,10 @@ start 2^18 device threads or more: small launches are still batched, and a
 launch over a whole field goes out at once. `FORT_SCOPE_GRAPH_QUEUE_WORK` sets
 another thread count (0: no limit); the fields do not depend on it.
 
-The `fort_scope_set_transfers` metadata operation configures a context before
-registration and initializes no CUDA resources. Generated interfaces publish a
-`configure(context)` helper for it. `fort_scope_transfer_stats_get_v1` reports requested
-and effective modes, fallback reasons, exact packing/transfer counts, staging
-reuse, capacity and event statistics without changing the original stats ABI.
-The runtime manifest describes the shared budget and supported modes. Common
-and scoped runtime units must link into the same program with the published
-default-linkage support header to share one pool; isolated loader namespaces
-are not covered by that contract.
+Sections travel directly between a host array and its device copy, as the
+exact rectangles an access names. Generated interfaces publish a
+`configure(context)` helper that states this one transfer mode through
+`fort_scope_set_transfers`.
 
 Emit a numerical entry that borrows common buffer handles:
 

@@ -120,7 +120,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _offload_config(args):
     try:
-        return OffloadConfig(args.host_threads, "direct")
+        return OffloadConfig(args.host_threads)
     except ValueError as error:
         raise CompilationError(str(error)) from error
 

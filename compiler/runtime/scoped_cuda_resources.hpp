@@ -21,7 +21,7 @@ struct Cache {
 };
 inline Cache &cache() {
     // CUDA runtime shutdown owns process teardown. Never call CUDA from static
-    // destructors after the driver has shut down (as for pinned staging).
+    // destructors after the driver has shut down.
     static auto *state = new Cache;
     return *state;
 }

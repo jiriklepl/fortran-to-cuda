@@ -12,20 +12,13 @@ module fort_scoped_memory
   integer(c_int32_t), parameter, public :: FORT_SCOPE_BYTES=0, FORT_SCOPE_REAL32=1, FORT_SCOPE_REAL64=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_INTEGER32=3, FORT_SCOPE_LOGICAL=4
   integer(c_int), parameter, public :: FORT_SCOPE_NATIVE=0, FORT_SCOPE_GPU=1
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_SCRATCH_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_OWNER=1, FORT_SCOPE_TRACE_PROCEDURE=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_SEGMENT=4, FORT_SCOPE_TRACE_OPERATION=8
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_IMPLEMENTATION=16, FORT_SCOPE_TRACE_BOUNDARY=32
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_ALL=63
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_DIRECT=0, FORT_SCOPE_TRANSFERS_PINNED=1
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_PIPELINED=2, FORT_SCOPE_TRANSFERS_AUTO=3
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_COALESCED=4
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_NONE=0, FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE=1
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_PIPELINED_UNAVAILABLE=2, FORT_SCOPE_TRANSFER_BUDGET=3
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_ALLOCATION=4
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_COALESCED_INELIGIBLE=5
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_DIRECT=0
 
   integer(c_int32_t), parameter, public :: FORT_SCOPE_VIEW_ABI_VERSION=1
 
@@ -89,15 +82,6 @@ module fort_scoped_memory
     integer(c_int64_t) :: acquisitions=0, allocations=0, reuses=0, releases=0, grows=0
     integer(c_int64_t) :: capacity_bytes=0, active_bytes=0, peak_scratch_bytes=0, peak_total_device_bytes=0
   end type
-  type, bind(C), public :: fort_scope_transfer_stats
-    integer(c_int32_t) :: version=1, requested_mode=0, effective_mode=0, fallback_reason=0
-    integer(c_int64_t) :: fallbacks=0, pinned_uploads=0, pinned_downloads=0
-    integer(c_int64_t) :: pinned_upload_bytes=0, pinned_download_bytes=0
-    integer(c_int64_t) :: packed_bytes=0, unpacked_bytes=0, tiles=0, events=0, event_waits=0
-    integer(c_int64_t) :: staging_allocations=0, staging_reuses=0, slot_capacity=0, staging_device_bytes=0
-    integer(c_int64_t) :: process_reserved_bytes=0, process_peak_bytes=0
-    real(c_double) :: packing_seconds=0, unpacking_seconds=0, event_wait_seconds=0
-  end type
 
   type, bind(C), public :: fort_scope_plan_binding
     integer(c_int64_t) :: buffer=0
@@ -120,7 +104,7 @@ module fort_scoped_memory
   public :: fort_scope_set_device_budget
   public :: fort_scope_device_budget_default_v1, fort_scope_domain_budget_get_v1
   public :: fort_scope_scratch_acquire_v1, fort_scope_scratch_release_v1, fort_scope_scratch_stats_get_v1
-  public :: fort_scope_set_transfers, fort_scope_transfer_stats_get_v1
+  public :: fort_scope_set_transfers
   public :: fort_scope_numerical_environment_supported
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
   public :: fort_scope_access_begin_v1
@@ -182,12 +166,6 @@ module fort_scoped_memory
       import c_int, c_int32_t, c_int64_t
       integer(c_int64_t), value :: context
       integer(c_int32_t), value :: mode
-      integer(c_int) :: status
-    end function
-    function fort_scope_transfer_stats_get_v1(context, stats) bind(C) result(status)
-      import c_int, c_int64_t, fort_scope_transfer_stats
-      integer(c_int64_t), value :: context
-      type(fort_scope_transfer_stats), intent(out) :: stats
       integer(c_int) :: status
     end function
 

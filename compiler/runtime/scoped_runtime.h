@@ -55,27 +55,7 @@ enum fort_scope_access_flags {
     FORT_SCOPE_READ_ALL = 1, FORT_SCOPE_WRITE_ALL = 2, FORT_SCOPE_OVERWRITE_ALL = 4
 };
 enum fort_scope_execution_mode { FORT_SCOPE_NATIVE = 0, FORT_SCOPE_GPU = 1 };
-#define FORT_SCOPE_TRANSFER_ABI_VERSION 1
-enum fort_scope_transfer_mode {
-    FORT_SCOPE_TRANSFERS_DIRECT = 0, FORT_SCOPE_TRANSFERS_PINNED = 1,
-    FORT_SCOPE_TRANSFERS_PIPELINED = 2, FORT_SCOPE_TRANSFERS_AUTO = 3,
-    FORT_SCOPE_TRANSFERS_COALESCED = 4
-};
-enum fort_scope_transfer_fallback {
-    FORT_SCOPE_TRANSFER_NONE = 0, FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE = 1,
-    FORT_SCOPE_TRANSFER_PIPELINED_UNAVAILABLE = 2, FORT_SCOPE_TRANSFER_BUDGET = 3,
-    FORT_SCOPE_TRANSFER_ALLOCATION = 4, FORT_SCOPE_TRANSFER_COALESCED_INELIGIBLE = 5
-};
-/* Additive actual-transfer diagnostics. Legacy allocation statistics continue
- * to count full-layout device payloads only. Timings never select a policy. */
-typedef struct fort_scope_transfer_stats {
-    uint32_t version, requested_mode, effective_mode, fallback_reason;
-    uint64_t fallbacks, pinned_uploads, pinned_downloads, pinned_upload_bytes, pinned_download_bytes;
-    uint64_t packed_bytes, unpacked_bytes, tiles, events, event_waits;
-    uint64_t staging_allocations, staging_reuses, slot_capacity, staging_device_bytes;
-    uint64_t process_reserved_bytes, process_peak_bytes;
-    double packing_seconds, unpacking_seconds, event_wait_seconds;
-} fort_scope_transfer_stats;
+enum fort_scope_transfer_mode { FORT_SCOPE_TRANSFERS_DIRECT = 0 };
 #define FORT_SCOPE_COMPLETION_ABI_VERSION 1
 typedef struct fort_scope_completion_stats_v1 {
     uint32_t version, reserved;
@@ -142,50 +122,6 @@ typedef struct fort_scope_plan_binding {
     fort_buffer_t buffer;
     fort_scope_access access;
 } fort_scope_plan_binding;
-/* Base rates of the device a physical-copy calibration was measured on. */
-#define FORT_SCOPE_PLANNING_ABI_VERSION 2
-typedef struct fort_scope_plan_costs {
-    uint32_t version, valid;
-    size_t max_allocation_bytes;
-    double cpu_flops, cpu_bandwidth, gpu_flops, gpu_bandwidth;
-    double h2d_latency, h2d_bandwidth, d2h_latency, d2h_bandwidth;
-    double create_seconds, register_seconds, host_access_seconds, device_access_seconds;
-    double gpu_setup_seconds, cold_driver_startup_seconds, allocation_seconds, release_seconds;
-    double wait_seconds, launch_enqueue_seconds, planning_operation_seconds;
-    /* Observed direct/pageable fit dispersion. Zero leaves nominal pricing
-     * unchanged. Values must be finite, nonnegative and less than one. */
-    double h2d_fit_relative_error, d2h_fit_relative_error;
-} fort_scope_plan_costs;
-/* Optional exact physical-copy calibration.
- * AUTO may use compact copies only inside the observed geometry envelope.
- * Directions are H2D/D2H; each rate predicts the complete physical batch.
- * Submission terms count original operations or compact kernel chunks.
- * Empirical errors are diagnostics, not global profitability bounds.
- * No field grants memory validity, execution, source motion or lifetime. */
-#define FORT_SCOPE_COPY_COST_ABI_VERSION 3
-typedef struct fort_scope_copy_rate_v3 {
-    double batch_seconds, submission_seconds, byte_seconds, row_seconds, descriptor_seconds;
-    double median_relative_error, p90_relative_error, maximum_relative_error;
-    size_t minimum_payload_bytes, maximum_payload_bytes, minimum_rows, maximum_rows;
-    size_t minimum_row_bytes, maximum_row_bytes, minimum_pitch_bytes, maximum_pitch_bytes, maximum_span_bytes;
-    size_t minimum_operations, maximum_operations, minimum_descriptor_work, maximum_descriptor_work;
-    size_t minimum_kernel_chunks, maximum_kernel_chunks;
-    uint32_t word_bytes_mask, layout_combinations_mask;
-} fort_scope_copy_rate_v3;
-typedef struct fort_scope_copy_costs_v3 {
-    uint32_t version, valid;
-    double minimum_relative_saving;
-    fort_scope_copy_rate_v3 direct[2], compact_cold[2], compact_reuse[2];
-} fort_scope_copy_costs_v3;
-/* Configure before registration in a private context, or at any time in a
- * borrowed context. The caller's hardware/runtime guard supplies compatible.
- * The domain owns this physical transport calibration: it survives context
- * detach and applies to final publication. A later child may replace it;
- * missing/invalid/incompatible costs clear the domain's model and cannot
- * select compact. */
-int fort_scope_set_copy_costs_v3(fort_scope_t context, const fort_scope_copy_costs_v3 *costs,
-                                const fort_scope_plan_costs *base, int compatible);
-
 uint32_t fort_scope_abi_version(void);
 const char *fort_scope_error(void);
 int fort_scope_create(int device, fort_scope_t *context);
@@ -254,11 +190,9 @@ int fort_scope_scratch_acquire_v1(fort_scope_t context, size_t bytes,
                                   fort_scope_scratch_lease_v1 *lease);
 int fort_scope_scratch_release_v1(fort_scope_t context, uint64_t token);
 int fort_scope_scratch_stats_get_v1(fort_scope_t context, fort_scope_scratch_stats_v1 *stats);
-/* Metadata-only. Configure before registering numerical work. PINNED is
- * synchronous. AUTO uses compact copies where a physical-copy calibration
- * covers them, and direct copies otherwise; PIPELINED is direct. */
+/* Metadata-only. Sections are copied directly between the host array and its
+ * device copy; DIRECT is the one mode. */
 int fort_scope_set_transfers(fort_scope_t context, uint32_t mode);
-int fort_scope_transfer_stats_get_v1(fort_scope_t context, fort_scope_transfer_stats *stats);
 int fort_scope_completion_stats_get_v1(fort_scope_t context, fort_scope_completion_stats_v1 *stats);
 int fort_scope_register(fort_scope_t context, uint64_t identity, uint64_t generation,
                         const fort_scope_layout *layout, int host_initialized, fort_buffer_t *buffer);

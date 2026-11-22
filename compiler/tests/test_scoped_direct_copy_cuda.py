@@ -83,8 +83,6 @@ int main(int argc,char **argv){
   ck(cudaMemcpy(got.data(),device,N*sizeof(double),cudaMemcpyDeviceToHost));assert(got==host);
   fort_scope_scratch_stats_v1 scratch{};check(fort_scope_scratch_stats_get_v1(c,&scratch));
   assert(!scratch.capacity_bytes&&!scratch.allocations&&!scratch.reuses);
-  fort_scope_transfer_stats transport{};check(fort_scope_transfer_stats_get_v1(c,&transport));
-  assert(!transport.staging_allocations&&!transport.packed_bytes&&!transport.unpacked_bytes&&!transport.events&&!transport.event_waits);
   check(fort_scope_gpu_leave(c,previous));check(fort_scope_close(c));std::puts("exact direct copies accepted");
 }
 '''
@@ -116,4 +114,3 @@ def test_direct_transport_exact_mirrors_without_staging(direct_executable, mode)
     if result.returncode == 77:
         pytest.skip('CUDA device unavailable')
     assert result.returncode == 0, result.stdout + result.stderr
-    assert '"event":"compact_transfer"' not in result.stderr

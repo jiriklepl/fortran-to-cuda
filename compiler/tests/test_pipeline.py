@@ -26,18 +26,6 @@ def test_invalid_optimization_level_is_rejected(opt_level: int) -> None:
         CompilerOptions(opt_level=opt_level)
 
 
-@pytest.mark.parametrize("transfers", ["pinned", "coalesced"])
-def test_default_generation_uses_scoped_transfer_ownership(transfers):
-    from compiler.emission import generate_sources
-    from compiler.offload.config import OffloadConfig
-
-    options = CompilerOptions(scope_transfers=transfers)
-    function, plan = prepare_function(lower_file(Path(__file__).parent / "fixtures/fill_array.f90", "fill_array"),
-                                     options=options)
-    generated = generate_sources(function, plan, offload_config=OffloadConfig(scope_transfers=transfers))
-    assert generated.scoped["transfer_configuration"]["requested"] == transfers
-
-
 @pytest.mark.parametrize("existing_outputs", [False, True], ids=["new-directory", "existing-outputs"])
 @pytest.mark.parametrize("opt_level", ["-1", "2", "x"])
 def test_invalid_optimization_options_preserve_outputs(

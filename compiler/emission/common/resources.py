@@ -23,7 +23,6 @@ def read_common_header() -> str:
                     .replace('#include "floating_environment.hpp"', floating_environment)
                     for name in ("offload.hpp",)]
     units += "\n" + floating_environment
-    units += "\n" + runtime.joinpath("copy_startup.hpp").read_text(encoding="utf-8")
     units += "\n#ifdef FORT_OFFLOAD_ENABLED\n" + "\n".join(experimental) + "\n#endif\n"
     return numerical_source_prologue() + base.replace("// FORT_RUNTIME_UNITS", units)
 
@@ -36,10 +35,6 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "floating_environment.hpp": runtime.joinpath("floating_environment.hpp").read_text(encoding="utf-8"),
         "scoped_entry.hpp": runtime.joinpath("scoped_entry.hpp").read_text(encoding="utf-8"),
         "section_copy.hpp": runtime.joinpath("section_copy.hpp").read_text(encoding="utf-8"),
-        "section_batch.hpp": runtime.joinpath("section_batch.hpp").read_text(encoding="utf-8"),
-        "section_batch_cost.hpp": runtime.joinpath("section_batch_cost.hpp").read_text(encoding="utf-8"),
-        "copy_startup.hpp": runtime.joinpath("copy_startup.hpp").read_text(encoding="utf-8"),
-        "staging.hpp": runtime.joinpath("staging.hpp").read_text(encoding="utf-8"),
         "scoped_cuda_resources.hpp": runtime.joinpath("scoped_cuda_resources.hpp").read_text(encoding="utf-8"),
         "scoped_graphs.hpp": runtime.joinpath("scoped_graphs.hpp").read_text(encoding="utf-8"),
         "scoped_regions.hpp": runtime.joinpath("scoped_regions.hpp").read_text(encoding="utf-8"),
@@ -155,52 +150,12 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "zero_bytes": "null pointer with a release-required token; no CUDA initialization",
             "compatibility": "existing field statistics and runtime interfaces remain unchanged",
         },
-        "scope_transfers": {
-            "abi_version": 1,
-            "configure": "fort_scope_set_transfers",
-            "statistics": "fort_scope_transfer_stats_get_v1",
-            "completed_statistics_event": "transfer_statistics",
-            "default": "direct",
-            "modes": {"direct": 0, "pinned": 1, "pipelined": 2, "auto": 3, "coalesced": 4},
-            "supported": ["direct", "pinned", "pipelined", "auto", "coalesced"],
-            "pinned_execution": "synchronous exact-section packing, copy, completion and unpack",
-            "staging_slots": 2,
-            "staging_streams": "two reusable non-default streams in the process-wide pool",
-            "pinned_budget_bytes": 64 * 1024 * 1024,
-            "budget_scope": "active, allocating and cached staging for scoped calls",
-            "auto": "exact compact physical copies where a matching bounded layout calibration is configured; otherwise direct",
-            "physical_copies": {
-                "abi_version": 3, "configure": "fort_scope_set_copy_costs_v3",
-                "selection": "AUTO only; single and multiple operations require measured geometry support; explicit DIRECT retains the direct path",
-                "coverage": "complete-batch empirical geometry, word and observed layout-combination bounds; no cost extrapolation",
-                "prediction": "median-fit complete direct/cold/reuse paths; strict 50 percent warm saving; bounded submitted-copy credit may fund a cold purchase, always charged at its full cold price; empirical errors are diagnostic",
-                "startup_credit": "one model/device record and four bounded capacity balances in the shared pool; successful direct submissions only, ownership changes reset; no future work, completion or data authority",
-                "workspace": "existing shared Compact slot pair; active bytes included in domain device budget",
-                "pool_device_bytes_limit": 64 * 1024 * 1024,
-                "pool_budget_scope": "active, allocating and idle cached device workspace",
-                "ordering": "complete prior domain work, exact gather or scatter on a leased stream, complete before return",
-                "fallback": "pre-submission resource miss uses direct copies; submitted failure poisons execution",
-                "coherence": "unchanged logical regions and replica validity; no additional definition credit",
-                "trace_event": "compact_transfer; logical boxes, physical operations, DMA calls and copy kernels remain distinct",
-            },
-            "coalesced_execution": {
-                "experimental": True, "direction": "upload only; output sections remain exact",
-                "minimum_physical_copies": 2, "maximum_extra_bytes_fraction": 0.125,
-                "source_requirement": "whole canonical source resource is defined and host current",
-                "pinning": False, "coordinates": "original full-layout pitches and logical coordinates",
-                "actual_bytes": "normal upload statistics; upload_coalesced trace records actual span bytes",
-                "required_bytes": "upload_requested trace event",
-                "fallback": "exact direct transfers with coalesced_upload_ineligible"},
-            "fallback_reasons": {"missing_calibration": "transfer_estimates_unavailable",
-                                 "resource_failure": "pre_execution_resource_failure",
-                                 "coalesced_upload": "coalesced_upload_ineligible"},
-        },
         "stream_ordered": True,
         "section_coordinates": "zero-based physical offsets, exclusive upper bounds",
         "host_storage": "borrowed stable contiguous whole arrays",
         "concurrent_access": "separate contexts with nonconflicting host storage",
         "rectangle_limit": 128,
         "intersection_limit": 8192,
-        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget", "pinned_section_transfers", "context_scratch_leases"],
+        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget", "context_scratch_leases"],
     }
     return outputs, manifest

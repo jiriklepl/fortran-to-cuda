@@ -4,20 +4,18 @@ import ctypes as c
 
 import pytest
 
-from compiler.emission.common.resources import read_scoped_runtime
-from compiler.tests.test_scoped_pinned_runtime import configured, pinned, stats  # noqa: F401
-from compiler.tests.test_scoped_runtime import TOKEN, access, runtime  # noqa: F401
+from compiler.tests.test_scoped_runtime import TOKEN, Scope, access, runtime  # noqa: F401
 from compiler.tests.test_scoped_scratch import ScratchStats
 
 
 @pytest.mark.native
 @pytest.mark.parametrize('exact_budget', [False, True])
-def test_sparse_faces_preserve_host_interior_and_readonly_mirrors(pinned, exact_budget):
+def test_sparse_faces_preserve_host_interior_and_readonly_mirrors(runtime, exact_budget):
     x, y, z = 134, 70, 70
     count = x * y * z
-    scope = configured(pinned, 0)
+    scope = Scope(runtime)
     if exact_budget:
-        scope.check(pinned.fort_scope_set_device_budget(scope.handle, count * 8))
+        scope.check(runtime.fort_scope_set_device_budget(scope.handle, count * 8))
     host = (c.c_double * count)(*([-7.0] * count))
     status, buffer = scope.register(host, [x, y, z], lower=[-10, 2, -100])
     scope.check(status)
@@ -55,30 +53,8 @@ def test_sparse_faces_preserve_host_interior_and_readonly_mirrors(pinned, exact_
         scope.gpu_end(buffer)
     final = scope.stats()
     assert (final.uploads, final.downloads, final.allocations) == (mirrored.uploads, mirrored.downloads, 1)
-    transport = stats(scope)
-    assert (transport.requested_mode, transport.effective_mode) == (0, 0)
-    assert transport.staging_allocations == transport.packed_bytes == transport.unpacked_bytes == 0
-    assert transport.tiles == transport.events == transport.event_waits == 0
-    pinned.fort_scope_scratch_stats_get_v1.argtypes = [TOKEN, c.POINTER(ScratchStats)]
+    runtime.fort_scope_scratch_stats_get_v1.argtypes = [TOKEN, c.POINTER(ScratchStats)]
     scratch = ScratchStats()
-    scope.check(pinned.fort_scope_scratch_stats_get_v1(scope.handle, c.byref(scratch)))
+    scope.check(runtime.fort_scope_scratch_stats_get_v1(scope.handle, c.byref(scratch)))
     assert scratch.capacity_bytes == scratch.allocations == scratch.reuses == 0
     scope.close()
-
-
-def test_published_runtime_keeps_direct_default_and_explicit_compact_calibration():
-    files, manifest = read_scoped_runtime()
-    assert 'scoped_copy.hpp' not in files
-    assert 'scoped_copy.hpp' not in manifest['headers']
-    assert 'compact_transport' not in manifest
-    assert all(name in files for name in manifest['headers'])
-    assert manifest['scope_transfers']['default'] == 'direct'
-    physical = manifest['scope_transfers']['physical_copies']
-    assert physical['abi_version'] == 3
-    assert physical['configure'] == 'fort_scope_set_copy_costs_v3'
-    assert physical['configure'] in files['scoped_runtime.h']
-    assert {'section_batch.hpp', 'section_batch_cost.hpp'} <= set(manifest['headers'])
-    # The independently requested alternatives and shared storage APIs remain.
-    assert 'FORT_SCOPE_TRANSFERS_COALESCED' in files['scoped_runtime.cu']
-    assert 'fort_scope_scratch_acquire_v1' in files['scoped_runtime.h']
-    assert 'fort_staging::Role::Staging' in files['scoped_runtime.cu']

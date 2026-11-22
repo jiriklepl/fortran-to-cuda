@@ -12,7 +12,6 @@ class CompilerOptions:
     tile_sizes: tuple[int, ...] = ()
     fallback: str = "error"
     indexing: str | None = None
-    scope_transfers: str = "direct"
     # Arrays whose subscript tuple the caller checks, before the entry runs, to
     # address a different element in every iteration of each nest that uses it.
     injective_arrays: tuple[str, ...] = ()
@@ -28,8 +27,6 @@ class CompilerOptions:
             raise CompilationError("fallback must be error or host")
         if self.indexing not in (None, "source", "auto"):
             raise CompilationError("indexing must be source or auto")
-        if self.scope_transfers not in {"direct", "pinned", "auto", "coalesced"}:
-            raise CompilationError("scope transfers must be direct, pinned, auto, or coalesced")
         if any(not isinstance(name, str) or not name for name in self.injective_arrays):
             raise CompilationError("injective arrays are named by their entry arguments")
 

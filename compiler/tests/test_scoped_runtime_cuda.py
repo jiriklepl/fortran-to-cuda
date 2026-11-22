@@ -67,7 +67,6 @@ extern "C" int consumer(fort_scope_t context, fort_buffer_t a, fort_buffer_t b, 
 
 MAIN = r'''
 #include "scoped_runtime.h"
-#include "staging.hpp"
 #include "scoped_cuda_resources.hpp"
 #include <cuda_runtime.h>
 #include <cassert>
@@ -92,82 +91,6 @@ __global__ void stencil_union(double *array) {
     // The ten shifted source rectangles form this cross; every cell executes
     // once, including cells appearing in several original read rectangles.
     if (i<6 && ((j<6 && k>=1 && k<4) || (j>=1 && j<5 && k<5))) array[n]+=1000;
-}
-__global__ void dense_union(double *array, bool gap_only) {
-    const int n=blockIdx.x*blockDim.x+threadIdx.x;
-    if (n>=17*8) return;
-    if (gap_only) {
-        if (n==16) array[n]=999;
-    } else if (n%17<16 || n/17>=4) array[n]+=1000;
-}
-void coalesced_upload(bool stale_gap) {
-    double host[17*8]; // Addresses and identities deliberately repeat.
-    for (int invocation=0;invocation<2;++invocation) {
-        for (int n=0;n<17*8;++n) host[n]=100*invocation+n+1;
-        size_t extents[2]={17,8}; int64_t bounds[2]={-4-3*invocation,-9-2*invocation};
-        fort_scope_layout layout{2,FORT_SCOPE_REAL64,8,host,extents,bounds,1};
-        fort_scope_t context=0; fort_buffer_t buffer=0;
-        check(fort_scope_create(0,&context));
-        check(fort_scope_set_transfers(context,FORT_SCOPE_TRANSFERS_COALESCED));
-        check(fort_scope_register(context,1,1,&layout,1,&buffer));
-        size_t gap_lo[2]={16,0}, gap_hi[2]={17,1};
-        fort_scope_section gap{gap_lo,gap_hi};
-        void *pointer=nullptr,*stream=nullptr; int previous=0;
-        if (stale_gap) {
-            fort_scope_access overwrite{};
-            overwrite.write_count=overwrite.overwrite_count=1;
-            overwrite.writes=overwrite.overwrites=&gap;
-            check(fort_scope_device_begin(context,buffer,&overwrite,&pointer));
-            check(fort_scope_gpu_enter(context,&previous,&stream));
-            dense_union<<<2,128,0,static_cast<cudaStream_t>(stream)>>>(static_cast<double *>(pointer),true);
-            assert(cudaGetLastError()==cudaSuccess);
-            check(fort_scope_note_launch(context));
-            check(fort_scope_device_end(context,buffer));
-            check(fort_scope_gpu_leave(context,previous));
-        }
-        size_t lower[2][2]={{0,0},{0,4}}, upper[2][2]={{16,4},{17,8}};
-        fort_scope_section sections[2]={{lower[0],upper[0]},{lower[1],upper[1]}};
-        fort_scope_access work{};
-        work.read_count=work.write_count=2; work.reads=work.writes=sections;
-        check(fort_scope_device_begin(context,buffer,&work,&pointer));
-        fort_scope_stats stats{}; check(fort_scope_stats_get(context,&stats));
-        assert(stats.allocations==1 && stats.downloads==0);
-        assert(stats.uploads==(stale_gap?2:1));
-        assert(stats.upload_bytes==(stale_gap?132:136)*sizeof(double));
-        fort_scope_transfer_stats detail{}; check(fort_scope_transfer_stats_get_v1(context,&detail));
-        assert(detail.requested_mode==FORT_SCOPE_TRANSFERS_COALESCED);
-        assert(detail.effective_mode==(stale_gap?FORT_SCOPE_TRANSFERS_DIRECT:FORT_SCOPE_TRANSFERS_COALESCED));
-        assert(detail.fallback_reason==(stale_gap?FORT_SCOPE_TRANSFER_COALESCED_INELIGIBLE:FORT_SCOPE_TRANSFER_NONE));
-        check(fort_scope_gpu_enter(context,&previous,&stream));
-        dense_union<<<2,128,0,static_cast<cudaStream_t>(stream)>>>(static_cast<double *>(pointer),false);
-        assert(cudaGetLastError()==cudaSuccess);
-        check(fort_scope_note_launch(context));
-        check(fort_scope_device_end(context,buffer));
-        check(fort_scope_gpu_leave(context,previous));
-        if (!stale_gap) {
-            // The coalesced physical copy included this gap, but cannot grant
-            // logical freshness to bytes outside the original requested union.
-            fort_scope_access read_gap{}; read_gap.read_count=1; read_gap.reads=&gap;
-            check(fort_scope_device_begin(context,buffer,&read_gap,&pointer));
-            check(fort_scope_stats_get(context,&stats));
-            assert(stats.uploads==2 && stats.upload_bytes==137*sizeof(double));
-            check(fort_scope_device_end(context,buffer));
-        }
-        fort_scope_access read_all{}; read_all.flags=FORT_SCOPE_READ_ALL;
-        check(fort_scope_host_begin(context,buffer,&read_all));
-        check(fort_scope_host_end(context,buffer));
-        check(fort_scope_stats_get(context,&stats));
-        assert(stats.download_bytes==(stale_gap?133:132)*sizeof(double));
-        assert(stats.launches==(stale_gap?2:1));
-        for (int n=0;n<17*8;++n) {
-            const bool touched=n%17<16 || n/17>=4;
-            const double expected=stale_gap && n==16 ? 999 : 100*invocation+n+1+(touched?1000:0);
-            assert(host[n]==expected); // Complete array, including every gap.
-        }
-        check(fort_scope_close(context));
-        std::printf("coalesced %s invocation=%d: complete array and negative bounds correct\n",
-                    stale_gap?"stale gap":"dense upload",invocation);
-    }
 }
 __global__ void source_read_update(double *array, int first, int last, double increment) {
     const int index=threadIdx.x;
@@ -407,58 +330,9 @@ void coalesced_stencil() {
     for (int n=0;n<8*7*6;++n) assert(host[n]==n+(touched[n]?1000:0));
     std::puts("coalesced stencil: exact coverage; negative bounds; undefined corners; three copies each");
 }
-void pinned_control(const char *mode) {
-    fort_staging::Result occupied;
-    const bool budget = !std::strcmp(mode,"pinned-budget");
-    const bool failed_record = !std::strcmp(mode,"pinned-record");
-    if (budget) {
-        occupied = fort_staging::acquire(fort_staging::pinned_limit/2,fort_staging::Role::Compact,false);
-        assert(occupied.slots && occupied.status==cudaSuccess);
-    }
-    double a[8], b[8]={};
-    for (int i=0;i<8;++i) a[i]=i+1;
-    fort_scope_t context=0; fort_buffer_t ha=0,hb=0;
-    check(fort_scope_create(0,&context));
-    check(fort_scope_set_transfers(context,FORT_SCOPE_TRANSFERS_PINNED));
-    size_t shape[1]={8}; int64_t bounds[1]={-7};
-    fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,a,shape,bounds,1};
-    check(fort_scope_register(context,1,1,&layout,1,&ha));
-    layout.host=b; check(fort_scope_register(context,2,1,&layout,0,&hb));
-    check(producer(context,ha,hb));
-    if (!budget) setenv(failed_record?"FORT_SCOPE_TEST_FAIL_STAGING_RECORD":"FORT_SCOPE_TEST_FAIL_STAGING_ALLOC","1",1);
-    fort_scope_access read{}; read.flags=FORT_SCOPE_READ_ALL;
-    const auto status=fort_scope_host_begin(context,hb,&read);
-    if (failed_record) {
-        assert(status==FORT_SCOPE_EXECUTION);
-        assert(fort_scope_host_begin(context,hb,&read)==FORT_SCOPE_EXECUTION);
-        assert(fort_scope_close(context)==FORT_SCOPE_EXECUTION);
-        check(fort_scope_abandon(context));
-        for (double value:b) assert(value==0); // No unpack and no numerical replay.
-        assert(fort_staging::usage().reserved==0); // Unrecorded slot stream was drained.
-    } else {
-        check(status); check(fort_scope_host_end(context,hb));
-        for (int i=0;i<8;++i) assert(b[i]==2*a[i]);
-        fort_scope_stats legacy{}; check(fort_scope_stats_get(context,&legacy));
-        assert(legacy.launches==1 && legacy.allocations==2 && legacy.download_bytes==64);
-        fort_scope_transfer_stats detail{}; check(fort_scope_transfer_stats_get_v1(context,&detail));
-        assert(detail.staging_device_bytes==0 && detail.pinned_download_bytes==0);
-        assert(detail.fallback_reason==(budget?FORT_SCOPE_TRANSFER_BUDGET:FORT_SCOPE_TRANSFER_ALLOCATION));
-        if(budget) assert(detail.process_reserved_bytes==fort_staging::pinned_limit && detail.fallbacks==2);
-        else assert(detail.pinned_upload_bytes==64 && detail.fallbacks==1);
-        check(fort_scope_close(context));
-    }
-    unsetenv("FORT_SCOPE_TEST_FAIL_STAGING_ALLOC"); unsetenv("FORT_SCOPE_TEST_FAIL_STAGING_RECORD");
-    size_t freed=0;
-    assert(fort_staging::release(std::move(occupied.slots),freed)==cudaSuccess);
-    assert(fort_staging::trim_cache(freed)==cudaSuccess);
-    assert(fort_staging::usage().reserved==0);
-    std::puts("pinned resource/event control: safe; launch executed once");
-}
 int main(int argc,char **argv) {
-    if (argc>1 && (!std::strcmp(argv[1],"lazy") || !std::strcmp(argv[1],"lazy-pinned") || !std::strcmp(argv[1],"lazy-coalesced"))) {
+    if (argc>1 && !std::strcmp(argv[1],"lazy")) {
         fort_scope_t context=0; check(fort_scope_create(0,&context));
-        if(!std::strcmp(argv[1],"lazy-pinned")) check(fort_scope_set_transfers(context,FORT_SCOPE_TRANSFERS_PINNED));
-        if(!std::strcmp(argv[1],"lazy-coalesced")) check(fort_scope_set_transfers(context,FORT_SCOPE_TRANSFERS_COALESCED));
         double a[8]={}; size_t shape[1]={8}; int64_t bounds[1]={0};
         fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,a,shape,bounds,1}; fort_buffer_t buffer=0;
         check(fort_scope_register(context,1,1,&layout,1,&buffer));
@@ -472,8 +346,6 @@ int main(int argc,char **argv) {
         assert(!empty_pointer); check(fort_scope_device_end(context,empty_buffer));
         fort_scope_stats stats{}; check(fort_scope_stats_get(context,&stats));
         assert(stats.allocations==0 && stats.uploads==0 && stats.downloads==0 && stats.waits==0);
-        fort_scope_transfer_stats detail{}; check(fort_scope_transfer_stats_get_v1(context,&detail));
-        assert(detail.pinned_uploads==0 && detail.pinned_downloads==0 && detail.staging_allocations==0);
         check(fort_scope_close(context)); std::puts("native-only scope: no CUDA initialization"); return 0;
     }
     int count=0;
@@ -481,14 +353,11 @@ int main(int argc,char **argv) {
         std::fprintf(stderr,"CUDA device unavailable\n"); return 77;
     }
     if (argc>1 && !std::strcmp(argv[1],"probe")) return 0;
-    if (argc>1 && !std::strncmp(argv[1],"pinned-",7)) { pinned_control(argv[1]); return 0; }
     if (argc>1 && (!std::strcmp(argv[1],"close-publication") || !std::strcmp(argv[1],"publish-boundary")))
         close_publication(!std::strcmp(argv[1],"publish-boundary"));
     else if (argc>1 && !std::strcmp(argv[1],"invocation-reuse")) invocation_reuse();
     else if (argc>1 && !std::strcmp(argv[1],"source-reads")) source_reads();
     else if (argc>1 && !std::strcmp(argv[1],"coalesced-stencil")) coalesced_stencil();
-    else if (argc>1 && !std::strcmp(argv[1],"dense-upload")) coalesced_upload(false);
-    else if (argc>1 && !std::strcmp(argv[1],"stale-gap")) coalesced_upload(true);
     else if (argc>1 && !std::strcmp(argv[1],"sections")) sections(); else chain();
 }
 '''
@@ -523,7 +392,7 @@ def cuda_runtime_executable(tmp_path_factory):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("mode", ["chain", "sections", "coalesced-stencil", "invocation-reuse", "source-reads", "lazy", "pinned-budget", "pinned-allocation", "pinned-record"])
+@pytest.mark.parametrize("mode", ["chain", "sections", "coalesced-stencil", "invocation-reuse", "source-reads", "lazy"])
 def test_scoped_cuda_public_consumers(cuda_runtime_executable, mode):
     result = subprocess.run([str(cuda_runtime_executable), mode], capture_output=True, text=True, timeout=30)
     if result.returncode == 77:
@@ -532,11 +401,10 @@ def test_scoped_cuda_public_consumers(cuda_runtime_executable, mode):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("mode", ["lazy", "lazy-pinned", "lazy-coalesced"])
-def test_native_only_and_empty_scope_with_cuda_devices_hidden(cuda_runtime_executable, mode):
+def test_native_only_and_empty_scope_with_cuda_devices_hidden(cuda_runtime_executable):
     import os
 
-    result = subprocess.run([str(cuda_runtime_executable), mode], capture_output=True, text=True,
+    result = subprocess.run([str(cuda_runtime_executable), "lazy"], capture_output=True, text=True,
                             env={**os.environ, "CUDA_VISIBLE_DEVICES": "", "FORT_RUNTIME_TRACE": "1"}, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "initialize" not in result.stderr
@@ -565,31 +433,3 @@ def test_close_combines_stream_ordered_retirement_without_delaying_host_boundary
     assert completion["stream_waits"] == expected-boundary_waits
     assert len(re.findall(r"^FORT_SCOPED wait ", result.stderr, re.MULTILINE)) == expected
     assert len(re.findall(r"^FORT_SCOPED download ", result.stderr, re.MULTILINE)) == 2
-
-
-@pytest.mark.cuda
-@pytest.mark.parametrize("mode", ["dense-upload", "stale-gap"])
-def test_coalesced_upload_respects_logical_coverage_and_source_freshness(cuda_runtime_executable, mode):
-    import os
-    import re
-
-    result = subprocess.run(
-        [str(cuda_runtime_executable), mode],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "FORT_RUNTIME_TRACE": "1"},
-        timeout=30,
-    )
-    if result.returncode == 77:
-        pytest.skip(result.stderr.strip())
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.count("complete array and negative bounds correct") == 2
-    uploads = [int(value) for value in re.findall(r"^FORT_SCOPED upload .*? bytes=(\d+)", result.stderr, re.MULTILINE)]
-    if mode == "dense-upload":
-        assert uploads == [136 * 8, 8, 136 * 8, 8]
-        assert len(re.findall(r"^FORT_SCOPED upload_coalesced .*? bytes=1088\b", result.stderr, re.MULTILINE)) == 2
-        assert len(re.findall(r"^FORT_SCOPED upload_requested .*? bytes=1056\b", result.stderr, re.MULTILINE)) == 2
-    else:
-        assert len(uploads) == 4
-        assert sum(uploads) == 2 * 132 * 8
-        assert "upload_coalesced" not in result.stderr

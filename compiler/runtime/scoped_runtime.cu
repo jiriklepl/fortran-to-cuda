@@ -2,7 +2,6 @@
  * -DFORT_SCOPE_CPU_TEST for the isolated coherence reference backend. */
 #include "scoped_runtime.h"
 #include "section_copy.hpp"
-#include "section_batch_cost.hpp"
 #include "scoped_regions.hpp"
 #include "scoped_graphs.hpp"
 #include "floating_environment.hpp"
@@ -31,7 +30,6 @@
 #endif
 #ifndef FORT_SCOPE_CPU_TEST
 #include <cuda_runtime.h>
-#include "staging.hpp"
 #include "scoped_cuda_resources.hpp"
 #endif
 
@@ -129,7 +127,6 @@ bool trace_allocation_allowed(const char *stage) noexcept {
 // An execution context borrows this state.
 struct Residency {
     explicit Residency(int ordinal) : device(ordinal) {
-        transfer_stats.version = FORT_SCOPE_TRANSFER_ABI_VERSION;
         scratch_stats.version = FORT_SCOPE_SCRATCH_ABI_VERSION;
         completion_stats.version = FORT_SCOPE_COMPLETION_ABI_VERSION;
         residency_stats.version = FORT_SCOPE_RESIDENCY_ABI_VERSION;
@@ -139,7 +136,7 @@ struct Residency {
     uint64_t last_context = 0;
     fort_scope_trace_state_v1 last_provenance{};
     bool ready = false, pending = false, poisoned = false, retired = false;
-    bool copy_completion_priced = false, budget_warned = false;
+    bool budget_warned = false;
     size_t device_budget = std::numeric_limits<size_t>::max();
     std::mutex mutex;
     std::unordered_map<fort_buffer_t, std::unique_ptr<Buffer>> buffers;
@@ -149,9 +146,6 @@ struct Residency {
     size_t scratch_capacity = 0;
     uint64_t scratch_token = 0;
     fort_scope_scratch_stats_v1 scratch_stats{};
-    fort_scope_transfer_stats transfer_stats{};
-    // Physical transport remains necessary after the last execution detaches.
-    std::optional<fort_physical::compact::Pricing> copy_costs;
     fort_scope_completion_stats_v1 completion_stats{};
     fort_scope_residency_stats_v1 residency_stats{};
     uint64_t residency_clock = 0;
@@ -160,10 +154,6 @@ struct Residency {
     std::weak_ptr<Completion> tail_completion;
     std::unordered_map<uint64_t, size_t> workspaces;
     size_t workspace_bytes = 0;
-#ifdef FORT_SCOPE_CPU_TEST
-    size_t compact_reference_capacity = 0;
-    fort_physical::compact::startup::State compact_reference_startup;
-#endif
 #ifndef FORT_SCOPE_CPU_TEST
     std::vector<cudaEvent_t> completion_events, available_completion_events;
     cudaStream_t stream = nullptr;
@@ -178,11 +168,10 @@ struct Context {
           device_budget(residency->device_budget), mutex(residency->mutex), buffers(residency->buffers),
           identities(residency->identities), stats(residency->stats), scratch(residency->scratch),
           scratch_capacity(residency->scratch_capacity), scratch_token(residency->scratch_token),
-          scratch_stats(residency->scratch_stats), transfer_stats(residency->transfer_stats),
+          scratch_stats(residency->scratch_stats),
           completion_stats(residency->completion_stats), residency_stats(residency->residency_stats),
           residency_clock(residency->residency_clock), unfenced_upload_buffers(residency->unfenced_upload_buffers),
-          completions(residency->completions), tail_completion(residency->tail_completion),
-          copy_costs(residency->copy_costs)
+          completions(residency->completions), tail_completion(residency->tail_completion)
 #ifndef FORT_SCOPE_CPU_TEST
           , completion_events(residency->completion_events), available_completion_events(residency->available_completion_events),
           stream(residency->stream), pool(residency->pool)
@@ -215,7 +204,6 @@ struct Context {
     size_t &scratch_capacity;
     uint64_t &scratch_token;
     fort_scope_scratch_stats_v1 &scratch_stats;
-    fort_scope_transfer_stats &transfer_stats;
     fort_scope_graph_stats_v1 graph_stats{};
     fort_scope_completion_stats_v1 &completion_stats;
     fort_scope_graph_queue_stats_v1 queue_stats{};
@@ -241,7 +229,6 @@ struct Context {
     std::vector<Buffer *> &unfenced_upload_buffers;
     std::deque<std::shared_ptr<Completion>> &completions;
     std::weak_ptr<Completion> &tail_completion;
-    std::optional<fort_physical::compact::Pricing> &copy_costs;
 #ifndef FORT_SCOPE_CPU_TEST
     fort_scoped::graphs::Cache graphs;
     std::vector<cudaEvent_t> &completion_events, &available_completion_events;
@@ -428,13 +415,12 @@ void initialize(Context &c) {
     trace(c, "initialize");
 }
 void mark_context_pending(Context &c) noexcept {
-    c.residency->copy_completion_priced=false;
     c.pending = true;
     c.tail_completion.reset();
 }
 void complete_through(Context &c, std::shared_ptr<Completion> target) noexcept {
     if (c.tail_completion.lock() == target) {
-        c.pending = false;c.residency->copy_completion_priced=false;c.tail_completion.reset();
+        c.pending = false;c.tail_completion.reset();
     }
     while (!c.completions.empty()) {
         auto completion = c.completions.front();
@@ -452,7 +438,6 @@ void complete_through(Context &c, std::shared_ptr<Completion> target) noexcept {
     }
 }
 void complete_all(Context &c) noexcept {
-    c.residency->copy_completion_priced=false;
     if (!c.completions.empty()) complete_through(c,c.completions.back());
     for (auto *b : c.unfenced_upload_buffers) b->unfenced_uploads.clear();
     c.unfenced_upload_buffers.clear();
@@ -678,57 +663,6 @@ void grow_scratch(Context &c, size_t bytes) {
     payload_peak(c);
     trace(c, "scratch_allocate", nullptr, bytes);
 }
-const char *transfer_reason(uint32_t reason) noexcept {
-    switch (reason) {
-        case FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE: return "transfer_estimates_unavailable";
-        case FORT_SCOPE_TRANSFER_PIPELINED_UNAVAILABLE: return "pipelined_not_available";
-        case FORT_SCOPE_TRANSFER_BUDGET: return "pinned_budget_exhausted";
-        case FORT_SCOPE_TRANSFER_ALLOCATION: return "pinned_allocation_failed";
-        case FORT_SCOPE_TRANSFER_COALESCED_INELIGIBLE: return "coalesced_upload_ineligible";
-        default: return "none";
-    }
-}
-void transfer_fallback(Context &c, uint32_t reason) noexcept {
-    c.transfer_stats.effective_mode = FORT_SCOPE_TRANSFERS_DIRECT;
-    c.transfer_stats.fallback_reason = reason;
-    ++c.transfer_stats.fallbacks;
-}
-fort_scope_transfer_stats transfer_statistics(const Context &c) {
-    auto result = c.transfer_stats;
-#ifndef FORT_SCOPE_CPU_TEST
-    const auto usage = fort_staging::usage();
-    result.process_reserved_bytes = usage.reserved;
-    result.process_peak_bytes = usage.peak;
-#endif
-    return result;
-}
-void transfer_statistics_trace(const Context &c, fort_scope_t handle) noexcept {
-    const auto *enabled = std::getenv("FORT_RUNTIME_TRACE");
-    if (c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_DIRECT || !enabled || std::strcmp(enabled, "1")) return;
-    try {
-        const auto stats = transfer_statistics(c);
-        std::lock_guard<std::mutex> lock(trace_mutex);
-        std::cerr << std::setprecision(17) << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << handle << DomainJson{c}
-                  << ",\"event\":\"transfer_statistics\",\"stats_version\":" << stats.version
-                  << ",\"complete\":true,\"requested_mode\":" << stats.requested_mode
-                  << ",\"effective_mode\":" << stats.effective_mode
-                  << ",\"fallback_reason\":" << stats.fallback_reason
-                  << ",\"reason\":\"" << transfer_reason(stats.fallback_reason) << "\"";
-        for (const auto &[key, value] : {
-            std::pair{"fallbacks", stats.fallbacks}, {"pinned_uploads", stats.pinned_uploads},
-            {"pinned_downloads", stats.pinned_downloads}, {"pinned_upload_bytes", stats.pinned_upload_bytes},
-            {"pinned_download_bytes", stats.pinned_download_bytes}, {"packed_bytes", stats.packed_bytes},
-            {"unpacked_bytes", stats.unpacked_bytes}, {"tiles", stats.tiles}, {"events", stats.events},
-            {"event_waits", stats.event_waits}, {"staging_allocations", stats.staging_allocations},
-            {"staging_reuses", stats.staging_reuses}, {"slot_capacity", stats.slot_capacity},
-            {"staging_device_bytes", stats.staging_device_bytes},
-            {"process_reserved_bytes", stats.process_reserved_bytes}, {"process_peak_bytes", stats.process_peak_bytes}})
-            std::cerr << ",\"" << key << "\":" << value;
-        std::cerr << ",\"packing_seconds\":" << stats.packing_seconds
-                  << ",\"unpacking_seconds\":" << stats.unpacking_seconds
-                  << ",\"event_wait_seconds\":" << stats.event_wait_seconds << "}\n";
-    } catch (...) {} // Reporting cannot change numerical success.
-}
 void graph_statistics_trace(const Context &c, bool complete) noexcept {
     if (!trace_enabled() || (!c.graph_stats.creations && !c.queue_stats.direct_kernels)) return;
     try {
@@ -800,139 +734,11 @@ void residency_statistics_trace(const Context &c,bool complete) noexcept {
         std::cerr << "}\n";
     } catch (...) {}
 }
-size_t staging_capacity(size_t bytes) noexcept {
-    for (const size_t candidate : {256ULL*1024, 1024ULL*1024, 4ULL*1024*1024, 16ULL*1024*1024})
-        if (bytes <= candidate) return candidate;
-    return 16ULL*1024*1024;
-}
-void pack_tile(unsigned char *packed, char *host, const fort_physical::CopyOperation &op, bool unpack) {
-    const size_t slice = op.pitch*op.physical_height;
-    for (size_t z=0; z<op.depth; ++z)
-        for (size_t y=0; y<op.height; ++y) {
-            auto *original = host+op.offset+z*slice+y*op.pitch;
-            auto *compact = packed+(z*op.height+y)*op.width;
-            if (unpack) std::memcpy(original, compact, op.width);
-            else std::memcpy(compact, original, op.width);
-        }
-}
-bool copy_pinned(Context &c, Buffer &b, const fort_physical::CopyPlan &plan, bool upload) {
-    // Full-layout allocations and all prior writers belong to c.stream.
-    // The synchronous control establishes that ordering before slot streams.
-    wait(c);
-    const auto capacity = staging_capacity(plan.bytes);
-#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
-    if (std::getenv("FORT_SCOPE_TEST_FAIL_STAGING_ALLOC")) {
-        transfer_fallback(c, FORT_SCOPE_TRANSFER_ALLOCATION); return false;
-    }
-#endif
-#ifdef FORT_SCOPE_CPU_TEST
-    std::array<std::vector<unsigned char>, 2> storage;
-    try { for (auto &slot : storage) slot.resize(capacity); }
-    catch (const std::bad_alloc &) { transfer_fallback(c, FORT_SCOPE_TRANSFER_ALLOCATION); return false; }
-    auto *packed = storage[0].data();
-    ++c.transfer_stats.staging_allocations; ++c.transfer_stats.staging_allocations;
-    c.transfer_stats.slot_capacity = capacity;
-#else
-    DeviceGuard guard(c);
-    auto lease = fort_staging::acquire(capacity, fort_staging::Role::Staging, false);
-    if (lease.exhausted) { transfer_fallback(c, FORT_SCOPE_TRANSFER_BUDGET); return false; }
-    if (lease.status != cudaSuccess) {
-        try { cuda_check(c, lease.status, true); }
-        catch (const Error &error) {
-            if (error.status != FORT_SCOPE_RESOURCE) throw;
-            transfer_fallback(c, FORT_SCOPE_TRANSFER_ALLOCATION); return false;
-        }
-    }
-    require(lease.slots != nullptr, FORT_SCOPE_STATE, "missing scoped staging lease");
-    auto &slot = lease.slots->slots[0];
-    auto *packed = slot.host;
-    c.transfer_stats.staging_allocations += lease.reused ? 0 : 2;
-    c.transfer_stats.staging_reuses += lease.reused ? 1 : 0;
-    c.transfer_stats.slot_capacity = lease.slots->capacity;
-#endif
-    auto *host = static_cast<char *>(b.host), *device = static_cast<char *>(b.device);
-    auto &stats = c.transfer_stats;
-    stats.effective_mode = FORT_SCOPE_TRANSFERS_PINNED;
-    plan.visit([&](const fort_physical::CopyOperation &operation) {
-        return fort_physical::visit_tiles(operation, stats.slot_capacity, [&](const fort_physical::CopyOperation &op) {
-            const size_t bytes = op.width*op.height*op.depth;
-            if (upload) {
-                const auto started = std::chrono::steady_clock::now();
-                pack_tile(packed, host, op, false);
-                stats.packing_seconds += std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
-                stats.packed_bytes += bytes;
-            }
-#ifdef FORT_SCOPE_CPU_TEST
-            pack_tile(packed, device, op, upload);
-#else
-            const auto direction = upload ? cudaMemcpyHostToDevice : cudaMemcpyDeviceToHost;
-            auto *to = upload ? device+op.offset : reinterpret_cast<char *>(packed);
-            const auto *from = upload ? reinterpret_cast<const char *>(packed) : device+op.offset;
-            const auto to_pitch = upload ? op.pitch : op.width;
-            const auto from_pitch = upload ? op.width : op.pitch;
-            if (op.depth == 1) {
-                if (op.height == 1)
-                    cuda_check(c, cudaMemcpyAsync(to, from, op.width, direction, slot.stream));
-                else cuda_check(c, cudaMemcpy2DAsync(to, to_pitch, from, from_pitch, op.width, op.height, direction, slot.stream));
-            } else {
-                cudaMemcpy3DParms parameters{};
-                parameters.srcPtr = make_cudaPitchedPtr(const_cast<char *>(from), from_pitch, from_pitch,
-                                                       upload ? op.height : op.physical_height);
-                parameters.dstPtr = make_cudaPitchedPtr(to, to_pitch, to_pitch,
-                                                       upload ? op.physical_height : op.height);
-                parameters.extent = make_cudaExtent(op.width, op.height, op.depth);
-                parameters.kind = direction;
-                cuda_check(c, cudaMemcpy3DAsync(&parameters, slot.stream));
-            }
-            slot.pending = true;
-#endif
-            ++stats.tiles;
-            if (upload) { ++c.stats.uploads; c.stats.upload_bytes += bytes; ++stats.pinned_uploads; stats.pinned_upload_bytes += bytes; }
-            else { ++c.stats.downloads; c.stats.download_bytes += bytes; ++stats.pinned_downloads; stats.pinned_download_bytes += bytes; }
-            const auto started = std::chrono::steady_clock::now();
-#ifdef FORT_SCOPE_CPU_TEST
-            if (std::getenv("FORT_SCOPE_TEST_FAIL_STAGING_EVENT")) {
-                c.poisoned = true;
-                throw Error(FORT_SCOPE_EXECUTION, "injected staging completion failure; unsafe replay prohibited");
-            }
-#else
-#ifdef FORT_SCOPE_TEST_FAULTS
-            if (std::getenv("FORT_SCOPE_TEST_FAIL_STAGING_RECORD")) {
-                c.poisoned = true;
-                throw Error(FORT_SCOPE_EXECUTION, "injected staging event-record failure; unsafe replay prohibited");
-            }
-#endif
-            cuda_check(c, cudaEventRecord(slot.complete, slot.stream));
-#endif
-            ++stats.events;
-#ifndef FORT_SCOPE_CPU_TEST
-            cuda_check(c, cudaEventSynchronize(slot.complete));
-            slot.pending = false;
-#endif
-            ++stats.event_waits;
-            stats.event_wait_seconds += std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
-            if (!upload) {
-                const auto started = std::chrono::steady_clock::now();
-                pack_tile(packed, host, op, true);
-                stats.unpacking_seconds += std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
-                stats.unpacked_bytes += bytes;
-            }
-            return true;
-        });
-    });
-#ifndef FORT_SCOPE_CPU_TEST
-    size_t freed = 0;
-    cuda_check(c, fort_staging::release(std::move(lease.slots), freed));
-#endif
-    trace(c, upload ? "upload" : "download", &b, plan.bytes);
-    return true;
-}
 void copy(Context &c, Buffer &b, const Box &box, bool upload) {
     const fort_physical::CopyPlan plan(b.element_bytes, b.extents, box.lo, box.hi);
     require(plan.valid, FORT_SCOPE_ARGUMENT, "invalid physical transfer layout");
     if (!plan.bytes) return;
     allocate(c, b);
-    if (c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_PINNED && copy_pinned(c, b, plan, upload)) return;
     if (upload) note_upload_reader(c,b,box);
     auto *host = static_cast<char *>(b.host), *device = static_cast<char *>(b.device);
 #ifndef FORT_SCOPE_CPU_TEST
@@ -972,349 +778,16 @@ void copy(Context &c, Buffer &b, const Box &box, bool upload) {
     mark_context_pending(c);
     trace(c, upload ? "upload" : "download", &b, plan.bytes);
 }
-void compact_trace(const Context &c,const Buffer &b,const fort_physical::compact::Plan &plan,
-                   const fort_physical::compact::Price &price,bool upload,size_t boxes,bool reused) noexcept {
-    if(!trace_enabled())return;
-    try {
-        std::lock_guard<std::mutex> lock(trace_mutex);
-        std::cerr<<"FORT_SCOPED evidence {\"schema_version\":1,\"context\":"<<c.handle<<DomainJson{c}
-                 <<",\"event\":\"compact_transfer\",\"version\":1,\"buffer\":"<<b.handle
-                 <<",\"identity\":"<<b.identity<<",\"generation\":"<<b.generation
-                 <<",\"upload\":"<<(upload?"true":"false")<<",\"bytes\":"<<plan.bytes
-                 <<",\"logical_rectangles\":"<<boxes<<",\"physical_operations\":"<<price.operations
-                 <<",\"dma_calls\":1,\"copy_kernel_launches\":"<<price.chunks
-                 <<",\"word_bytes\":"<<plan.word_bytes<<",\"workspace_bytes\":"<<price.workspace_bytes
-                 <<",\"reused\":"<<(reused?"true":"false");
-        const auto &p=c.provenance;
-        for(const auto &[key,value]:{std::pair{"owner",p.owner},{"procedure",p.procedure},{"segment",p.segment},
-                {"operation",p.operation},{"implementation",p.implementation},{"boundary",p.boundary}})
-            std::cerr<<",\""<<key<<"\":\""<<(value[0]?value:"unknown")<<'"';
-        std::cerr<<"}\n";
-    } catch(...) {}
-}
-// Pricing is deliberately separate from completed physical-copy evidence.
-// This row can survive a later wait/submission failure and grants no execution credit.
-void copy_pricing_trace(const Context &c,const Buffer &b,const fort_physical::compact::Plan &plan,
-                        const fort_physical::compact::startup::Decision &decision,
-                        const fort_physical::compact::startup::State &before,
-                        bool upload,bool reused,bool pending) noexcept {
-    if(!trace_enabled())return;
-    try {
-        using namespace fort_physical::compact;
-        const auto &selected=decision.price;
-        const PoolState warm{selected.capacity,selected.workspace_bytes,true,false};
-        const auto reuse=price(plan,c.copy_costs->copy,c.copy_costs->base,upload,pending,warm);
-        const PoolState empty{0,selected.workspace_bytes,false,true};
-        const auto cold=price(plan,c.copy_costs->copy,c.copy_costs->base,upload,pending,empty);
-        // Cold measurements cover the minimal capacity bucket only. In particular,
-        // an oversized compatible reused pair does not price an unmeasured cold allocation.
-        const bool cold_known=cold.compact_available && cold.capacity==selected.capacity;
-        const bool reuse_known=reuse.compact_available;
-        unsigned bucket=0;while(bucket<4 && capacities[bucket]!=selected.capacity)++bucket;
-        std::ostringstream out;out<<std::setprecision(17);
-        out<<"FORT_SCOPED evidence {\"schema_version\":1,\"context\":"<<c.handle<<DomainJson{c}
-           <<",\"event\":\"copy_pricing\",\"version\":1,\"evidence\":\"MODELED\""
-           <<",\"phase\":\"before_submission\",\"confirms_execution\":false"
-           <<",\"buffer\":"<<b.handle<<",\"identity\":"<<b.identity<<",\"generation\":"<<b.generation
-           <<",\"device\":"<<c.device<<",\"upload\":"<<(upload?"true":"false")
-           <<",\"decision\":\""<<(decision.seed?"credit_funded_cold":reused?"reuse":"locally_profitable_cold")
-           <<"\",\"capacity_bytes\":"<<selected.capacity
-           <<",\"direct_seconds\":"<<selected.direct_seconds<<",\"selected_seconds\":"<<selected.compact_seconds;
-        auto optional=[&](const char *name,bool known,double value) {
-            out<<",\""<<name<<"\":";if(known)out<<value;else out<<"null";
-        };
-        optional("cold_seconds",cold_known,cold.compact_seconds);
-        optional("reuse_seconds",reuse_known,reuse.compact_seconds);
-        optional("prior_credit_seconds",!reused&&bucket<4,bucket<4?before.credit[bucket]:0);
-        optional("startup_premium_seconds",cold_known&&reuse_known,std::max(0.,cold.compact_seconds-reuse.compact_seconds));
-        out<<",\"state_revision\":"<<before.revision<<",\"state_generation\":"<<before.generation<<",\"model_key\":[";
-        for(size_t i=0;i<before.model.words.size();++i)out<<(i?",":"")<<before.model.words[i];
-        out<<']';
-        const auto &p=c.provenance;
-        for(const auto &[key,value]:{std::pair{"owner",p.owner},{"procedure",p.procedure},{"segment",p.segment},
-                {"operation",p.operation},{"implementation",p.implementation},{"boundary",p.boundary}})
-            out<<",\""<<key<<"\":\""<<(value[0]?value:"unknown")<<'"';
-        out<<"}\n";
-        std::lock_guard<std::mutex> lock(trace_mutex);std::cerr<<out.str();
-    } catch(...) {}
-}
-struct StartupObservation {
-    fort_physical::compact::startup::State before;
-    fort_physical::compact::startup::Decision decision;
-    bool valid=false,priced=false;
-};
-void forget_copy_startup(Context &c) noexcept {
-    if(!c.copy_costs)return;
-#ifdef FORT_SCOPE_CPU_TEST
-    fort_physical::compact::startup::ownership_changed(c.residency->compact_reference_startup);
-#else
-    fort_staging::forget_startup(fort_physical::compact::startup::key(*c.copy_costs,c.device));
-#endif
-}
-bool copy_compact(Context &c,Buffer &b,const Region &parts,bool upload,StartupObservation &observation) {
-    namespace compact=fort_physical::compact;
-    if(c.transfer_stats.requested_mode!=FORT_SCOPE_TRANSFERS_AUTO || !c.copy_costs ||
-       parts.empty())return false;
-    std::vector<fort_physical::CopyOperation> operations;
-    compact::Plan plan;
-    try {
-        for(const auto &part:parts) {
-            const fort_physical::CopyPlan original(b.element_bytes,b.extents,part.lo,part.hi);
-            require(original.valid,FORT_SCOPE_ARGUMENT,"invalid physical transfer layout");
-            if(!original.visit([&](const auto &op) {
-                if(operations.size()==compact::operation_limit)return false;
-                operations.push_back(op);return true;
-            })) return false;
-        }
-        plan=compact::make_plan(operations,b.bytes,std::numeric_limits<size_t>::max());
-    } catch(const compact::Ineligible &) { return false; }
-      catch(const std::bad_alloc &) { return false; }
-    const auto own=field_budget(c);
-    if(c.stats.allocated_bytes>own || (!b.device && b.bytes>own-c.stats.allocated_bytes))return false;
-    const auto available=own-c.stats.allocated_bytes-(b.device?0:b.bytes);
-    compact::PoolState pool;pool.available_device_bytes=available;
-    const auto &pricing=*c.copy_costs;
-#ifdef FORT_SCOPE_CPU_TEST
-    compact::startup::bind(c.residency->compact_reference_startup,pricing,c.device);
-    const auto before=c.residency->compact_reference_startup;
-    pool.capacity=c.residency->compact_reference_capacity;
-    pool.cold_available=pool.capacity==0;
-    pool.reused=pool.capacity>=plan.bytes && pool.capacity<=available/2;
-#else
-    const auto snapshot=fort_staging::startup_snapshot([&](auto &state){compact::startup::bind(state,pricing,c.device);});
-    const auto before=snapshot.startup;
-    const auto idle=snapshot.idle_role==fort_staging::Role::Compact ? 2*snapshot.idle_capacity : 0;
-    const auto active=snapshot.device_reserved-idle;
-    pool.available_device_bytes=std::min(active>available?0:available-active,fort_staging::compact_available(snapshot));
-    pool.capacity=snapshot.idle_capacity;
-    pool.cold_available=snapshot.idle_capacity==0;
-    pool.reused=snapshot.idle_device==c.device && snapshot.idle_role==fort_staging::Role::Compact &&
-                pool.capacity>=plan.bytes && snapshot.device_reserved<=available &&
-                pool.capacity<=pool.available_device_bytes/2;
-#endif
-    auto decision=compact::startup::choose(plan,pricing,upload,c.pending&&!c.residency->copy_completion_priced,pool,before);
-    auto price=decision.price;
-    if(!price.available) return false;
-    observation.priced=true;
-    if(!price.selected) {
-        if(decision.observation>0)observation={before,decision,true,true};
-        return false;
-    }
-    allocate(c,b);
-#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
-    if(std::getenv("FORT_SCOPE_TEST_FAIL_COMPACT_ALLOC")) {
-        transfer_fallback(c,FORT_SCOPE_TRANSFER_ALLOCATION);return false;
-    }
-#endif
-#ifdef FORT_SCOPE_CPU_TEST
-    std::vector<unsigned char> packed_storage,device_storage;
-    try {packed_storage.resize(price.capacity);device_storage.resize(price.capacity);}
-    catch(const std::bad_alloc &) {transfer_fallback(c,FORT_SCOPE_TRANSFER_ALLOCATION);return false;}
-    if(decision.seed)require(compact::startup::reserve(c.residency->compact_reference_startup,before,decision),
-                            FORT_SCOPE_STATE,"compact startup state changed");
-    else compact::startup::ownership_changed(c.residency->compact_reference_startup);
-    auto *packed=packed_storage.data(),*compact_device=device_storage.data();
-    const bool reused=pool.reused;
-#else
-    DeviceGuard guard(c);
-    fort_staging::Result lease;
-    try {lease=fort_staging::acquire(price.capacity,fort_staging::Role::Compact,false,available,true,
-                                   decision.seed?&before:nullptr,decision.seed?&decision:nullptr);}
-    catch(const std::bad_alloc &) {transfer_fallback(c,FORT_SCOPE_TRANSFER_ALLOCATION);return false;}
-    if(lease.exhausted) {transfer_fallback(c,(lease.unpriced_idle||lease.stale_startup)?FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE:FORT_SCOPE_TRANSFER_BUDGET);return false;}
-    if(lease.status!=cudaSuccess) {
-        try {cuda_check(c,lease.status,true);}catch(const Error &error) {
-            if(error.status!=FORT_SCOPE_RESOURCE)throw;
-            transfer_fallback(c,FORT_SCOPE_TRANSFER_ALLOCATION);return false;
-        }
-    }
-    require(bool(lease.slots),FORT_SCOPE_STATE,"missing compact staging lease");
-    // Cache state can change after metadata pricing. Reprice the actual lease
-    // before payload submission; a changed choice never replays source work.
-    const bool reused=lease.reused;
-    pool={lease.slots->capacity,available,reused};
-    decision=compact::startup::choose(plan,pricing,upload,c.pending&&!c.residency->copy_completion_priced,pool,before);
-    price=decision.price;
-    if(!price.available || !price.selected || (decision.seed&&!lease.startup_paid)) {
-        size_t freed=0;cuda_check(c,fort_staging::release(std::move(lease.slots),freed));
-        return false;
-    }
-    auto &slot=lease.slots->slots[0];auto *packed=slot.host,*compact_device=slot.device;
-#endif
-    const auto workspace=price.workspace_bytes;
-    require(workspace<=available,FORT_SCOPE_RESOURCE,"compact workspace exceeds inclusive device budget");
-    c.residency->workspace_bytes+=workspace;payload_peak(c);
-    bool charged=true,submitted=false;
-    auto &stats=c.transfer_stats;
-    copy_pricing_trace(c,b,plan,decision,before,upload,reused,c.pending&&!c.residency->copy_completion_priced);
-    try {
-        wait(c); // Full-layout allocations and prior writers use the domain stream.
-        stats.staging_allocations+=reused?0:2;stats.staging_reuses+=reused?1:0;
-        stats.slot_capacity=price.capacity;stats.staging_device_bytes=workspace;
-        if(upload) {
-            const auto start=std::chrono::steady_clock::now();size_t offset=0;
-            for(const auto &op:operations) {pack_tile(packed+offset,static_cast<char*>(b.host),op,false);offset+=op.width*op.height*op.depth;}
-            stats.packing_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
-            stats.packed_bytes+=plan.bytes;
-        }
-        auto kernels=[&](bool scatter) {
-            for(const auto &chunk:plan.chunks) {
-#ifdef FORT_SCOPE_CPU_TEST
-                for(size_t i=0;i<chunk.count;++i) {
-                    const auto &d=chunk.ops[i];
-                    const fort_physical::CopyOperation op{d.offset,d.width,d.height,d.depth,d.pitch,d.physical_height};
-                    pack_tile(compact_device+d.packed_offset,static_cast<char*>(b.device),op,scatter);
-                }
-#else
-                auto *physical=static_cast<unsigned char*>(b.device);
-                if(plan.word_bytes==8) {
-                    if(scatter)compact::launch<uint64_t,true>(physical,compact_device,chunk,slot.stream);
-                    else compact::launch<uint64_t,false>(physical,compact_device,chunk,slot.stream);
-                } else if(plan.word_bytes==4) {
-                    if(scatter)compact::launch<uint32_t,true>(physical,compact_device,chunk,slot.stream);
-                    else compact::launch<uint32_t,false>(physical,compact_device,chunk,slot.stream);
-                } else {
-                    if(scatter)compact::launch<unsigned char,true>(physical,compact_device,chunk,slot.stream);
-                    else compact::launch<unsigned char,false>(physical,compact_device,chunk,slot.stream);
-                }
-                cuda_check(c,cudaGetLastError());
-#endif
-            }
-        };
-        submitted=true;
-#ifndef FORT_SCOPE_CPU_TEST
-        slot.pending=true; // Also covers launch/API failure before event record.
-#endif
-        if(!upload)kernels(false);
-#ifdef FORT_SCOPE_CPU_TEST
-        if(upload)std::memcpy(compact_device,packed,plan.bytes);else std::memcpy(packed,compact_device,plan.bytes);
-#else
-        cuda_check(c,cudaMemcpyAsync(upload?compact_device:packed,upload?packed:compact_device,plan.bytes,
-                                   upload?cudaMemcpyHostToDevice:cudaMemcpyDeviceToHost,slot.stream));
-#endif
-#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
-        if(std::getenv("FORT_SCOPE_TEST_FAIL_COMPACT_SUBMIT"))throw Error(FORT_SCOPE_EXECUTION,"injected compact post-submission failure");
-#endif
-        if(upload)kernels(true);
-        if(upload) {++c.stats.uploads;c.stats.upload_bytes+=plan.bytes;++stats.pinned_uploads;stats.pinned_upload_bytes+=plan.bytes;}
-        else {++c.stats.downloads;c.stats.download_bytes+=plan.bytes;++stats.pinned_downloads;stats.pinned_download_bytes+=plan.bytes;}
-        const auto start=std::chrono::steady_clock::now();
-#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
-        if(std::getenv("FORT_SCOPE_TEST_FAIL_COMPACT_RECORD"))throw Error(FORT_SCOPE_EXECUTION,"injected compact event-record failure");
-#endif
-#ifndef FORT_SCOPE_CPU_TEST
-        cuda_check(c,cudaEventRecord(slot.complete,slot.stream));
-        cuda_check(c,cudaEventSynchronize(slot.complete));slot.pending=false;
-#endif
-#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
-        if(std::getenv("FORT_SCOPE_TEST_FAIL_COMPACT_WAIT"))throw Error(FORT_SCOPE_EXECUTION,"injected compact completion failure");
-#endif
-        ++stats.events;++stats.event_waits;
-        stats.event_wait_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
-        if(!upload) {
-            const auto unpack_start=std::chrono::steady_clock::now();size_t offset=0;
-            for(const auto &op:operations) {pack_tile(packed+offset,static_cast<char*>(b.host),op,true);offset+=op.width*op.height*op.depth;}
-            stats.unpacking_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-unpack_start).count();
-            stats.unpacked_bytes+=plan.bytes;
-        }
-#ifdef FORT_SCOPE_CPU_TEST
-        c.residency->compact_reference_capacity=price.capacity;
-        compact::startup::ownership_changed(c.residency->compact_reference_startup);
-#else
-        size_t freed=0;cuda_check(c,fort_staging::release(std::move(lease.slots),freed));
-#endif
-        c.residency->workspace_bytes-=workspace;charged=false;
-        stats.effective_mode=FORT_SCOPE_TRANSFERS_AUTO;
-        compact_trace(c,b,plan,price,upload,parts.size(),reused);
-        trace(c,upload?"upload":"download",&b,plan.bytes);
-        return true;
-    } catch(...) {
-        if(submitted) {c.poisoned=true;forget_copy_startup(c);}
-#ifndef FORT_SCOPE_CPU_TEST
-        if(lease.slots) {
-            size_t freed=0;
-            if(lease.slots->cleanup(freed)!=cudaSuccess) {c.poisoned=true;charged=false;}
-        }
-#endif
-        if(charged)c.residency->workspace_bytes-=workspace;
-        throw;
-    }
-}
 void copy_region(Context &c, Buffer &b, const Region &parts, bool upload) {
-    StartupObservation observation;
-    if(copy_compact(c,b,parts,upload,observation))return;
-    // Experimental upload-only transport. Logical coverage remains the exact
-    // requested union: extra physical bytes never establish device freshness.
-    // Full source freshness is deliberately stronger than span freshness, and
-    // prevents overwriting a newer device value in a gap between rectangles.
-    if (upload && !parts.empty() && c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_COALESCED) {
-        const auto full = b.full();
-        const bool source_full = b.initialized.size()==1 && contains(b.initialized.front(),full) &&
-            b.host_current.size()==1 && contains(b.host_current.front(),full);
-        size_t first=b.bytes, last=0, required_bytes=0, physical_copies=0;
-        if (source_full) {
-            for (const auto &part : parts) {
-                const fort_physical::CopyPlan plan(b.element_bytes,b.extents,part.lo,part.hi);
-                require(plan.valid,FORT_SCOPE_ARGUMENT,"invalid physical transfer layout");
-                if (!plan.bytes) continue;
-                require(plan.bytes<=b.bytes-required_bytes &&
-                        plan.copies<=std::numeric_limits<size_t>::max()-physical_copies,
-                        FORT_SCOPE_ARGUMENT,"coalesced transfer extent overflow");
-                required_bytes+=plan.bytes; physical_copies+=plan.copies;
-                // Valid nonempty physical coordinates and the checked full
-                // allocation product bound both flat offsets by b.bytes.
-                size_t begin=0, end=b.element_bytes;
-                for (size_t k=0;k<b.extents.size();++k) {
-                    begin+=part.lo[k]*b.strides[k];
-                    end+=(part.hi[k]-1)*b.strides[k];
-                }
-                first=std::min(first,begin); last=std::max(last,end);
-            }
-        }
-        if (physical_copies>=2 && first<=last && last<=b.bytes &&
-            last-first>=required_bytes && last-first-required_bytes<=required_bytes/8) {
-            allocate(c,b);
-            // This transport deliberately copies bytes between rectangles.
-            // Hazard coverage must include those physical gaps as well.
-            note_upload_reader(c,b,b.full());
-            auto *host=static_cast<char *>(b.host)+first, *device=static_cast<char *>(b.device)+first;
-            const auto bytes=last-first;
-#ifdef FORT_SCOPE_CPU_TEST
-            std::memcpy(device,host,bytes);
-#else
-            DeviceGuard guard(c);
-            cuda_check(c,cudaMemcpyAsync(device,host,bytes,cudaMemcpyHostToDevice,c.stream));
-#endif
-            ++c.stats.uploads; c.stats.upload_bytes+=bytes; mark_context_pending(c);
-            c.transfer_stats.effective_mode=FORT_SCOPE_TRANSFERS_COALESCED;
-            trace(c,"upload_coalesced",&b,bytes);
-            trace(c,"upload_requested",&b,required_bytes);
-            trace(c,"upload",&b,bytes);
-            return;
-        }
-        c.transfer_stats.fallback_reason = FORT_SCOPE_TRANSFER_COALESCED_INELIGIBLE;
-        ++c.transfer_stats.fallbacks;
-    }
     [[maybe_unused]] size_t submitted_parts=0;
     for (const auto &part : parts) {
         copy(c,b,part,upload);++submitted_parts;
 #if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
         const auto fail_after=std::getenv("FORT_SCOPE_TEST_FAIL_DIRECT_BATCH_AFTER");
         if(fail_after && submitted_parts==std::strtoull(fail_after,nullptr,10)) {
-            c.poisoned=true;forget_copy_startup(c);
+            c.poisoned=true;
             throw Error(FORT_SCOPE_EXECUTION,"injected direct batch post-submission failure");
         }
-#endif
-    }
-    if(observation.priced)c.residency->copy_completion_priced=true;
-    // Reached direct APIs have all returned success. No completion/readability
-    // inference or new synchronization follows from this pricing observation.
-    if(observation.valid) {
-#ifdef FORT_SCOPE_CPU_TEST
-        fort_physical::compact::startup::observe(c.residency->compact_reference_startup,observation.before,observation.decision);
-#else
-        bool changed=false;
-        fort_staging::observe_startup(observation.before,observation.decision,changed);
 #endif
     }
 }
@@ -2045,7 +1518,7 @@ void invalidate(Context &c, Change change) noexcept {
     if (change == Change::State) ++c.virtual_epoch;
 }
 template<class F> int with(fort_scope_t handle, F &&f, Change change = Change::State) noexcept {
-    const int status=protect([&]() {
+    return protect([&]() {
         const auto c = lookup(handle);
         std::lock_guard<std::mutex> lock(c->mutex);
         require(!c->closed && !c->residency->retired, FORT_SCOPE_STALE, "invalid or stale scope handle");
@@ -2054,13 +1527,6 @@ template<class F> int with(fort_scope_t handle, F &&f, Change change = Change::S
         invalidate(*c, change);
         f(*c);
     });
-    if(status!=FORT_SCOPE_OK) {
-        try {
-            const auto c=lookup(handle);std::lock_guard<std::mutex> lock(c->mutex);
-            if(c->poisoned)forget_copy_startup(*c);
-        } catch(...) {} // Preserve the original failure, including stale handles.
-    }
-    return status;
 }
 }
 extern "C" void fort_scope_trace_set_v1(fort_scope_t h, uint32_t mask, const char *owner, const char *procedure,
@@ -2293,44 +1759,9 @@ extern "C" int fort_scope_domain_budget_get_v1(fort_scope_domain_t domain,size_t
     });
 }
 extern "C" int fort_scope_set_transfers(fort_scope_t h, uint32_t mode) {
-    return with(h, [&](Context &c) {
-        require(mode <= FORT_SCOPE_TRANSFERS_COALESCED, FORT_SCOPE_ARGUMENT, "invalid scoped transfer mode");
-        if(c.borrowed_domain && (!c.buffers.empty() || c.ready)) {
-            require(mode==c.transfer_stats.requested_mode,
-                    FORT_SCOPE_STATE,"cannot change a live residency transfer mode"); return;
-        }
-        require(c.buffers.empty() && !c.ready,
-                FORT_SCOPE_STATE, "configure scoped transfers before registration");
-        auto &stats = c.transfer_stats;
-        stats.requested_mode = mode;
-        stats.effective_mode = mode == FORT_SCOPE_TRANSFERS_PINNED ? mode : uint32_t(FORT_SCOPE_TRANSFERS_DIRECT);
-        stats.fallback_reason = FORT_SCOPE_TRANSFER_NONE;
-        if (mode == FORT_SCOPE_TRANSFERS_AUTO) transfer_fallback(c, FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE);
-        if (mode == FORT_SCOPE_TRANSFERS_PIPELINED) transfer_fallback(c, FORT_SCOPE_TRANSFER_PIPELINED_UNAVAILABLE);
+    return with(h, [&](Context &) {
+        require(mode == FORT_SCOPE_TRANSFERS_DIRECT, FORT_SCOPE_ARGUMENT, "invalid scoped transfer mode");
     }, Change::None);
-}
-extern "C" int fort_scope_transfer_stats_get_v1(fort_scope_t h, fort_scope_transfer_stats *out) {
-    return with(h, [&](Context &c) {
-        require(out, FORT_SCOPE_ARGUMENT, "missing scoped transfer statistics output");
-        *out = transfer_statistics(c);
-    }, Change::None);
-}
-extern "C" int fort_scope_set_copy_costs_v3(fort_scope_t h,const fort_scope_copy_costs_v3 *costs,
-        const fort_scope_plan_costs *base,int compatible) {
-    return with(h,[&](Context &c) {
-        require(compatible==0 || compatible==1,FORT_SCOPE_ARGUMENT,"invalid physical copy calibration compatibility");
-        require(c.borrowed_domain || (c.buffers.empty() && !c.ready),
-                FORT_SCOPE_STATE,"configure physical copy calibration before registration");
-        c.copy_costs.reset();
-        if(compatible && costs)require(costs->version==FORT_SCOPE_COPY_COST_ABI_VERSION,
-            FORT_SCOPE_ARGUMENT,"unsupported physical-copy cost ABI; expected version3");
-        if(!compatible || !costs || !base || !fort_physical::compact::valid_costs(*costs) ||
-           !fort_physical::compact::valid_base(*base))return;
-        c.copy_costs=fort_physical::compact::Pricing{*costs,*base};
-        if(c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_AUTO) {
-            c.transfer_stats.fallback_reason=FORT_SCOPE_TRANSFER_NONE;c.transfer_stats.fallbacks=0;
-        }
-    });
 }
 static int register_buffer(fort_scope_t h, uint64_t identity, uint64_t generation,
                            const fort_scope_layout *layout, bool full_initialized,
@@ -2885,7 +2316,6 @@ void close_storage(Context &c) {
 #endif
         c.buffers.clear(); c.identities.clear(); c.closed = true;
         trace(c, "close");
-        transfer_statistics_trace(c, c.handle);
         if(!c.residency->domain) graph_statistics_trace(c,true);
         completion_statistics_trace(c,true);
         if(!c.residency->domain) queue_statistics_trace(c,true);
@@ -2921,7 +2351,6 @@ extern "C" int fort_scope_close(fort_scope_t h) {
 }
 namespace {
 void abandon_storage(Context &c) {
-    forget_copy_startup(c);
 #ifdef FORT_SCOPE_CPU_TEST
         for (auto &entry : c.buffers) std::free(entry.second->device);
         std::free(c.scratch);
@@ -2956,7 +2385,6 @@ extern "C" int fort_scope_abandon(fort_scope_t h) {
         std::lock_guard<std::mutex> lock(c->mutex);
         require(!c->closed, FORT_SCOPE_STALE, "invalid or stale scope handle");
         require(c->poisoned, FORT_SCOPE_STATE, "only a failed scope can be abandoned");
-        forget_copy_startup(*c);
         if(c->borrowed_domain) {
 #ifndef FORT_SCOPE_CPU_TEST
             int previous=0;
