@@ -21,7 +21,6 @@ from compiler.ir import (
     ParallelRegion,
     Reference,
     RegionAddressing,
-    SequentialRegion,
     Size,
     SubscriptDecision,
     Unary,
@@ -142,7 +141,7 @@ def plan_addressing(plan: ExecutionPlan, *, options: CompilerOptions) -> Executi
                     f"  {_expression_text(decision.expression)}: {decision.mode}{bounds}; {decision.reason} "
                     f"({decision.occurrences} occurrence(s))"
                 )
-        elif isinstance(step, (HostBlock, SequentialRegion)):
+        elif isinstance(step, HostBlock):
             steps.append(step)
         else:
             raise TypeError(f"Unknown execution step: {type(step).__name__}")

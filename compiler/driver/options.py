@@ -9,7 +9,6 @@ from compiler.ir import CompilationError
 class CompilerOptions:
     opt_level: int = 1
     schedule: str | None = None
-    fallback: str = "error"
     indexing: str | None = None
     # Arrays whose subscript tuple the caller checks, before the entry runs, to
     # address a different element in every iteration of each nest that uses it.
@@ -20,8 +19,6 @@ class CompilerOptions:
             raise CompilationError("optimization level must be 0 or 1")
         if self.schedule not in (None, "source", "auto"):
             raise CompilationError("schedule must be source or auto")
-        if self.fallback not in ("error", "host"):
-            raise CompilationError("fallback must be error or host")
         if self.indexing not in (None, "source", "auto"):
             raise CompilationError("indexing must be source or auto")
         if any(not isinstance(name, str) or not name for name in self.injective_arrays):

@@ -26,7 +26,6 @@ from compiler.ir import (
     RegionReport,
     RegionSchedule,
     ScalarType,
-    SequentialRegion,
     Size,
     SourceLocation,
     Symbol,
@@ -317,19 +316,17 @@ def test_body_predicates_count_accesses_without_refining_branch_ranges_or_assign
     assert decisions[Reference(TEMP)].interval == FULL_INTEGER_RANGE
 
 
-def test_host_and_fallback_steps_remain_unchanged_while_branch_regions_are_planned():
+def test_host_steps_remain_unchanged_while_branch_regions_are_planned():
     assignment = Assignment(ArrayAccess(A, (integer(1),)), integer(1), LOCATION)
     host = HostBlock((assignment,))
-    sequential = SequentialRegion(1, Block((assignment,)), "carried dependence")
     branch = ConditionalRegion(
         Binary(">", Reference(N), integer(0)),
         ExecutionPlan((host, region())),
-        ExecutionPlan((sequential, replace(region(), id=2))),
+        ExecutionPlan((replace(region(), id=2),)),
         LOCATION,
     )
     result = plan_addressing(ExecutionPlan((branch,)), options=CompilerOptions())
     assert result.steps[0].then_plan.steps[0] is host
-    assert result.steps[0].else_plan.steps[0] is sequential
     assert all(item.addressing.wide_iterators == (ITERATOR,) for item in result.regions)
 
 

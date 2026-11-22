@@ -1,4 +1,4 @@
-"""Structured parallel-proof outcomes. Semantic errors never become fallback."""
+"""Structured parallel-proof outcomes, apart from semantic errors."""
 
 from dataclasses import dataclass
 

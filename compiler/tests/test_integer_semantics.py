@@ -87,13 +87,12 @@ def test_source_literal_tokens_must_fit_before_unary_signs(tmp_path, token, cont
         "n+(1/(2-2))",
     ],
 )
-@pytest.mark.parametrize("fallback", ["error", "host"])
-def test_invalid_constant_subexpressions_cannot_become_fallback(tmp_path, expression, fallback):
+def test_invalid_constant_subexpressions_are_rejected(tmp_path, expression):
     path = source(tmp_path, "a(1)=" + expression)
     with pytest.raises(
         CompilationError, match="default INTEGER (constant expression overflows|division by zero)"
     ) as error:
-        build_execution_plan(lower_file(path, "entry"), options=CompilerOptions(fallback=fallback))
+        build_execution_plan(lower_file(path, "entry"), options=CompilerOptions())
     assert error.value.location == SourceLocation(str(path), 9)
 
 
@@ -139,10 +138,9 @@ def test_checked_evaluation_keeps_valid_values_and_unknown_runtime_values(expres
         ArrayAccess(A, (Binary("+", Reference(N), literal(INTEGER_MAX + 1)),)),
     ],
 )
-@pytest.mark.parametrize("fallback", ["error", "host"])
-def test_manually_constructed_ir_has_identical_integer_validation(expression, fallback):
+def test_manually_constructed_ir_has_identical_integer_validation(expression):
     with pytest.raises(CompilationError, match="default INTEGER") as error:
-        build_execution_plan(function(expression), options=CompilerOptions(fallback=fallback))
+        build_execution_plan(function(expression), options=CompilerOptions())
     assert error.value.location == LOCATION
 
 

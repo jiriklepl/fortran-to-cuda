@@ -36,7 +36,6 @@ from .plan import (
     RegionAddressing,
     RegionReport,
     RegionSchedule,
-    SequentialRegion,
     SubscriptDecision,
 )
 
@@ -50,7 +49,6 @@ __all__ = [
     "If",
     "IntrinsicCall",
     "RegionSchedule",
-    "SequentialRegion",
     "ExecutionPlan",
     "Expr",
     "FunctionIR",

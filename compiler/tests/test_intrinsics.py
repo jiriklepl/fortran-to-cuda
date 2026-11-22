@@ -116,10 +116,9 @@ def test_requested_intrinsics_are_registered():
         ("dim(2147483647,-1)", "constant expression overflows"),
     ],
 )
-@pytest.mark.parametrize("fallback", ["error", "host"])
-def test_invalid_intrinsics_reject_before_execution_policy(tmp_path, call, message, fallback):
+def test_invalid_intrinsics_are_rejected(tmp_path, call, message):
     with pytest.raises(CompilationError, match=message) as failure:
-        prepare_function(lower(tmp_path, "a(1)=" + call), options=CompilerOptions(fallback=fallback))
+        prepare_function(lower(tmp_path, "a(1)=" + call), options=CompilerOptions())
     assert failure.value.location.path.endswith("language.f90")
 
 

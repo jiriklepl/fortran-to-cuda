@@ -82,12 +82,6 @@ def _parse_args() -> argparse.Namespace:
         help="Array addressing: source INTEGER arithmetic or proved wide indices (default: auto at level 1, source at 0).",
     )
     parser.add_argument(
-        "--fallback",
-        choices=("error", "host"),
-        default="error",
-        help="Unproved parallel regions: reject or execute on the host (default: error).",
-    )
-    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -164,7 +158,6 @@ def main() -> None:
         options = CompilerOptions(
             opt_level=args.opt_level,
             schedule=args.schedule,
-            fallback=args.fallback,
             indexing=args.indexing,
         )
         if args.list_candidates:

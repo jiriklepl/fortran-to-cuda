@@ -7,7 +7,7 @@ from compiler.analysis.sections import must_overlap
 from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import abi_arguments, dimension_name
 from compiler.emission.common.c_family import cpp_type, indent, render_assignment, render_expression
-from compiler.emission.common.loops import _loop_snapshot, sequential_block
+from compiler.emission.common.loops import _loop_snapshot
 from compiler.emission.common.schedules import checked_product, region_schedule
 from compiler.emission.common.symbols import host_symbols, region_symbols
 from compiler.emission.cuda.graphs import _kernel_arguments, generate_graph_group, graph_group_eligible
@@ -25,7 +25,6 @@ from compiler.ir import (
     ParallelRegion,
     Reference,
     ScalarType,
-    SequentialRegion,
     referenced_symbols,
     walk_expr,
 )
@@ -350,7 +349,7 @@ def generate_scoped(function, plan, config, common_header):
         # entry's context. Pure local integer/logical setup has no coherent
         # storage access or floating-point effect to publish. In particular,
         # loop-header snapshots must not open empty host transactions.
-        local_setup = arrays and isinstance(step, HostBlock) and not touched.intersection(arrays)
+        local_setup = arrays and not touched.intersection(arrays)
         if local_setup:
             for assignment in step.assignments:
                 if (not isinstance(assignment.target, Reference) or assignment.target.symbol.parameter
@@ -418,8 +417,6 @@ def generate_scoped(function, plan, config, common_header):
                            "} else {", *indent(execution(step.else_plan)), "}"]
             elif isinstance(step, HostBlock):
                 result += host(step, [render_assignment(a) for a in step.assignments])
-            elif isinstance(step, SequentialRegion):
-                result += host(step, sequential_block(step.body, 0, [0]))
             elif isinstance(step, ParallelRegion):
                 unit = units[step.id]
                 if step.id in group_first:

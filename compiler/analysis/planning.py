@@ -1,4 +1,4 @@
-"""Execution policy: validated source, proof queries, and explicit host fallback."""
+"""Execution plans: validated source and proof queries; an unproved region is an error."""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from compiler.ir import (
     ParallelRegion,
     Reference,
     ScalarType,
-    SequentialRegion,
     block_writes,
 )
 
@@ -88,17 +87,12 @@ def build_execution_plan(function: FunctionIR, *, options: CompilerOptions | Non
                 next_region[0] += 1
                 proof = prove_region(region_id, statement, environment, defined, later,
                                      injective=frozenset(name.lower() for name in options.injective_arrays))
-                if proof.proven:
-                    steps.append(proof.region)
-                elif options.fallback == "host":
-                    body = Block((statement,))
-                    reads, writes = array_effects(body)
-                    steps.append(SequentialRegion(region_id, body, proof.failure.reason, reads, writes))
-                else:
+                if not proof.proven:
                     failure = proof.failure
                     raise ParallelizationError(
                         failure.reason, failure.location, witness=failure.witness, conservative=failure.conservative
                     )
+                steps.append(proof.region)
                 defined = validate_block(Block((statement,)), defined)
                 written = block_writes(Block((statement,)))
             for symbol in written:
@@ -118,8 +112,6 @@ def format_plan(plan):
             lines.append(f"host block: {len(step.assignments)} ordered assignment(s)")
             lines.append(f"  array reads: {', '.join(s.name for s in step.read_symbols) or '(none)'}")
             lines.append(f"  array writes: {', '.join(s.name for s in step.write_symbols) or '(none)'}")
-        elif isinstance(step, SequentialRegion):
-            lines.append(f"region {step.id}: sequential host fallback: {step.reason}")
         elif isinstance(step, ConditionalRegion):
             lines.append(f"host conditional at {step.location}")
             lines.extend("  then: " + line for line in format_plan(step.then_plan).splitlines())

@@ -54,9 +54,8 @@ perfect prefix maps to parallel iterations; its remaining ordered body can conta
 assignments, conditionals, and sequential inner loops. `--opt-level 0` retains the
 source regions, source indexing, and source axis order unless overridden by
 `--indexing` or `--schedule`. Automatic axis ordering favors Fortran locality.
-Strict parallelization is the
-default; `--fallback host` executes valid regions whose independence is unproved
-sequentially on the host.
+Parallelization is strict: a region whose independence is unproved is an
+error.
 
 ## Implementation layout
 
@@ -98,7 +97,7 @@ from its caller and always runs its regions on the device, falling back to its
 generated host loops only when the device budget cannot hold a region's arrays.
 `--list-candidates` reports which procedures of a file compile, and
 `--emit-scoped-runtime` writes the runtime alone. `--opt-level`, `--schedule`,
-`--indexing`, `--fallback`, `--host-threads`, `--verbose` and the
+`--indexing`, `--host-threads`, `--verbose` and the
 header options shape the entry. Output is published only after every stage
 succeeded.
 
@@ -750,9 +749,9 @@ only accumulate scalars before they reach this frontend (see "Resident build of
 an application"). `IEEE_IS_NAN` of `IEEE_ARITHMETIC`, the intrinsic module or a
 source module that stands in for it, is read as the comparison `x /= x`.
 Scoped source generation has the additional proven array-operation normalization
-described above; it does not make arbitrary numerical slices legal. Initialized scalar recurrences, valid
-scalar live-outs, final induction values, and otherwise unproved regions can
-execute sequentially with `--fallback host`. General nonlinear or indirect writes
+described above; it does not make arbitrary numerical slices legal. Initialized scalar recurrences, scalar
+live-outs, final induction values, and otherwise unproved regions are
+rejected with the reason. General nonlinear or indirect writes
 are parallelized only when conservative relations prove independence; no runtime
 alias or index-uniqueness checks are introduced.
 
@@ -805,7 +804,7 @@ and unlisted intrinsics remain unsupported.
 
 Semantic validation and definite definitions live in `analysis/semantics.py`;
 structural effects live in `analysis/effects.py`; `analysis/planning.py` builds
-execution plans according to the selected fallback policy. Intrinsic signatures
+execution plans. Intrinsic signatures
 live in `ir/intrinsics.py`; `runtime/numeric.hpp` is assembled into the existing
 shared support header.
 
@@ -828,9 +827,8 @@ composes access maps to find ordered read-after-write (RAW), write-after-read
 identical **mapped iteration coordinates**, including every dimension assigned
 to CUDA threads. Ordered same-cell updates and recurrences inside retained
 sequential loops are accepted within one mapped iteration. Conflicts between
-mapped iterations reject by default or select sequential host fallback when
-requested. A perfect rectangular nest maps all its dimensions; an inner
-recurrence in such a mapped nest requires host fallback.
+mapped iterations are rejected. A perfect rectangular nest maps all its
+dimensions; an inner recurrence in such a mapped nest is rejected.
 
 A dependence error includes source/call provenance, affected accesses, the
 symbolic conflict relation, and a conflicting-iteration witness. Embedded
@@ -843,6 +841,12 @@ collision for every caller's runtime data.
 Branch-free affine models remain exact; proofs do not split paths by predicates.
 `--verbose` also displays exact/conservative modeling and retained loop counts.
 Unfused regions execute in original order, honoring cross-region dependencies.
+
+Distinct array arguments must not overlap whenever either is written. The
+compiler does not perform runtime overlap checks. Repeated actual arguments in
+an inlined helper retain shared identity and are analyzed as aliases. Callers
+must provide valid extents and sufficient storage for every accessed index;
+general bounds checking and broader Fortran semantics are outside this subset.
 
 ### Checked fusion
 
@@ -902,8 +906,8 @@ can use wide `i` and `i-1` subscripts, while `i+1` retains source arithmetic.
 Each complete subscript is selected independently, including nested array
 accesses. Shared C++/CUDA rendering consumes the plan and preserves scalar
 INTEGER arithmetic, the ABI, `SIZE` conversions, and integer array-load values.
-Loop-bound snapshots, retained-loop headers, host statements, and sequential
-fallback remain unchanged. Source-order bound evaluation and empty-loop
+Loop-bound snapshots, retained-loop headers, and host statements remain
+unchanged. Source-order bound evaluation and empty-loop
 suppression are preserved. No array bounds checks are introduced.
 
 Use `--indexing source` and `--indexing auto` with the same optimization level
@@ -911,30 +915,6 @@ and schedule to measure addressing independently. Both choices override
 the optimization-level default. Plans constructed without addressing metadata
 use source indexing. Verbose reports count promoted and retained subscript
 occurrences and explain decisions; accesses in unchanged loop headers are excluded.
-
-### Sequential host fallback
-
-`--fallback error` keeps strict parallelization. `--fallback host` permits otherwise
-valid regions with unproved independence, initialized recurrences, or scalar
-live-outs to run in source order. Proved neighboring regions stay parallel, and
-fusion never crosses a fallback region. Verbose output identifies each sequential
-region and its proof-failure reason.
-
-The execution plan represents these loops as `SequentialRegion` nodes. Shared
-loop lowering preserves signed and runtime strides, empty domains, final induction
-values, and scalar state. Analysis discards obsolete scalar substitutions before
-proving later regions. CUDA synchronizes affected arrays before host execution and
-uploads host writes before later device work; partial writes preserve other cells.
-
-Fallback is an execution policy after semantic validation. Undefined scalar reads,
-invalid types, unsupported constructs, zero-stride errors, and internal failures
-remain errors.
-
-Distinct array arguments must not overlap whenever either is written. The
-compiler does not perform runtime overlap checks. Repeated actual arguments in
-an inlined helper retain shared identity and are analyzed as aliases. Callers
-must provide valid extents and sufficient storage for every accessed index;
-general bounds checking and broader Fortran semantics are outside this subset.
 
 ## Development and validation
 
@@ -977,9 +957,8 @@ absolute tolerance `1e-10` for real values and exact comparison for integers.
 Coverage includes fill/scale, non-cubic/singleton/empty domains, sentinel halos,
 CDU/CDV/CDW, signed/runtime strides, rank-5 integer arrays, rank-15 bridge
 compilation, imperfect nests, fresh host/device values, indirect gathers,
-squared indices, and default-real arithmetic. Fallback tests cover recurrences,
-scalar live-outs, final induction values, neighboring parallel regions, and CUDA
-host/device transitions; invalid source is checked under both execution policies.
+squared indices, and default-real arithmetic. Rejection tests cover recurrences,
+scalar live-outs and conflicts between iterations, apart from invalid source.
 Runtime tests also check CPU ownership, selective host/device coherence, pinned
 registration lifetimes, stale tokens, shape/size errors, and profiling events with
 instrumented CUDA calls.

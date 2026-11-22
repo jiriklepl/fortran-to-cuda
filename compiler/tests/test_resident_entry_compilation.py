@@ -78,7 +78,7 @@ def test_in_process_compilation_writes_what_the_command_line_writes(tmp_path):
     entry, = export(tmp_path, ("fields::step",))["entries"]
     report = compile_resident_entry(entry["input_path"], entry["entry"], tmp_path / "direct")
     command = [sys.executable, "-m", "compiler", "--input", entry["input_path"], "--kernel", entry["entry"],
-               "--opt-level", "1", "--fallback", "error", "--json", "--output-dir", str(tmp_path / "cli"),
+               "--opt-level", "1", "--json", "--output-dir", str(tmp_path / "cli"),
                "--common-header", "runtime.hpp", "--host-threads", "4"]
     result = subprocess.run(command, cwd=ROOT, env={**os.environ, "PYTHONPATH": str(ROOT)},
                             capture_output=True, text=True, check=True)

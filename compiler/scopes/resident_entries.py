@@ -1167,7 +1167,7 @@ def compile_resident_entry(source, entry, directory, *, host_threads=4, injectiv
         config = OffloadConfig(host_threads)
     except ValueError as error:
         raise CompilationError(str(error)) from error
-    options = CompilerOptions(opt_level=1, fallback="error", injective_arrays=tuple(injective))
+    options = CompilerOptions(opt_level=1, injective_arrays=tuple(injective))
     _function, plan, sources = compile_kernel_entry(Path(source).resolve(), entry, options=options,
                                                     offload_config=config, common_header="runtime.hpp")
     outputs = kernel_entry_outputs(sources, common_header="runtime.hpp")

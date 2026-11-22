@@ -264,7 +264,7 @@ def test_conflicting_branch_passes_remain_separate(tmp_path: Path) -> None:
 
 
 def test_branch_fusion_keeps_outer_liveness_checks(tmp_path: Path) -> None:
-    from compiler.ir import ConditionalRegion, SequentialRegion
+    from compiler.analysis import ParallelizationError
 
     source = tmp_path / "branch_liveout.f90"
     source.write_text("""! kernels
@@ -290,11 +290,8 @@ contains
 end module
 """)
     function = lower_file(source, "entry")
-    unchanged, plan = optimize_function(function, options=CompilerOptions(fallback="host"))
-    assert unchanged is function
-    conditional = next(step for step in plan.steps if isinstance(step, ConditionalRegion))
-    assert isinstance(conditional.then_plan.steps[-1], SequentialRegion)
-    assert "live after" in conditional.then_plan.steps[-1].reason
+    with pytest.raises(ParallelizationError, match="live after"):
+        optimize_function(function, options=CompilerOptions())
 
 
 def test_fusion_does_not_capture_retained_serial_iterator(tmp_path: Path) -> None:
@@ -404,10 +401,8 @@ def test_private_temporary_does_not_hide_array_dependence(tmp_path):
     ("if(b(i)>0) t=b(i)+2\n b(i)=t", ""),
 ])
 def test_escaping_or_carried_scalar_does_not_become_private(tmp_path, second, tail):
-    from compiler.ir import SequentialRegion
+    from compiler.analysis import ParallelizationError
 
     function = _private_scalar_function(tmp_path, "t=a(i)+1; a(i)=t", second, tail=tail)
-    unchanged, plan = optimize_function(function, options=CompilerOptions(fallback="host"))
-    assert unchanged is function
-    reasons = [step.reason for step in plan.steps if isinstance(step, SequentialRegion)]
-    assert any("live after" in reason or "before its per-iteration definition" in reason for reason in reasons)
+    with pytest.raises(ParallelizationError, match="live after|before its per-iteration definition"):
+        optimize_function(function, options=CompilerOptions())

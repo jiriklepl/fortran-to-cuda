@@ -32,8 +32,6 @@ def compile_report(tmp_path, body, *arguments, entry="advance"):
             entry,
             "--output-dir",
             str(output),
-            "--fallback",
-            "error",
             "--json",
             *arguments,
         ],

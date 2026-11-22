@@ -126,7 +126,7 @@ def _regions(plan: ExecutionPlan) -> dict[int, ParallelRegion]:
 
 
 def _host_blocks(block: Block):
-    """Visit host branch bodies, never the bodies of parallel or fallback loops."""
+    """Visit host branch bodies, never the bodies of loops."""
     yield block
     for statement in block.statements:
         if isinstance(statement, If):

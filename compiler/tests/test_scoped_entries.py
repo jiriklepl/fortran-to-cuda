@@ -172,7 +172,6 @@ def generated(tmp_path_factory):
         # native worker, which would stop exercising the mixed continuation.
         optimization = ["--opt-level", "0"] if name == "guarded_value" else []
         report = json.loads(_run([sys.executable, "-m", "compiler", "--input", str(source), "--kernel", name,
-                                 "--fallback", "host",
                                  "--json", "--output-dir", str(output), *optimization], directory=directory, env=env).stdout)
         reports[name] = report
         assert report["artifact_schema_version"] == 2
