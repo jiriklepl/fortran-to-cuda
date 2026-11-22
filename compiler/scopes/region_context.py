@@ -18,10 +18,12 @@ class OriginalRegionContext:
     cyclic_following: tuple
 
 
-def original_region_context(routine, sources):
+def original_region_context(routine, sources, known=None):
     """What lies before and after the selected statements in their procedure.
 
     Keeps excluded suffixes and backedges as distinct original paths.
+    ``known`` keeps the spans of the procedure's nodes for the next selection
+    of the same procedure, while its tree does not change.
 
     Prepared coordinates establish order, including included source that has no
     editable original span. This helper grants no definition or capture facts.
@@ -38,7 +40,7 @@ def original_region_context(routine, sources):
     # its aggregate, so recycled IDs cannot identify a different parser node.
     # An existing item with no span poisons the aggregate; an absent item does
     # not. Expression descendants remain part of the original full-walk proof.
-    spans_by_node = {}
+    spans_by_node = {} if known is None else known
 
     def children(node):
         if isinstance(node, Base):

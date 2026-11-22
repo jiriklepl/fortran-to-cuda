@@ -328,29 +328,6 @@ def _helper_closure(analysis, routine, loops):
     return result
 
 
-def _exception_observers(analysis):
-    """Resolve intrinsic IEEE observers across configured source inputs.
-
-    Device arithmetic does not publish the CPU exception flags. Until that
-    effect can be represented, even an observer in another configured caller
-    conservatively prevents admission of these new numerical closures. A user
-    procedure with the same spelling is not an intrinsic observer.
-    """
-    observers = []
-    procedures = {**analysis.routines, **analysis.numerical_helpers}
-    for qualified, routine in procedures.items():
-        for node in walk(routine.execution):
-            if kind_of(node) != "Call_Stmt" or kind_of(node.items[0]) != "Name":
-                continue
-            for target in analysis._candidates(routine.scope, node.items[0]):
-                parts = target.split("::")
-                if (len(parts) == 3 and parts[0] == "$intrinsic"
-                        and parts[1] in {"ieee_arithmetic", "ieee_exceptions"}
-                        and parts[2] in {"ieee_get_flag", "ieee_get_status"}):
-                    observers.append(qualified + " calls " + target)
-    return tuple(sorted(set(observers)))
-
-
 def _validate_real_varargs(analysis, routine, node):
     """The supported native contract proves unordered two-operand MIN/MAX.
 
@@ -741,8 +718,11 @@ def _check_allocation(analysis, routine, binding, preceding):
         raise CompilationError("inline local allocation lacks a preceding original allocation site: " + binding.root)
 
 
-def extract_region(analysis, routine, node, *, preceding=(), following=(), cyclic_following=()):
-    """Construct a bounded candidate from serial counted loops of the original procedure."""
+def extract_region(analysis, routine, node, *, preceding=(), following=(), cyclic_following=(), spans=statement_span):
+    """Construct a bounded candidate from serial counted loops of the original procedure.
+
+    ``spans`` gives the source lines of a node (see ``segments.Spans``).
+    """
     # The original procedure keeps its declarations and initialization. Only
     # declarations actually borrowed by this region need numerical support.
     # Implicit typing, interfaces and uncertain imports still cannot establish
@@ -767,12 +747,12 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     def complete_original_groups(sequence):
         for group in grouped_nodes(sequence):
             if isinstance(group, tuple):
-                first, last = statement_span(group[0])[0], statement_span(group[-1])[1]
+                first, last = spans(group[0])[0], spans(group[-1])[1]
                 if (selected_span[0] <= last and first <= selected_span[1]
                         and not (selected_span[0] <= first and last <= selected_span[1])):
                     raise CompilationError("inline OpenMP association requires its complete original source region")
             elif kind_of(group) in {"If_Construct", "Associate_Construct"}:
-                first, last = statement_span(group)
+                first, last = spans(group)
                 if selected_span[0] <= last and first <= selected_span[1]:
                     complete_original_groups(group.content)
 
@@ -837,7 +817,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     vector_reduction = any(kind_of(item) == "Intrinsic_Function_Reference"
                            and str(item.items[0]).lower() in {"sum", "dot_product"}
                            for _owner, body in bodies for item in walk(body))
-    if (helpers or vector_reduction) and (observers := _exception_observers(analysis)):
+    if (helpers or vector_reduction) and (observers := analysis.exception_observers):
         raise CompilationError("source-observable floating-point exception flags prevent GPU helper closure: "
                                + "; ".join(observers))
     admitted = {"Execution_Part", "Block_Nonlabel_Do_Construct", "Nonlabel_Do_Stmt", "End_Do_Stmt", "Assignment_Stmt", "Call_Stmt",

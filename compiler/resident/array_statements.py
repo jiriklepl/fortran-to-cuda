@@ -44,7 +44,7 @@ from compiler.frontend.syntax import kind_of, parse_fortran, part_of
 
 from .anchors import _strip_inline_comment
 from .inlining import _declarations
-from .reductions import _heading, _procedures, _span, _units
+from .reductions import _heading, _procedures, _span, holds_selected
 
 # Intrinsic functions whose result for arrays is the function of each element.
 _ELEMENTAL = frozenset({
@@ -395,7 +395,7 @@ def lower_array_statements(text, procedures, sources=()):
     without ALLOCATABLE, SAVE or TARGET) is not looked at.
     """
     patterns = [pattern.lower() for pattern in procedures]
-    if not any(fnmatchcase(unit, pattern.split("::", 1)[0]) for unit in _units(text) for pattern in patterns):
+    if not holds_selected(text, patterns):
         return text, []
     lines = text.splitlines(keepends=True)
     edits, records, number = [], [], 0

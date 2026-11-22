@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 
 from fparser.two.utils import Base, walk
@@ -331,6 +332,28 @@ class SourceEffects:
                 self._register_routine(parent, child, source_kind="internal")
             elif kind_of(child) == "Function_Subprogram":
                 self._register_function(parent, child)
+
+    @cached_property
+    def exception_observers(self):
+        """Who calls the intrinsic procedures that read the IEEE exception flags, as ``<procedure> calls <name>``.
+
+        Device arithmetic does not publish the CPU exception flags. Until that
+        effect can be represented, even an observer in another configured caller
+        conservatively prevents admission of new numerical closures. A user
+        procedure with the same spelling is not an intrinsic observer.
+        """
+        observers = []
+        for qualified, routine in {**self.routines, **self.numerical_helpers}.items():
+            for node in walk(routine.execution):
+                if kind_of(node) != "Call_Stmt" or kind_of(node.items[0]) != "Name":
+                    continue
+                for target in self._candidates(routine.scope, node.items[0]):
+                    parts = target.split("::")
+                    if (len(parts) == 3 and parts[0] == "$intrinsic"
+                            and parts[1] in {"ieee_arithmetic", "ieee_exceptions"}
+                            and parts[2] in {"ieee_get_flag", "ieee_get_status"}):
+                        observers.append(qualified + " calls " + target)
+        return tuple(sorted(set(observers)))
 
     @staticmethod
     def external_interface(routine):

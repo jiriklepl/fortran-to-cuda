@@ -62,7 +62,7 @@ def test_named_integer_constants_are_collected_unless_their_value_is_ambiguous()
 
 def test_decided_branches_are_folded_in_a_copy_of_the_body():
     constants = integer_parameters([PARAMETERS])
-    result = specialize(SOURCE, "apply", ("bc(west) == PERIODIC", "bc(east) == PERIODIC"), constants)
+    result = specialize(SOURCE, ["faces::apply"], ("bc(west) == PERIODIC", "bc(east) == PERIODIC"), constants)
     head, rest = result.split("    if ((bc(west) == PERIODIC) .and. &\n        (bc(east) == PERIODIC)) then\n")
     folded, original = rest.split("    else\n    if (bc(west)==INLET .and. mode/=2) then\n", 1)
     # Declarations and the comment before the first statement come first, unchanged; the original body follows.
@@ -81,7 +81,7 @@ def test_decided_branches_are_folded_in_a_copy_of_the_body():
 
 def test_an_else_if_that_becomes_the_first_branch_is_an_if():
     constants = integer_parameters([PARAMETERS])
-    result = specialize(SOURCE, "apply", ("bc(west) == WALL",), constants)
+    result = specialize(SOURCE, ["faces::apply"], ("bc(west) == WALL",), constants)
     folded = result.split("    if ((bc(west) == WALL)) then\n")[1].split(
         "    else\n    if (bc(west)==INLET .and. mode/=2) then\n")[0]
     # The inlet branch needs another kind and goes; the wall branch after it is decided and replaces the chain.
@@ -89,7 +89,7 @@ def test_an_else_if_that_becomes_the_first_branch_is_an_if():
     # In the third chain the first branch is undecided, so the decided one after it becomes its ELSE.
     assert "    if (mode==2) then\n      u(1) = 0\n    else\n      u(1) = 2\n    end if\n" in folded
     # With the first branch dropped and the second undecided, an ELSE IF would have to open the construct.
-    result = specialize(SOURCE.replace("mode/=2) then", "mode==9) then"), "apply", ("mode == 2",),
+    result = specialize(SOURCE.replace("mode/=2) then", "mode==9) then"), ["faces::apply"], ("mode == 2",),
                         integer_parameters([PARAMETERS]))
     folded = result.split("    if ((mode == 2)) then\n")[1].split("    else\n    if (bc(west)==INLET")[0]
     assert folded.startswith("    if (bc(west)==WALL .or. (bc(west)==INLET .and. mode==2)) then\n")
@@ -99,9 +99,9 @@ def test_an_order_comparison_of_known_values_is_decided_too():
     # ELMM tells its ordinary boundary kinds from the parallel ones by a range.
     source = SOURCE.replace("    else if (bc(west)==PERIODIC) then\n", "    else if (bc(west) < INLET .or. bc(west) >= 9) then\n")
     constants = integer_parameters([PARAMETERS])
-    folded = specialize(source, "apply", ("bc(west) == PERIODIC",), constants).split("    else\n    if (bc(west)==INLET")[0]
+    folded = specialize(source, ["faces::apply"], ("bc(west) == PERIODIC",), constants).split("    else\n    if (bc(west)==INLET")[0]
     assert "      do i = 0, 0\n        u(i) = u(n)\n      end do\n    if (bc(east)==PERIODIC) then\n" in folded
-    folded = specialize(source.replace("< INLET", "> INLET"), "apply", ("bc(west) == PERIODIC",),
+    folded = specialize(source.replace("< INLET", "> INLET"), ["faces::apply"], ("bc(west) == PERIODIC",),
                         constants).split("    else\n    if (bc(west)==INLET")[0]
     assert "      u(0) = u(1)\n    if (bc(east)==PERIODIC) then\n" in folded
     assert "u(i) = u(n)" not in folded
@@ -112,20 +112,20 @@ def test_an_order_comparison_of_known_values_is_decided_too():
     (("mode /= 2",), "has the form <expression> <relation> <integer constant>"),
     (("bc(west) == east",), "no known integer value"),
     (("bc(west) == WALL", "bc(west) == PERIODIC"), "contradict each other"),
-    (("n == 5",), "decide no branch of apply"),
+    (("n == 5",), "decide no branch of faces::apply"),
 ])
 def test_conditions_that_cannot_be_used_are_refused(conditions, message):
     with pytest.raises(ValueError, match=message):
-        specialize(SOURCE, "apply", conditions, integer_parameters([PARAMETERS]))
+        specialize(SOURCE, ["faces::apply"], conditions, integer_parameters([PARAMETERS]))
 
 
 def test_a_body_that_cannot_be_written_twice_is_refused():
     named = SOURCE.replace("      do i = 0, 0\n", "      halo: do i = 0, 0\n").replace(
         "        u(i) = u(n)\n      end do\n", "        u(i) = u(n)\n      end do halo\n")
     with pytest.raises(ValueError, match="cannot be written twice"):
-        specialize(named, "apply", ("bc(west) == PERIODIC",), integer_parameters([PARAMETERS]))
-    with pytest.raises(ValueError, match="Expected one procedure missing"):
-        specialize(SOURCE, "missing", ("bc(west) == PERIODIC",), integer_parameters([PARAMETERS]))
+        specialize(named, ["faces::apply"], ("bc(west) == PERIODIC",), integer_parameters([PARAMETERS]))
+    with pytest.raises(ValueError, match="Expected the procedure faces::missing"):
+        specialize(SOURCE, ["faces::missing"], ("bc(west) == PERIODIC",), integer_parameters([PARAMETERS]))
 
 
 @pytest.mark.parametrize("statement", ["bc(west) = WALL", "call reset(bc)", "mode = 2"])
@@ -133,7 +133,7 @@ def test_a_body_that_may_change_what_a_condition_tests_is_refused(statement):
     changing = SOURCE.replace("      u(0) = 1\n", "      u(0) = 1\n      " + statement + "\n")
     conditions = ("mode == 1",) if statement.startswith("mode") else ("bc(west) == PERIODIC",)
     with pytest.raises(ValueError, match="may change what an assumed condition tests"):
-        specialize(changing, "apply", conditions, integer_parameters([PARAMETERS]))
+        specialize(changing, ["faces::apply"], conditions, integer_parameters([PARAMETERS]))
 
 
 def test_a_bound_decides_the_comparisons_it_settles_also_inside_loops():
@@ -157,7 +157,7 @@ contains
   end subroutine
 end module
 """
-    text = specialize(source, "visc", ("viscosity > 0",), {})
+    text = specialize(source, ["walls::visc"], ("viscosity > 0",), {})
     folded = text[text.index("if ((viscosity > 0)) then"):text.index("    else\n    do i")]
     # The bound settles the first comparison, not the second; what lies between the statements stays.
     assert "stop_run" not in folded
@@ -185,7 +185,7 @@ contains
   end subroutine
 end module
 """
-    text = specialize(source, "step", (".not. buoyant",), {})
+    text = specialize(source, ["flags::step"], (".not. buoyant",), {})
     folded = text[text.index("if ((.not. buoyant)) then"):text.index("    else\n    do i")]
     assert "2 * u(i)" not in folded
     assert "      if (moist) then\n        u(i) = 0\n      end if\n" in folded

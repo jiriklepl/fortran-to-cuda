@@ -22,6 +22,7 @@ from fparser.two.utils import walk
 from compiler.frontend.syntax import parse_fortran, parser
 
 from .anchors import _logical_lines, _split_top_level_args
+from .reductions import _procedures
 
 _PARAMETERS = re.compile(r"(?i)^\s*integer\b[^!:]*\bparameter\b[^!:]*::(.*)$")
 _LITERAL = re.compile(r"[+-]?\d+\Z")
@@ -255,54 +256,59 @@ def _fold(nodes, lines, conditions, counter, one_line=False):
     return output
 
 
-def specialize(text, routine, conditions, constants):
-    """Give ``routine`` a version of its body for the case that ``conditions`` hold.
+def specialize(text, procedures, conditions, constants):
+    """Give each of ``procedures`` a version of its body for the case that ``conditions`` hold.
 
-    ``conditions`` are Fortran comparisons ``<expression> == <integer constant>``
-    that the procedure can evaluate; ``constants`` maps named constants to
-    their values (see ``integer_parameters``). An IF branch is folded when the
-    conditions decide it. The procedure tests the conditions once at entry and
-    runs the original body when they do not hold, so nothing it calls may
-    change what they test. Raises ValueError when the conditions decide no
-    branch of the procedure, when the procedure itself assigns to a variable
-    they name or passes one to a call, or when its body cannot be written
-    twice.
+    ``procedures`` are ``module::name`` names of procedures of ``text`` (see
+    ``reductions._procedures``). ``conditions`` are Fortran comparisons
+    ``<expression> <relation> <integer constant>``, or LOGICAL variables and
+    their negations, that the procedures can evaluate; ``constants`` maps named
+    constants to their values (see ``integer_parameters``). An IF branch is
+    folded when the conditions decide it. A procedure tests the conditions once
+    at entry and runs the original body when they do not hold, so nothing it
+    calls may change what they test. Raises ValueError when the conditions
+    decide no branch of a procedure, when a procedure itself assigns to a
+    variable they name or passes one to a call, or when its body cannot be
+    written twice.
     """
     known = _Conditions(conditions, constants)
-    tree = parse_fortran(text)
-    matches = []
-    for node in walk(tree):
-        if type(node).__name__ in {"Subroutine_Subprogram", "Function_Subprogram"}:
-            header = next((item for item in node.content
-                           if type(item).__name__ in {"Subroutine_Stmt", "Function_Stmt"}), None)
-            if header is not None and len(header.items) > 1 and str(header.items[1]).lower() == routine.lower():
-                matches.append(node)
-    if len(matches) != 1:
-        raise ValueError(f"Expected one procedure {routine} to specialize, found {len(matches)}")
-    execution = next((part for part in matches[0].content if type(part).__name__ == "Execution_Part"), None)
+    scopes = {scope.qualified: scope for scope in _procedures(parse_fortran(text))}
+    lines = text.splitlines(keepends=True)
+    edits = []
+    for name in procedures:
+        scope = scopes.get(name.lower())
+        if scope is None:
+            raise ValueError(f"Expected the procedure {name} to specialize")
+        edits.append(_specialized(scope.node, name, lines, conditions, known))
+    for first, last, replacement in sorted(edits, reverse=True):
+        lines[first - 1:last] = replacement
+    return "".join(lines)
+
+
+def _specialized(procedure, name, lines, conditions, known):
+    """The edit ``(first, last, lines)`` that gives one procedure its version for the case that ``known`` holds."""
+    execution = next((part for part in procedure.content if type(part).__name__ == "Execution_Part"), None)
     if execution is None:
-        raise ValueError(f"Procedure {routine} has no executable statements")
+        raise ValueError(f"Procedure {name} has no executable statements")
     for node in walk(execution):
         item = getattr(node, "item", None)
         if item is not None and (getattr(item, "label", None) is not None or getattr(item, "name", None)):
-            raise ValueError(f"Procedure {routine} has a labelled or named statement; its body cannot be written twice")
+            raise ValueError(f"Procedure {name} has a labelled or named statement; its body cannot be written twice")
         # The conditions are tested once, at entry: the body must not be able to change them.
         changed = ()
         if type(node).__name__ == "Assignment_Stmt":
             changed = [name for name in walk(node.items[0], Fortran2003.Name)][:1]
         elif type(node).__name__ == "Call_Stmt" and node.items[1] is not None:
             changed = walk(node.items[1], Fortran2003.Name)
-        if any(str(name).lower() in known.names for name in changed):
-            raise ValueError(f"Procedure {routine} may change what an assumed condition tests: "
+        if any(str(item).lower() in known.names for item in changed):
+            raise ValueError(f"Procedure {name} may change what an assumed condition tests: "
                              + " ".join(str(node).split()))
-    lines = text.splitlines(keepends=True)
     first, last = _span(execution)
     counter = [0]
     folded = _fold(execution.content, lines, known, counter)
     if not counter[0]:
-        raise ValueError(f"The assumed conditions decide no branch of {routine}")
+        raise ValueError(f"The assumed conditions decide no branch of {name}")
     original = lines[first - 1:last]
     indent = original[0][:len(original[0]) - len(original[0].lstrip())]
     test = (" .and. &\n" + indent + "    ").join("(" + condition.strip() + ")" for condition in conditions)
-    return "".join([*lines[:first - 1], f"{indent}if ({test}) then\n", *folded, f"{indent}else\n", *original,
-                    f"{indent}end if\n", *lines[last:]])
+    return first, last, [f"{indent}if ({test}) then\n", *folded, f"{indent}else\n", *original, f"{indent}end if\n"]

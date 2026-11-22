@@ -44,10 +44,10 @@ from fnmatch import fnmatchcase
 
 from fparser.two.utils import walk
 
-from compiler.frontend.syntax import kind_of, parse_fortran, part_of
+from compiler.frontend.syntax import children_of, kind_of, parse_fortran, part_of
 
 from .anchors import _strip_inline_comment
-from .reductions import _heading, _procedures, _span
+from .reductions import _heading, _procedures, _span, holds_selected
 from .specialize import _fold
 
 _PRESENT = re.compile(r"(?i)\bpresent\s*\(\s*([a-z]\w*)\s*\)")
@@ -632,6 +632,73 @@ def _declare(scope, lines, names):
     return after + 1, after, [margin + item + "\n" for item in names]
 
 
+def _moved(line, moves):
+    """Where a line of the text is after the edits ``(first, last, added lines)`` made since, in their order."""
+    for first, last, added in moves:
+        if line > last:
+            line += added
+        elif line >= first:
+            raise ValueError("A rewrite changed lines of another procedure")
+    return line
+
+
+def _alone(lines, first, last):
+    """The node of the procedure on lines ``first`` to ``last``, parsed on its own at the same line numbers."""
+    tree = parse_fortran("\n" * (first - 1) + "".join(lines[first - 1:last]))
+    node, = (item for item in children_of(tree) if kind_of(item) in {"Subroutine_Subprogram", "Function_Subprogram"})
+    return node
+
+
+def _rewrite(node, qualified, lines, text, selected):
+    """The next rewrite of a procedure: its edits and record; no edits and maybe a record where there is none.
+
+    A pointer to the element of a list and a SELECT CASE are rewritten in any
+    procedure; the RETURN statements and capped loops only in those the
+    selected ones call. A record without edits says why a rewrite cannot be
+    made; the procedure gets no more of them then.
+    """
+    scope = _Node(node)
+    found = _element_pointer(scope, lines)
+    if found is not None:
+        return [found], {"procedure": qualified, "pointer": found[0]}
+    found = _select_case(scope, lines)
+    if found is not None:
+        return [found], {"procedure": qualified, "cases": found[0]}
+    execution = part_of(node, "Execution_Part")
+    if selected or execution is None:
+        return [], None
+    if _returns(execution):
+        found = _return_edit(list(execution.content), lines)
+        if found is not None and not isinstance(found, str):
+            return [found], {"procedure": qualified, "returns": True}
+        # Where the statements after a RETURN cannot simply become a branch, a flag says it was reached.
+        taken = re.findall(r"(?i)\bfort_left_(\d+)\b", text)
+        flag = f"fort_left_{1 + max((int(item) for item in taken), default=0)}"
+        flagged = _flagged(list(execution.content), lines, flag)
+        if flagged is None:
+            return [], {"procedure": qualified, "reason": found or "a RETURN stays"}
+        start, stop = _span(execution)
+        indent = lines[start - 1][:len(lines[start - 1]) - len(lines[start - 1].lstrip())]
+        return ([(start, stop, [f"{indent}{flag} = .false.\n", *flagged]), _declare(scope, lines, [f"logical :: {flag}"])],
+                {"procedure": qualified, "returns": True})
+    number = 1 + max((int(found) for found in re.findall(r"(?i)\bfort_trip_(\d+)\b", text)), default=0)
+    found = _counted_loop(list(execution.content), lines, number)
+    if isinstance(found, str):
+        return [], {"procedure": qualified, "reason": found}
+    if found is None:
+        return [], None
+    first, last, replacement, (flag, trip) = found
+    return ([(first, last, replacement), _declare(scope, lines, [f"logical :: {flag}", f"integer :: {trip}"])],
+            {"procedure": qualified, "loop": first})
+
+
+class _Node:
+    """A procedure as the rewrites see it: its node."""
+
+    def __init__(self, node):
+        self.node = node
+
+
 def prepare_helpers(text, procedures):
     """Rewrite what the selected procedures call so that their nests can take it in.
 
@@ -643,7 +710,7 @@ def prepare_helpers(text, procedures):
     rewrite cannot be made.
     """
     patterns = [pattern.lower() for pattern in procedures]
-    if not any(pattern.split("::", 1)[0] in text.lower() for pattern in patterns):
+    if not holds_selected(text, patterns):
         return text, []
     records, versions = {}, {}
     for _round in range(_ROUNDS):
@@ -654,61 +721,28 @@ def prepare_helpers(text, procedures):
         if not any("version" in record for record in found):
             break
     records = list(records.values())
-    refused = set()
-    for _round in range(_ROUNDS):
-        lines = text.splitlines(keepends=True)
-        scopes, reached = _reached(text, patterns)
-        edits = None
-        for qualified in sorted(reached):
-            scope = scopes[qualified]
-            found = _element_pointer(scope, lines)
-            if found is not None:
-                edits = [found]
-                records.append({"procedure": qualified, "pointer": found[0]})
+    # The rewrites of a procedure change its own lines only, and do not change what it calls: one procedure is
+    # rewritten after the other, and parsed alone again after each rewrite.
+    scopes, reached = _reached(text, patterns)
+    moves = []
+    for qualified in sorted(reached):
+        selected = any(fnmatchcase(qualified, pattern) for pattern in patterns)
+        first, last = (_moved(line, moves) for line in _span(scopes[qualified].node))
+        node = scopes[qualified].node if not moves else None
+        for _round in range(_ROUNDS):
+            lines = text.splitlines(keepends=True)
+            if node is None:
+                node = _alone(lines, first, last)
+            edits, record = _rewrite(node, qualified, lines, text, selected)
+            if record is not None:
+                records.append(record)
+            if not edits:
                 break
-            found = _select_case(scope, lines)
-            if found is not None:
-                edits = [found]
-                records.append({"procedure": qualified, "cases": found[0]})
-                break
-            if any(fnmatchcase(qualified, pattern) for pattern in patterns) or qualified in refused:
-                continue
-            execution = part_of(scope.node, "Execution_Part")
-            if execution is None:
-                continue
-            if _returns(execution):
-                found = _return_edit(list(execution.content), lines)
-                if isinstance(found, str) or found is None:
-                    # Where the statements after a RETURN cannot simply become a branch, a flag says it was reached.
-                    taken = re.findall(r"(?i)\bfort_left_(\d+)\b", text)
-                    flag = f"fort_left_{1 + max((int(item) for item in taken), default=0)}"
-                    flagged = _flagged(list(execution.content), lines, flag)
-                    if flagged is None:
-                        records.append({"procedure": qualified, "reason": found or "a RETURN stays"})
-                        refused.add(qualified)
-                        continue
-                    start, stop = _span(execution)
-                    indent = lines[start - 1][:len(lines[start - 1]) - len(lines[start - 1].lstrip())]
-                    found = (start, stop, [f"{indent}{flag} = .false.\n", *flagged])
-                    edits = [found, _declare(scope, lines, [f"logical :: {flag}"])]
-                else:
-                    edits = [found]
-                records.append({"procedure": qualified, "returns": True})
-                break
-            number = 1 + max((int(found) for found in re.findall(r"(?i)\bfort_trip_(\d+)\b", text)), default=0)
-            found = _counted_loop(list(execution.content), lines, number)
-            if isinstance(found, str):
-                records.append({"procedure": qualified, "reason": found})
-                refused.add(qualified)
-                continue
-            if found is not None:
-                first, last, replacement, (flag, trip) = found
-                edits = [(first, last, replacement), _declare(scope, lines, [f"logical :: {flag}", f"integer :: {trip}"])]
-                records.append({"procedure": qualified, "loop": first})
-                break
-        if edits is None:
-            break
-        for first, last, replacement in sorted(edits, reverse=True):
-            lines[first - 1:last] = replacement
-        text = "".join(lines)
+            for edit_first, edit_last, replacement in sorted(edits, reverse=True):
+                lines[edit_first - 1:edit_last] = replacement
+                moves.append((edit_first, edit_last, len(replacement) - (edit_last - edit_first + 1)))
+                last += len(replacement) - (edit_last - edit_first + 1)
+            text, node = "".join(lines), None
+        else:
+            raise ValueError(f"The procedures that {qualified} calls take more than {_ROUNDS} rewrites")
     return text, records

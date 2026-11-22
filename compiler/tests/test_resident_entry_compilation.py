@@ -11,6 +11,7 @@ from compiler.ir import CompilationError
 from compiler.scopes.resident_entries import (
     compile_resident_entries,
     compile_resident_entry,
+    compiling_pool,
     export_resident_entries,
     pass_scalars_by_value,
 )
@@ -72,6 +73,21 @@ def test_supported_entries_are_written_and_a_rejected_span_stays_with_the_caller
         "fields::carried", original["first_line"], original["last_line"])
     assert "Cannot parallelize" in rejection["reason"]
     assert not (tmp_path / "entries" / original["source_identity"][:16]).exists()
+
+
+def test_entries_compiled_at_the_same_time_are_those_compiled_one_by_one(tmp_path):
+    exported = export(tmp_path)
+    pool = compiling_pool(2)
+    try:
+        records = [compile_resident_entries(exported, tmp_path / name, pool=using)
+                   for name, using in (("one", None), ("two", pool))]
+    finally:
+        pool.shutdown()
+    one, two = (json.dumps(record).replace(str(tmp_path / name), "@") for record, name in zip(records, ("one", "two"), strict=True))
+    assert one == two
+    files = [sorted((path.relative_to(tmp_path / name), path.read_bytes()) for path in (tmp_path / name).rglob("*")
+                    if path.is_file() and path.name != "device-entries.json") for name in ("one", "two")]
+    assert files[0] == files[1]
 
 
 def test_in_process_compilation_writes_what_the_command_line_writes(tmp_path):

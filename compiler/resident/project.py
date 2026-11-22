@@ -10,6 +10,7 @@ to add; ``compiler.resident.build`` turns that into executables.
 import json
 import re
 from collections.abc import Callable, Mapping
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 from itertools import count
@@ -20,11 +21,12 @@ from compiler.resident.configure import configure_sources, distinct_name
 from compiler.resident.directives import expand_directives
 from compiler.resident.helpers import prepare_helpers
 from compiler.resident.inlining import inline_calls
-from compiler.resident.reductions import lower_reductions
+from compiler.resident.reductions import holds_selected, lower_reductions
 from compiler.resident.rewrites import inline_tile_scratch_nests, promote_line_snapshots
 from compiler.resident.specialize import integer_parameters, specialize
 from compiler.scopes.resident_entries import (
     compile_resident_entries,
+    compiling_pool,
     export_resident_entries,
     host_statement_id,
     pass_scalars_by_value,
@@ -267,7 +269,7 @@ def _access_needed(extracted, packages, selected):
     return needed
 
 
-def prepare(project, directory, *, fortran, host_threads=4):
+def prepare(project, directory, *, fortran, host_threads=4, jobs=1):
     """Write the resident variant of the application's sources into ``directory``.
 
     Returns, and writes as ``prepared.json``: ``sources``, one record per
@@ -288,7 +290,8 @@ def prepare(project, directory, *, fortran, host_threads=4):
     the host (see ``compiler.resident.reductions``); and ``temporaries``, the
     arrays a selected procedure allocates and deallocates in each call, whose
     storage the domain lends instead (see ``resident_splice.lend_storage``).
-    The directory must not exist.
+    The directory must not exist. The entries are compiled ``jobs`` at a time,
+    which changes nothing of what is written.
     """
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
@@ -333,23 +336,25 @@ def prepare(project, directory, *, fortran, host_threads=4):
                 path.write_text(text)
                 current[original] = path
                 specialized.add(original)
-    if assumed:
-        for selection in assumed:
-            for name in selection.procedures:
-                routine = name.rsplit("::", 1)[-1]
-                if any(character in name for character in "*?["):
-                    raise ValueError("Assumed conditions need exact procedure names: " + name)
-                # The declaration, not a reference: a procedure statement or its END.
-                holders = [original for original, text in texts.items()
-                           if re.search(rf"(?im)^\s*(?:\w+\s+)*(?:subroutine|function)\s+{re.escape(routine)}\b", text)]
-                if len(holders) != 1:
-                    raise ValueError(f"Expected one source that defines {name}, found {len(holders)}")
-                texts[holders[0]] = specialize(texts[holders[0]], routine, selection.assume, constants)
-                path = directory / "rewritten" / current[holders[0]].name
-                path.parent.mkdir(exist_ok=True)
-                path.write_text(texts[holders[0]])
-                current[holders[0]] = path
-                specialized.add(holders[0])
+    for selection in assumed:
+        by_source = {}
+        for name in selection.procedures:
+            routine = name.rsplit("::", 1)[-1]
+            if any(character in name for character in "*?["):
+                raise ValueError("Assumed conditions need exact procedure names: " + name)
+            # The declaration, not a reference: a procedure statement or its END, in a source of its module.
+            holders = [original for original, text in texts.items() if holds_selected(text, [name.lower()])
+                       and re.search(rf"(?im)^\s*(?:\w+\s+)*(?:subroutine|function)\s+{re.escape(routine)}\b", text)]
+            if len(holders) != 1:
+                raise ValueError(f"Expected one source that defines {name}, found {len(holders)}")
+            by_source.setdefault(holders[0], []).append(name)
+        for original, names in by_source.items():
+            texts[original] = specialize(texts[original], names, selection.assume, constants)
+            path = directory / "rewritten" / current[original].name
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(texts[original])
+            current[original] = path
+            specialized.add(original)
 
     # What the selected procedures call is written in a form their loop nests can take in.
     helpers = []
@@ -400,73 +405,74 @@ def prepare(project, directory, *, fortran, host_threads=4):
 
     extracted = export_resident_entries(list(current.values()), patterns, directory / "extracted")
     packages, summaries = [], []
-    for selection in project.selections:
-        chosen = [name.lower() for name in selection.procedures]
+    with compiling_pool(jobs) or nullcontext() as pool:
+        for selection in project.selections:
+            chosen = [name.lower() for name in selection.procedures]
 
-        def selected(item, chosen=chosen):
-            return any(fnmatchcase(item["procedure"], pattern) for pattern in chosen)
+            def selected(item, chosen=chosen):
+                return any(fnmatchcase(item["procedure"], pattern) for pattern in chosen)
 
-        group = {**extracted, "entries": [item for item in extracted["entries"] if selected(item)],
-                 "rejected": [item for item in extracted["rejected"] if selected(item)]}
-        group = pass_scalars_by_value(group, directory / (selection.label + "-values"))
-        retried = count(1)
+            group = {**extracted, "entries": [item for item in extracted["entries"] if selected(item)],
+                     "rejected": [item for item in extracted["rejected"] if selected(item)]}
+            group = pass_scalars_by_value(group, directory / (selection.label + "-values"))
+            retried = count(1)
 
-        def expand(region, label=selection.label, retried=retried):
-            """The nests of an entry that did not compile, each exported as an entry of its own."""
-            more = extracted["retry"](region["procedure"], region["first_line"], region["last_line"])
-            return pass_scalars_by_value(more, directory / f"{label}-values-{next(retried)}")
+            def expand(region, label=selection.label, retried=retried):
+                """The nests of an entry that did not compile, each exported as an entry of its own."""
+                more = extracted["retry"](region["procedure"], region["first_line"], region["last_line"])
+                return pass_scalars_by_value(more, directory / f"{label}-values-{next(retried)}")
 
-        package = compile_resident_entries(group, directory / (selection.label + "-entries"),
-                                           host_threads=host_threads, expand=expand)
-        # A rewritten reduction runs on the device only when all three of its nests compiled. Otherwise
-        # its original nest runs, and what the rewrite added is left out of the entries and the report.
-        for record in lowered:
-            if not any(fnmatchcase(record["procedure"], pattern) for pattern in chosen):
-                continue
-            own = [item for item in package["entries"] if reduction(item["region"]) is record]
-            record["compiled"] = sum(len(item["region"]["source_loop_spans"]) for item in own) == 3
-            if record["compiled"]:
-                continue
-            lines = current[record["source"]].read_text().splitlines()
+            package = compile_resident_entries(group, directory / (selection.label + "-entries"),
+                                               host_threads=host_threads, expand=expand, pool=pool)
+            # A rewritten reduction runs on the device only when all three of its nests compiled. Otherwise
+            # its original nest runs, and what the rewrite added is left out of the entries and the report.
+            for record in lowered:
+                if not any(fnmatchcase(record["procedure"], pattern) for pattern in chosen):
+                    continue
+                own = [item for item in package["entries"] if reduction(item["region"]) is record]
+                record["compiled"] = sum(len(item["region"]["source_loop_spans"]) for item in own) == 3
+                if record["compiled"]:
+                    continue
+                lines = current[record["source"]].read_text().splitlines()
 
-            def belongs(item, record=record, lines=lines):
-                return item["procedure"] == record["procedure"] and record["tag"] in "\n".join(
-                    lines[item["first_line"] - 1:item["last_line"]])
+                def belongs(item, record=record, lines=lines):
+                    return item["procedure"] == record["procedure"] and record["tag"] in "\n".join(
+                        lines[item["first_line"] - 1:item["last_line"]])
 
-            mine = [item for item in package["rejected"] if belongs(item)]
-            # A nest that was tried piece by piece says why at its outermost loop; the pieces only add
-            # that they do not stand on their own.
-            opened = [item for item in package.get("descended", ()) if belongs(item)]
-            record["reason"] = "; ".join(sorted({item["reason"] for item in opened or mine})) \
-                or "its nests were not exported"
-            package = {**package, "entries": [item for item in package["entries"] if item not in own],
-                       "rejected": [item for item in package["rejected"] if item not in mine],
-                       "descended": [item for item in package.get("descended", ()) if item not in opened]}
-        # The nest of an array assignment that did not compile stays in place and runs on the host, as the
-        # statement did: it is host code for the audit, not a rejected nest.
-        for record in array_statements:
-            if "tag" not in record or not any(fnmatchcase(record["procedure"], pattern) for pattern in chosen):
-                continue
-            lines = current[record["source"]].read_text().splitlines()
-            mine = [item for item in package["rejected"] if item["procedure"] == record["procedure"]
-                    and record["tag"] in "\n".join(lines[item["first_line"] - 1:item["last_line"]])]
-            if mine:
-                record.update(lowered=False, reason="; ".join(sorted({item["reason"] for item in mine})),
-                              nests=[{**item, "source": str(current[record["source"]])} for item in mine])
-                package = {**package, "rejected": [item for item in package["rejected"] if item not in mine]}
-        nests = sum(len(item["region"]["source_loop_spans"]) for item in package["entries"])
-        if nests < selection.minimum_nests:
-            raise ValueError(f"Selection {selection.label} compiled {nests} loop nests; "
-                             f"at least {selection.minimum_nests} are required")
-        summary = {"label": selection.label, "entries": len(package["entries"]), "nests": nests,
-                   "rejected": package["rejected"]}
-        if package.get("descended"):
-            # Loops the host runs around entries: each did not compile as a nest of its own.
-            summary["descended"] = package["descended"]
-        if not selection.native_rejections:
-            package = {**package, "rejected": []}
-        packages.append(package)
-        summaries.append(summary)
+                mine = [item for item in package["rejected"] if belongs(item)]
+                # A nest that was tried piece by piece says why at its outermost loop; the pieces only add
+                # that they do not stand on their own.
+                opened = [item for item in package.get("descended", ()) if belongs(item)]
+                record["reason"] = "; ".join(sorted({item["reason"] for item in opened or mine})) \
+                    or "its nests were not exported"
+                package = {**package, "entries": [item for item in package["entries"] if item not in own],
+                           "rejected": [item for item in package["rejected"] if item not in mine],
+                           "descended": [item for item in package.get("descended", ()) if item not in opened]}
+            # The nest of an array assignment that did not compile stays in place and runs on the host, as the
+            # statement did: it is host code for the audit, not a rejected nest.
+            for record in array_statements:
+                if "tag" not in record or not any(fnmatchcase(record["procedure"], pattern) for pattern in chosen):
+                    continue
+                lines = current[record["source"]].read_text().splitlines()
+                mine = [item for item in package["rejected"] if item["procedure"] == record["procedure"]
+                        and record["tag"] in "\n".join(lines[item["first_line"] - 1:item["last_line"]])]
+                if mine:
+                    record.update(lowered=False, reason="; ".join(sorted({item["reason"] for item in mine})),
+                                  nests=[{**item, "source": str(current[record["source"]])} for item in mine])
+                    package = {**package, "rejected": [item for item in package["rejected"] if item not in mine]}
+            nests = sum(len(item["region"]["source_loop_spans"]) for item in package["entries"])
+            if nests < selection.minimum_nests:
+                raise ValueError(f"Selection {selection.label} compiled {nests} loop nests; "
+                                 f"at least {selection.minimum_nests} are required")
+            summary = {"label": selection.label, "entries": len(package["entries"]), "nests": nests,
+                       "rejected": package["rejected"]}
+            if package.get("descended"):
+                # Loops the host runs around entries: each did not compile as a nest of its own.
+                summary["descended"] = package["descended"]
+            if not selection.native_rejections:
+                package = {**package, "rejected": []}
+            packages.append(package)
+            summaries.append(summary)
 
     # Temporary arrays of the selected procedures that entries keep on the device: the domain lends their
     # storage, so their ALLOCATE and DEALLOCATE are no host statements that need anything.

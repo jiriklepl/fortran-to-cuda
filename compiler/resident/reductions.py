@@ -121,6 +121,11 @@ def _units(text):
             *(match.group(1).lower() for match in re.finditer(r"(?im)^\s*module\s+([a-z_]\w*)\b", text))}
 
 
+def holds_selected(text, patterns):
+    """Whether ``text`` may hold procedures that the ``module::name`` patterns select (see ``_units``)."""
+    return any(fnmatchcase(unit, pattern.split("::", 1)[0]) for unit in _units(text) for pattern in patterns)
+
+
 def _procedures(tree):
     def subprograms(nodes, prefix, hosts):
         for node in nodes:
@@ -453,7 +458,7 @@ def lower_reductions(text, procedures):
     """
     lines = text.splitlines(keepends=True)
     patterns = [pattern.lower() for pattern in procedures]
-    if not any(fnmatchcase(unit, pattern.split("::", 1)[0]) for unit in _units(text) for pattern in patterns):
+    if not holds_selected(text, patterns):
         return text, []
     tree = parse_fortran(text)
     edits, records, number = [], [], 0

@@ -163,3 +163,17 @@ def statement_span(node):
         raise CompilationError("structured source operation lacks an exact edit span")
     spans = [item.item.span for item in items]
     return min(span[0] for span in spans), max(span[1] for span in spans)
+
+
+class Spans:
+    """``statement_span`` of the nodes of trees that do not change meanwhile, each computed once."""
+
+    def __init__(self):
+        # Each node is kept with its span, so that its id is not taken by another node.
+        self._known = {}
+
+    def __call__(self, node):
+        known = self._known.get(id(node))
+        if known is None or known[0] is not node:
+            known = self._known[id(node)] = (node, statement_span(node))
+        return known[1]

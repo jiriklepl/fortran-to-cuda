@@ -7,7 +7,7 @@ from pathlib import Path
 
 from compiler.frontend.syntax import parse_fortran
 from compiler.resident.anchors import _strip_inline_comment
-from compiler.resident.reductions import _heading, _procedures, _units
+from compiler.resident.reductions import _heading, _procedures, holds_selected
 from compiler.scopes.segments import license_line, parse_license, private_marker
 
 
@@ -48,8 +48,7 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
             raise RuntimeError("Preprocessing failed: " + str(source) + "\n" + result.stderr)
         lines = result.stdout.splitlines(keepends=True)
         removed = []
-        if any(fnmatchcase(unit, name.split("::", 1)[0]) for unit in _units(result.stdout) for name in selected
-               if "::" in name):
+        if holds_selected(result.stdout, [name for name in selected if "::" in name]):
             tree = parse_fortran(result.stdout)
             for scope in _procedures(tree):
                 if not any(fnmatchcase(scope.qualified, pattern) for pattern in selected):

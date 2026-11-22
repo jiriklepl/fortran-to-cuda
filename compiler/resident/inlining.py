@@ -35,7 +35,7 @@ from compiler.frontend.syntax import kind_of, parse_fortran, part_of
 
 from .anchors import _strip_inline_comment
 from .configure import serialize_openmp
-from .reductions import _heading, _names, _procedures, _rename, _span, _units
+from .reductions import _heading, _names, _procedures, _rename, _span, holds_selected
 from .specialize import _Conditions, _fold
 
 _LITERAL = re.compile(r"[+-]?\d+\Z")
@@ -149,7 +149,7 @@ def inline_calls(text, callers, callees, constants=None):
     the call stays.
     """
     wanted = {name.lower() for name in callees}
-    if not any(name.split("::", 1)[0] in _units(text) for name in wanted):
+    if not holds_selected(text, wanted):
         return text, []
     lines = text.splitlines(keepends=True)
     tree = parse_fortran(text)

@@ -34,7 +34,7 @@ from compiler.ir import CompilationError
 from compiler.scopes.numerical import NUMERIC_TYPES, resource_binding
 from compiler.scopes.region_context import original_region_context
 from compiler.scopes.regions import extract_region
-from compiler.scopes.segments import directive, grouped_nodes, is_residency_directive, statement_span
+from compiler.scopes.segments import Spans, directive, grouped_nodes, is_residency_directive, statement_span
 
 _INQUIRIES = {"lbound", "ubound", "size", "shape", "allocated", "associated", "present", "kind", "rank",
               "storage_size", "is_contiguous"}
@@ -935,6 +935,8 @@ def export_resident_entries(paths, procedures, directory):
     def export(procedure, entries, rejected, host_statements, temporaries, splitting=None):
         """Export what one procedure holds. With ``splitting``, only the nests of those spans, each on its own."""
         routine = analysis.routines[procedure]
+        # The procedure's tree changes only for the while that _as_values passes elements as values.
+        spans, context = Spans(), {}
 
         def emit(nodes, sequence, outer=()):
             if len(nodes) > 1:
@@ -947,13 +949,12 @@ def export_resident_entries(paths, procedures, directory):
                             emit(nodes[start:index], sequence, outer)
                             start = index
                     return
-            first = min(statement_span(node)[0] for node in nodes)
-            last = max(statement_span(node)[1] for node in nodes)
+            first = min(spans(node)[0] for node in nodes)
+            last = max(spans(node)[1] for node in nodes)
             # Grouping can peel directive prefixes. Recover the actual
             # source nodes instead of supplying manufactured syntax.
             selected = tuple(node for node in sequence
-                             if first <= statement_span(node)[0]
-                             and statement_span(node)[1] <= last)
+                             if first <= spans(node)[0] and spans(node)[1] <= last)
             loops = [node for node in nodes if kind_of(node) == "Block_Nonlabel_Do_Construct"]
             if splitting is not None:
                 if (first, last) in splitting and len(loops) > 1:
@@ -966,10 +967,10 @@ def export_resident_entries(paths, procedures, directory):
             fixed = _fixed_elements(analysis, routine, selected) if len(loops) == len(nodes) else {}
             undo, values = _as_values(analysis, routine, fixed)
             try:
-                context = original_region_context(routine, selected)
+                surroundings = original_region_context(routine, selected, context)
                 extracted = extract_region(analysis, routine, selected,
-                                           preceding=context.preceding, following=context.following,
-                                           cyclic_following=context.cyclic_following)
+                                           preceding=surroundings.preceding, following=surroundings.following,
+                                           cyclic_following=surroundings.cyclic_following, spans=spans)
                 path = extracted.write(directory)
                 public = extracted.public()
                 readable = sorted(parameter.name for parameter in extracted.parameters
@@ -1233,7 +1234,66 @@ def compile_resident_entry(source, entry, directory, *, host_threads=4, injectiv
     return report
 
 
-def compile_resident_entries(extracted, directory, *, host_threads=4, expand=None):
+def _attempt(arguments):
+    """Compile one entry: its report and None, or None and why it does not compile."""
+    source, entry, directory, host_threads, injective = arguments
+    try:
+        return compile_resident_entry(source, entry, directory, host_threads=host_threads, injective=injective), None
+    except CompilationError as error:
+        return None, str(error)
+
+
+def compiling_pool(jobs):
+    """A pool of ``jobs`` processes that compile entries, for ``compile_resident_entries``; None for one job."""
+    from concurrent.futures import ProcessPoolExecutor
+    from multiprocessing import get_context
+
+    if jobs <= 1:
+        return None
+    context = get_context("forkserver")
+    context.set_forkserver_preload([__name__])
+    return ProcessPoolExecutor(jobs, mp_context=context)
+
+
+class _Attempts:
+    """Entries compiled ahead of the loop that decides which of them are used, by the processes of ``pool``.
+
+    Without a pool an entry is compiled when its result is asked for. With one,
+    each entry that may be asked for is compiled as soon as it is known; the
+    directories of those that are not asked for in the end are removed, so the
+    output is the same either way.
+    """
+
+    def __init__(self, pool):
+        self.pool = pool
+        self.started, self.used = {}, set()
+
+    def start(self, arguments):
+        # Two attempts that would write one directory are not made at once.
+        if self.pool is not None and not any(arguments[2] == other[2] for other in self.started):
+            self.started[arguments] = self.pool.submit(_attempt, arguments)
+
+    def result(self, arguments):
+        self.used.add(arguments[2])
+        future = self.started.get(arguments)
+        if future is not None:
+            return future.result()
+        for other, running in self.started.items():
+            if other[2] == arguments[2]:
+                running.result()
+        return _attempt(arguments)
+
+    def close(self):
+        import shutil
+
+        for arguments, future in self.started.items():
+            if arguments[2] not in self.used:
+                if not future.cancel():
+                    future.exception()
+                shutil.rmtree(arguments[2], ignore_errors=True)
+
+
+def compile_resident_entries(extracted, directory, *, host_threads=4, expand=None, pool=None):
     """Compile every exported entry; keep those whose regions all run on the device.
 
     An entry that the compiler rejects, or that would leave a region on the
@@ -1249,7 +1309,8 @@ def compile_resident_entries(extracted, directory, *, host_threads=4, expand=Non
     Nests that share an entry which does not compile are tried one by one in
     the same way: ``expand(region)`` exports them when that happens (see the
     ``retry`` of an export), and returns their entries, rejections and host
-    statements. Writes and returns ``device-entries.json``.
+    statements. Writes and returns ``device-entries.json``. With a ``pool``
+    (see ``compiling_pool``), its processes compile entries at the same time.
     """
     import json
 
@@ -1262,41 +1323,52 @@ def compile_resident_entries(extracted, directory, *, host_threads=4, expand=Non
         """Not an alternative, or one of spans that all turned out not to be entries."""
         return all((item["procedure"], *span) in opened for span in item.get("alternative_of", ()))
 
-    while pending:
-        region = pending.pop(0)
-        if not counts(region, tried):
-            continue
-        target = directory / region["source_identity"][:16]
-        span = {"procedure": region["procedure"], "source": region["source"], "first_line": region["first_line"],
-                "last_line": region["last_line"], **{key: region[key] for key in ("alternative_of",) if key in region}}
+    def attempt(region):
+        """What compiling a region's entry takes: its source, entry, directory, threads and injective arrays."""
         checked = {requirement["resource"] for requirement in region.get("injective", ())}
-        unavailable = ()
-        try:
-            report = compile_resident_entry(
-                region["input_path"], region["entry"], target, host_threads=host_threads,
-                injective=[parameter["name"] for parameter in region["parameters"]
-                           if parameter["rank"] and parameter["resource"] in checked])
-            unavailable = [item for item in report["scoped"]["region_execution"] if not item["gpu_available"]]
-            failure = {"reason": "Resident GPU entry contains native-only regions",
-                       "regions": unavailable} if unavailable else None
-        except CompilationError as error:
-            failure = {"reason": str(error)}
-        if failure is None:
-            entries.append({"region": region, "directory": str(target), "entry": report["scoped"]})
-        elif region.get("descends"):
-            # The host may run this loop; what its body holds was exported for this case.
-            tried[span["procedure"], span["first_line"], span["last_line"]] = (
-                {**span, **failure}, region.get("host_code", {}))
-        elif expand is not None and len(region["source_loop_spans"]) > 1:
-            # One nest may be all that stands in the way of the others: each is exported on its own now.
-            more = expand(region)
-            tried[span["procedure"], span["first_line"], span["last_line"]] = (
-                {**span, **failure}, region.get("host_code", {}))
-            pending[:0] = more["entries"]
-            for key in expanded:
-                expanded[key] += more[key]
-        else:
-            rejected.append({**span, **failure, **region.get("host_code", {})})
+        return (region["input_path"], region["entry"], directory / region["source_identity"][:16], host_threads,
+                tuple(parameter["name"] for parameter in region["parameters"]
+                      if parameter["rank"] and parameter["resource"] in checked))
+
+    attempts = _Attempts(pool)
+    try:
+        for region in pending:
+            attempts.start(attempt(region))
+        while pending:
+            region = pending.pop(0)
+            if not counts(region, tried):
+                continue
+            arguments = attempt(region)
+            target = arguments[2]
+            span = {"procedure": region["procedure"], "source": region["source"], "first_line": region["first_line"],
+                    "last_line": region["last_line"], **{key: region[key] for key in ("alternative_of",) if key in region}}
+            report, reason = attempts.result(arguments)
+            if reason is not None:
+                failure = {"reason": reason}
+            else:
+                unavailable = [item for item in report["scoped"]["region_execution"] if not item["gpu_available"]]
+                failure = {"reason": "Resident GPU entry contains native-only regions",
+                           "regions": unavailable} if unavailable else None
+            if failure is None:
+                entries.append({"region": region, "directory": str(target), "entry": report["scoped"]})
+            elif region.get("descends"):
+                # The host may run this loop; what its body holds was exported for this case.
+                tried[span["procedure"], span["first_line"], span["last_line"]] = (
+                    {**span, **failure}, region.get("host_code", {}))
+            elif expand is not None and len(region["source_loop_spans"]) > 1:
+                # One nest may be all that stands in the way of the others: each is exported on its own now.
+                more = expand(region)
+                tried[span["procedure"], span["first_line"], span["last_line"]] = (
+                    {**span, **failure}, region.get("host_code", {}))
+                pending[:0] = more["entries"]
+                for item in more["entries"]:
+                    attempts.start(attempt(item))
+                for key in expanded:
+                    expanded[key] += more[key]
+            else:
+                rejected.append({**span, **failure, **region.get("host_code", {})})
+    finally:
+        attempts.close()
     # A span is worth opening when an entry compiled somewhere inside it.
     fruitful = {(item["region"]["procedure"], *span) for item in entries
                 for span in item["region"].get("alternative_of", ())}
