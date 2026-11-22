@@ -12,7 +12,7 @@ import re
 
 from fparser.two.utils import walk
 
-from compiler.frontend.source_effects import _kind
+from compiler.frontend.syntax import kind_of
 from compiler.ir import CompilationError
 
 
@@ -41,20 +41,71 @@ def fortran_lines(lines):
 
 
 def directive(node):
-    if _kind(node) != "Comment":
+    """The text of an OpenMP directive line after ``!$omp``, or None for other nodes."""
+    if kind_of(node) != "Comment":
         return None
     text = str(node).lstrip().lower()
     return text[5:].strip() if text.startswith("!$omp") else None
+
+
+# A ``!$fort`` line of the compiler's: a residency directive, or what the preparation keeps of an OpenMP directive.
+FORT_LINE = re.compile(r"^(?P<indent>[ \t]*)!\$fort\b[ \t]*(?P<body>.*?)[ \t]*$", re.IGNORECASE)
+REDUCTION_LINE = re.compile(r"^[ \t]*!\$fort[ \t]+reduction\b(?P<body>.*?)[ \t]*$", re.IGNORECASE)
+_CLAUSE = re.compile(r"\b(reduction|private)\s*\(([^()]*)\)", re.IGNORECASE)
+_PRIVATE = re.compile(r"!\$fort\s+private\s*\(([^)]*)\)", re.IGNORECASE)
+
+
+def parse_license(text):
+    """The reduction operators and private names a ``!$fort reduction`` line or an OpenMP directive states."""
+    operators, private = {}, set()
+    for clause, body in _CLAUSE.findall(text):
+        if clause.lower() == "private":
+            private.update(name.strip().lower() for name in body.split(",") if name.strip())
+            continue
+        operator, _, names = body.partition(":")
+        for name in names.split(","):
+            if name.strip():
+                operators[name.strip().lower()] = operator.strip().lower()
+    return operators, private
+
+
+def license_line(text):
+    """The ``!$fort reduction`` line for an OpenMP directive, or None when it has no reduction clause."""
+    operators, private = parse_license(text)
+    if not operators:
+        return None
+    grouped = {}
+    for name, operator in operators.items():
+        grouped.setdefault(operator, []).append(name)
+    line = "!$fort " + " ".join(f"reduction({operator}: {', '.join(names)})" for operator, names in grouped.items())
+    return line + (f" private({', '.join(sorted(private))})" if private else "")
+
+
+def private_marker(names):
+    """The comment that says, at the end of a DO statement, which scalars have no value when an iteration starts."""
+    return "!$fort private(" + ", ".join(sorted(names)) + ")"
+
+
+def private_names(text):
+    """The names of the ``!$fort private`` comment in ``text``; empty if it has none."""
+    match = _PRIVATE.search(text)
+    return {name.strip().lower() for name in match.group(1).split(",") if name.strip()} if match else set()
+
+
+def is_residency_directive(node):
+    """A ``!$fort`` line, other than the ``private`` one a loop's OpenMP directive left, which says nothing of residency."""
+    text = str(node).lstrip().lower()
+    return text.startswith("!$fort") and not re.match(r"!\$fort\s+private\b", text)
 
 
 def grouped_nodes(nodes):
     """Keep whole joined groups as one native scheduling operation."""
     expanded = []
     for node in nodes:
-        if _kind(node) in {"Block_Nonlabel_Do_Construct", "If_Construct", "Associate_Construct"}:
+        if kind_of(node) in {"Block_Nonlabel_Do_Construct", "If_Construct", "Associate_Construct"}:
             prefix = []
             for item in node.content:
-                if _kind(item) != "Comment":
+                if kind_of(item) != "Comment":
                     break
                 prefix.append(item)
             if prefix:
@@ -75,12 +126,12 @@ def grouped_nodes(nodes):
             ending = "end parallel do" if combined else "end parallel"
             if combined:
                 loop = index + 1
-                while loop < len(nodes) and _kind(nodes[loop]) == "Comment" and directive(nodes[loop]) is None:
+                while loop < len(nodes) and kind_of(nodes[loop]) == "Comment" and directive(nodes[loop]) is None:
                     loop += 1
-                if loop >= len(nodes) or _kind(nodes[loop]) != "Block_Nonlabel_Do_Construct":
+                if loop >= len(nodes) or kind_of(nodes[loop]) != "Block_Nonlabel_Do_Construct":
                     raise CompilationError("combined PARALLEL DO requires its original associated loop")
                 end = loop + 1
-                while end < len(nodes) and _kind(nodes[end]) == "Comment" and directive(nodes[end]) is None:
+                while end < len(nodes) and kind_of(nodes[end]) == "Comment" and directive(nodes[end]) is None:
                     end += 1
                 if end < len(nodes) and directive(nodes[end]) == ending:
                     result.append(tuple(nodes[index:end + 1]))

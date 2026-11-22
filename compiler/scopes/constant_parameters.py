@@ -15,8 +15,17 @@ from hashlib import sha256
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base
 
-from compiler.frontend.source_effects import Binding, _children, _kind, _part
+from compiler.frontend.source_effects import Binding
+from compiler.frontend.syntax import children_of, declared_type, kind_of, part_of
 from compiler.ir import CompilationError, SourceLocation
+from compiler.ir.integers import fits_integer, integer_text
+from compiler.scopes.numerical import NUMERIC_TYPES, resource_binding
+
+# How deep the declarations of constants may refer to others, how many an entry takes in, and how many nodes
+# their expressions may have in all.
+_DEPTH = 16
+_CONSTANTS = 256
+_VISITS = 4096
 
 
 @dataclass(frozen=True)
@@ -25,6 +34,14 @@ class ConstantParameters:
     declarations: tuple[str, ...]
     identity: str
     scalar_captures: tuple[Binding, ...] = ()
+
+
+def integer_constant(scope, value):
+    """A default INTEGER constant expression of ``scope`` as the literal of its value."""
+    result = scope.constant(value)
+    if not fits_integer(result):
+        raise CompilationError("inline constant exceeds the existing INTEGER ABI")
+    return F.Level_2_Expr(integer_text(result))
 
 
 class _UnsupportedInitializer(CompilationError):
@@ -44,7 +61,7 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
             scope = binding.declaring_scope
             try:
                 if scope is not None:
-                    scope.kinds.integer(F.Name(binding.name), SourceLocation(str(scope.path)))
+                    scope.constant(F.Name(binding.name))
                     continue
             except CompilationError:
                 pass
@@ -54,12 +71,6 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
     names, ordered, active = {}, [], set()
     captures, capture_authority = [], []
     visits = 0
-
-    def integer(scope, value):
-        result = scope.kinds.integer(value, SourceLocation(str(scope.path)))
-        if not -(2**31) <= result < 2**31:
-            raise CompilationError("inline constant exceeds the existing INTEGER ABI")
-        return F.Level_2_Expr("(-2147483647 - 1)" if result == -(2**31) else str(result))
 
     def declaration(binding):
         scope = binding.declaring_scope
@@ -72,44 +83,38 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
                 or scope.bindings.get(binding.name) is not binding
                 or binding.root != owner + "::" + binding.name):
             raise CompilationError("inline constant requires its original declaring scope")
-        for node in _children(_part(scope.node, "Specification_Part")):
-            if _kind(node) != "Type_Declaration_Stmt":
+        for node in children_of(part_of(scope.node, "Specification_Part")):
+            if kind_of(node) != "Type_Declaration_Stmt":
                 continue
             dtype, attributes, entities = node.items
-            if not any(str(item).lower() == "parameter" for item in _children(attributes)):
+            if not any(str(item).lower() == "parameter" for item in children_of(attributes)):
                 continue
-            for entity in _children(entities):
+            for entity in children_of(entities):
                 if str(entity.items[0]).lower() == binding.name and entity.items[3] is not None:
-                    dimension = next((item.items[1] for item in _children(attributes)
-                                      if _kind(item) == "Dimension_Attr_Spec"), None)
+                    dimension = next((item.items[1] for item in children_of(attributes)
+                                      if kind_of(item) == "Dimension_Attr_Spec"), None)
                     shape = entity.items[1] if entity.items[1] is not None else dimension
-                    axes = tuple(_children(shape))
+                    axes = tuple(children_of(shape))
                     if (len(axes) != binding.rank or len(binding.shape_nodes) != len(axes)
                             or any(left is not right for left, right in zip(axes, binding.shape_nodes, strict=True))
-                            or _kind(dtype) != "Intrinsic_Type_Spec"):
+                            or kind_of(dtype) != "Intrinsic_Type_Spec"):
                         raise CompilationError("inline constant descriptor differs from its original declaration")
-                    base, selector = dtype.items
-                    base = str(base).lower()
-                    width = 8 if base == "double precision" else 4
-                    if base == "double precision":
-                        base = "real"
-                    if selector is not None:
-                        width = scope.kinds.integer(selector.items[1], SourceLocation(str(scope.path)))
+                    base, width = declared_type(dtype, scope.kinds, SourceLocation(str(scope.path)))
                     if (base, width) != (binding.dtype, binding.kind):
                         raise CompilationError("inline constant type differs from its original declaration")
                     return scope, entity.items[3].items[1]
         raise CompilationError("inline constant requires its original initializer")
 
     def require(binding, depth):
-        if binding.root in active or depth >= 16:
+        if binding.root in active or depth >= _DEPTH:
             raise CompilationError("inline constant closure is cyclic or exceeds the depth budget")
         if binding.root in names:
             return names[binding.root]
         if ("parameter" not in binding.attributes
-                or (binding.dtype, binding.kind) not in {("integer", 4), ("real", 4), ("real", 8)}
+                or (binding.dtype, binding.kind) not in NUMERIC_TYPES
                 or binding.rank > 1):
             raise CompilationError("inline constants require scalar or bounded rank-one numeric PARAMETER storage")
-        if len(names) >= 256:
+        if len(names) >= _CONSTANTS:
             raise CompilationError("inline constant closure exceeds the declaration budget")
         name = "fort_region_constant_" + str(len(names))
         if name in occupied:
@@ -129,19 +134,19 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
     def normalize(value, scope, depth):
         nonlocal visits
         visits += 1
-        if visits > 4096:
+        if visits > _VISITS:
             raise CompilationError("inline constant initializer exceeds the expression budget")
         if isinstance(value, (tuple, list)):
             return type(value)(normalize(child, scope, depth) for child in value)
         if not isinstance(value, Base):
             return value
-        kind = _kind(value)
+        kind = kind_of(value)
         if kind == "Name":
             binding = analysis._binding(scope, value)
             if binding is None or "parameter" not in binding.attributes:
                 raise CompilationError("inline initializer requires original constant operands")
             if binding.dtype == "integer" and not binding.rank and binding.kind == 4:
-                return integer(scope, value)
+                return integer_constant(scope, value)
             return F.Name(require(binding, depth))
         if kind in {"Ac_Implied_Do", "Function_Reference", "Structure_Constructor", "Data_Ref"}:
             raise _UnsupportedInitializer("inline constant initializer requires bounded numeric expressions")
@@ -159,7 +164,7 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
                 value.items[1], SourceLocation(str(scope.path)))) + ")")
         if kind in {"Real_Literal_Constant", "Int_Literal_Constant"} and value.items[1] is not None:
             result = copy.copy(value)
-            result.items = (value.items[0], str(scope.kinds.integer(value.items[1], SourceLocation(str(scope.path)))))
+            result.items = (value.items[0], str(scope.constant(value.items[1])))
             return result
         result = copy.copy(value)
         if hasattr(value, "items"):
@@ -167,10 +172,8 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
         return result
 
     def capture(binding):
-        from compiler.scopes.numerical import resource_binding
-
         if (binding.rank or "parameter" not in binding.attributes
-                or (binding.dtype, binding.kind) not in {("integer", 4), ("real", 4), ("real", 8)}):
+                or (binding.dtype, binding.kind) not in NUMERIC_TYPES):
             raise CompilationError("inline scalar PARAMETER requires its supported original numeric type")
         try:
             visible = resource_binding(analysis, routine, binding.root)

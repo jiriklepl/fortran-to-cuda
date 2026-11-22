@@ -112,7 +112,7 @@ def schedule_plan(function: FunctionIR, plan: ExecutionPlan, *, options: Compile
             axes = tuple(reversed(range(len(step.loops))))
             if options.resolved_schedule == "auto":
                 axes = tuple(sorted(axes, key=lambda axis: (scores[axis], axis), reverse=True))
-            steps.append(replace(step, schedule=RegionSchedule(axes, (), 256)))
+            steps.append(replace(step, schedule=RegionSchedule(axes)))
             order = ",".join(step.loops[axis].iterator.name for axis in axes)
             reports.append(
                 f"region {step.id}: {options.resolved_schedule} schedule fastest-first [{order}], "

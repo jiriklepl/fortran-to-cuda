@@ -35,7 +35,8 @@ there and the order of their terms is free (see ``compiler.resident.reductions``
 """
 import re
 
-_LINE = re.compile(r"^(?P<indent>[ \t]*)!\$fort\b[ \t]*(?P<body>.*?)[ \t]*$", re.IGNORECASE)
+from compiler.scopes.segments import FORT_LINE, parse_license
+
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*(?:%[A-Za-z][A-Za-z0-9_]*)*\Z")
 _FIELD = re.compile(r"([A-Za-z][A-Za-z0-9_]*)\s*\(\s*:\s*\)\s*%\s*([A-Za-z][A-Za-z0-9_]*)\Z")
 _CLAUSES = {"enter": {"budget", "if", "device"}, "leave": set(), "close": set(), "publish": {"if"},
@@ -132,13 +133,12 @@ def expand_directives(text, domain, *, origin="source"):
     """
     output, records = [], []
     for number, line in enumerate(text.splitlines(keepends=True), 1):
-        match = _LINE.match(line.rstrip("\r\n"))
+        match = FORT_LINE.match(line.rstrip("\r\n"))
         if match is None:
             output.append(line)
             continue
         word = match.group("body").split("(", 1)[0].strip().lower()
         if word in {"host", "reduction"}:
-            from compiler.resident.reductions import parse_license
             if (word == "host") != (match.group("body").strip().lower() == "host") or (
                     word == "reduction" and not parse_license(match.group("body"))[0]):
                 raise ValueError(f"Malformed residency directive on line {number}: {match.group('body')!r}")

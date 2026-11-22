@@ -20,7 +20,7 @@ from compiler.ir import (
     Unary,
     referenced_symbols,
 )
-from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
+from compiler.ir.integers import integer_literal, integer_text
 from compiler.ir.intrinsics import REAL_MATH
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ def render_expression(expression: Expr, *, addressing: RegionAddressing | None =
         if expression.dtype is ScalarType.INTEGER:
             # Fortran integer literals are decimal even with leading zeros.
             value = integer_literal(expression.value)
-            return f"(-{INTEGER_MAX} - 1)" if value == INTEGER_MIN else str(value)
+            return integer_text(value)
         # The frontend normalizes literals; accepting Fortran exponent spelling
         # here also makes standalone construction of the public IR convenient.
         value = expression.value.split("_", 1)[0].replace("d", "e").replace("D", "e")

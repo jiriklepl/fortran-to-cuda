@@ -54,6 +54,11 @@ TYPES = {
 ENTRY_ABI_VERSION = 3
 
 
+# One launch passes every member's arguments, at most eight bytes each, and CUDA takes 4096 bytes of them:
+# this many leave a quarter free.
+_MERGED_ARGUMENTS = 384
+
+
 def generate_scoped(function, plan, config, common_header):
     arrays = tuple(s for s in function.parameters if s.rank)
     scalars = tuple(s for s in function.parameters if not s.rank)
@@ -199,9 +204,8 @@ def generate_scoped(function, plan, config, common_header):
                 groups.extend(launch_groups(step.else_plan))
                 continue
             member = isinstance(step, ParallelRegion) and groupable(step)
-            # One launch passes every member's arguments, at most eight bytes each; CUDA takes 4096 bytes.
             if (member and all(independent(earlier, step) for earlier in run)
-                    and sum(len(_kernel_arguments(region)) for region in (*run, step)) <= 384):
+                    and sum(len(_kernel_arguments(region)) for region in (*run, step)) <= _MERGED_ARGUMENTS):
                 run.append(step)
                 continue
             close()

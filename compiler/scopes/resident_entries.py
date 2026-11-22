@@ -28,22 +28,17 @@ from fparser.two.utils import walk
 
 from compiler.frontend.call_bindings import resolve_original_call
 from compiler.frontend.component_bindings import component_access
-from compiler.frontend.source_effects import Binding, SourceEffects, _children, _kind
+from compiler.frontend.source_effects import Binding, SourceEffects
+from compiler.frontend.syntax import children_of, kind_of
 from compiler.ir import CompilationError
-from compiler.scopes.numerical import resource_binding
+from compiler.scopes.numerical import NUMERIC_TYPES, resource_binding
 from compiler.scopes.region_context import original_region_context
 from compiler.scopes.regions import extract_region
-from compiler.scopes.segments import directive, grouped_nodes, statement_span
+from compiler.scopes.segments import directive, grouped_nodes, is_residency_directive, statement_span
 
 _INQUIRIES = {"lbound", "ubound", "size", "shape", "allocated", "associated", "present", "kind", "rank",
               "storage_size", "is_contiguous"}
 _CONSTRUCT_HEADERS = {"If_Then_Stmt", "Else_If_Stmt", "Associate_Stmt"}
-
-
-def _residency_directive(node):
-    """A ``!$fort`` line, other than the ``private`` one a loop's OpenMP directive left, which says nothing of residency."""
-    text = str(node).lstrip().lower()
-    return text.startswith("!$fort") and not re.match(r"!\$fort\s+private\b", text)
 
 
 def _entry_groups(sequence, acknowledged=None):
@@ -66,16 +61,16 @@ def _entry_groups(sequence, acknowledged=None):
         return group
 
     for group in grouped_nodes(sequence):
-        if not isinstance(group, tuple) and _kind(group) == "Comment" and directive(group) is None:
-            if _residency_directive(group):
+        if not isinstance(group, tuple) and kind_of(group) == "Comment" and directive(group) is None:
+            if is_residency_directive(group):
                 if pending:
                     yield mark(tuple(pending))
                     pending = []
                 follows_directive = True
             continue
-        if (not isinstance(group, tuple) and _kind(group) == "Block_Nonlabel_Do_Construct"
-                and not any(directive(node) is not None or _residency_directive(node)
-                            for node in walk(group) if _kind(node) == "Comment")):
+        if (not isinstance(group, tuple) and kind_of(group) == "Block_Nonlabel_Do_Construct"
+                and not any(directive(node) is not None or is_residency_directive(node)
+                            for node in walk(group) if kind_of(node) == "Comment")):
             pending.append(group)
             continue
         if pending:
@@ -88,7 +83,7 @@ def _entry_groups(sequence, acknowledged=None):
 
 def _counted(loop):
     """The variable and the bounds of a counted DO construct; (None, ()) for any other loop."""
-    statement = next((item for item in _children(loop) if _kind(item) == "Nonlabel_Do_Stmt"), None)
+    statement = next((item for item in children_of(loop) if kind_of(item) == "Nonlabel_Do_Stmt"), None)
     control = statement.items[1] if statement is not None else None
     counted = control.items[1] if control is not None and len(control.items) > 1 else None
     if not counted:
@@ -115,7 +110,7 @@ def _carries(loop):
         return False
     depends, grown = {variable}, True
     assignments = list(walk(loop, Assignment_Stmt))
-    inner = [_counted(item) for item in walk(loop) if _kind(item) == "Block_Nonlabel_Do_Construct" and item is not loop]
+    inner = [_counted(item) for item in walk(loop) if kind_of(item) == "Block_Nonlabel_Do_Construct" and item is not loop]
 
     def named(node):
         return {str(name).lower() for name in walk(node, Name)}
@@ -124,7 +119,7 @@ def _carries(loop):
         grown = False
         for statement in assignments:
             target = statement.items[0]
-            if _kind(target) == "Name" and str(target).lower() not in depends and named(statement.items[2]) & depends:
+            if kind_of(target) == "Name" and str(target).lower() not in depends and named(statement.items[2]) & depends:
                 depends.add(str(target).lower())
                 grown = True
         for name, bounds in inner:
@@ -134,14 +129,14 @@ def _carries(loop):
 
     def subscripts(reference):
         listed = reference.items[1]
-        return tuple(_children(listed)) if _kind(listed) == "Section_Subscript_List" else (listed,)
+        return tuple(children_of(listed)) if kind_of(listed) == "Section_Subscript_List" else (listed,)
 
     uses = {}
     for reference in walk(loop, Part_Ref):
         uses.setdefault(str(reference.items[0]).lower(), []).append(subscripts(reference))
     for statement in assignments:
         target = statement.items[0]
-        if _kind(target) != "Part_Ref":
+        if kind_of(target) != "Part_Ref":
             continue
         written = subscripts(target)
         places = [index for index, item in enumerate(written) if named(item) & depends]
@@ -160,8 +155,8 @@ def _around_nests(loop):
     or nests), or its body is one nest and its iterations may depend on each
     other (see ``_carries``).
     """
-    body = [item for item in _children(loop) if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
-    if not any(_kind(item) == "Block_Nonlabel_Do_Construct" for item in body):
+    body = [item for item in children_of(loop) if kind_of(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
+    if not any(kind_of(item) == "Block_Nonlabel_Do_Construct" for item in body):
         return False
     return len(body) > 1 or _carries(loop)
 
@@ -186,10 +181,10 @@ def _runs(analysis, routine, nodes):
     """
     conditions = []
     for loop in nodes:
-        if _kind(loop) != "Block_Nonlabel_Do_Construct":
+        if kind_of(loop) != "Block_Nonlabel_Do_Construct":
             return None
-        control = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt").items[1]
-        counted = control.items[1] if control is not None and _kind(control) == "Loop_Control" else None
+        control = next(item for item in loop.content if kind_of(item) == "Nonlabel_Do_Stmt").items[1]
+        counted = control.items[1] if control is not None and kind_of(control) == "Loop_Control" else None
         if not counted or len(counted) != 2 or len(counted[1]) != 2:
             return None
         for bound in counted[1]:
@@ -218,9 +213,9 @@ def _statement_form(nodes):
     ``leaves`` says that control can leave from inside (RETURN, GOTO, EXIT
     ...), past whatever follows.
     """
-    several = "group" if any(_kind(node) in _CONSTRUCT_HEADERS for node in nodes) else "statements"
-    form = {"kind": _kind(nodes[0]) if len(nodes) == 1 else several,
-            "leaves": any(_kind(item) in _LEAVING for node in nodes for item in walk(node))}
+    several = "group" if any(kind_of(node) in _CONSTRUCT_HEADERS for node in nodes) else "statements"
+    form = {"kind": kind_of(nodes[0]) if len(nodes) == 1 else several,
+            "leaves": any(kind_of(item) in _LEAVING for node in nodes for item in walk(node))}
     if form["kind"] == "If_Stmt":
         condition, action = nodes[0].items[0], nodes[0].items[1]
         form.update(condition=_text(condition), action=_text(action),
@@ -263,11 +258,11 @@ def _indirect_writes(analysis, routine, loops):
     found, refused = {}, set()
     for loop in loops:
         computed = {str(statement.items[0]).lower() for statement in walk(loop, Assignment_Stmt)
-                    if _kind(statement.items[0]) == "Name"}
+                    if kind_of(statement.items[0]) == "Name"}
         forwarded = _forwarded(analysis, routine, loop, computed)
         accesses = {}
         for reference in walk(loop, Part_Ref):
-            if _kind(reference.parent) == "Data_Ref" and reference.parent.items[0] is reference:
+            if kind_of(reference.parent) == "Data_Ref" and reference.parent.items[0] is reference:
                 continue  # objects(i)%field: the element, not an access to a numeric array
             binding = analysis._binding(routine.scope, reference.items[0])
             if binding is None or not binding.rank or str(binding.dtype).lower().startswith("type"):
@@ -276,7 +271,7 @@ def _indirect_writes(analysis, routine, loops):
             item["tuples"].setdefault(_text(reference.items[1]).lower(), reference)
         for statement in walk(loop, Assignment_Stmt):
             target = statement.items[0]
-            binding = analysis._binding(routine.scope, target.items[0]) if _kind(target) == "Part_Ref" else None
+            binding = analysis._binding(routine.scope, target.items[0]) if kind_of(target) == "Part_Ref" else None
             if binding is not None and binding.root in accesses:
                 accesses[binding.root]["written"].add(_text(target.items[1]).lower())
         for root, item in accesses.items():
@@ -284,7 +279,7 @@ def _indirect_writes(analysis, routine, loops):
                 continue
             uses_computed, by_tuple = False, []
             for reference in item["tuples"].values():
-                subscripts, indexed = _children(reference.items[1]), {}
+                subscripts, indexed = children_of(reference.items[1]), {}
                 named = {str(name).lower() for part in subscripts for name in walk(part, Name)} & computed
                 # A scalar set from index values at the top of the iteration stands for those values.
                 uses_computed |= any(name not in forwarded or not _after(loop, forwarded[name], reference)
@@ -295,7 +290,7 @@ def _indirect_writes(analysis, routine, loops):
                     for inner in walk(part, Part_Ref):
                         index = analysis._binding(routine.scope, inner.items[0])
                         if (index is not None and index.rank and not str(index.dtype).lower().startswith("type")
-                                and not (_kind(inner.parent) == "Data_Ref" and inner.parent.items[0] is inner)):
+                                and not (kind_of(inner.parent) == "Data_Ref" and inner.parent.items[0] is inner)):
                             indexed[index.root] = index.name
                 by_tuple.append((reference, indexed))
             if not any(indexed for _, indexed in by_tuple) and not uses_computed:
@@ -307,14 +302,14 @@ def _indirect_writes(analysis, routine, loops):
             for reference, indexed in by_tuple:
                 enclosing, node = [], reference
                 while node is not None:
-                    if _kind(node) == "Block_Nonlabel_Do_Construct":
+                    if kind_of(node) == "Block_Nonlabel_Do_Construct":
                         enclosing.append(_text(next(part for part in node.content
-                                                    if _kind(part) == "Nonlabel_Do_Stmt")))
+                                                    if kind_of(part) == "Nonlabel_Do_Stmt")))
                     if node is loop:
                         break
                     node = getattr(node, "parent", None)
                 requirement = {"resource": root, "array": item["name"], "loops": enclosing[::-1],
-                               "indices": [_substituted(_text(part), forwarded) for part in _children(reference.items[1])],
+                               "indices": [_substituted(_text(part), forwarded) for part in children_of(reference.items[1])],
                                "index_resources": sorted(indexed)}
                 if requirement not in found.setdefault(root, []):
                     found[root].append(requirement)
@@ -330,25 +325,25 @@ def _forwarded(analysis, routine, loop, computed):
     so the scalar is the same function of the iteration wherever the loop
     reads it after the assignment.
     """
-    body = [item for item in loop.content if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
+    body = [item for item in loop.content if kind_of(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
     written = set()
     for statement in walk(loop, Assignment_Stmt):
         target = statement.items[0]
-        while _kind(target) in {"Part_Ref", "Data_Ref"}:
+        while kind_of(target) in {"Part_Ref", "Data_Ref"}:
             target = target.items[0]
-        binding = analysis._binding(routine.scope, target) if _kind(target) == "Name" else None
+        binding = analysis._binding(routine.scope, target) if kind_of(target) == "Name" else None
         if binding is not None and binding.rank:
             written.add(binding.root)
     counts = {}
     for statement in walk(loop, Assignment_Stmt):
-        if _kind(statement.items[0]) == "Name":
+        if kind_of(statement.items[0]) == "Name":
             counts[str(statement.items[0]).lower()] = counts.get(str(statement.items[0]).lower(), 0) + 1
     found = {}
     for statement in body:
-        if _kind(statement) != "Assignment_Stmt" or _kind(statement.items[0]) != "Name":
+        if kind_of(statement) != "Assignment_Stmt" or kind_of(statement.items[0]) != "Name":
             continue
         name = str(statement.items[0]).lower()
-        if counts.get(name) != 1 or any(_kind(item) in {"Call_Stmt", "Function_Reference"} for item in walk(statement)):
+        if counts.get(name) != 1 or any(kind_of(item) in {"Call_Stmt", "Function_Reference"} for item in walk(statement)):
             continue
         others = _other_names(statement.items[2])
         names = [item for item in walk(statement.items[2], Name) if id(item) not in others]
@@ -381,9 +376,9 @@ def _other_names(node):
     """The ids of the names in ``node`` that are components or argument keywords, not variables of the scope."""
     found = set()
     for item in walk(node):
-        kind = _kind(item)
+        kind = kind_of(item)
         if kind == "Data_Ref":
-            found.update(id(part.items[0] if _kind(part) == "Part_Ref" else part) for part in item.items[1:])
+            found.update(id(part.items[0] if kind_of(part) == "Part_Ref" else part) for part in item.items[1:])
         elif kind == "Procedure_Designator":
             found.add(id(item.items[2]))
         elif kind in {"Actual_Arg_Spec", "Component_Spec"}:
@@ -411,7 +406,7 @@ def _bound_procedures(analysis):
     found, generics, parents = {}, {}, {}
     for module, scope in analysis.modules.items():
         for definition in walk(scope.node):
-            if _kind(definition) != "Derived_Type_Def":
+            if kind_of(definition) != "Derived_Type_Def":
                 continue
             header = definition.content[0]
             owner = str(header.items[1]).lower()
@@ -419,12 +414,12 @@ def _bound_procedures(analysis):
             if extended:
                 parents.setdefault(owner, set()).add(extended[1])
             for binding in walk(definition):
-                if _kind(binding) == "Generic_Binding":
+                if kind_of(binding) == "Generic_Binding":
                     names = binding.items[2]
                     generics.setdefault((owner, str(binding.items[1]).lower()), set()).update(
-                        str(item).lower() for item in (_children(names) if _kind(names) != "Name" else (names,)))
+                        str(item).lower() for item in (children_of(names) if kind_of(names) != "Name" else (names,)))
                     continue
-                if _kind(binding) != "Specific_Binding":
+                if kind_of(binding) != "Specific_Binding":
                     continue
                 key = owner, str(binding.items[3]).lower()
                 attributes = {item.split("(")[0].strip() for item in str(binding.items[1] or "").lower().split(",")}
@@ -504,8 +499,8 @@ def _array_uses(analysis, routine, nodes):
         where the object of a type-bound call is passed ahead of them.
         """
         callee = analysis.routines.get(procedure) or analysis.numerical_helpers.get(procedure)
-        for position, argument in enumerate(_children(arguments) if arguments is not None else (), first):
-            keyword = str(argument.items[0]).lower() if _kind(argument) == "Actual_Arg_Spec" else None
+        for position, argument in enumerate(children_of(arguments) if arguments is not None else (), first):
+            keyword = str(argument.items[0]).lower() if kind_of(argument) == "Actual_Arg_Spec" else None
             value = argument.items[1] if keyword is not None else argument
             formal = None
             if callee is not None:
@@ -516,9 +511,9 @@ def _array_uses(analysis, routine, nodes):
                 written.update(named(value))
 
     def whole_arguments(arguments):
-        for argument in (_children(arguments) if arguments is not None else ()):
-            value = argument.items[1] if _kind(argument) == "Actual_Arg_Spec" else argument
-            if _kind(value) == "Name":
+        for argument in (children_of(arguments) if arguments is not None else ()):
+            value = argument.items[1] if kind_of(argument) == "Actual_Arg_Spec" else argument
+            if kind_of(value) == "Name":
                 passed.add(id(value))
 
     for node in nodes:
@@ -526,11 +521,11 @@ def _array_uses(analysis, routine, nodes):
         others = _other_names(node)
         for call in walk(node, Call_Stmt):
             whole_arguments(call.items[1])
-            if _kind(call.items[0]) == "Procedure_Designator":
+            if kind_of(call.items[0]) == "Procedure_Designator":
                 # Through a type-bound procedure: every procedure bound under the name, if they are known.
                 base = call.items[0].items[0]
-                base = base.items[0] if _kind(base) == "Part_Ref" else base
-                declared = analysis._binding(routine.scope, base) if _kind(base) == "Name" else None
+                base = base.items[0] if kind_of(base) == "Part_Ref" else base
+                declared = analysis._binding(routine.scope, base) if kind_of(base) == "Name" else None
                 declared = re.fullmatch(r"(?:type|class)\((\w+)\)", (declared.dtype or "").replace(" ", "")) \
                     if declared is not None else None
                 targets = _reached(analysis, declared[1] if declared else None, str(call.items[0].items[2]).lower())
@@ -560,7 +555,7 @@ def _array_uses(analysis, routine, nodes):
                 may_write(candidates[0], reference.items[1])
         for statement in walk(node, Assignment_Stmt):
             target = statement.items[0]
-            while _kind(target) in {"Part_Ref", "Data_Ref"}:
+            while kind_of(target) in {"Part_Ref", "Data_Ref"}:
                 target = target.items[0]
             written.update(named(target))
         for statement in walk(node, Read_Stmt):
@@ -623,7 +618,7 @@ def _host_procedures(analysis, selected):
             return None
         try:
             arrays, calls, elsewhere, written, released = _array_uses(
-                analysis, routine, tuple(_children(routine.execution)))
+                analysis, routine, tuple(children_of(routine.execution)))
         except CompilationError:
             arrays, calls, elsewhere, written, released = {}, {"$opaque"}, set(), set(), set()
         outside = {}
@@ -670,28 +665,28 @@ def _fixed_elements(analysis, routine, nodes):
     assigned = set()
     for node in nodes:
         for statement in walk(node, Assignment_Stmt):
-            if _kind(statement.items[0]) == "Name":
+            if kind_of(statement.items[0]) == "Name":
                 assigned.add(str(statement.items[0]).lower())
         for loop in walk(node):
-            if _kind(loop) == "Block_Nonlabel_Do_Construct":
+            if kind_of(loop) == "Block_Nonlabel_Do_Construct":
                 assigned.add(_counted(loop)[0])
     found, refused = {}, set()
     for node in nodes:
         for reference in walk(node, Part_Ref):
-            binding = analysis._binding(routine.scope, reference.items[0]) if _kind(reference.items[0]) == "Name" else None
+            binding = analysis._binding(routine.scope, reference.items[0]) if kind_of(reference.items[0]) == "Name" else None
             if binding is None or not binding.rank:
                 continue
             root = binding.root
             subscripts = reference.items[1]
-            parts = list(_children(subscripts)) if _kind(subscripts) == "Section_Subscript_List" else [subscripts]
+            parts = list(children_of(subscripts)) if kind_of(subscripts) == "Section_Subscript_List" else [subscripts]
             fixed = len(parts) == binding.rank and all(
-                _kind(item) in _PLAIN and (_kind(item) != "Name" or (
+                kind_of(item) in _PLAIN and (kind_of(item) != "Name" or (
                     str(item).lower() not in assigned and (scalar := analysis._binding(routine.scope, item)) is not None
                     and not scalar.rank and scalar.dtype == "integer"))
                 for part in parts for item in walk(part))
             above, conditional = reference.parent, False
             while above is not None and above not in nodes:
-                conditional = conditional or _kind(above) in _CONDITIONAL
+                conditional = conditional or kind_of(above) in _CONDITIONAL
                 above = getattr(above, "parent", None)
             if fixed and not conditional and above is not None:
                 found.setdefault(root, []).append(reference)
@@ -699,7 +694,7 @@ def _fixed_elements(analysis, routine, nodes):
                 refused.add(root)
     return {root: references for root, references in found.items()
             if root not in refused and root not in written and root not in released
-            and (arrays[root].dtype, arrays[root].kind) in {("real", 4), ("real", 8), ("integer", 4)}
+            and (arrays[root].dtype, arrays[root].kind) in NUMERIC_TYPES
             and not hasattr(arrays[root], "component_object")
             and not arrays[root].attributes & {"allocatable", "pointer", "optional"}
             # Every mention of the array is one of these elements.
@@ -784,8 +779,8 @@ def _temporaries(analysis, routine, procedure):
     """
     node = routine.scope.node
     execution = routine.execution
-    if any(_kind(item) == "Internal_Subprogram_Part" for item in _children(node)) \
-            or any(_kind(item) in {"Return_Stmt", "Goto_Stmt", "Computed_Goto_Stmt"} for item in walk(execution)):
+    if any(kind_of(item) == "Internal_Subprogram_Part" for item in children_of(node)) \
+            or any(kind_of(item) in {"Return_Stmt", "Goto_Stmt", "Computed_Goto_Stmt"} for item in walk(execution)):
         return []
     candidates = {name: binding for name, binding in routine.scope.bindings.items()
                   if binding.rank == 3 and binding.dtype == "real" and binding.kind in {4, 8} and binding.intent is None
@@ -795,20 +790,20 @@ def _temporaries(analysis, routine, procedure):
     if not candidates:
         return []
     statements = {"Allocate_Stmt": {}, "Deallocate_Stmt": {}}
-    top = {id(item) for item in _children(execution)}
+    top = {id(item) for item in children_of(execution)}
     allowed, refused = set(), set()
     for statement in walk(execution, (Allocate_Stmt, Deallocate_Stmt)):
-        kind = _kind(statement)
+        kind = kind_of(statement)
         if kind == "Allocate_Stmt":
             objects = [item for item in walk(statement, Allocation)]
             named = [str(item.items[0]).lower() for item in objects]
             plain = statement.items[0] is None and statement.items[2] is None and all(
-                item.items[1] is not None and len(_children(item.items[1])) == 3 for item in objects)
+                item.items[1] is not None and len(children_of(item.items[1])) == 3 for item in objects)
         else:
             listed = statement.items[0]
-            parts = [listed] if _kind(listed) == "Name" else list(_children(listed))
+            parts = [listed] if kind_of(listed) == "Name" else list(children_of(listed))
             named = [str(item).lower() for item in parts]
-            plain = statement.items[1] is None and all(_kind(item) == "Name" for item in parts)
+            plain = statement.items[1] is None and all(kind_of(item) == "Name" for item in parts)
         mine = [name for name in named if name in candidates]
         if not mine:
             continue
@@ -824,16 +819,16 @@ def _temporaries(analysis, routine, procedure):
         allowed.add(id(reference.items[0]))
     for reference in walk(execution, Intrinsic_Function_Reference):
         if str(reference.items[0]).lower() in {"lbound", "ubound", "size", "shape"} and reference.items[1] is not None:
-            allowed.update(id(item) for item in _children(reference.items[1])[:1])
+            allowed.update(id(item) for item in children_of(reference.items[1])[:1])
     for call in walk(execution, Call_Stmt):
         try:
             callee = resolve_original_call(analysis, routine.scope, call)
         except CompilationError:
             callee = None
-        for position, argument in enumerate(_children(call.items[1]) if call.items[1] is not None else ()):
+        for position, argument in enumerate(children_of(call.items[1]) if call.items[1] is not None else ()):
             formal = callee.arguments[position] if callee is not None and position < len(callee.arguments) else None
             binding = callee.scope.bindings.get(formal) if formal is not None else None
-            if _kind(argument) == "Name" and binding is not None and binding.rank \
+            if kind_of(argument) == "Name" and binding is not None and binding.rank \
                     and not binding.attributes & {"allocatable", "pointer"}:
                 allowed.add(id(argument))
     for name in walk(execution, Name):
@@ -856,6 +851,11 @@ def _temporaries(analysis, routine, procedure):
             if name in kept and not partners <= kept:
                 kept -= partners
     return [item for item in found if item["name"].lower() in kept]
+
+
+def host_statement_id(procedure, text):
+    """The id of statements of a procedure that stay host code: stable while both keep their text."""
+    return sha256((procedure + "\n" + text).encode()).hexdigest()[:16]
 
 
 def _resolve_procedures(analysis, procedures):
@@ -954,7 +954,7 @@ def export_resident_entries(paths, procedures, directory):
             selected = tuple(node for node in sequence
                              if first <= statement_span(node)[0]
                              and statement_span(node)[1] <= last)
-            loops = [node for node in nodes if _kind(node) == "Block_Nonlabel_Do_Construct"]
+            loops = [node for node in nodes if kind_of(node) == "Block_Nonlabel_Do_Construct"]
             if splitting is not None:
                 if (first, last) in splitting and len(loops) > 1:
                     for node in loops:
@@ -1029,9 +1029,9 @@ def export_resident_entries(paths, procedures, directory):
             return {"alternative_of": [list(span) for span in outer]} if outer else {}
 
         def within(loop, outer):
-            statement = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt")
+            statement = next(item for item in loop.content if kind_of(item) == "Nonlabel_Do_Stmt")
             host((statement,), False, outer)
-            scan(tuple(item for item in _children(loop) if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt"}),
+            scan(tuple(item for item in children_of(loop) if kind_of(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt"}),
                  outer)
 
         def touched(arrays, written, released, elsewhere):
@@ -1111,8 +1111,7 @@ def export_resident_entries(paths, procedures, directory):
                 host_statements.append({"procedure": procedure, "source": str(routine.scope.path),
                                         "first_line": first, "last_line": last,
                                         "text": text if len(text) <= 240 else text[:237] + "...",
-                                        # Stable while the statement and its procedure keep their text.
-                                        "id": sha256((procedure + "\n" + text).encode()).hexdigest()[:16],
+                                        "id": host_statement_id(procedure, text),
                                         **used, **_statement_form(nodes), "acknowledged": acknowledged,
                                         **alternative(outer)})
 
@@ -1120,16 +1119,16 @@ def export_resident_entries(paths, procedures, directory):
             follows = set()
             for group in _entry_groups(sequence, follows):
                 nodes = tuple(group) if isinstance(group, tuple) else (group,)
-                carries = any(_residency_directive(item) for node in nodes for item in walk(node)
-                              if _kind(item) == "Comment")
-                if len(nodes) == 1 and _kind(nodes[0]) in {"If_Construct", "Associate_Construct", "Block_Construct"}:
+                carries = any(is_residency_directive(item) for node in nodes for item in walk(node)
+                              if kind_of(item) == "Comment")
+                if len(nodes) == 1 and kind_of(nodes[0]) in {"If_Construct", "Associate_Construct", "Block_Construct"}:
                     # The construct's own statements (its conditions, selectors) are host code as well.
-                    host(tuple(item for item in nodes[0].content if _kind(item) in _CONSTRUCT_HEADERS),
+                    host(tuple(item for item in nodes[0].content if kind_of(item) in _CONSTRUCT_HEADERS),
                          id(nodes[0]) in follows or carries, outer)
-                    scan(tuple(_children(nodes[0])), outer)
-                elif any(_kind(node) == "Block_Nonlabel_Do_Construct" for node in nodes) and not carries:
+                    scan(tuple(children_of(nodes[0])), outer)
+                elif any(kind_of(node) == "Block_Nonlabel_Do_Construct" for node in nodes) and not carries:
                     emit(nodes, sequence, outer)
-                elif len(nodes) == 1 and _kind(nodes[0]) == "Block_Nonlabel_Do_Construct" \
+                elif len(nodes) == 1 and kind_of(nodes[0]) == "Block_Nonlabel_Do_Construct" \
                         and _around_nests(nodes[0]):
                     # A loop around nests, with directives between them: the host runs it.
                     within(nodes[0], outer)
@@ -1137,7 +1136,7 @@ def export_resident_entries(paths, procedures, directory):
                     # A nest that carries a residency directive is host code that manages its own access.
                     host(nodes, id(nodes[0]) in follows or carries, outer)
 
-        scan(tuple(_children(routine.execution)))
+        scan(tuple(children_of(routine.execution)))
         temporaries += _temporaries(analysis, routine, procedure)
 
     for procedure in resolved_procedures:

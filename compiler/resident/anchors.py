@@ -7,20 +7,10 @@ do not lose it. Every lookup must identify exactly one place.
 from __future__ import annotations
 
 import re
-from functools import lru_cache
 
-from fparser.common.readfortran import FortranStringReader
-from fparser.two.parser import ParserFactory
 from fparser.two.utils import walk
 
-_PARSER = None
-
-
-def _get_parser():
-    global _PARSER
-    if _PARSER is None:
-        _PARSER = ParserFactory().create(std="f2008")
-    return _PARSER
+from compiler.frontend import syntax
 
 
 def _sanitize_for_parse(text: str, undefined: tuple[str, ...] = ()) -> str:
@@ -56,29 +46,16 @@ def _sanitize_for_parse(text: str, undefined: tuple[str, ...] = ()) -> str:
     return "".join(lines)
 
 
-# The preparation's passes each parse the sources they look at, one pass after the other over all of
-# them, and most passes leave most sources as they are. Keeping the trees of the last distinct texts
-# answers a third of the parses of a sixty-source application; a large file takes seconds to parse.
-_KEPT_TREES = 32
-
-
 def parse_fortran(text: str, *, undefined: tuple[str, ...] = ()):
-    """Parse free-form Fortran 2008 text; the tree is shared with other callers and must not be changed.
+    """The tree of Fortran text that may not have been preprocessed (see ``syntax.parse_fortran``).
 
     Text that still carries preprocessor lines is retried with those lines
     blanked; the ``#ifdef`` blocks of the ``undefined`` macros are dropped.
     """
-    return _parsed(text, tuple(undefined))
-
-
-@lru_cache(maxsize=_KEPT_TREES)
-def _parsed(text, undefined):
-    parser = _get_parser()
     try:
-        return parser(FortranStringReader(text, ignore_comments=False))
+        return syntax.parse_fortran(text)
     except Exception:
-        sanitized = _sanitize_for_parse(text, undefined)
-        return parser(FortranStringReader(sanitized, ignore_comments=False))
+        return syntax.parse_fortran(_sanitize_for_parse(text, tuple(undefined)))
 
 
 def _strip_inline_comment(line: str) -> tuple[str, str]:

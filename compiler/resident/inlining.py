@@ -31,8 +31,11 @@ from fnmatch import fnmatchcase
 
 from fparser.two.utils import walk
 
-from .anchors import _strip_inline_comment, parse_fortran
-from .reductions import _heading, _kind, _names, _part, _procedures, _rename, _span, _units, serialize_openmp
+from compiler.frontend.syntax import kind_of, parse_fortran, part_of
+
+from .anchors import _strip_inline_comment
+from .configure import serialize_openmp
+from .reductions import _heading, _names, _procedures, _rename, _span, _units
 from .specialize import _Conditions, _fold
 
 _LITERAL = re.compile(r"[+-]?\d+\Z")
@@ -45,9 +48,9 @@ def _normal(text):
 def _declarations(node):
     """name -> (type text, attribute text, array bounds text or None) for the entities a procedure declares."""
     found = {}
-    specification = _part(node, "Specification_Part")
+    specification = part_of(node, "Specification_Part")
     for statement in (specification.content if specification is not None else ()):
-        if _kind(statement) != "Type_Declaration_Stmt":
+        if kind_of(statement) != "Type_Declaration_Stmt":
             continue
         dtype, attributes, entities = statement.items
         attrs = str(attributes).lower() if attributes is not None else ""
@@ -66,16 +69,16 @@ class _Callee:
     def __init__(self, scope, lines):
         self.scope, self.reason = scope, None
         node = scope.node
-        statement = _part(node, "Subroutine_Stmt")
-        self.execution = _part(node, "Execution_Part")
+        statement = part_of(node, "Subroutine_Stmt")
+        self.execution = part_of(node, "Execution_Part")
         if statement is None or self.execution is None:
             self.reason = "it is not a subroutine with statements"
             return
         self.dummies = [str(item).lower() for item in getattr(statement.items[2], "items", ())]
         self.declared = _declarations(node)
-        specification = _part(node, "Specification_Part")
-        kinds = {_kind(item) for item in (specification.content if specification is not None else ())}
-        if _part(node, "Internal_Subprogram_Part") is not None or kinds - {
+        specification = part_of(node, "Specification_Part")
+        kinds = {kind_of(item) for item in (specification.content if specification is not None else ())}
+        if part_of(node, "Internal_Subprogram_Part") is not None or kinds - {
                 "Type_Declaration_Stmt", "Comment", "Implicit_Part"}:
             self.reason = "it has more than declarations and statements"
             return
@@ -89,12 +92,12 @@ class _Callee:
             self.reason = "it does not declare all its arguments"
         assigned = set()
         for item in walk(self.execution):
-            kind = _kind(item)
+            kind = kind_of(item)
             if kind in {"Return_Stmt", "Stop_Stmt", "Goto_Stmt", "Cycle_Stmt", "Exit_Stmt"}:
                 self.reason = "it has a " + kind.removesuffix("_Stmt").upper() + " statement"
             if getattr(getattr(item, "item", None), "label", None) is not None:
                 self.reason = "it has a labelled statement"
-            if kind == "Assignment_Stmt" and _kind(item.items[0]) == "Name":
+            if kind == "Assignment_Stmt" and kind_of(item.items[0]) == "Name":
                 assigned.add(str(item.items[0]).lower())
             if kind == "Nonlabel_Do_Stmt" and item.items[1] is not None and item.items[1].items[1] is not None:
                 assigned.add(str(item.items[1].items[1][0]).lower())
@@ -157,14 +160,14 @@ def inline_calls(text, callers, callees, constants=None):
     for scope in scopes:
         if not any(fnmatchcase(scope.qualified, pattern) for pattern in patterns) or scope.qualified in available:
             continue
-        execution = _part(scope.node, "Execution_Part")
+        execution = part_of(scope.node, "Execution_Part")
         if execution is None:
             continue
         module = scope.qualified.split("::", 1)[0]
         # A module's own arrays are whole arrays too; the caller's declarations come first.
         declared, added = {**_declarations(scope.hosts[-1]), **_declarations(scope.node)}, []
         for call in walk(execution):
-            if _kind(call) != "Call_Stmt":
+            if kind_of(call) != "Call_Stmt":
                 continue
             callee = available.get(module + "::" + str(call.items[0]).lower())
             if callee is None:
@@ -177,7 +180,7 @@ def inline_calls(text, callers, callees, constants=None):
                                    or _strip_inline_comment(lines[last - 1].rstrip("\n"))[0].rstrip()[-1:] != ")"):
                 reason = "the call is not a statement of its own"
             if reason is None and (len(arguments) != len(callee.dummies)
-                                   or any(_kind(item) == "Actual_Arg_Spec" for item in arguments)):
+                                   or any(kind_of(item) == "Actual_Arg_Spec" for item in arguments)):
                 reason = "the arguments are not all given, by position"
             mapping, facts = {}, []
             for dummy, actual in zip(callee.dummies, arguments, strict=False):
@@ -187,7 +190,7 @@ def inline_calls(text, callers, callees, constants=None):
                 value = " ".join(str(actual).split())
                 if bounds is not None:
                     mine = declared.get(value.lower())
-                    if _kind(actual) != "Name" or mine is None or mine[2] != bounds:
+                    if kind_of(actual) != "Name" or mine is None or mine[2] != bounds:
                         reason = f"{value} is not a whole array declared with the bounds of {dummy}"
                     mapping[dummy] = value
                 elif {name for name in _names(actual)} & callee.assigned:
@@ -220,9 +223,9 @@ def inline_calls(text, callers, callees, constants=None):
             records.append({**record, "inlined": True})
         if added:
             heading = _span(_heading(scope.node))[1]
-            specification = _part(scope.node, "Specification_Part")
+            specification = part_of(scope.node, "Specification_Part")
             ends = [_span(item)[1] for item in (specification.content if specification is not None else ())
-                    if _kind(item) != "Comment" and _span(item) is not None]
+                    if kind_of(item) != "Comment" and _span(item) is not None]
             after = max([heading, *ends])
             margin = " " * (len(lines[heading - 1]) - len(lines[heading - 1].lstrip()) + 2)
             edits.append((after + 1, after, [margin + item + "\n" for item in added]))

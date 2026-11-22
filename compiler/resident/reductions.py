@@ -49,27 +49,24 @@ from fnmatch import fnmatchcase
 
 from fparser.two.utils import walk
 
-from .anchors import _strip_inline_comment, parse_fortran
+from compiler.frontend.syntax import kind_of, parse_fortran, part_of
+from compiler.scopes.segments import REDUCTION_LINE, parse_license
+
+from .anchors import _strip_inline_comment
 
 SLOTS = 65536
 FINAL = 256
 # A nest with at most this many iterations stores FINAL partial results directly.
 DIRECT = 65536
 
-_MARKER = re.compile(r"^[ \t]*!\$fort[ \t]+reduction\b(?P<body>.*?)[ \t]*$", re.IGNORECASE)
-_CLAUSE = re.compile(r"(reduction|private)\s*\(([^()]*)\)", re.IGNORECASE)
 _STATEMENTS = {"Nonlabel_Do_Stmt", "End_Do_Stmt", "If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt",
                "If_Stmt", "Assignment_Stmt"}
 _OPERATORS = {"+": "+", "-": "+", "max": "max", "min": "min", ".or.": ".or.", ".and.": ".and.",
               "ior": None, "iand": None, "ieor": None, "*": None, ".eqv.": None, ".neqv.": None}
 
 
-def _kind(node):
-    return type(node).__name__
 
 
-def _part(node, kind):
-    return next((item for item in node.content if _kind(item) == kind), None)
 
 
 def _span(node):
@@ -77,7 +74,7 @@ def _span(node):
     item = getattr(node, "item", None)
     if item is not None:
         return item.span
-    spans = [span for span in (_span(child) for child in node.content if _kind(child) != "Comment")
+    spans = [span for span in (_span(child) for child in node.content if kind_of(child) != "Comment")
              if span is not None]
     # A part that holds nothing but comments has no statement to place it by.
     return (min(first for first, _ in spans), max(last for _, last in spans)) if spans else None
@@ -87,83 +84,16 @@ def _names(node):
     """Lower-case names in ``node``, in source order, without the fields selected from them."""
     if node is None or isinstance(node, str):
         return []
-    if _kind(node) == "Name":
+    if kind_of(node) == "Name":
         return [str(node).lower()]
-    if _kind(node) == "Data_Ref":
+    if kind_of(node) == "Data_Ref":
         # object(i)%field: the object and its subscripts are names of the scope; the field is not.
-        return _names(node.items[0]) + [name for part in node.items[1:] if _kind(part) != "Name"
+        return _names(node.items[0]) + [name for part in node.items[1:] if kind_of(part) != "Name"
                                         for name in _names(getattr(part, "items", (None, None))[1])]
     children = getattr(node, "items", None)
     if children is None:
         children = getattr(node, "content", ())
     return [name for child in children for name in _names(child)]
-
-
-def parse_license(text):
-    """The reduction operators and private names a ``!$fort reduction`` line or an OpenMP directive states."""
-    operators, private = {}, set()
-    for clause, body in _CLAUSE.findall(text):
-        if clause.lower() == "private":
-            private.update(name.strip().lower() for name in body.split(",") if name.strip())
-            continue
-        operator, _, names = body.partition(":")
-        for name in names.split(","):
-            if name.strip():
-                operators[name.strip().lower()] = operator.strip().lower()
-    return operators, private
-
-
-def license_line(text):
-    """The ``!$fort reduction`` line for an OpenMP directive, or None when it has no reduction clause."""
-    operators, private = parse_license(text)
-    if not operators:
-        return None
-    grouped = {}
-    for name, operator in operators.items():
-        grouped.setdefault(operator, []).append(name)
-    line = "!$fort " + " ".join(f"reduction({operator}: {', '.join(names)})" for operator, names in grouped.items())
-    return line + (f" private({', '.join(sorted(private))})" if private else "")
-
-
-def serialize_openmp(lines, first, last):
-    """Blank the OpenMP directives in ``lines[first:last]``; return ``(index, text)`` of each removed line.
-
-    The loop nests of a selected procedure become entries that one serial
-    caller dispatches. A directive with a ``reduction`` clause leaves a
-    ``!$fort reduction`` line: what the clause says about the order of an
-    accumulation outlives the directive. A loop directive with a ``private``
-    clause and no reduction leaves ``!$fort private(...)`` at the end of the
-    DO statement: the scalars it names have no value when an iteration starts.
-    """
-    removed, index = [], first
-    while index < last:
-        if not re.match(r"\s*!\$omp\b", lines[index], re.IGNORECASE):
-            index += 1
-            continue
-        # One directive, with its continuation lines.
-        group = [index]
-        while lines[group[-1]].rstrip().endswith("&") and group[-1] + 1 < last \
-                and re.match(r"\s*!\$omp\b", lines[group[-1] + 1], re.IGNORECASE):
-            group.append(group[-1] + 1)
-        text = " ".join(re.sub(r"(?i)^\s*!\$omp&?", "", lines[item]).strip().rstrip("&") for item in group)
-        indent = lines[index][:len(lines[index]) - len(lines[index].lstrip())]
-        for item in group:
-            removed.append((item, lines[item].rstrip()))
-            lines[item] = "\n"
-        stated = license_line(text)
-        if stated is not None:
-            lines[index] = indent + stated + "\n"
-        elif re.search(r"(?i)\bdo\b", text) and parse_license(text)[1]:
-            # The scalars a loop's directive makes private have no value when an iteration starts. That is
-            # said at the end of the DO statement, where it stays with the loop through every rewrite.
-            loop = next((item for item in range(group[-1] + 1, min(last, group[-1] + 8))
-                         if re.match(r"(?i)\s*do\b", lines[item])), None)
-            if loop is not None and not lines[loop].rstrip().endswith("&"):
-                code, comment = _strip_inline_comment(lines[loop].rstrip("\n"))
-                lines[loop] = (code.rstrip() + "  !$fort private(" + ", ".join(sorted(parse_license(text)[1]))
-                               + ")" + (" " + comment if comment else "") + "\n")
-        index = group[-1] + 1
-    return removed
 
 
 @dataclass
@@ -177,7 +107,7 @@ class _Scope:
 
 def _heading(node):
     """The statement that opens a procedure or a main program."""
-    return _part(node, "Subroutine_Stmt") or _part(node, "Function_Stmt") or _part(node, "Program_Stmt")
+    return part_of(node, "Subroutine_Stmt") or part_of(node, "Function_Stmt") or part_of(node, "Program_Stmt")
 
 
 def _units(text):
@@ -194,7 +124,7 @@ def _units(text):
 def _procedures(tree):
     def subprograms(nodes, prefix, hosts):
         for node in nodes:
-            statement = _heading(node) if _kind(node) in {"Subroutine_Subprogram", "Function_Subprogram"} else None
+            statement = _heading(node) if kind_of(node) in {"Subroutine_Subprogram", "Function_Subprogram"} else None
             if statement is None:
                 continue
             scope = _Scope(prefix + "::" + str(statement.items[1]).lower(), node, hosts)
@@ -202,37 +132,37 @@ def _procedures(tree):
             yield from internal(scope)
 
     def internal(scope):
-        container = _part(scope.node, "Internal_Subprogram_Part")
+        container = part_of(scope.node, "Internal_Subprogram_Part")
         yield from subprograms(container.content if container is not None else (), scope.qualified,
                                (scope.node, *scope.hosts))
 
-    for module in (node for node in walk(tree) if _kind(node) == "Module"):
-        name = str(_part(module, "Module_Stmt").items[1]).lower()
-        container = _part(module, "Module_Subprogram_Part")
+    for module in (node for node in walk(tree) if kind_of(node) == "Module"):
+        name = str(part_of(module, "Module_Stmt").items[1]).lower()
+        container = part_of(module, "Module_Subprogram_Part")
         yield from subprograms(container.content if container is not None else (), name, (module,))
     # Program units of their own: external procedures and the main program.
     yield from subprograms(tree.content, "$external", ())
-    for program in (node for node in tree.content if _kind(node) == "Main_Program"):
-        if _part(program, "Program_Stmt") is not None:
-            scope = _Scope("$program::" + str(_part(program, "Program_Stmt").items[1]).lower(), program, ())
+    for program in (node for node in tree.content if kind_of(node) == "Main_Program"):
+        if part_of(program, "Program_Stmt") is not None:
+            scope = _Scope("$program::" + str(part_of(program, "Program_Stmt").items[1]).lower(), program, ())
             yield scope
             yield from internal(scope)
 
 
 def _declaration(name, scope):
     """``(type text, attribute text, is an array)`` of a variable one scope declares itself, or None."""
-    statement = _part(scope, "Function_Stmt")
+    statement = part_of(scope, "Function_Stmt")
     if statement is not None:
         result = str(statement.items[3].items[0] if statement.items[3] is not None else statement.items[1]).lower()
         prefix = statement.items[0]
-        typed = next((item for item in getattr(prefix, "items", ()) if _kind(item) == "Intrinsic_Type_Spec"), None)
-        if typed is None and _kind(prefix) == "Intrinsic_Type_Spec":
+        typed = next((item for item in getattr(prefix, "items", ()) if kind_of(item) == "Intrinsic_Type_Spec"), None)
+        if typed is None and kind_of(prefix) == "Intrinsic_Type_Spec":
             typed = prefix
         if result == name and typed is not None:
             return str(typed), "", False
-    specification = _part(scope, "Specification_Part")
+    specification = part_of(scope, "Specification_Part")
     for node in (specification.content if specification is not None else ()):
-        if _kind(node) != "Type_Declaration_Stmt":
+        if kind_of(node) != "Type_Declaration_Stmt":
             continue
         dtype, attributes, entities = node.items
         for entity in entities.items:
@@ -252,7 +182,7 @@ def _category(dtype):
 def _operator(statement, name):
     """How one assignment to ``name`` accumulates, or None when it does something else."""
     value = statement.items[2]
-    kind = _kind(value)
+    kind = kind_of(value)
     occurrences = _names(value).count(name)
     if kind == "Logical_Literal_Constant" and not occurrences:
         return ".or." if str(value).lower() == ".true." else ".and."
@@ -260,19 +190,19 @@ def _operator(statement, name):
         return None
     if kind == "Level_2_Expr":
         # name + a - b ...: the variable leads a chain of additions, or closes one addition.
-        if _kind(value.items[2]) == "Name" and str(value.items[2]).lower() == name:
+        if kind_of(value.items[2]) == "Name" and str(value.items[2]).lower() == name:
             return "+" if value.items[1] == "+" else None
         node = value
-        while _kind(node) == "Level_2_Expr" and len(node.items) == 3:
+        while kind_of(node) == "Level_2_Expr" and len(node.items) == 3:
             node = node.items[0]
-        return "+" if _kind(node) == "Name" and str(node).lower() == name else None
+        return "+" if kind_of(node) == "Name" and str(node).lower() == name else None
     if kind == "Intrinsic_Function_Reference" and str(value.items[0]).lower() in {"max", "min"}:
         arguments = getattr(value.items[1], "items", ())
-        if any(_kind(item) == "Name" and str(item).lower() == name for item in arguments):
+        if any(kind_of(item) == "Name" and str(item).lower() == name for item in arguments):
             return str(value.items[0]).lower()
         return None
     if kind in {"Equiv_Operand", "Or_Operand"} and any(
-            _kind(item) == "Name" and str(item).lower() == name for item in (value.items[0], value.items[2])):
+            kind_of(item) == "Name" and str(item).lower() == name for item in (value.items[0], value.items[2])):
         return str(value.items[1]).lower()
     return None
 
@@ -302,7 +232,7 @@ def _analyse(nest, scope, operators, private, lines, last_line):
     assigned, counts, obstacle = {}, {}, None
     opening = _span(nest)[0]
     for node in walk(nest):
-        kind = _kind(node)
+        kind = kind_of(node)
         if kind == "Comment":
             # A comment before the DO statement belongs to the construct, but not to the loop.
             if re.match(r"\s*!\$", str(node)) and node.item is not None and node.item.span[0] > opening:
@@ -312,7 +242,7 @@ def _analyse(nest, scope, operators, private, lines, last_line):
         elif kind == "Nonlabel_Do_Stmt" and (node.items[1] is None or node.items[1].items[1] is None):
             obstacle = obstacle or "a loop that is not counted"
         elif kind == "Assignment_Stmt":
-            if _kind(node.items[0]) != "Name":
+            if kind_of(node.items[0]) != "Name":
                 obstacle = obstacle or "an assignment to an array element or a field"
             else:
                 assigned.setdefault(str(node.items[0]).lower(), []).append(node)
@@ -354,15 +284,15 @@ def _analyse(nest, scope, operators, private, lines, last_line):
 
     loops, node, bound = [], nest, set(assigned)
     while True:
-        statement = _part(node, "Nonlabel_Do_Stmt")
+        statement = part_of(node, "Nonlabel_Do_Stmt")
         variable, limits = statement.items[1].items[1]
         variable = str(variable).lower()
         if any(name in bound for limit in limits for name in _names(limit)):
             break  # A bound that the nest computes: this loop runs inside each iteration.
         loops.append((variable, *(str(limit) for limit in limits), *(["1"] if len(limits) == 2 else [])))
         bound.add(variable)
-        inner = [item for item in node.content if _kind(item) not in {"Comment", "Nonlabel_Do_Stmt", "End_Do_Stmt"}]
-        if len(inner) != 1 or _kind(inner[0]) != "Block_Nonlabel_Do_Construct":
+        inner = [item for item in node.content if kind_of(item) not in {"Comment", "Nonlabel_Do_Stmt", "End_Do_Stmt"}]
+        if len(inner) != 1 or kind_of(inner[0]) != "Block_Nonlabel_Do_Construct":
             break
         node = inner[0]
     if not loops:
@@ -371,11 +301,11 @@ def _analyse(nest, scope, operators, private, lines, last_line):
         return "an assignment to a loop variable"
     innermost = nest
     for _ in loops[1:]:
-        innermost = next(item for item in innermost.content if _kind(item) == "Block_Nonlabel_Do_Construct")
-    body = (_span(_part(innermost, "Nonlabel_Do_Stmt"))[1] + 1, _span(_part(innermost, "End_Do_Stmt"))[0] - 1)
+        innermost = next(item for item in innermost.content if kind_of(item) == "Block_Nonlabel_Do_Construct")
+    body = (_span(part_of(innermost, "Nonlabel_Do_Stmt"))[1] + 1, _span(part_of(innermost, "End_Do_Stmt"))[0] - 1)
 
     inner_variables = {str(statement.items[1].items[1][0]).lower() for statement in walk(innermost)
-                       if _kind(statement) == "Nonlabel_Do_Stmt"} - {loops[-1][0]}
+                       if kind_of(statement) == "Nonlabel_Do_Stmt"} - {loops[-1][0]}
     temporaries = {}
     after = "".join(_strip_inline_comment(line.rstrip("\n"))[0] + "\n" for line in lines[_span(nest)[1]:last_line])
     for name in sorted((set(assigned) | inner_variables) - set(described)):
@@ -503,7 +433,7 @@ def _lowered(nest, info, number, lines):
                      for axis, (variable, *_) in enumerate(info.loops, 1)),
                    # With the values on the device and the nest not rewritten for them, the host needs them all back.
                    "else", f"  !$fort publish if({tag}wide /= 0)"])
-    header = _span(_part(nest, "Nonlabel_Do_Stmt"))[1] - first + 1
+    header = _span(part_of(nest, "Nonlabel_Do_Stmt"))[1] - first + 1
     host += [*original[:header], indent + "  !$fort host\n", *original[header:]]
     host += put(0, ["end if"])
     return {"setup": setup, "device": device, "host": host, "declarations": declarations,
@@ -530,7 +460,7 @@ def lower_reductions(text, procedures):
     for scope in _procedures(tree):
         if not any(fnmatchcase(scope.qualified, pattern) for pattern in patterns):
             continue
-        execution = _part(scope.node, "Execution_Part")
+        execution = part_of(scope.node, "Execution_Part")
         if execution is None:
             continue
         statement = _heading(scope.node)
@@ -548,7 +478,7 @@ def lower_reductions(text, procedures):
             """
             run = []
             for item in getattr(node, "content", ()):
-                kind = _kind(item)
+                kind = kind_of(item)
                 if kind == "Block_Nonlabel_Do_Construct":
                     run.append(item)
                     continue
@@ -562,10 +492,10 @@ def lower_reductions(text, procedures):
             if run:
                 yield run, inside
             for item in getattr(node, "content", ()):
-                if _kind(item) == "Block_Nonlabel_Do_Construct":
+                if kind_of(item) == "Block_Nonlabel_Do_Construct":
                     body = [part for part in item.content
-                            if _kind(part) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
-                    if len(body) > 1 and any(_kind(part) == "Block_Nonlabel_Do_Construct" for part in body):
+                            if kind_of(part) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
+                    if len(body) > 1 and any(kind_of(part) == "Block_Nonlabel_Do_Construct" for part in body):
                         yield from runs(item, True)
 
         def emit(group):
@@ -582,7 +512,7 @@ def lower_reductions(text, procedures):
             for (nest, _, part) in group:
                 # Comments between the nests stay with the nest they precede.
                 between = lines[previous - 1:_span(nest)[0] - 1]
-                replacement += [line for line in between if line.strip() and not _MARKER.match(line)]
+                replacement += [line for line in between if line.strip() and not REDUCTION_LINE.match(line)]
                 replacement += part["host"]
                 previous = _span(nest)[1] + 1
             edits.append((first, last, replacement))
@@ -594,7 +524,7 @@ def lower_reductions(text, procedures):
                 stated = first - 2
                 while stated >= 0 and not lines[stated].strip():
                     stated -= 1
-                marker = _MARKER.match(lines[stated]) if stated >= 0 else None
+                marker = REDUCTION_LINE.match(lines[stated]) if stated >= 0 else None
                 operators, private = parse_license(marker.group(0)) if marker else ({}, set())
                 info = None
                 if (re.match(r"(?i)\s*do\b", lines[first - 1]) and re.match(r"(?i)\s*end\s*do\b", lines[last - 1])
@@ -629,9 +559,9 @@ def lower_reductions(text, procedures):
                 uses += ["use, intrinsic :: ieee_arithmetic, only: fort_red_ieee_value => ieee_value, &",
                          "  fort_red_negative_inf => ieee_negative_inf, fort_red_positive_inf => ieee_positive_inf"]
             heading = _span(statement)[1]
-            specification = _part(scope.node, "Specification_Part")
+            specification = part_of(scope.node, "Specification_Part")
             ends = [_span(item)[1] for item in (specification.content if specification is not None else ())
-                    if _kind(item) != "Comment" and _span(item) is not None]
+                    if kind_of(item) != "Comment" and _span(item) is not None]
             declared_after = max([heading, *ends])
             if declared_after == heading:
                 uses, declarations = uses + declarations, []
@@ -642,7 +572,7 @@ def lower_reductions(text, procedures):
     # A stated order is used or not; either way the line has done its work.
     replaced = [(first, last) for first, last, _ in edits if last >= first]
     for index, line in enumerate(lines):
-        if _MARKER.match(line) and not any(first <= index + 1 <= last for first, last in replaced):
+        if REDUCTION_LINE.match(line) and not any(first <= index + 1 <= last for first, last in replaced):
             edits.append((index + 1, index + 1, ["\n"]))
     for first, last, replacement in sorted(edits, key=lambda edit: (edit[0], edit[1]), reverse=True):
         if any(first <= other_first <= last and (other_first, other_last) != (first, last)

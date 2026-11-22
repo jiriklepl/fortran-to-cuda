@@ -9,22 +9,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from compiler.frontend.syntax import children_of, declared_type, kind_of
 from compiler.ir import CompilationError, SourceLocation
-
-
-def _kind(node):
-    return type(node).__name__
-
-
-def _children(node):
-    return getattr(node, "content", getattr(node, "items", ())) or ()
 
 
 def _arrange(callee, original):
     """The actuals of a CALL in the order of the callee's dummies, ``None`` for an absent optional one."""
     values, keyword_seen, position = {}, False, 0
     for item in original:
-        keyword = str(item.items[0]) if _kind(item) == "Actual_Arg_Spec" else None
+        keyword = str(item.items[0]) if kind_of(item) == "Actual_Arg_Spec" else None
         actual = item.items[1] if keyword is not None else item
         if keyword is not None:
             keyword_seen = True
@@ -77,9 +70,9 @@ def _match_signature(declaration, signature):
 def _resolve_candidates(analysis, scope, call_node, associate):
     """The one procedure a CALL can mean whose dummies its actuals associate with."""
     target, arguments = call_node.items
-    if _kind(target) != "Name":
+    if kind_of(target) != "Name":
         raise CompilationError("indirect calls are scope boundaries")
-    original = tuple(_children(arguments))
+    original = tuple(children_of(arguments))
     matches, errors = [], []
     candidates = analysis._candidates(scope, target)
     unavailable = [procedure for procedure in candidates if procedure not in analysis.routines]
@@ -92,7 +85,7 @@ def _resolve_candidates(analysis, scope, call_node, associate):
                 reason = analysis.external_interface(callee)
                 if reason is not None:
                     raise CompilationError(reason + ": " + procedure)
-                if any(_kind(item) == "Actual_Arg_Spec" for item in original):
+                if any(kind_of(item) == "Actual_Arg_Spec" for item in original):
                     raise CompilationError("external keyword arguments require a proven explicit interface: " + procedure)
             associate(callee, _arrange(callee, original))
             matches.append(callee)
@@ -177,15 +170,15 @@ class _OriginalTypes:
                                   self.schema(binding.declaring_scope, binding.dtype))
 
     def indices(self, scope, part, rank, depth):
-        if _kind(part) != "Part_Ref":
+        if kind_of(part) != "Part_Ref":
             return rank
-        indices = tuple(_children(part.items[1]))
+        indices = tuple(children_of(part.items[1]))
         if len(indices) != rank:
             raise CompilationError("original call array subscripts do not match declared rank")
         logical_rank = 0
         for index in indices:
-            values = index.items if _kind(index) == "Subscript_Triplet" else (index,)
-            logical_rank += _kind(index) == "Subscript_Triplet"
+            values = index.items if kind_of(index) == "Subscript_Triplet" else (index,)
+            logical_rank += kind_of(index) == "Subscript_Triplet"
             for value in values:
                 if value is not None:
                     typed = self.actual(scope, value, depth + 1)
@@ -194,9 +187,9 @@ class _OriginalTypes:
         return logical_rank
 
     def storage(self, scope, node, depth):
-        parts = tuple(node.items) if _kind(node) == "Data_Ref" else (node,)
-        base = parts[0].items[0] if _kind(parts[0]) == "Part_Ref" else parts[0]
-        if _kind(base) != "Name":
+        parts = tuple(node.items) if kind_of(node) == "Data_Ref" else (node,)
+        base = parts[0].items[0] if kind_of(parts[0]) == "Part_Ref" else parts[0]
+        if kind_of(base) != "Name":
             return None
         binding = self.analysis._binding(scope, base)
         if binding is None:
@@ -208,7 +201,7 @@ class _OriginalTypes:
             self.tick(depth)
             if schema is None:
                 raise CompilationError("original call component requires a declared source type")
-            name = str(part.items[0] if _kind(part) == "Part_Ref" else part).lower()
+            name = str(part.items[0] if kind_of(part) == "Part_Ref" else part).lower()
             declaration = schema.members.get(name)
             if declaration is None:
                 raise CompilationError("original call component declaration unavailable: " + name)
@@ -217,18 +210,13 @@ class _OriginalTypes:
             if (schema.private or "private" in flags) and scope.module != schema.scope.module:
                 raise CompilationError("original call component is inaccessible: " + name)
             dimension = next((item.items[1] for item in attributes
-                              if _kind(item) == "Dimension_Component_Attr_Spec"), None)
+                              if kind_of(item) == "Dimension_Component_Attr_Spec"), None)
             shape = entity.items[1] if entity.items[1] is not None else dimension
-            field_rank = len(_children(shape))
+            field_rank = len(children_of(shape))
             if rank and field_rank:
                 raise CompilationError("original call requires at most one array part in a component reference")
-            if _kind(spec) == "Intrinsic_Type_Spec":
-                base_type, selector = spec.items
-                dtype = str(base_type).lower()
-                width = 8 if dtype == "double precision" else 4
-                dtype = "real" if dtype == "double precision" else dtype
-                if selector is not None:
-                    width = schema.scope.kinds.integer(selector.items[1], SourceLocation(str(scope.path)))
+            if kind_of(spec) == "Intrinsic_Type_Spec":
+                dtype, width = declared_type(spec, schema.scope.kinds, SourceLocation(str(scope.path)))
             else:
                 dtype, width = str(spec).lower(), None
             owner = schema.scope
@@ -243,16 +231,16 @@ class _OriginalTypes:
 
     def actual(self, scope, node, depth=0):
         self.tick(depth)
-        if _kind(node) in {"Name", "Part_Ref", "Data_Ref"}:
+        if kind_of(node) in {"Name", "Part_Ref", "Data_Ref"}:
             storage = self.storage(scope, node, depth)
             if storage is not None:
                 return storage
-        items = _children(node)
-        if _kind(node) == "Array_Constructor" and _kind(node.items[1]) == "Ac_Value_List":
+        items = children_of(node)
+        if kind_of(node) == "Array_Constructor" and kind_of(node.items[1]) == "Ac_Value_List":
             # Type association only: retain the original vector expression and
             # its evaluation point. Implied DOs, explicit type specifications,
             # nested arrays and mixed kinds require separate expression proof.
-            values = tuple(_children(node.items[1]))
+            values = tuple(children_of(node.items[1]))
             if values:
                 typed = tuple(self.actual(scope, value, depth + 1) for value in values)
                 first = typed[0]
@@ -261,7 +249,7 @@ class _OriginalTypes:
                         and all((value.dtype, value.kind, value.rank) == (first.dtype, first.kind, 0)
                                 for value in typed)):
                     return OriginalActualType(first.dtype, first.kind, 1)
-        if _kind(node) == "Parenthesis":
+        if kind_of(node) == "Parenthesis":
             typed = self.actual(scope, items[1], depth + 1)
             return OriginalActualType(typed.dtype, typed.kind, typed.rank, schema=typed.schema)
         if len(items) == 2 and str(items[0]) in {"+", "-"}:
@@ -274,7 +262,7 @@ class _OriginalTypes:
                                               (right.dtype, right.kind, right.rank))
             if signature is not None:
                 return OriginalActualType(*signature)
-        if _kind(node) in {"Int_Literal_Constant", "Real_Literal_Constant", "Logical_Literal_Constant"}:
+        if kind_of(node) in {"Int_Literal_Constant", "Real_Literal_Constant", "Logical_Literal_Constant"}:
             signature = self.analysis._literal_signature(scope, node)
             if signature[1] is not None:
                 return OriginalActualType(*signature)
@@ -303,7 +291,7 @@ def resolve_original_call(analysis, scope, call_node):
 
     ``scope`` is the scope the statement stands in. The answer is kept per statement.
     """
-    if _kind(call_node) != "Call_Stmt":
+    if kind_of(call_node) != "Call_Stmt":
         raise CompilationError("original association requires the corresponding CALL syntax")
     if scope is None or analysis.source_scope_for(call_node) is not scope:
         raise CompilationError("original call requires its exact original statement and lexical scope")

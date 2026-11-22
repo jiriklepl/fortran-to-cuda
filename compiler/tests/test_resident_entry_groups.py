@@ -5,7 +5,8 @@ import pytest
 from fparser.two.utils import walk
 
 from compiler.frontend.lowering import lower_file
-from compiler.frontend.source_effects import SourceEffects, _kind
+from compiler.frontend.source_effects import SourceEffects
+from compiler.frontend.syntax import kind_of
 from compiler.ir import CompilationError
 from compiler.scopes.regions import extract_region
 from compiler.scopes.resident_entries import export_resident_entries
@@ -82,7 +83,7 @@ def test_direct_extraction_cannot_skip_effect_or_branch_boundaries(tmp_path, bod
     export(tmp_path, body)
     analysis = SourceEffects([tmp_path / "input.f90"])
     routine = analysis.routines["grouped::step"]
-    loops = tuple(item for item in walk(routine.execution) if _kind(item) == "Block_Nonlabel_Do_Construct")
+    loops = tuple(item for item in walk(routine.execution) if kind_of(item) == "Block_Nonlabel_Do_Construct")
     with pytest.raises(CompilationError, match="consecutive original sibling loops"):
         extract_region(analysis, routine, loops)
 

@@ -12,12 +12,11 @@ import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
-from hashlib import sha256
 from itertools import count
 from pathlib import Path
 
 from compiler.resident.array_statements import lower_array_statements
-from compiler.resident.configure import configure_sources
+from compiler.resident.configure import configure_sources, distinct_name
 from compiler.resident.directives import expand_directives
 from compiler.resident.helpers import prepare_helpers
 from compiler.resident.inlining import inline_calls
@@ -27,6 +26,7 @@ from compiler.resident.specialize import integer_parameters, specialize
 from compiler.scopes.resident_entries import (
     compile_resident_entries,
     export_resident_entries,
+    host_statement_id,
     pass_scalars_by_value,
 )
 from compiler.scopes.resident_splice import (
@@ -497,8 +497,7 @@ def prepare(project, directory, *, fortran, host_threads=4):
         named = sorted(bound.intersection(record.get("arrays", ()))) if record.get("lowered") is False else []
         if named:
             # The same finding, with the same id, that the statement gives where it is not rewritten.
-            identity = sha256((record["procedure"] + "\n" + record["text"]).encode()).hexdigest()[:16]
-            findings.append({"id": identity, "procedure": record["procedure"], "source": str(current[record["source"]]),
+            findings.append({"id": host_statement_id(record["procedure"], record["text"]), "procedure": record["procedure"], "source": str(current[record["source"]]),
                              "first_line": record["line"], "last_line": record["line"], "arrays": named, "calls": [],
                              "text": record["text"], "access": "arrays"})
             accessed += nests
@@ -553,7 +552,7 @@ def prepare(project, directory, *, fortran, host_threads=4):
         if changed:
             name = original.name
             if name in names:
-                name = sha256(str(original).encode()).hexdigest()[:12] + "_" + name
+                name = distinct_name(original)
             names.add(name)
             resident = output / name
             resident.write_text(text)

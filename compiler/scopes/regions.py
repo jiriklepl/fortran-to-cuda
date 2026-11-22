@@ -19,10 +19,18 @@ from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base, walk
 
 from compiler.frontend.component_bindings import component_access, references, source_scope_for
-from compiler.frontend.source_effects import Binding, _children, _kind, _part
+from compiler.frontend.lowering import SCALARIZED_ELEMENTS
+from compiler.frontend.source_effects import Binding
+from compiler.frontend.syntax import children_of, kind_of, part_of
 from compiler.ir import CompilationError
-from compiler.scopes.numerical import Parameter
-from compiler.scopes.segments import directive, fortran_lines, grouped_nodes, statement_span
+from compiler.ir.integers import INTEGER_MAX, fits_integer, integer_text
+from compiler.scopes.constant_parameters import integer_constant, outline_constants
+from compiler.scopes.numerical import LOGICAL_TYPES, NUMERIC_TYPES, Parameter
+from compiler.scopes.segments import directive, fortran_lines, grouped_nodes, private_names, statement_span
+
+# The elements of a local array that comes to an entry as values, and the most variables an entry captures.
+_VALUED_ELEMENTS = 16
+_CAPTURES = 64
 
 
 @dataclass(frozen=True)
@@ -63,7 +71,7 @@ def _variable_names(node):
         for child in node:
             yield from _variable_names(child)
         return
-    kind = _kind(node)
+    kind = kind_of(node)
     if kind == "Name":
         yield node
         return
@@ -72,7 +80,7 @@ def _variable_names(node):
     elif kind in {"End_Do_Stmt", "Comment"}:
         children = ()
     else:
-        children = _children(node)
+        children = children_of(node)
     for child in children:
         yield from _variable_names(child)
 
@@ -118,7 +126,7 @@ def _host_associated_reads(analysis, routine, helper, active=frozenset()):
     active = active | {helper.qualified}
     roots = {binding.root for binding in routine.scope.bindings.values() if not binding.rank}
     found, children = set(), {}
-    for part in (_part(helper.scope.node, 'Specification_Part'), helper.execution):
+    for part in (part_of(helper.scope.node, 'Specification_Part'), helper.execution):
         if part is None:
             continue
         try:
@@ -141,12 +149,8 @@ def _element_names(routine, binding):
     """The variable, or for an array of rank two or more each of its elements, as assignment targets."""
     if binding.rank < 2:
         return [binding.name]
-    shape = [tuple(int(value) for value in axis.replace("(-2147483647 - 1)", str(-(2**31))).split(":"))
-             for axis in _fixed_shape(routine, binding)]
-    subscripts = [()]
-    for lower, upper in reversed(shape):
-        subscripts = [(index, *rest) for index in range(lower, upper + 1) for rest in subscripts]
-    return [f"{binding.name}({','.join(str(index) for index in subscript)})" for subscript in subscripts]
+    return [f"{binding.name}({','.join(str(index) for index in subscript)})"
+            for subscript in _subscripts(_fixed_bounds(routine, binding))]
 
 
 def _openmp_private(loop):
@@ -154,14 +158,12 @@ def _openmp_private(loop):
 
     The preparation writes it there where it removes the loop's OpenMP directive.
     """
-    opening = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt")
+    opening = next(item for item in loop.content if kind_of(item) == "Nonlabel_Do_Stmt")
     names = set()
     for item in loop.content:
-        if _kind(item) == "Comment" and getattr(item, "item", None) is not None \
+        if kind_of(item) == "Comment" and getattr(item, "item", None) is not None \
                 and item.item.span[0] == opening.item.span[0]:
-            match = re.search(r"(?i)!\$fort\s+private\s*\(([^)]*)\)", str(item))
-            if match:
-                names |= {name.strip().lower() for name in match.group(1).split(",") if name.strip()}
+            names |= private_names(str(item))
     return names
 
 
@@ -185,8 +187,8 @@ _IMPURE = frozenset({"Write_Stmt", "Print_Stmt", "Read_Stmt", "Open_Stmt", "Clos
 
 
 def _declared_pure(helper):
-    statement = _part(helper.scope.node, "Subroutine_Stmt") or _part(helper.scope.node, "Function_Stmt")
-    return any(str(prefix).lower() in {"pure", "elemental"} for prefix in _children(statement.items[0]))
+    statement = part_of(helper.scope.node, "Subroutine_Stmt") or part_of(helper.scope.node, "Function_Stmt")
+    return any(str(prefix).lower() in {"pure", "elemental"} for prefix in children_of(statement.items[0]))
 
 
 def _pure(analysis, helper, visiting=()):
@@ -210,20 +212,20 @@ def _pure(analysis, helper, visiting=()):
                 return False
         elif binding.root.startswith(own) and binding.attributes & {"save", "pointer", "target", "allocatable"}:
             return False
-    specification = _part(helper.scope.node, "Specification_Part")
+    specification = part_of(helper.scope.node, "Specification_Part")
     for declaration in walk(specification, F.Entity_Decl) if specification is not None else ():
         name = str(declaration.items[0]).lower()
         binding = helper.scope.bindings.get(name)
         # An initialized local keeps its value from one call to the next.
         if declaration.items[3] is not None and binding is not None and "parameter" not in binding.attributes:
             return False
-    if any(_kind(node) in _IMPURE for node in walk(helper.execution)):
+    if any(kind_of(node) in _IMPURE for node in walk(helper.execution)):
         return False
     for statement in walk(helper.execution, F.Assignment_Stmt):
         target = statement.items[0]
-        while _kind(target) in {"Part_Ref", "Data_Ref"}:
+        while kind_of(target) in {"Part_Ref", "Data_Ref"}:
             target = target.items[0]
-        binding = analysis._binding(helper.scope, target) if _kind(target) == "Name" else None
+        binding = analysis._binding(helper.scope, target) if kind_of(target) == "Name" else None
         if binding is None:
             return False
         if binding.root.startswith("argument::"):
@@ -232,34 +234,34 @@ def _pure(analysis, helper, visiting=()):
         elif not binding.root.startswith(own):
             return False
     for node in walk(helper.execution):
-        if _kind(node) not in {"Call_Stmt", "Part_Ref", "Function_Reference"} or _kind(node.items[0]) != "Name":
+        if kind_of(node) not in {"Call_Stmt", "Part_Ref", "Function_Reference"} or kind_of(node.items[0]) != "Name":
             continue
         child = _helper(analysis, helper, node.items[0])
         if child is not None:
             if not _pure(analysis, child, visiting):
                 return False
-        elif _kind(node) == "Call_Stmt":
+        elif kind_of(node) == "Call_Stmt":
             return False
     return True
 
 
 def _helper_actuals(analysis, routine, node, *, allow_omitted_optional=False):
     """Resolve ordinary numerical calls without evaluating their actuals."""
-    if _kind(node) == "Call_Stmt":
+    if kind_of(node) == "Call_Stmt":
         name, arguments = node.items
-    elif _kind(node) in {"Part_Ref", "Function_Reference", "Structure_Constructor"}:
+    elif kind_of(node) in {"Part_Ref", "Function_Reference", "Structure_Constructor"}:
         name, arguments = node.items[:2]
     else:
         return None, ()
-    if _kind(name) != "Name":
+    if kind_of(name) != "Name":
         return None, ()
     helper = _helper(analysis, routine, name)
     if helper is None:
         return None, ()
     actuals, seen = {}, set()
     positional = 0
-    for value in _children(arguments):
-        keyword = _kind(value) == "Actual_Arg_Spec"
+    for value in children_of(arguments):
+        keyword = kind_of(value) == "Actual_Arg_Spec"
         if keyword:
             formal, value = str(value.items[0]).lower(), value.items[1]
         else:
@@ -285,9 +287,9 @@ def _helper_actuals(analysis, routine, node, *, allow_omitted_optional=False):
 def _element_count(binding, reference):
     """Whether ``reference`` names an array of derived type only to ask for its SIZE."""
     parent = getattr(getattr(reference, "parent", None), "parent", None)
-    return (binding.rank == 1 and str(binding.dtype).lower().startswith("type") and _kind(reference) == "Name"
-            and _kind(parent) == "Intrinsic_Function_Reference" and str(parent.items[0]).lower() == "size"
-            and len(_children(parent.items[1])) == 1)
+    return (binding.rank == 1 and str(binding.dtype).lower().startswith("type") and kind_of(reference) == "Name"
+            and kind_of(parent) == "Intrinsic_Function_Reference" and str(parent.items[0]).lower() == "size"
+            and len(children_of(parent.items[1])) == 1)
 
 
 def _helper_closure(analysis, routine, loops):
@@ -301,11 +303,11 @@ def _helper_closure(analysis, routine, loops):
         for item in walk(body):
             if id(item) in component_selectors:
                 continue
-            if _kind(item) not in {"Call_Stmt", "Part_Ref", "Function_Reference", "Structure_Constructor"}:
+            if kind_of(item) not in {"Call_Stmt", "Part_Ref", "Function_Reference", "Structure_Constructor"}:
                 continue
             helper, _ = _helper_actuals(analysis, owner, item)
             if helper is None:
-                if _kind(item) == "Call_Stmt":
+                if kind_of(item) == "Call_Stmt":
                     raise CompilationError("unsupported inline numerical statement: unresolved source helper")
                 continue
             if helper.qualified in active:
@@ -338,7 +340,7 @@ def _exception_observers(analysis):
     procedures = {**analysis.routines, **analysis.numerical_helpers}
     for qualified, routine in procedures.items():
         for node in walk(routine.execution):
-            if _kind(node) != "Call_Stmt" or _kind(node.items[0]) != "Name":
+            if kind_of(node) != "Call_Stmt" or kind_of(node.items[0]) != "Name":
                 continue
             for target in analysis._candidates(routine.scope, node.items[0]):
                 parts = target.split("::")
@@ -357,7 +359,7 @@ def _validate_real_varargs(analysis, routine, node):
     unless every operand is an explicitly finite numeric literal.
     """
     def dtype(value):
-        kind = _kind(value)
+        kind = kind_of(value)
         if kind == "Real_Literal_Constant":
             return "real"
         if kind == "Int_Literal_Constant":
@@ -371,14 +373,14 @@ def _validate_real_varargs(analysis, routine, node):
                 return "integer"
             if name in {"real", "sqrt", "sin", "cos", "acos", "exp", "log"}:
                 return "real"
-            children = _children(value.items[1])
+            children = children_of(value.items[1])
         else:
-            children = _children(value)
+            children = children_of(value)
         types = {dtype(child) for child in children if not isinstance(child, (str, int))}
         return "real" if "real" in types else "integer" if types == {"integer"} else None
 
     def finite_literal(value):
-        kind = _kind(value)
+        kind = kind_of(value)
         if kind in {"Real_Literal_Constant", "Int_Literal_Constant"}:
             return math.isfinite(float(value.items[0].lower().replace("d", "e")))
         items = getattr(value, "items", ())
@@ -389,10 +391,10 @@ def _validate_real_varargs(analysis, routine, node):
         return False
 
     for item in walk(node):
-        if _kind(item) != "Intrinsic_Function_Reference" or str(item.items[0]).lower() not in {"min", "max"}:
+        if kind_of(item) != "Intrinsic_Function_Reference" or str(item.items[0]).lower() not in {"min", "max"}:
             continue
-        arguments = tuple(value.items[1] if _kind(value) == "Actual_Arg_Spec" else value
-                          for value in _children(item.items[1]))
+        arguments = tuple(value.items[1] if kind_of(value) == "Actual_Arg_Spec" else value
+                          for value in children_of(item.items[1]))
         if len(arguments) > 2 and any(dtype(value) != "integer" for value in arguments) and not all(finite_literal(value) for value in arguments):
             raise CompilationError("inline real MIN/MAX with more than two operands needs proven finite values or a supported native ordering contract")
 
@@ -407,10 +409,10 @@ def _intrinsic_shadowed(analysis, routine, name):
 
 
 def _iterator(node):
-    header = next((item for item in _children(node) if _kind(item) == "Nonlabel_Do_Stmt"), None)
+    header = next((item for item in children_of(node) if kind_of(item) == "Nonlabel_Do_Stmt"), None)
     control = header.items[1] if header is not None else None
-    counted = control.items[1] if control is not None and _kind(control) == "Loop_Control" else None
-    if not counted or len(counted) != 2 or _kind(counted[0]) != "Name":
+    counted = control.items[1] if control is not None and kind_of(control) == "Loop_Control" else None
+    if not counted or len(counted) != 2 or kind_of(counted[0]) != "Name":
         raise CompilationError("inline numerical regions require counted DO loops")
     return str(counted[0]).lower(), tuple(counted[1])
 
@@ -436,8 +438,8 @@ def _loop_control(analysis, routine, loops, live, iterators, changed):
     def control(loop, enclosing, depth):
         name, bounds = _iterator(loop)
         root, inner = variable(loop), []
-        for child in _children(loop):
-            if _kind(child) == "Block_Nonlabel_Do_Construct":
+        for child in children_of(loop):
+            if kind_of(child) == "Block_Nonlabel_Do_Construct":
                 inner += control(child, enclosing | {root}, depth + 1)
             elif any(variable(item) in live for item in walk(child, F.Block_Nonlabel_Do_Construct)):
                 raise refusal  # Whether that loop runs is decided by the statements left out.
@@ -452,29 +454,40 @@ def _loop_control(analysis, routine, loops, live, iterators, changed):
     return tuple(line for loop in loops for line in control(loop, frozenset(), 0))
 
 
-def _fixed_shape(routine, binding):
-    from compiler.ir import SourceLocation
+def _fixed_bounds(routine, binding):
+    """The constant bounds of a local array, ``(lower, upper)`` per axis, within the element budget."""
     if not binding.rank or len(binding.shape_nodes) != binding.rank:
         raise CompilationError("inline private arrays require constant explicit bounds")
     result, elements = [], 1
     scope = binding.declaring_scope or routine.scope
     for axis in binding.shape_nodes:
-        if _kind(axis) != "Explicit_Shape_Spec" or axis.items[1] is None:
+        if kind_of(axis) != "Explicit_Shape_Spec" or axis.items[1] is None:
             raise CompilationError("inline private arrays require constant explicit bounds")
         try:
-            lower = scope.kinds.integer(axis.items[0], SourceLocation(str(scope.path))) if axis.items[0] is not None else 1
-            upper = scope.kinds.integer(axis.items[1], SourceLocation(str(scope.path)))
+            lower = scope.constant(axis.items[0]) if axis.items[0] is not None else 1
+            upper = scope.constant(axis.items[1])
         except CompilationError as error:
             raise CompilationError("inline private arrays require constant explicit bounds") from error
-        if not -(2**31) <= lower < 2**31 or not -(2**31) <= upper < 2**31:
+        if not fits_integer(lower) or not fits_integer(upper):
             raise CompilationError("inline private array bounds exceed the INTEGER ABI")
         elements *= max(0, upper - lower + 1)
-        def integer_spelling(value):
-            return "(-2147483647 - 1)" if value == -(2**31) else str(value)
-        result.append(f"{integer_spelling(lower)}:{integer_spelling(upper)}")
-    if elements > 256:
+        result.append((lower, upper))
+    if elements > SCALARIZED_ELEMENTS:
         raise CompilationError("inline private array exceeds the bounded element budget")
     return tuple(result)
+
+
+def _fixed_shape(routine, binding):
+    """The shape of a local array with constant bounds, as its declaration writes it."""
+    return tuple(f"{integer_text(lower)}:{integer_text(upper)}" for lower, upper in _fixed_bounds(routine, binding))
+
+
+def _subscripts(bounds):
+    """Every subscript of an array with these bounds, in array element order."""
+    subscripts = [()]
+    for lower, upper in reversed(bounds):
+        subscripts = [(index, *rest) for index in range(lower, upper + 1) for rest in subscripts]
+    return subscripts
 
 
 def _untile(analysis, routine, loop, helpers):
@@ -485,11 +498,11 @@ def _untile(analysis, routine, loop, helpers):
     never authorizes a stencil recurrence or an index-as-data tile coordinate.
     """
     chain, current = [], loop
-    while _kind(current) == "Block_Nonlabel_Do_Construct":
+    while kind_of(current) == "Block_Nonlabel_Do_Construct":
         chain.append(current)
-        body = tuple(child for child in _children(current)
-                     if _kind(child) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"})
-        if len(body) != 1 or _kind(body[0]) != "Block_Nonlabel_Do_Construct":
+        body = tuple(child for child in children_of(current)
+                     if kind_of(child) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"})
+        if len(body) != 1 or kind_of(body[0]) != "Block_Nonlabel_Do_Construct":
             break
         current = body[0]
     if len(chain) < 2 or len(chain) % 2:
@@ -500,12 +513,11 @@ def _untile(analysis, routine, loop, helpers):
 
     def check(value):
         """A bound that is not a variable is a constant of the INTEGER ABI."""
-        from compiler.ir import SourceLocation
-        binding = analysis._binding(routine.scope, value) if _kind(value) == "Name" else None
+        binding = analysis._binding(routine.scope, value) if kind_of(value) == "Name" else None
         if binding is not None and "parameter" not in binding.attributes:
             return
-        constant = routine.scope.kinds.integer(value, SourceLocation(str(routine.scope.path)))
-        if not -(2**31) <= constant < 2**31:
+        constant = routine.scope.constant(value)
+        if not fits_integer(constant):
             raise CompilationError("inline tile bound exceeds the INTEGER ABI")
     for tile, cells in zip(outer, inner, strict=True):
         tile_name, tile_bounds = _iterator(tile)
@@ -514,28 +526,27 @@ def _untile(analysis, routine, loop, helpers):
             return loop, (), ()
         lower, upper, step = tile_bounds
         for value in (lower, upper, step):
-            if _kind(value) == "Name":
+            if kind_of(value) == "Name":
                 continue
             try:
-                from compiler.ir import SourceLocation
-                constant = routine.scope.kinds.integer(value, SourceLocation(str(routine.scope.path)))
-                if not -(2**31) <= constant < 2**31:
+                constant = routine.scope.constant(value)
+                if not fits_integer(constant):
                     return loop, (), ()
             except CompilationError:
                 return loop, (), ()
         if str(cell_bounds[0]).lower() != tile_name:
             return loop, (), ()
         ceiling = cell_bounds[1]
-        if _kind(ceiling) != "Intrinsic_Function_Reference" or str(ceiling.items[0]).lower() != "min":
+        if kind_of(ceiling) != "Intrinsic_Function_Reference" or str(ceiling.items[0]).lower() != "min":
             return loop, (), ()
         if _intrinsic_shadowed(analysis, routine, "min"):
             raise CompilationError("inline tile clipping intrinsic is shadowed")
-        arguments = _children(ceiling.items[1])
+        arguments = children_of(ceiling.items[1])
         expected = {str(F.Level_2_Expr(f"{tile_name}+{step}-1")).lower(), str(upper).lower()}
         if len(arguments) != 2 or {str(value).lower() for value in arguments} != expected:
             return loop, (), ()
         for value in (lower, upper, step):
-            if _kind(value) == "Name":
+            if kind_of(value) == "Name":
                 binding = analysis._binding(routine.scope, value)
                 if binding is None or binding.signature() != ("integer", 4, 0):
                     raise CompilationError("inline tile bounds require default INTEGER scalars")
@@ -544,14 +555,14 @@ def _untile(analysis, routine, loop, helpers):
         if _intrinsic_shadowed(analysis, routine, "int"):
             raise CompilationError("inline tile guard conversion intrinsic is shadowed")
         predicates = [f"int({step},kind=c_int64_t) > 0_c_int64_t",
-                      f"int({upper},kind=c_int64_t) + int({step},kind=c_int64_t) <= 2147483647_c_int64_t"]
+                      f"int({upper},kind=c_int64_t) + int({step},kind=c_int64_t) <= {INTEGER_MAX}_c_int64_t"]
         guards += predicates
         for value in (step, upper, lower):
             check(value)
         domains.append({"tile_iterator": tile_name, "iterator": index_name, "lower": str(lower), "upper": str(upper)})
     tile_names = {domain["tile_iterator"] for domain in domains}
-    numerical_body = tuple(child for child in _children(inner[-1])
-                           if _kind(child) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"})
+    numerical_body = tuple(child for child in children_of(inner[-1])
+                           if kind_of(child) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"})
     if any(str(name).lower() in tile_names for value in (*numerical_body, *(helper.execution for helper in helpers.values()))
            for name in _variable_names(value)):
         raise CompilationError("inline tile coordinates are observed by numerical work")
@@ -560,8 +571,8 @@ def _untile(analysis, routine, loop, helpers):
     result = numerical_body
     for cells, domain in reversed(tuple(zip(inner, domains, strict=True))):
         clone = copy.copy(cells)
-        header = next(child for child in _children(cells) if _kind(child) == "Nonlabel_Do_Stmt")
-        ending = next(child for child in _children(cells) if _kind(child) == "End_Do_Stmt")
+        header = next(child for child in children_of(cells) if kind_of(child) == "Nonlabel_Do_Stmt")
+        ending = next(child for child in children_of(cells) if kind_of(child) == "End_Do_Stmt")
         replacement = F.Nonlabel_Do_Stmt(f"do {domain['iterator']}={domain['lower']},{domain['upper']}")
         replacement.item = header.item
         clone.content = [replacement, *result, ending]
@@ -573,16 +584,16 @@ def _upward_reads(analysis, routine, nodes):
     """Conservative scalar liveness, including original DO final values."""
     defined, reads = set(), set()
     for node in nodes:
-        kind = _kind(node)
+        kind = kind_of(node)
         if kind == "Comment":
             continue
         if kind == "Assignment_Stmt":
             target, _, value = node.items
             own = _scalar_reads(analysis, routine, value)
-            if _kind(target) != "Name":
+            if kind_of(target) != "Name":
                 own |= _scalar_reads(analysis, routine, target)
             reads |= own - defined
-            binding = analysis._binding(routine.scope, target) if _kind(target) == "Name" else None
+            binding = analysis._binding(routine.scope, target) if kind_of(target) == "Name" else None
             if binding and not binding.rank:
                 defined.add(binding.root)
         elif kind == "Block_Nonlabel_Do_Construct":
@@ -591,7 +602,7 @@ def _upward_reads(analysis, routine, nodes):
             index = analysis._binding(routine.scope, name)
             if index:
                 defined.add(index.root)
-            body = tuple(item for item in _children(node) if _kind(item) not in {
+            body = tuple(item for item in children_of(node) if kind_of(item) not in {
                 "Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"})
             reads |= _upward_reads(analysis, routine, body) - defined
         elif kind == "Call_Stmt":
@@ -610,14 +621,14 @@ def _upward_reads(analysis, routine, nodes):
                     # is liveness, not a numerical-callee proof: retain every
                     # possible actual/callback capture and infer no definition.
                     reads |= _scalar_reads(analysis, routine, actual) - defined
-                    if _kind(actual) != "Name" or _helper(analysis, routine, actual) is None:
+                    if kind_of(actual) != "Name" or _helper(analysis, routine, actual) is None:
                         # A dynamic callback may capture any original local;
                         # a later coherent native fallback cannot reconstruct
                         # a loop iterator discarded by an earlier GPU worker.
                         reads |= {value.root for value in routine.scope.bindings.values()
                                   if not value.rank} - defined
                     continue
-                target = analysis._binding(routine.scope, actual) if _kind(actual) == "Name" else None
+                target = analysis._binding(routine.scope, actual) if kind_of(actual) == "Name" else None
                 if binding.intent != "out":
                     reads |= _scalar_reads(analysis, routine, actual) - defined
                 if binding.intent in {"out", "inout"} and target and not target.rank:
@@ -625,8 +636,8 @@ def _upward_reads(analysis, routine, nodes):
             defined |= outputs
         elif kind == "If_Construct":
             body = []
-            for child in _children(node):
-                if _kind(child) in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
+            for child in children_of(node):
+                if kind_of(child) in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
                     reads |= _upward_reads(analysis, routine, body) - defined
                     body = []
                     reads |= _scalar_reads(analysis, routine, child) - defined
@@ -652,7 +663,7 @@ def _upward_array_reads(analysis, routine, nodes):
         return _named(analysis, routine, node, True)
     defined, incoming = set(), set()
     for node in nodes:
-        kind = _kind(node)
+        kind = kind_of(node)
         if kind == "Comment":
             continue
         if kind == "Call_Stmt":
@@ -665,7 +676,7 @@ def _upward_array_reads(analysis, routine, nodes):
                 if actual is None:
                     continue
                 parameter = helper.scope.bindings.get(formal)
-                binding = analysis._binding(routine.scope, actual) if _kind(actual) == "Name" else None
+                binding = analysis._binding(routine.scope, actual) if kind_of(actual) == "Name" else None
                 if parameter is None or parameter.intent != "out":
                     incoming |= reads(actual) - defined
                 if parameter and parameter.intent == "out" and binding and binding.rank:
@@ -674,20 +685,20 @@ def _upward_array_reads(analysis, routine, nodes):
         elif kind == "Assignment_Stmt":
             target, _, value = node.items
             incoming |= reads(value) - defined
-            if _kind(target) == "Name":
+            if kind_of(target) == "Name":
                 binding = analysis._binding(routine.scope, target)
                 if binding and binding.rank:
                     defined.add(binding.root)
         elif kind == "Block_Nonlabel_Do_Construct":
             _, bounds = _iterator(node)
             incoming |= set().union(*(reads(bound) for bound in bounds)) - defined
-            body = tuple(child for child in _children(node)
-                         if _kind(child) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"})
+            body = tuple(child for child in children_of(node)
+                         if kind_of(child) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"})
             incoming |= _upward_array_reads(analysis, routine, body) - defined
         elif kind == "If_Construct":
             branch = []
-            for child in _children(node):
-                if _kind(child) in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
+            for child in children_of(node):
+                if kind_of(child) in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
                     incoming |= _upward_array_reads(analysis, routine, branch) - defined
                     branch = []
                     incoming |= reads(child) - defined
@@ -700,11 +711,11 @@ def _upward_array_reads(analysis, routine, nodes):
 
 
 def _allocated_names(node):
-    if _kind(node) != "Allocate_Stmt":
+    if kind_of(node) != "Allocate_Stmt":
         return set()
     result = set()
     for item in walk(node):
-        if _kind(item) == "Allocation":
+        if kind_of(item) == "Allocation":
             result.add(str(item.items[0]).lower())
     return result
 
@@ -725,7 +736,7 @@ def _check_allocation(analysis, routine, binding, preceding):
         raise CompilationError("inline local allocation may escape or have uncertain association")
     if _intrinsic_shadowed(analysis, routine, "allocated"):
         raise CompilationError("inline allocation guard intrinsic is shadowed")
-    if not any(_kind(item) == "Allocate_Stmt" and binding.name in _allocated_names(item)
+    if not any(kind_of(item) == "Allocate_Stmt" and binding.name in _allocated_names(item)
                for node in preceding for item in walk(node)):
         raise CompilationError("inline local allocation lacks a preceding original allocation site: " + binding.root)
 
@@ -742,7 +753,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         raise CompilationError("inline original specification is unsupported: " + "; ".join(specification_issues))
     if analysis._unknown_exports(routine.scope):
         raise CompilationError("inline intrinsic authority requires complete wildcard imports")
-    if any(directive(item) is not None for item in walk(_part(routine.scope.node, "Specification_Part"))):
+    if any(directive(item) is not None for item in walk(part_of(routine.scope.node, "Specification_Part"))):
         # fparser may attach opening executable directives to specifications.
         # A detached DO alone does not prove either serial participation or the
         # complete parallel region; retain the original operation in that case.
@@ -760,14 +771,14 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                 if (selected_span[0] <= last and first <= selected_span[1]
                         and not (selected_span[0] <= first and last <= selected_span[1])):
                     raise CompilationError("inline OpenMP association requires its complete original source region")
-            elif _kind(group) in {"If_Construct", "Associate_Construct"}:
+            elif kind_of(group) in {"If_Construct", "Associate_Construct"}:
                 first, last = statement_span(group)
                 if selected_span[0] <= last and first <= selected_span[1]:
                     complete_original_groups(group.content)
 
     # A detached DO can be a genuine original AST node while still belonging
     # to a larger team. Source identity alone must not turn it into serial work.
-    complete_original_groups(_children(routine.execution))
+    complete_original_groups(children_of(routine.execution))
     # fparser attaches an associated !$OMP DO prefix to its DO construct.
     # Peel only that original structural prefix; do not authorize a projected
     # routine or arbitrary foreign AST as source-backed numerical work.
@@ -775,15 +786,15 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     # the exact original selection, but do not create an execution operation
     # beside the joined group. Keep that selection for completion authority.
     grouped = tuple(item for item in grouped_nodes(nodes)
-                    if _kind(item) != "Comment" or directive(item) is not None)
+                    if kind_of(item) != "Comment" or directive(item) is not None)
     if len(grouped) == 1 and isinstance(grouped[0], tuple):
         nodes = grouped[0]
-    elif len(grouped) == 1 or all(_kind(item) == "Block_Nonlabel_Do_Construct" for item in grouped):
+    elif len(grouped) == 1 or all(kind_of(item) == "Block_Nonlabel_Do_Construct" for item in grouped):
         nodes = grouped
     if directive(nodes[0]) is not None:
         # A loop under an OpenMP directive is the work of a whole team; only serial loops are extracted.
         raise CompilationError("inline OpenMP association requires its complete original source region")
-    if not all(_kind(item) == "Block_Nonlabel_Do_Construct" for item in nodes):
+    if not all(kind_of(item) == "Block_Nonlabel_Do_Construct" for item in nodes):
         raise CompilationError("inline numerical region requires serial counted DO loops")
     if len(nodes) > 1:
         # Membership and sorted line numbers do not prove a serial group:
@@ -793,16 +804,16 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
 
         def consecutive(sequence):
             effective = tuple(item for item in sequence
-                              if _kind(item) != "Comment" or directive(item) is not None)
+                              if kind_of(item) != "Comment" or directive(item) is not None)
             identities = tuple(id(item) for item in effective)
             if any(identities[start:start + len(wanted)] == wanted
                    for start in range(len(identities) - len(wanted) + 1)):
                 return True
-            return any(consecutive(_children(item)) for item in effective
-                       if _kind(item) in {"If_Construct", "Associate_Construct", "Block_Construct",
+            return any(consecutive(children_of(item)) for item in effective
+                       if kind_of(item) in {"If_Construct", "Associate_Construct", "Block_Construct",
                                           "Block_Nonlabel_Do_Construct"})
 
-        if not consecutive(_children(routine.execution)):
+        if not consecutive(children_of(routine.execution)):
             raise CompilationError("serial numerical group requires consecutive original sibling loops")
     loops = nodes
     original_nodes = {id(item) for item in walk(routine.execution)}
@@ -810,10 +821,10 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         if id(item) in original_nodes:
             continue
         related = False
-        if _kind(item) == "Block_Nonlabel_Do_Construct":
+        if kind_of(item) == "Block_Nonlabel_Do_Construct":
             for original in walk(routine.execution, F.Block_Nonlabel_Do_Construct):
                 children = list(original.content)
-                while children and _kind(children[0]) == "Comment":
+                while children and kind_of(children[0]) == "Comment":
                     children.pop(0)
                 if (len(children) == len(item.content)
                         and all(left is right for left, right in zip(children, item.content, strict=True))):
@@ -823,7 +834,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             raise CompilationError("inline extraction nodes must belong to the original execution")
     helpers = _helper_closure(analysis, routine, loops)
     bodies = [(routine, loop) for loop in loops] + [(helper, helper.execution) for helper in helpers.values()]
-    vector_reduction = any(_kind(item) == "Intrinsic_Function_Reference"
+    vector_reduction = any(kind_of(item) == "Intrinsic_Function_Reference"
                            and str(item.items[0]).lower() in {"sum", "dot_product"}
                            for _owner, body in bodies for item in walk(body))
     if (helpers or vector_reduction) and (observers := _exception_observers(analysis)):
@@ -836,9 +847,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         if helpers or vector_reduction:
             _validate_real_varargs(analysis, owner, loop)
         for item in walk(loop):
-            if ((hasattr(item, "content") or _kind(item).endswith("_Stmt")
-                 or getattr(item, "item", None) is not None) and _kind(item) not in admitted):
-                raise CompilationError("unsupported inline numerical statement: " + _kind(item))
+            if ((hasattr(item, "content") or kind_of(item).endswith("_Stmt")
+                 or getattr(item, "item", None) is not None) and kind_of(item) not in admitted):
+                raise CompilationError("unsupported inline numerical statement: " + kind_of(item))
             if directive(item) is not None:
                 raise CompilationError("nested inline OpenMP directives require a synchronization proof")
 
@@ -856,7 +867,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             used[binding.root] = binding
     for binding in used.values():
         # The device copy of an array is as large as the array, and this one does not say how large it is.
-        if any(_kind(axis) == "Assumed_Size_Spec" for axis in binding.shape_nodes):
+        if any(kind_of(axis) == "Assumed_Size_Spec" for axis in binding.shape_nodes):
             raise CompilationError("an assumed-size array has no extent to keep on the device: " + binding.name)
     writes, scalar_writes, iterators, local_arrays, assigned_scalars = set(), set(), set(), set(), set()
     def write(binding, target):
@@ -869,7 +880,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                 and not binding.attributes & {"save", "allocatable", "pointer", "target"}):
             local_arrays.add(binding.root)
         elif binding.rank:
-            if (_kind(target) not in {"Name", "Part_Ref"} and not (_kind(target) == "Data_Ref"
+            if (kind_of(target) not in {"Name", "Part_Ref"} and not (kind_of(target) == "Data_Ref"
                     and component_access(analysis, routine.scope, target).indices)):
                 raise CompilationError("inline whole-array assignments require separate allocation/effect proofs")
             if binding.intent == "in":
@@ -881,7 +892,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
 
     for owner, loop in bodies:
         for item in walk(loop):
-            if _kind(item) == "Block_Nonlabel_Do_Construct":
+            if kind_of(item) == "Block_Nonlabel_Do_Construct":
                 name, _ = _iterator(item)
                 binding = analysis._binding(source_scope_for(analysis, item, owner.scope), name)
                 if binding is None:
@@ -890,14 +901,14 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                     continue
                 scalar_writes.add(binding.root)
                 iterators.add(binding.root)
-            elif _kind(item) == "Assignment_Stmt":
+            elif kind_of(item) == "Assignment_Stmt":
                 target = item.items[0]
-                name = target.items[0] if _kind(target) == "Part_Ref" else target
+                name = target.items[0] if kind_of(target) == "Part_Ref" else target
                 binding = analysis._binding(source_scope_for(analysis, target, owner.scope), name)
                 if owner is not routine and binding is owner.scope.bindings.get(str(name).lower()):
                     continue
                 write(binding, target)
-            elif _kind(item) == "Call_Stmt":
+            elif kind_of(item) == "Call_Stmt":
                 helper, actuals = _helper_actuals(analysis, owner, item)
                 for formal, actual in zip(helper.arguments, actuals, strict=True):
                     parameter = helper.scope.bindings.get(formal)
@@ -905,17 +916,17 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                         raise CompilationError("inline numerical helper requires explicit formal intents")
                     if parameter.intent == "in":
                         continue
-                    name = actual.items[0] if _kind(actual) == "Part_Ref" else actual
-                    binding = analysis._binding(source_scope_for(analysis, actual, owner.scope), name) if _kind(name) in {"Name", "Data_Ref"} else None
+                    name = actual.items[0] if kind_of(actual) == "Part_Ref" else actual
+                    binding = analysis._binding(source_scope_for(analysis, actual, owner.scope), name) if kind_of(name) in {"Name", "Data_Ref"} else None
                     if owner is not routine and binding is owner.scope.bindings.get(str(name).lower()):
                         continue
-                    if (binding is not None and binding.rank and _kind(actual) == "Name"
+                    if (binding is not None and binding.rank and kind_of(actual) == "Name"
                             and binding.root.startswith(routine.qualified + "::")
                             and binding.attributes & {"save", "allocatable", "pointer", "target"}):
                         raise CompilationError("inline helper array outputs require private storage in the original owner")
                     # A whole private fixed array is a per-item output, rather
                     # than an external allocation-changing array assignment.
-                    if binding is not None and binding.rank and _kind(actual) == "Name" and not binding.root.startswith(routine.qualified + "::"):
+                    if binding is not None and binding.rank and kind_of(actual) == "Name" and not binding.root.startswith(routine.qualified + "::"):
                         if binding.intent == "in":
                             raise CompilationError("inline helper writes original INTENT(IN) storage")
                         writes.add(binding.root)
@@ -927,8 +938,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             raise CompilationError("inline scalar effects must remain in the original owner: " + root)
         if binding.attributes & {"target", "pointer", "allocatable", "optional", "volatile", "asynchronous", "value"}:
             raise CompilationError("inline private scalar association is uncertain: " + root)
-        if (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1),
-                                                 ("logical", 4)}:
+        if (binding.dtype, binding.kind) not in NUMERIC_TYPES | LOGICAL_TYPES:
             raise CompilationError("unsupported inline private scalar type: " + root)
         if root in iterators and (binding.dtype, binding.kind) != ("integer", 4):
             raise CompilationError("inline loop iterators require default INTEGER: " + root)
@@ -968,10 +978,10 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                      and not binding.attributes & {"save", "allocatable", "pointer", "target", "parameter"}}
     for root in local_arrays:
         binding = used[root]
-        _fixed_shape(routine, binding)
+        _fixed_bounds(routine, binding)
         if binding.attributes & {"optional", "volatile", "asynchronous", "value"}:
             raise CompilationError("inline private array association is uncertain: " + root)
-        if (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4)}:
+        if (binding.dtype, binding.kind) not in NUMERIC_TYPES:
             raise CompilationError("unsupported inline private array type: " + root)
         if binding.name.lower() not in private_names and root in (
                 _upward_array_reads(following_analysis, routine, following)
@@ -986,7 +996,6 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     private = {root: used[root] for root in sorted(scalar_writes | local_arrays)}
     occupied = {binding.name for binding in used.values()}
     occupied.update(name for helper in helpers.values() for name in helper.scope.bindings)
-    from compiler.scopes.constant_parameters import outline_constants
     constants = outline_constants(analysis, routine, used.values(), occupied, _fixed_shape)
     captures = {root: binding for root, binding in used.items()
                 if root not in private and "parameter" not in binding.attributes}
@@ -996,16 +1005,12 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     valued = {}
     for root in sorted(local_arrays - written_locals):
         binding = used[root]
-        shape = [tuple(int(value) for value in axis.replace("(-2147483647 - 1)", str(-(2**31))).split(":"))
-                 for axis in _fixed_shape(routine, binding)]
-        count = math.prod(max(0, upper - lower + 1) for lower, upper in shape)
-        if binding.name.lower() in private_names or count > 16 or binding.dtype not in {"real", "integer"}:
+        bounds = _fixed_bounds(routine, binding)
+        count = math.prod(max(0, upper - lower + 1) for lower, upper in bounds)
+        if binding.name.lower() in private_names or count > _VALUED_ELEMENTS or binding.dtype not in {"real", "integer"}:
             continue
-        subscripts = [()]
-        for lower, upper in reversed(shape):
-            subscripts = [(index, *rest) for index in range(lower, upper + 1) for rest in subscripts]
         values = []
-        for subscript in subscripts:
+        for subscript in _subscripts(bounds):
             text = ",".join(str(index) for index in subscript)
             element = replace(binding, name=f"{binding.name}({text})", root=f"{root}({text})", rank=0,
                               attributes=frozenset(), lower_bounds=(), lower_bound_nodes=(), shape_nodes=())
@@ -1023,13 +1028,13 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             # A default LOGICAL scalar comes to the entry converted to the entry's own kind, so it is only read.
             if binding.root in writes:
                 raise CompilationError("a default LOGICAL scalar is only read by an entry: " + binding.root)
-        elif (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1)}:
+        elif (binding.dtype, binding.kind) not in NUMERIC_TYPES | {("logical", 1)}:
             raise CompilationError("unsupported inline numerical capture type: " + binding.root)
         if "allocatable" in binding.attributes and binding.root.startswith(routine.qualified + "::"):
             _check_allocation(analysis, routine, binding, preceding)
     if not any(binding.rank for binding in captures.values()):
         raise CompilationError("inline numerical candidate has no array resources")
-    if len(captures) > 64:
+    if len(captures) > _CAPTURES:
         raise CompilationError("inline numerical capture budget exceeded")
     capture_names = {root: binding.name for root, binding in captures.items()}
     for index, (root, binding) in enumerate(sorted(captures.items())):
@@ -1062,16 +1067,15 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             binding = helper.scope.bindings.get(argument)
             if binding is None or not binding.rank or all(node is None for node in binding.lower_bound_nodes):
                 continue
-            from compiler.ir import SourceLocation
             try:
                 helper_lowers[id(binding)] = tuple(
-                    1 if node is None else helper.scope.kinds.integer(node, SourceLocation(str(helper.scope.path)))
+                    1 if node is None else helper.scope.constant(node)
                     for node in binding.lower_bound_nodes)
             except CompilationError as error:
                 raise CompilationError("inline helper array lower bounds must be constant") from error
             for name in walk(helper.execution, F.Name):
                 if (analysis._binding(helper.scope, name) is binding
-                        and not (_kind(name.parent) == "Part_Ref" and name.parent.items[0] is name)):
+                        and not (kind_of(name.parent) == "Part_Ref" and name.parent.items[0] is name)):
                     raise CompilationError("inline helper arrays with lower bounds require element references")
     occupied.update(helper_names.values())
     section_variables, section_guards = [], []
@@ -1083,16 +1087,15 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         for axis, index in enumerate(indices, 1):
             lower = lowers[name, axis]
 
-            if _kind(index) != "Subscript_Triplet":
+            if kind_of(index) != "Subscript_Triplet":
                 rendered.append(f"({transformed(index, owner)}) - {lower} + 1")
                 continue
-            from compiler.ir import SourceLocation
             start, stop, step = index.items
             try:
-                stride = 1 if step is None else owner.scope.kinds.integer(step, SourceLocation(str(owner.scope.path)))
+                stride = 1 if step is None else owner.scope.constant(step)
             except CompilationError as error:
                 raise CompilationError("inline array slices require a constant nonzero stride") from error
-            if not -(2**31) <= stride < 2**31 or not stride:
+            if not fits_integer(stride) or not stride:
                 raise CompilationError("inline array slices require a constant nonzero INTEGER stride")
             original_lower = F.Name(lower)
             original_upper = F.Level_2_Expr(f"({lower} + (SIZE({name},{axis}) - 1))")
@@ -1112,13 +1115,13 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             return type(value)(transformed(child, owner) for child in value)
         if not isinstance(value, Base):
             return value
-        kind = _kind(value)
+        kind = kind_of(value)
         if kind == "Assignment_Stmt" and owner is routine:
             target = value.items[0]
-            base = target.items[0] if _kind(target) == "Part_Ref" else target
+            base = target.items[0] if kind_of(target) == "Part_Ref" else target
             target_binding = analysis._binding(owner.scope, base)
-            bounded = (_kind(target) == "Part_Ref" and any(_kind(index) == "Subscript_Triplet"
-                       and any(child is not None for child in index.items) for index in _children(target.items[1])))
+            bounded = (kind_of(target) == "Part_Ref" and any(kind_of(index) == "Subscript_Triplet"
+                       and any(child is not None for child in index.items) for index in children_of(target.items[1])))
             if not bounded and not (target_binding and target_binding.root in private):
                 from compiler.scopes.section_operations import expand_full_sections
                 expanded = expand_full_sections(analysis, routine, value, section_variables, section_guards)
@@ -1164,22 +1167,22 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         if kind == "Part_Ref" and not captured_array and not private_array:
             name = str(value.items[0]).lower()
             found = analysis._candidates(source_scope_for(analysis, value, owner.scope), value.items[0]) \
-                if name == "ieee_is_nan" and len(_children(value.items[1])) == 1 else ()
+                if name == "ieee_is_nan" and len(children_of(value.items[1])) == 1 else ()
             if found and all(item.removeprefix("$intrinsic::").startswith("ieee_arithmetic::") for item in found):
                 # IEEE_IS_NAN of IEEE_ARITHMETIC, the intrinsic module or a source module that stands in
                 # for it where the compiler has none: the comparison that only a NaN fails.
-                operand = str(transformed(_children(value.items[1])[0], owner))
+                operand = str(transformed(children_of(value.items[1])[0], owner))
                 return F.Expr(f"(({operand}) /= ({operand}))")
             if _intrinsic_shadowed(analysis, owner, name):
                 raise CompilationError("inline numerical intrinsic is shadowed: " + name)
         if kind == "Part_Ref" and captured_array:
             name = capture_names[binding.root]
-            indices = _children(value.items[1])
+            indices = children_of(value.items[1])
             rendered = normalized_indices(name, indices, owner)
             return F.Part_Ref(name + "(" + ",".join(rendered) + ")")
         if kind == "Part_Ref" and binding is not None and id(binding) in helper_lowers:
-            indices = _children(value.items[1])
-            if len(indices) != binding.rank or any(_kind(index) == "Subscript_Triplet" for index in indices):
+            indices = children_of(value.items[1])
+            if len(indices) != binding.rank or any(kind_of(index) == "Subscript_Triplet" for index in indices):
                 raise CompilationError("inline helper arrays with lower bounds require element references")
             rendered = [f"({transformed(index, owner)}) - ({lower}) + 1"
                         for index, lower in zip(indices, helper_lowers[id(binding)], strict=True)]
@@ -1188,9 +1191,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             intrinsic = str(value.items[0]).lower()
             if _intrinsic_shadowed(analysis, owner, intrinsic):
                 raise CompilationError("inline array inquiry intrinsic is shadowed")
-            arguments = _children(value.items[1])
+            arguments = children_of(value.items[1])
             original_array = (analysis._binding(source_scope_for(analysis, arguments[0], owner.scope), arguments[0])
-                              if arguments and _kind(arguments[0]) in {"Name", "Data_Ref"} else None)
+                              if arguments and kind_of(arguments[0]) in {"Name", "Data_Ref"} else None)
             if original_array is not None and _element_count(original_array, arguments[0]):
                 # Every element field has the extent of its array of derived type.
                 fields = sorted(name for root, name in capture_names.items()
@@ -1211,7 +1214,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                 result.items = (value.items[0], actuals)
                 return result
             else:
-                if len(arguments) != 2 or _kind(arguments[1]) != "Int_Literal_Constant":
+                if len(arguments) != 2 or kind_of(arguments[1]) != "Int_Literal_Constant":
                     raise CompilationError("inline bounds inquiries require a constant scalar DIM")
                 axis = int(str(arguments[1]).split("_")[0])
                 if (name, axis) not in lowers:
@@ -1220,7 +1223,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                     return F.Name(lowers[name, axis])
                 return F.Level_2_Expr(f"({lowers[name, axis]} + (SIZE({name},{axis}) - 1))")
         if kind == "Name":
-            statement = _part(owner.scope.node, "Function_Stmt")
+            statement = part_of(owner.scope.node, "Function_Stmt")
             if (statement is not None and statement.items[3] is None
                     and str(value).lower() == str(statement.items[1]).lower()):
                 return F.Name(helper_names[owner.qualified])
@@ -1236,15 +1239,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                 # module cannot silently acquire a same-spelling imported value.
                 if binding.dtype != "integer" or binding.kind != 4:
                     raise CompilationError("inline numerical constants currently require default INTEGER")
-                from compiler.ir import SourceLocation
-                integer = owner.scope.kinds.integer(value, SourceLocation(str(owner.scope.path)))
-                if not -(2**31) <= integer < 2**31:
-                    raise CompilationError("inline constant exceeds the existing INTEGER ABI")
-                spelling = "(-2147483647 - 1)" if integer == -(2**31) else str(integer)
-                return F.Level_2_Expr(spelling)
+                return integer_constant(owner.scope, value)
         if kind in {"Real_Literal_Constant", "Int_Literal_Constant"} and value.items[1] is not None:
-            from compiler.ir import SourceLocation
-            selector = owner.scope.kinds.integer(value.items[1], SourceLocation(str(owner.scope.path)))
+            selector = owner.scope.constant(value.items[1])
             result = copy.copy(value)
             result.items = (value.items[0], str(selector))
             return result
@@ -1308,8 +1305,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     runtime_guards = tuple(dict.fromkeys((*runtime_guards, *section_guards)))
     helper_sources = []
     for qualified, helper in helpers.items():
-        statement = _part(helper.scope.node, "Subroutine_Stmt") or _part(helper.scope.node, "Function_Stmt")
-        function = _kind(statement) == "Function_Stmt"
+        statement = part_of(helper.scope.node, "Subroutine_Stmt") or part_of(helper.scope.node, "Function_Stmt")
+        function = kind_of(statement) == "Function_Stmt"
         header = copy.copy(statement)
         prefix = transformed(statement.items[0], helper)
         if not _declared_pure(helper):
@@ -1317,24 +1314,24 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             prefix = F.Prefix(("pure " + str(prefix)) if prefix is not None else "pure")
         header.items = (prefix, F.Name(helper_names[qualified]), *statement.items[2:])
         local_declarations = []
-        for declaration in _children(_part(helper.scope.node, "Specification_Part")):
-            if _kind(declaration) in {"Implicit_Part", "Comment", "Use_Stmt"}:
+        for declaration in children_of(part_of(helper.scope.node, "Specification_Part")):
+            if kind_of(declaration) in {"Implicit_Part", "Comment", "Use_Stmt"}:
                 # Original imported constants are resolved below. An unused
                 # intrinsic IEEE import does not move its caller's guards.
                 continue
-            if _kind(declaration) != "Type_Declaration_Stmt":
-                raise CompilationError("unsupported inline numerical helper specification: " + _kind(declaration))
+            if kind_of(declaration) != "Type_Declaration_Stmt":
+                raise CompilationError("unsupported inline numerical helper specification: " + kind_of(declaration))
             dtype, attributes, entities = declaration.items
-            retained = [entity for entity in _children(entities)
+            retained = [entity for entity in children_of(entities)
                         if helper.scope.bindings[str(entity.items[0]).lower()].root not in constants.names]
             if not retained:
                 continue
             entities = copy.copy(entities)
             entities.items = tuple(retained)
-            own = [helper.scope.bindings[str(entity.items[0]).lower()] for entity in _children(entities)]
+            own = [helper.scope.bindings[str(entity.items[0]).lower()] for entity in children_of(entities)]
             if any(id(binding) in helper_lowers for binding in own):
                 # A DIMENSION attribute gives its shape to each entity, which then says it itself.
-                shared = next((item for item in _children(attributes) if _kind(item) == "Dimension_Attr_Spec"), None) \
+                shared = next((item for item in children_of(attributes) if kind_of(item) == "Dimension_Attr_Spec"), None) \
                     if attributes is not None else None
                 rebased = []
                 for entity, binding in zip(retained, own, strict=True):
@@ -1349,13 +1346,12 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                     rebased.append(entity)
                 entities.items = tuple(rebased)
                 if shared is not None:
-                    kept = [item for item in _children(attributes) if item is not shared]
+                    kept = [item for item in children_of(attributes) if item is not shared]
                     attributes = F.Attr_Spec_List(", ".join(str(item) for item in kept)) if kept else None
             if any(binding.attributes & {"save", "allocatable", "pointer", "optional", "target", "volatile", "asynchronous"} for binding in own):
                 raise CompilationError("inline numerical helper storage association is unsupported")
             # A helper's own variables are not passed to the entry: a LOGICAL of any kind is a flag in it.
-            if any((binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1),
-                                                         ("logical", 4)} for binding in own):
+            if any((binding.dtype, binding.kind) not in NUMERIC_TYPES | LOGICAL_TYPES for binding in own):
                 raise CompilationError("unsupported inline numerical helper declaration type")
             if any(binding.signature()[:2] != own[0].signature()[:2] for binding in own):
                 raise CompilationError("inline numerical helper declaration has inconsistent type")

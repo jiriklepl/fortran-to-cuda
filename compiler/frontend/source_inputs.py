@@ -7,9 +7,9 @@ from io import StringIO
 from pathlib import Path
 
 from fparser.common.readfortran import FortranFileReader
-from fparser.two.parser import ParserFactory
 from fparser.two.utils import FortranSyntaxError
 
+from compiler.frontend.syntax import parser
 from compiler.ir import CompilationError, SourceLocation
 
 
@@ -32,6 +32,6 @@ class SourceInputs:
         source.name = str(path)
         try:
             reader = FortranFileReader(source, ignore_comments=False)
-            return ParserFactory().create(std="f2008")(reader)
+            return parser()(reader)
         except FortranSyntaxError as error:
             raise CompilationError(f"invalid Fortran syntax: {error}", SourceLocation(str(path))) from error

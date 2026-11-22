@@ -11,7 +11,9 @@ from collections.abc import Sequence
 
 from fparser.two.utils import walk
 
-from .anchors import _line_char_offsets, _split_top_level_args, find_routine_span, parse_fortran
+from compiler.frontend.syntax import parse_fortran
+
+from .anchors import _line_char_offsets, _split_top_level_args, find_routine_span
 
 
 def _do_loop_info(loop_node) -> tuple[str, list]:

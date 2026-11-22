@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
+from compiler.frontend.syntax import parse_fortran
+
 _BIND = {("real", 8): "bind_real64", ("real", 4): "bind_real32", ("integer", 4): "bind_integer32"}
 
 
@@ -419,7 +421,6 @@ def lend_storage(text, domain, temporaries):
     """
     from fparser.two.utils import walk
 
-    from compiler.resident.anchors import parse_fortran
     from compiler.resident.reductions import _procedures
 
     wanted = {procedure.lower(): {name.lower() for name in names} for procedure, names in temporaries.items()}
@@ -507,11 +508,9 @@ def addressable_arrays(text):
     alone, and so are the dummies of an external procedure, which its callers
     know without an interface.
     """
-    from fparser.common.readfortran import FortranStringReader
-    from fparser.two.parser import ParserFactory
     from fparser.two.utils import walk
 
-    tree = ParserFactory().create(std="f2008")(FortranStringReader(text, ignore_comments=False))
+    tree = parse_fortran(text)
     lines = text.splitlines(keepends=True)
     changes = []
     for node in walk(tree):

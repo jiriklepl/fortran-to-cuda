@@ -8,7 +8,6 @@ not mistaken for physical transfer coordinates. Unknown effects are boundaries.
 from __future__ import annotations
 
 import re
-from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -16,19 +15,8 @@ from fparser.two.utils import Base, walk
 
 from compiler.frontend.lowering import _intrinsic_kind_imports, _KindScope
 from compiler.frontend.source_inputs import SourceInputs
+from compiler.frontend.syntax import children_of, declared_type, kind_of, part_of
 from compiler.ir import CompilationError, SourceLocation
-
-
-def _kind(node):
-    return type(node).__name__
-
-
-def _children(node):
-    return getattr(node, "content", getattr(node, "items", ())) or ()
-
-
-def _part(node, name):
-    return next((child for child in _children(node) if _kind(child) == name), None)
 
 
 def _attach_execution_directives(node):
@@ -39,15 +27,15 @@ def _attach_execution_directives(node):
     declaration directives and comments separated by declarations stay put.
     All source identities are captured after this parser normalization.
     """
-    specification, execution = _part(node, "Specification_Part"), _part(node, "Execution_Part")
+    specification, execution = part_of(node, "Specification_Part"), part_of(node, "Execution_Part")
     def detach_prefixes(parent):
         if not hasattr(parent, 'content'):
             return
         children = []
         for child in parent.content:
-            if _kind(child) in {'Block_Nonlabel_Do_Construct', 'Block_Label_Do_Construct',
+            if kind_of(child) in {'Block_Nonlabel_Do_Construct', 'Block_Label_Do_Construct',
                                'If_Construct', 'Associate_Construct'}:
-                while child.content and _kind(child.content[0]) == 'Comment':
+                while child.content and kind_of(child.content[0]) == 'Comment':
                     children.append(child.content.pop(0))
             detach_prefixes(child)
             children.append(child)
@@ -62,16 +50,16 @@ def _attach_execution_directives(node):
         return
     containers, trailing = [], []
     for child in reversed(specification.content):
-        if _kind(child) == "Comment":
+        if kind_of(child) == "Comment":
             containers.append((specification, child))
             trailing.insert(0, child)
-        elif _kind(child) == "Implicit_Part":
+        elif kind_of(child) == "Implicit_Part":
             for item in reversed(child.content):
-                if _kind(item) != "Comment":
+                if kind_of(item) != "Comment":
                     break
                 containers.append((child, item))
                 trailing.insert(0, item)
-            if any(_kind(item) != "Comment" for item in child.content):
+            if any(kind_of(item) != "Comment" for item in child.content):
                 break
         else:
             break
@@ -82,7 +70,7 @@ def _attach_execution_directives(node):
     for parent, comment in containers:
         del parent.content[next(index for index, item in enumerate(parent.content) if item is comment)]
     specification.content[:] = [child for child in specification.content
-                                 if _kind(child) != "Implicit_Part" or child.content]
+                                 if kind_of(child) != "Implicit_Part" or child.content]
     execution.content[:0] = trailing
 
 
@@ -107,9 +95,9 @@ class Binding:
         return {"name": self.name, "resource": self.root, "type": self.dtype,
                 "kind": self.kind, "rank": self.rank, "intent": self.intent,
                 "attributes": sorted(self.attributes), "lower_bounds": self.lower_bounds,
-                "shape": [{"kind": _kind(axis), "source": str(axis),
+                "shape": [{"kind": kind_of(axis), "source": str(axis),
                            "bounds": ([str(axis.items[1]) if axis.items[1] is not None else None, "*"]
-                                      if _kind(axis) == "Assumed_Size_Spec" else
+                                      if kind_of(axis) == "Assumed_Size_Spec" else
                                       [str(item) if item is not None else None for item in axis.items])}
                           for axis in self.shape_nodes]}
 
@@ -137,6 +125,10 @@ class Scope:
     procedures: dict[str, str] = field(default_factory=dict)
     intrinsic_procedures: dict[str, str] = field(default_factory=dict)
     intrinsic_wildcards: set[str] = field(default_factory=set)
+
+    def constant(self, node):
+        """The value of an INTEGER constant expression of this scope; raises ``CompilationError`` if it has none."""
+        return self.kinds.integer(node, SourceLocation(str(self.path)))
 
 
 @dataclass
@@ -195,22 +187,22 @@ class SourceEffects:
         source_nodes = 0
         for filename in inputs.paths:
             tree = inputs.parse(filename)
-            for node in _children(tree):
-                if (_kind(node) == "Main_Program" and _part(node, "Program_Stmt") is not None
-                        and "$program::" + str(_part(node, "Program_Stmt").items[1]).lower() in program_roots):
+            for node in children_of(tree):
+                if (kind_of(node) == "Main_Program" and part_of(node, "Program_Stmt") is not None
+                        and "$program::" + str(part_of(node, "Program_Stmt").items[1]).lower() in program_roots):
                     program_nodes.append((filename, node))
-                elif _kind(node) == "Subroutine_Subprogram":
+                elif kind_of(node) == "Subroutine_Subprogram":
                     external_nodes.append((filename, node))
-                elif _kind(node) == "Function_Subprogram":
-                    name = "$external::" + str(_part(node, "Function_Stmt").items[1]).lower()
+                elif kind_of(node) == "Function_Subprogram":
+                    name = "$external::" + str(part_of(node, "Function_Stmt").items[1]).lower()
                     if name in self.functions:
                         raise CompilationError("duplicate external source procedure " + name)
                     self.functions.add(name)
             for node in walk(tree):
                 source_nodes += isinstance(node, Base)
-                if _kind(node) != "Module":
+                if kind_of(node) != "Module":
                     continue
-                module = str(_part(node, "Module_Stmt").items[1]).lower()
+                module = str(part_of(node, "Module_Stmt").items[1]).lower()
                 if module in self.modules:
                     raise CompilationError(f"duplicate source module {module}")
                 self.modules[module] = Scope(module, filename, node)
@@ -221,11 +213,11 @@ class SourceEffects:
             if scope.module == "argument":
                 scope.issues.append("source module name argument collides with canonical dummy resources")
         for scope in self.modules.values():
-            for node in _children(_part(scope.node, "Module_Subprogram_Part")):
-                if _kind(node) == "Function_Subprogram":
+            for node in children_of(part_of(scope.node, "Module_Subprogram_Part")):
+                if kind_of(node) == "Function_Subprogram":
                     self._register_function(scope, node)
                     continue
-                if _kind(node) != "Subroutine_Subprogram":
+                if kind_of(node) != "Subroutine_Subprogram":
                     continue
                 self._register_routine(scope, node)
         for filename, node in external_nodes:
@@ -249,7 +241,7 @@ class SourceEffects:
         for binding, scope, selector in self.kind_expressions:
             # An unresolved kind cannot select a generic overload.
             try:
-                binding.kind = scope.kinds.integer(selector, SourceLocation(str(scope.path)))
+                binding.kind = scope.constant(selector)
             except CompilationError:
                 # The initial local specification may have resolved a direct
                 # intrinsic export before the complete module import graph
@@ -261,7 +253,7 @@ class SourceEffects:
 
     def _register_routine(self, parent, node, *, source_kind="module"):
         _attach_execution_directives(node)
-        stmt = _part(node, "Subroutine_Stmt")
+        stmt = part_of(node, "Subroutine_Stmt")
         owner = getattr(parent, "qualified", parent.module)
         qualified = owner + "::" + str(stmt.items[1]).lower()
         if qualified in self.routines or qualified in self.functions:
@@ -269,17 +261,17 @@ class SourceEffects:
         child = Scope(parent.module, parent.path, node, parent if source_kind != "external" else None)
         child.qualified = qualified
         parent.procedures[str(stmt.items[1]).lower()] = qualified
-        arguments = tuple(str(argument).lower() for argument in _children(stmt.items[2]))
+        arguments = tuple(str(argument).lower() for argument in children_of(stmt.items[2]))
         issues = parent.issues + self._specification(child, arguments, qualified)
-        routine = Routine(child, arguments, _part(node, "Execution_Part"), qualified, issues, source_kind)
+        routine = Routine(child, arguments, part_of(node, "Execution_Part"), qualified, issues, source_kind)
         self.routines[qualified] = routine
         self.numerical_helpers[qualified] = routine
         self._register_internal(child, node)
 
     def _register_program(self, filename, node):
         """Retain an original named main frame for metadata and call ownership."""
-        statement = _part(node, "Program_Stmt")
-        ending = _part(node, "End_Program_Stmt")
+        statement = part_of(node, "Program_Stmt")
+        ending = part_of(node, "End_Program_Stmt")
         # Optional ownership metadata must not reject an unrelated legal main
         # frame that this first named-program slice cannot authenticate.
         if statement is None or ending is None:
@@ -300,14 +292,14 @@ class SourceEffects:
             if "parameter" not in binding.attributes:
                 binding.attributes |= {"save"}
         issues.append("original program frame supplies metadata/ownership only; no numerical or execution authority")
-        routine = Routine(scope, (), _part(node, "Execution_Part"), qualified, issues, "program")
+        routine = Routine(scope, (), part_of(node, "Execution_Part"), qualified, issues, "program")
         self.routines[qualified] = routine
         self.numerical_helpers[qualified] = routine
         self._register_internal(scope, node)
 
     def _register_function(self, parent, node):
         _attach_execution_directives(node)
-        stmt = _part(node, "Function_Stmt")
+        stmt = part_of(node, "Function_Stmt")
         qualified = getattr(parent, "qualified", parent.module) + "::" + str(stmt.items[1]).lower()
         if qualified in self.routines or qualified in self.functions:
             raise CompilationError("duplicate source procedure " + qualified)
@@ -315,33 +307,29 @@ class SourceEffects:
         parent.procedures[str(stmt.items[1]).lower()] = qualified
         child = Scope(parent.module, parent.path, node, parent)
         child.qualified = qualified
-        arguments = tuple(str(argument).lower() for argument in _children(stmt.items[2]))
+        arguments = tuple(str(argument).lower() for argument in children_of(stmt.items[2]))
         issues = parent.issues + self._specification(child, arguments, qualified)
-        prefix_type = next((item for item in _children(stmt.items[0]) if _kind(item) == "Intrinsic_Type_Spec"), None)
+        prefix_type = next((item for item in children_of(stmt.items[0]) if kind_of(item) == "Intrinsic_Type_Spec"), None)
         result = str(stmt.items[3].items[0] if stmt.items[3] is not None else stmt.items[1]).lower()
         if prefix_type is not None and result not in child.bindings:
-            base, selector = prefix_type.items
-            base = str(base).lower()
-            width = 8 if base == "double precision" else 4
-            if base == "double precision":
-                base = "real"
-            if selector is not None:
-                width = None
-                with suppress(CompilationError):
-                    width = child.kinds.integer(selector.items[1], SourceLocation(str(child.path)))
+            selector = prefix_type.items[1]
+            try:
+                base, width = declared_type(prefix_type, child.kinds, SourceLocation(str(child.path)))
+            except CompilationError:
+                base, width = str(prefix_type.items[0]).lower(), None
             binding = Binding(result, qualified + "::" + result, base, width, 0, declaring_scope=child)
             child.bindings[result] = binding
             if selector is not None:
                 self.kind_expressions.append((binding, child, selector.items[1]))
-        self.numerical_helpers[qualified] = Routine(child, arguments, _part(node, "Execution_Part"), qualified,
+        self.numerical_helpers[qualified] = Routine(child, arguments, part_of(node, "Execution_Part"), qualified,
                                                     issues, "internal_function" if parent.parent else "function")
         self._register_internal(child, node)
 
     def _register_internal(self, parent, node):
-        for child in _children(_part(node, "Internal_Subprogram_Part")):
-            if _kind(child) == "Subroutine_Subprogram":
+        for child in children_of(part_of(node, "Internal_Subprogram_Part")):
+            if kind_of(child) == "Subroutine_Subprogram":
                 self._register_routine(parent, child, source_kind="internal")
-            elif _kind(child) == "Function_Subprogram":
+            elif kind_of(child) == "Function_Subprogram":
                 self._register_function(parent, child)
 
     @staticmethod
@@ -352,10 +340,10 @@ class SourceEffects:
         interface. Descriptor dummies, keyword calls and changed calling
         conventions must wait for a proof of that original interface.
         """
-        statement = _part(routine.scope.node, "Subroutine_Stmt")
+        statement = part_of(routine.scope.node, "Subroutine_Stmt")
         prefix, _name, _arguments, suffix = statement.items
         reason = None
-        if suffix is not None or any(str(item).lower() == "elemental" for item in _children(prefix)):
+        if suffix is not None or any(str(item).lower() == "elemental" for item in children_of(prefix)):
             reason = "external calling convention requires a proven explicit interface"
         forbidden = {"optional", "allocatable", "pointer", "value", "contiguous", "asynchronous", "volatile"}
         for name in routine.arguments:
@@ -363,8 +351,8 @@ class SourceEffects:
             if binding is None or binding.dtype not in {"real", "integer", "logical"} or binding.kind is None:
                 reason = reason or "external formal type requires a proven explicit interface"
             elif (binding.attributes & forbidden or any(
-                    _kind(axis) != "Explicit_Shape_Spec" and not (
-                        _kind(axis) == "Assumed_Size_Spec" and index == binding.rank-1)
+                    kind_of(axis) != "Explicit_Shape_Spec" and not (
+                        kind_of(axis) == "Assumed_Size_Spec" and index == binding.rank-1)
                     for index, axis in enumerate(binding.shape_nodes))):
                 reason = reason or "external descriptor or shape requires a proven explicit interface"
         return reason
@@ -401,7 +389,7 @@ class SourceEffects:
                 owner = selector_cache[None].get(key)
                 expressions = () if owner is None else owner[1]
                 names = frozenset(str(node).lower() for expression in expressions
-                                  for node in walk(expression) if _kind(node) == "Name")
+                                  for node in walk(expression) if kind_of(node) == "Name")
                 selector_cache[key] = target, names
             return selector_cache[key][1]
 
@@ -418,7 +406,7 @@ class SourceEffects:
             if key in direct_cache:
                 return direct_cache[key][1]
             result = {}
-            for node in _children(_part(target.node, "Specification_Part")):
+            for node in children_of(part_of(target.node, "Specification_Part")):
                 for name, identity in _intrinsic_kind_imports(node).items():
                     result.setdefault(name, set()).add(identity)
             direct_cache[key] = target, result
@@ -539,18 +527,18 @@ class SourceEffects:
                 continue
             self._import_kinds(owner, active, _lookups=lookups)
             try:
-                value = owner.kinds.integer(binding.name, SourceLocation(str(owner.path)))
+                value = owner.constant(binding.name)
             except CompilationError:
                 continue
             if local not in scope.bindings:
                 scope.kinds.values[local] = value
 
     def _specification(self, scope, arguments=(), qualified=None):
-        spec = _part(scope.node, "Specification_Part")
+        spec = part_of(scope.node, "Specification_Part")
         scope.kinds = _KindScope(spec, scope.parent.kinds if scope.parent else None)
         issues = []
-        for node in _children(spec):
-            name = _kind(node)
+        for node in children_of(spec):
+            name = kind_of(node)
             if name == "Use_Stmt":
                 nature, _, module, only, symbols = node.items
                 module = str(module).lower()
@@ -564,7 +552,7 @@ class SourceEffects:
                     if symbols is not None:
                         for item in symbols.items:
                             local, remote = ((str(item.items[1]).lower(), str(item.items[2]).lower())
-                                             if _kind(item) == "Rename" else (str(item).lower(), str(item).lower()))
+                                             if kind_of(item) == "Rename" else (str(item).lower(), str(item).lower()))
                             identity = "$intrinsic::" + module + "::" + remote
                             previous = scope.intrinsic_procedures.get(local)
                             if previous is not None and previous != identity and (
@@ -581,9 +569,9 @@ class SourceEffects:
                 if symbols is not None:
                     for item in symbols.items:
                         local, remote = ((str(item.items[1]), str(item.items[2]))
-                                         if _kind(item) == "Rename" else (str(item), str(item)))
+                                         if kind_of(item) == "Rename" else (str(item), str(item)))
                         local, remote = local.lower(), remote.lower()
-                        if _kind(item) == "Rename":
+                        if kind_of(item) == "Rename":
                             renamed.add(remote)
                         previous = scope.imports.get(local)
                         if previous is not None and previous != (module, remote):
@@ -599,59 +587,59 @@ class SourceEffects:
                         scope.wildcards.append(module)
                         scope.wildcard_exclusions[module] = renamed
             elif name == "Interface_Block":
-                start = _part(node, "Interface_Stmt")
+                start = part_of(node, "Interface_Stmt")
                 abstract = start.items[0] == "ABSTRACT"
                 generic = str(start.items[0]).lower() if start.items[0] is not None and not abstract else None
                 members = []
-                for item in _children(node):
-                    if _kind(item) == "Procedure_Stmt":
+                for item in children_of(node):
+                    if kind_of(item) == "Procedure_Stmt":
                         members += [(scope.module, str(p).lower()) for p in item.items[0].items]
-                if abstract and all(_kind(item) in {
+                if abstract and all(kind_of(item) in {
                         "Interface_Stmt", "End_Interface_Stmt", "Subroutine_Body", "Function_Body", "Comment"}
-                        for item in _children(node)):
+                        for item in children_of(node)):
                     # An abstract interface executes nothing and supplies no
                     # callable implementation. Keep its identifiers in the
                     # existing unresolved-procedure namespace: they shadow
                     # intrinsics/source targets, including through USE renames,
                     # without granting direct or dummy-procedure dispatch.
-                    for item in _children(node):
-                        header = (_part(item, "Subroutine_Stmt") if _kind(item) == "Subroutine_Body"
-                                  else _part(item, "Function_Stmt") if _kind(item) == "Function_Body" else None)
+                    for item in children_of(node):
+                        header = (part_of(item, "Subroutine_Stmt") if kind_of(item) == "Subroutine_Body"
+                                  else part_of(item, "Function_Stmt") if kind_of(item) == "Function_Body" else None)
                         if header is not None:
                             scope.procedure_arguments.add(str(header.items[1]).lower())
                 elif generic and members:
                     # Separate original interface blocks contribute to one
                     # generic; later blocks must not hide earlier specifics.
                     scope.generics.setdefault(generic, []).extend(members)
-                elif generic is None and all(_kind(item) in {
+                elif generic is None and all(kind_of(item) in {
                         "Interface_Stmt", "End_Interface_Stmt", "Subroutine_Body", "Function_Body", "Comment"}
-                        for item in _children(node)):
+                        for item in children_of(node)):
                     # An explicit external declaration executes nothing. Keep
                     # its names as external/shadowing bindings; each call still
                     # needs independent source/effect/interface authority. An
                     # unrelated opaque declaration must not poison the effects
                     # of numerical work elsewhere in this original routine.
-                    for item in _children(node):
-                        header = (_part(item, "Subroutine_Stmt") if _kind(item) == "Subroutine_Body"
-                                  else _part(item, "Function_Stmt") if _kind(item) == "Function_Body" else None)
+                    for item in children_of(node):
+                        header = (part_of(item, "Subroutine_Stmt") if kind_of(item) == "Subroutine_Body"
+                                  else part_of(item, "Function_Stmt") if kind_of(item) == "Function_Body" else None)
                         if header is not None:
                             scope.externals.add(str(header.items[1]).lower())
                 else:
                     issues.append("non-module generic interface is unavailable")
             elif name == "Procedure_Declaration_Stmt":
                 interface, attributes, entities = node.items
-                if (_kind(interface) == "Name" and attributes is None
-                        and all(_kind(item) == "Name" for item in _children(entities))):
+                if (kind_of(interface) == "Name" and attributes is None
+                        and all(kind_of(item) == "Name" for item in children_of(entities))):
                     # Merely declaring an ordinary dummy procedure executes
                     # nothing. An invocation still needs its own resolved
                     # source target; never infer its effects from this type.
-                    names = {str(item).lower() for item in _children(entities)}
+                    names = {str(item).lower() for item in children_of(entities)}
                     scope.procedure_arguments.update(names.intersection(arguments))
                     scope.externals.update(names)
                 else:
                     issues.append("procedure association or initialization requires source proof")
             elif name == "External_Stmt":
-                names = {str(item).lower() for item in _children(node.items[-1])}
+                names = {str(item).lower() for item in children_of(node.items[-1])}
                 scope.externals.update(names)
                 scope.procedure_arguments.update(names.intersection(arguments))
             elif name == "Access_Stmt":
@@ -663,30 +651,24 @@ class SourceEffects:
                     scope.access.update((str(item).lower(),public) for item in names.items)
             elif name == "Type_Declaration_Stmt":
                 dtype, attrs, entities = node.items
-                if _kind(dtype) == "Intrinsic_Type_Spec":
-                    base, selector = dtype.items
-                    base = str(base).lower()
-                    width = 8 if base == "double precision" else 4
-                    if selector is not None:
-                        try:
-                            width = scope.kinds.integer(selector.items[1], SourceLocation(str(scope.path)))
-                        except CompilationError:
-                            width = None
-                    if base == "double precision":
-                        base = "real"
+                if kind_of(dtype) == "Intrinsic_Type_Spec":
+                    try:
+                        base, width = declared_type(dtype, scope.kinds, SourceLocation(str(scope.path)))
+                    except CompilationError:
+                        base, width = str(dtype.items[0]).lower(), None
                 else:
                     base, width = str(dtype).lower(), None
-                attrs = tuple(_children(attrs))
+                attrs = tuple(children_of(attrs))
                 flags = frozenset(str(a).split("(")[0].lower() for a in attrs)
-                dimension = next((a.items[1] for a in attrs if _kind(a) == "Dimension_Attr_Spec"), None)
-                intent = next((str(a.items[1]).lower() for a in attrs if _kind(a) == "Intent_Attr_Spec"), None)
+                dimension = next((a.items[1] for a in attrs if kind_of(a) == "Dimension_Attr_Spec"), None)
+                intent = next((str(a.items[1]).lower() for a in attrs if kind_of(a) == "Intent_Attr_Spec"), None)
                 for entity in entities.items:
                     variable, shape, _, initializer = entity.items
                     variable = str(variable).lower()
                     shape = shape if shape is not None else dimension
-                    dimensions = (tuple(_children(shape.items[0])) + (shape,) if _kind(shape) == "Assumed_Size_Spec"
-                                  else tuple(_children(shape)))
-                    lower_nodes = tuple(d.items[1] if _kind(d) == "Assumed_Size_Spec" else d.items[0]
+                    dimensions = (tuple(children_of(shape.items[0])) + (shape,) if kind_of(shape) == "Assumed_Size_Spec"
+                                  else tuple(children_of(shape)))
+                    lower_nodes = tuple(d.items[1] if kind_of(d) == "Assumed_Size_Spec" else d.items[0]
                                         for d in dimensions)
                     lowers = tuple(str(lower) if lower is not None else "1" for lower in lower_nodes)
                     persistent = "save" in flags or (initializer is not None and "parameter" not in flags)
@@ -696,8 +678,8 @@ class SourceEffects:
                     binding = Binding(variable, root, base, width, len(dimensions), intent,
                                       frozenset(attributes), lowers, lower_nodes, dimensions, declaring_scope=scope)
                     scope.bindings[variable] = binding
-                    if _kind(dtype) == "Intrinsic_Type_Spec" and selector is not None:
-                        self.kind_expressions.append((binding, scope, selector.items[1]))
+                    if kind_of(dtype) == "Intrinsic_Type_Spec" and dtype.items[1] is not None:
+                        self.kind_expressions.append((binding, scope, dtype.items[1].items[1]))
             elif name not in {"Implicit_Part", "Comment", "Public_Stmt", "Private_Stmt", "Access_Stmt", "Derived_Type_Def"}:
                 issues.append(f"specification effect unavailable: {name}")
         from compiler.frontend.component_bindings import register_types
@@ -730,7 +712,7 @@ class SourceEffects:
         return tuple(dict.fromkeys(choices))
 
     def _binding(self, scope, name, visited=frozenset()):
-        if _kind(name) == "Data_Ref":
+        if kind_of(name) == "Data_Ref":
             from compiler.frontend.component_bindings import resolve_binding
             return resolve_binding(self, scope, name)
         name = str(name).lower()
@@ -829,11 +811,11 @@ class SourceEffects:
     def _literal_signature(scope, node):
         """The type, kind and rank of a literal constant; the kind is None where it cannot be evaluated."""
         dtype = {"Int_Literal_Constant": "integer", "Real_Literal_Constant": "real",
-                 "Logical_Literal_Constant": "logical"}[_kind(node)]
+                 "Logical_Literal_Constant": "logical"}[kind_of(node)]
         width = 8 if dtype == "real" and "d" in node.items[0].lower() else 4
         if node.items[1] is not None:
             try:
-                width = scope.kinds.integer(node.items[1], SourceLocation(str(scope.path)))
+                width = scope.constant(node.items[1])
             except CompilationError:
                 width = None
         return dtype, width, 0

@@ -6,8 +6,9 @@ import pytest
 from compiler.resident.configure import configure_sources
 from compiler.resident.directives import expand_directives
 from compiler.resident.project import ResidentProject, Selection, prepare
-from compiler.resident.reductions import DIRECT, FINAL, SLOTS, license_line, lower_reductions, parse_license
+from compiler.resident.reductions import DIRECT, FINAL, SLOTS, lower_reductions
 from compiler.scopes.resident_splice import ResidentDomain
+from compiler.scopes.segments import license_line, parse_license
 from compiler.tests.resident_application_support import fortran_compiler
 
 DOMAIN = ResidentDomain("my_state", "flow", "check")
@@ -69,6 +70,8 @@ def test_an_openmp_reduction_clause_becomes_a_statement_about_the_order():
         "!$fort reduction(max: top) reduction(+: a, b) private(i, j)")
     # A directive without a reduction clause says nothing about any order.
     assert license_line("parallel do private(i,j) schedule(guided,5)") is None
+    # FIRSTPRIVATE and LASTPRIVATE variables keep their values across the loop's boundaries: they are not private.
+    assert parse_license("parallel do firstprivate(a) lastprivate(b) private(c)") == ({}, {"c"})
 
 
 def test_a_nest_that_only_accumulates_gets_partial_results_a_fold_and_its_original():

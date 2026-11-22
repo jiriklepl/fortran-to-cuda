@@ -1,15 +1,24 @@
 """Preprocess application sources into the text the compiler analyses and edits."""
 import hashlib
+import re
 import subprocess
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from compiler.resident.reductions import _heading, _procedures, _units, serialize_openmp
+from compiler.frontend.syntax import parse_fortran
+from compiler.resident.anchors import _strip_inline_comment
+from compiler.resident.reductions import _heading, _procedures, _units
+from compiler.scopes.segments import license_line, parse_license, private_marker
 
 
 def _identity(path):
     path = Path(path).resolve(strict=True)
     return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
+def distinct_name(path):
+    """A file name for a copy of ``path`` that copies of other files of the same name do not take."""
+    return hashlib.sha256(str(path).encode()).hexdigest()[:12] + "_" + path.name
 
 
 def configure_sources(paths, procedures, directory, *, fortran, defines=()):
@@ -25,12 +34,8 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
     accumulation order. Every statement, branch and expression stays. Returns
     the record of originals, prepared copies and removed directives.
     """
-    from fparser.common.readfortran import FortranStringReader
-    from fparser.two.parser import ParserFactory
-
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
-    parser = ParserFactory().create(std="f2008")
     selected = {name.lower() for name in procedures}
     records = []
     for filename in paths:
@@ -45,14 +50,14 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
         removed = []
         if any(fnmatchcase(unit, name.split("::", 1)[0]) for unit in _units(result.stdout) for name in selected
                if "::" in name):
-            tree = parser(FortranStringReader(result.stdout, ignore_comments=False))
+            tree = parse_fortran(result.stdout)
             for scope in _procedures(tree):
                 if not any(fnmatchcase(scope.qualified, pattern) for pattern in selected):
                     continue
                 first, last = _heading(scope.node).item.span[0], scope.node.content[-1].item.span[1]
                 removed += [{"line": index + 1, "directive": directive, "procedure": scope.qualified}
                             for index, directive in serialize_openmp(lines, first - 1, last)]
-        target = directory / (hashlib.sha256(str(source).encode()).hexdigest()[:12] + "_" + source.name)
+        target = directory / distinct_name(source)
         target.write_text("".join(lines))
         if _identity(source) != before:
             raise ValueError("Source changed while it was preprocessed: " + str(source))
@@ -60,3 +65,44 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
                         "serialized_directives": removed})
     return {"version": 1, "kind": "configured_resident_sources", "defines": list(defines),
             "procedures": sorted(selected), "sources": records}
+
+
+def serialize_openmp(lines, first, last):
+    """Blank the OpenMP directives in ``lines[first:last]``; return ``(index, text)`` of each removed line.
+
+    The loop nests of a selected procedure become entries that one serial
+    caller dispatches. A directive with a ``reduction`` clause leaves a
+    ``!$fort reduction`` line: what the clause says about the order of an
+    accumulation outlives the directive. A loop directive with a ``private``
+    clause and no reduction leaves ``!$fort private(...)`` at the end of the
+    DO statement: the scalars it names have no value when an iteration starts.
+    """
+    removed, index = [], first
+    while index < last:
+        if not re.match(r"\s*!\$omp\b", lines[index], re.IGNORECASE):
+            index += 1
+            continue
+        # One directive, with its continuation lines.
+        group = [index]
+        while lines[group[-1]].rstrip().endswith("&") and group[-1] + 1 < last \
+                and re.match(r"\s*!\$omp\b", lines[group[-1] + 1], re.IGNORECASE):
+            group.append(group[-1] + 1)
+        text = " ".join(re.sub(r"(?i)^\s*!\$omp&?", "", lines[item]).strip().rstrip("&") for item in group)
+        indent = lines[index][:len(lines[index]) - len(lines[index].lstrip())]
+        for item in group:
+            removed.append((item, lines[item].rstrip()))
+            lines[item] = "\n"
+        stated = license_line(text)
+        if stated is not None:
+            lines[index] = indent + stated + "\n"
+        elif re.search(r"(?i)\bdo\b", text) and parse_license(text)[1]:
+            # The scalars a loop's directive makes private have no value when an iteration starts. That is
+            # said at the end of the DO statement, where it stays with the loop through every rewrite.
+            loop = next((item for item in range(group[-1] + 1, min(last, group[-1] + 8))
+                         if re.match(r"(?i)\s*do\b", lines[item])), None)
+            if loop is not None and not lines[loop].rstrip().endswith("&"):
+                code, comment = _strip_inline_comment(lines[loop].rstrip("\n"))
+                lines[loop] = (code.rstrip() + "  " + private_marker(parse_license(text)[1])
+                               + (" " + comment if comment else "") + "\n")
+        index = group[-1] + 1
+    return removed

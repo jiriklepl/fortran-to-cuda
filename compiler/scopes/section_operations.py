@@ -11,27 +11,30 @@ from fparser.common.readfortran import FortranStringReader
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base
 
-from compiler.frontend.source_effects import _children, _kind
+from compiler.frontend.syntax import children_of, kind_of
 from compiler.ir import CompilationError
+
+# The most index variables the whole-array sections of one entry may need.
+_SECTION_VARIABLES = 32
 
 
 def expand_full_sections(analysis, routine, node, variables, guards):
     """Return scalar numerical syntax after proving pointwise RHS semantics."""
-    if _kind(node) != "Assignment_Stmt":
+    if kind_of(node) != "Assignment_Stmt":
         return None
     target, _, value = node.items
-    if _kind(target) not in {"Name", "Part_Ref"}:
+    if kind_of(target) not in {"Name", "Part_Ref"}:
         return None
-    base = target.items[0] if _kind(target) == "Part_Ref" else target
+    base = target.items[0] if kind_of(target) == "Part_Ref" else target
     output = analysis._binding(routine.scope, base)
     if output is None or not output.rank:
         return None
-    indices = tuple(_children(target.items[1])) if _kind(target) == "Part_Ref" else (None,) * output.rank
+    indices = tuple(children_of(target.items[1])) if kind_of(target) == "Part_Ref" else (None,) * output.rank
     axes = tuple(axis for axis, index in enumerate(indices, 1)
-                 if index is None or _kind(index) == "Subscript_Triplet")
+                 if index is None or kind_of(index) == "Subscript_Triplet")
     if not axes:
         return None
-    if len(indices) != output.rank or any(index is not None and _kind(index) == "Subscript_Triplet"
+    if len(indices) != output.rank or any(index is not None and kind_of(index) == "Subscript_Triplet"
                                         and any(value is not None for value in index.items) for index in indices):
         raise CompilationError("nested array operation requires full section axes")
     iterators = []
@@ -41,21 +44,21 @@ def expand_full_sections(analysis, routine, node, variables, guards):
             raise CompilationError("nested array operation iterator conflicts with original source")
         variables.append(name)
         iterators.append(name)
-        if len(variables) > 32:
+        if len(variables) > _SECTION_VARIABLES:
             raise CompilationError("nested section iterator budget exhausted")
 
     def signature(items):
-        return tuple(":" if item is None or (_kind(item) == "Subscript_Triplet"
+        return tuple(":" if item is None or (kind_of(item) == "Subscript_Triplet"
                                              and all(value is None for value in item.items))
                      else str(item).lower() for item in items)
 
     def element(reference, binding, *, writing=False):
-        own = tuple(_children(reference.items[1])) if _kind(reference) == "Part_Ref" else (None,) * binding.rank
+        own = tuple(children_of(reference.items[1])) if kind_of(reference) == "Part_Ref" else (None,) * binding.rank
         if len(own) != binding.rank:
             raise CompilationError("nested array operation subscript rank is inconsistent")
         section_axes = tuple(axis for axis, index in enumerate(own, 1)
-                             if index is None or _kind(index) == "Subscript_Triplet")
-        if any(index is not None and _kind(index) == "Subscript_Triplet"
+                             if index is None or kind_of(index) == "Subscript_Triplet")
+        if any(index is not None and kind_of(index) == "Subscript_Triplet"
                and any(value is not None for value in index.items) for index in own):
             raise CompilationError("nested array operation requires full section axes")
         if not writing and binding.root == output.root and signature(own) != signature(indices):
@@ -65,7 +68,7 @@ def expand_full_sections(analysis, routine, node, variables, guards):
         names = iter(iterators)
         dimensions = iter(axes)
         coordinates = []
-        name = str(reference.items[0]) if _kind(reference) == "Part_Ref" else str(reference)
+        name = str(reference.items[0]) if kind_of(reference) == "Part_Ref" else str(reference)
         for axis, index in enumerate(own, 1):
             if axis not in section_axes:
                 coordinates.append(str(index))
@@ -82,7 +85,7 @@ def expand_full_sections(analysis, routine, node, variables, guards):
     def expression(item):
         if not isinstance(item, Base):
             return item
-        kind = _kind(item)
+        kind = kind_of(item)
         if kind in {"Name", "Part_Ref"}:
             name = item.items[0] if kind == "Part_Ref" else item
             binding = analysis._binding(routine.scope, name)

@@ -40,9 +40,11 @@ from fnmatch import fnmatchcase
 
 from fparser.two.utils import walk
 
-from .anchors import _strip_inline_comment, parse_fortran
+from compiler.frontend.syntax import kind_of, parse_fortran, part_of
+
+from .anchors import _strip_inline_comment
 from .inlining import _declarations
-from .reductions import _heading, _kind, _part, _procedures, _span, _units
+from .reductions import _heading, _procedures, _span, _units
 
 # Intrinsic functions whose result for arrays is the function of each element.
 _ELEMENTAL = frozenset({
@@ -67,7 +69,7 @@ def _normal(node):
 
 def _subscripts(reference):
     listed = reference.items[1]
-    return list(listed.items) if _kind(listed) == "Section_Subscript_List" else [listed]
+    return list(listed.items) if kind_of(listed) == "Section_Subscript_List" else [listed]
 
 
 _USE = re.compile(r"(?i)use\b(?:\s*,\s*\w+)?\s*(?:::)?\s*(\w+)\s*(?:,\s*(only\s*:)?\s*(.*))?\Z")
@@ -76,9 +78,9 @@ _USE = re.compile(r"(?i)use\b(?:\s*,\s*\w+)?\s*(?:::)?\s*(\w+)\s*(?:,\s*(only\s*
 def _imports(node):
     """The USE statements of a scope: ``(module, only, {local name: name there})`` each."""
     found = []
-    specification = _part(node, "Specification_Part")
+    specification = part_of(node, "Specification_Part")
     for statement in (specification.content if specification is not None else ()):
-        if _kind(statement) != "Use_Stmt":
+        if kind_of(statement) != "Use_Stmt":
             continue
         match = _USE.match(" ".join(str(statement).split()))
         if match is None:
@@ -111,10 +113,10 @@ class _Modules:
                 if stop is None:
                     continue
                 tree = parse_fortran(text[start.start():stop.start()] + f"end module {module}\n")
-                node = next(item for item in walk(tree) if _kind(item) == "Module")
-                specification = _part(node, "Specification_Part")
+                node = next(item for item in walk(tree) if kind_of(item) == "Module")
+                specification = part_of(node, "Specification_Part")
                 elsewhere = {str(name).lower() for statement in (specification.content if specification else ())
-                             if _kind(statement) in _ELSEWHERE for name in walk(statement) if _kind(name) == "Name"}
+                             if kind_of(statement) in _ELSEWHERE for name in walk(statement) if kind_of(name) == "Name"}
                 self.read[module] = (_declarations(node), _imports(node), elsewhere)
                 break
         return self.read[module]
@@ -155,16 +157,16 @@ class _Names:
         self.own = _declarations(scope.node)
         heading = _heading(scope.node)
         # The arrays of a main program live as long as the run, like a module's.
-        self.program = _kind(heading) == "Program_Stmt"
+        self.program = kind_of(heading) == "Program_Stmt"
         # A main program has no arguments.
         self.dummies = {str(item).lower() for item in getattr(heading.items[2], "items", ())} \
-            if _kind(heading) != "Program_Stmt" else set()
+            if kind_of(heading) != "Program_Stmt" else set()
         for node in (*reversed(scope.hosts), scope.node):
             self.declared.update(_declarations(node))
-            specification = _part(node, "Specification_Part")
+            specification = part_of(node, "Specification_Part")
             for statement in (specification.content if specification is not None else ()):
-                if _kind(statement) in _ELSEWHERE:
-                    self.elsewhere |= {str(name).lower() for name in walk(statement) if _kind(name) == "Name"}
+                if kind_of(statement) in _ELSEWHERE:
+                    self.elsewhere |= {str(name).lower() for name in walk(statement) if kind_of(name) == "Name"}
 
     def find(self, name):
         """``(type, attributes, bounds, initialized)`` of ``name``, or None when the sources do not say."""
@@ -214,7 +216,7 @@ class _Names:
 
 def _operands(node, names, found):
     """Collect the array-valued references of an expression into ``found``; raise when it has other parts."""
-    kind = _kind(node)
+    kind = kind_of(node)
     if isinstance(node, str) or kind.endswith("_Literal_Constant") or kind.startswith("Signed_"):
         return
     if kind == "Name":
@@ -224,17 +226,17 @@ def _operands(node, names, found):
         base = str(node.items[0])
         if not names.rank(base):
             raise _Unchanged(f"{base} is not an array; a function result has no known shape")
-        if any(_kind(item) == "Subscript_Triplet" for item in _subscripts(node)):
+        if any(kind_of(item) == "Subscript_Triplet" for item in _subscripts(node)):
             found.append(node)
         for item in _subscripts(node):
-            if _kind(item) != "Subscript_Triplet":
+            if kind_of(item) != "Subscript_Triplet":
                 _scalar(item, names)
     elif kind == "Intrinsic_Function_Reference":
         function = str(node.items[0]).lower()
         if function not in _ELEMENTAL:
             raise _Unchanged(f"the intrinsic {function} is not applied element by element")
         for item in getattr(node.items[1], "items", ()) if node.items[1] is not None else ():
-            if _kind(item) == "Actual_Arg_Spec":
+            if kind_of(item) == "Actual_Arg_Spec":
                 raise _Unchanged(f"the intrinsic {function} is called with a keyword")
             _operands(item, names, found)
     elif kind in _OPERATIONS:
@@ -255,7 +257,7 @@ def _scalar(node, names):
 
 def _sections(reference, names):
     """``(first, last, step)`` texts of each dimension an array-valued reference runs over."""
-    if _kind(reference) == "Name":
+    if kind_of(reference) == "Name":
         name = str(reference)
         return [(f"lbound({name},{axis})", f"ubound({name},{axis})", None)
                 for axis in range(1, names.rank(name) + 1)]
@@ -264,7 +266,7 @@ def _sections(reference, names):
     if len(subscripts) != names.rank(name):
         raise _Unchanged(f"{name} is not given a subscript for each dimension")
     for axis, item in enumerate(subscripts, 1):
-        if _kind(item) == "Subscript_Triplet":
+        if kind_of(item) == "Subscript_Triplet":
             first, last, step = item.items
             result.append((f"lbound({name},{axis})" if first is None else str(first),
                            f"ubound({name},{axis})" if last is None else str(last),
@@ -274,11 +276,11 @@ def _sections(reference, names):
 
 def _element(reference, positions, names):
     """The element of an array-valued reference that belongs to the given position in each dimension."""
-    if _kind(reference) == "Name":
+    if kind_of(reference) == "Name":
         return f"{reference}({', '.join(positions)})"
     positions = iter(positions)
     return f"{reference.items[0]}(" + ", ".join(
-        next(positions) if _kind(item) == "Subscript_Triplet" else str(item) for item in _subscripts(reference)) + ")"
+        next(positions) if kind_of(item) == "Subscript_Triplet" else str(item) for item in _subscripts(reference)) + ")"
 
 
 def _position(variable, target, source):
@@ -307,13 +309,13 @@ def _wrapped(text, indent):
 def _nest(statement, names, number, indent):
     """The loop nest for one array assignment, or None when the statement assigns no array of this file."""
     target, _, value = statement.items
-    kind = _kind(target)
+    kind = kind_of(target)
     if kind == "Name":
         if not names.array(str(target)):
             return None
     elif kind == "Part_Ref":
         if (not names.array(str(target.items[0]))
-                or not any(_kind(item) == "Subscript_Triplet" for item in _subscripts(target))):
+                or not any(kind_of(item) == "Subscript_Triplet" for item in _subscripts(target))):
             return None
     else:
         return None
@@ -325,7 +327,7 @@ def _nest(statement, names, number, indent):
     _operands(value, names, operands)
     whole = kind == "Name"
     for operand in operands:
-        own = str(operand if _kind(operand) == "Name" else operand.items[0]).lower()
+        own = str(operand if kind_of(operand) == "Name" else operand.items[0]).lower()
         if own == name and _normal(operand) != _normal(target):
             raise _Unchanged(f"it reads other elements of {name} than it assigns")
     if whole and names.allocatable(name) and operands and not any(_normal(item) == name for item in operands):
@@ -353,7 +355,7 @@ def _nest(statement, names, number, indent):
         lines += _wrapped(f"do {variable} = {first}, {last}" + (f", {step}" if step else ""), indent + "  " * depth)
     lines += _wrapped(f"{_element(target, variables, names)} = {text}", indent + "  " * len(ranges))
     lines += [indent + "  " * depth + "end do\n" for depth in reversed(range(len(ranges)))]
-    arrays = sorted({name, *(str(item if _kind(item) == "Name" else item.items[0]).lower() for item in operands)})
+    arrays = sorted({name, *(str(item if kind_of(item) == "Name" else item.items[0]).lower() for item in operands)})
     return lines, variables, arrays
 
 
@@ -365,14 +367,14 @@ def _assignments(nodes):
     runs around nests, and an array assignment in its body is one more of them.
     """
     for node in nodes:
-        kind = _kind(node)
+        kind = kind_of(node)
         if kind == "If_Construct":
             yield from _assignments(node.content)
         elif kind == "Block_Nonlabel_Do_Construct":
-            body = [item for item in node.content if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
-            if len(body) > 1 and any(_kind(item) == "Block_Nonlabel_Do_Construct" for item in body):
+            body = [item for item in node.content if kind_of(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
+            if len(body) > 1 and any(kind_of(item) == "Block_Nonlabel_Do_Construct" for item in body):
                 yield from _assignments(node.content)
-        elif kind == "If_Stmt" and _kind(node.items[1]) == "Assignment_Stmt":
+        elif kind == "If_Stmt" and kind_of(node.items[1]) == "Assignment_Stmt":
             yield node, node.items[0], node.items[1]
         elif kind == "Assignment_Stmt":
             yield node, None, node
@@ -401,7 +403,7 @@ def lower_array_statements(text, procedures, sources=()):
     for scope in _procedures(parse_fortran(text)):
         if not any(fnmatchcase(scope.qualified, pattern) for pattern in patterns):
             continue
-        execution = _part(scope.node, "Execution_Part")
+        execution = part_of(scope.node, "Execution_Part")
         if execution is None:
             continue
         names, added = _Names(scope, modules), []
@@ -431,9 +433,9 @@ def lower_array_statements(text, procedures, sources=()):
                             "text": " ".join(str(node).split())})
         if added:
             heading = _span(_heading(scope.node))[1]
-            specification = _part(scope.node, "Specification_Part")
+            specification = part_of(scope.node, "Specification_Part")
             ends = [_span(item)[1] for item in (specification.content if specification is not None else ())
-                    if _kind(item) != "Comment" and _span(item) is not None]
+                    if kind_of(item) != "Comment" and _span(item) is not None]
             after = max([heading, *ends])
             margin = " " * (len(lines[heading - 1]) - len(lines[heading - 1].lstrip()) + 2)
             edits.append((after + 1, after, _wrapped("integer :: " + ", ".join(added), margin)))

@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 
 from fparser.common.readfortran import FortranFileReader
-from fparser.two.parser import ParserFactory
 from fparser.two.utils import FortranSyntaxError, walk
 
+from compiler.frontend.syntax import parser
 from compiler.ir import (
     ArrayAccess,
     Assignment,
@@ -47,6 +47,20 @@ from compiler.ir.intrinsics import (
     intrinsic_type,
     model_inquiry,
 )
+
+# The most elements a fixed array, vector or unrolled loop is expanded into, and the most for all of an entry's.
+SCALARIZED_ELEMENTS = 256
+_SCALARIZED_TOTAL = 4096
+# How deep helper calls may nest, and how many calls an entry may take in.
+_HELPER_DEPTH = 8
+_HELPER_CALLS = 128
+# The size of a bound expression of a fixed vector that is simplified: its depth and its terms.
+_BOUND_DEPTH = 64
+_BOUND_TERMS = 32
+# A private vector shorter than this is read at a run-time index by choosing among its elements.
+_SELECTED_ELEMENTS = 16
+# The largest constant INTEGER exponent of a power that is expanded into products.
+_POWER = 16
 
 
 def _intrinsic_kind_imports(node):
@@ -511,8 +525,8 @@ class _Lowerer:
                     count = 1
                     for lower, upper in bounds:
                         count *= max(0, upper - lower + 1)
-                    if count > 256:
-                        raise self.error("private fixed array exceeds the 256-element scalarization budget", node)
+                    if count > SCALARIZED_ELEMENTS:
+                        raise self.error(f"private fixed array exceeds the {SCALARIZED_ELEMENTS}-element scalarization budget", node)
                 elif type(shape).__name__ != "Assumed_Shape_Spec_List" or any(
                     value.items != (None, None) for value in shape.items
                 ):
@@ -615,7 +629,7 @@ class _Lowerer:
         key = "::".join(routine.key)
         if key in ancestors:
             raise CompilationError("recursive kernel calls are unsupported", routine.location)
-        if len(ancestors) >= 8 or self.inline_calls >= 128:
+        if len(ancestors) >= _HELPER_DEPTH or self.inline_calls >= _HELPER_CALLS:
             raise CompilationError("numerical helper depth/call budget exhausted", routine.location)
         self.inline_calls += 1
         bindings = dict(parameters)
@@ -848,8 +862,9 @@ class _Lowerer:
                     if None in (start, stop, stride) or stride == 0:
                         raise CompilationError("private array indexing loops require bounded constant ranges", location)
                     trip_count = max(0, (stop-start)//stride+1)
-                    if self.unrolled_iterations + trip_count > 256:
-                        raise CompilationError("private array indexing loop exceeds the 256-iteration unrolling budget", location)
+                    if self.unrolled_iterations + trip_count > SCALARIZED_ELEMENTS:
+                        raise CompilationError("private array indexing loop exceeds the "
+                                               f"{SCALARIZED_ELEMENTS}-iteration unrolling budget", location)
                     self.unrolled_iterations += trip_count
                     old_values = dict(self.unrolled_values)
                     try:
@@ -1076,7 +1091,7 @@ class _Lowerer:
     def fixed_vector(self, dtype, elements, location):
         elements = tuple(elements)
         self.vector_elements += len(elements)
-        if len(elements) > 256 or self.vector_elements > 4096:
+        if len(elements) > SCALARIZED_ELEMENTS or self.vector_elements > _SCALARIZED_TOTAL:
             raise CompilationError("fixed vector expansion exceeds its bounded scalarization budget", location)
         # Scalarization must not erase the floating environment contract of
         # new vector arithmetic, conversions or assignments. Address metadata
@@ -1144,7 +1159,7 @@ class _Lowerer:
 
     def integer_affine(self, expression, location, depth=0):
         """Cancel equal runtime origins without evaluating any runtime bound."""
-        if depth > 64:
+        if depth > _BOUND_DEPTH:
             raise CompilationError("fixed vector bound expression exceeds its depth budget", location)
         value = constant_integer(expression, location)
         if value is not None:
@@ -1161,7 +1176,7 @@ class _Lowerer:
                 left[key] = left.get(key, 0) + factor * value
                 if not left[key]:
                     del left[key]
-            if len(left) > 32:
+            if len(left) > _BOUND_TERMS:
                 raise CompilationError("fixed vector bound expression exceeds its term budget", location)
             return left, a + factor * b
         return {expression: 1}, 0
@@ -1198,8 +1213,9 @@ class _Lowerer:
             if a != b:
                 raise CompilationError("array section requires bounded constant cardinality", location)
             extent = max(0, (d - c) // stride + 1) if (d - c) * stride >= 0 else 0
-            if extent > 256:
-                raise CompilationError("fixed vector section exceeds the 256-element scalarization budget", location)
+            if extent > SCALARIZED_ELEMENTS:
+                raise CompilationError(f"fixed vector section exceeds the {SCALARIZED_ELEMENTS}-element scalarization "
+                                       "budget", location)
             coordinates = tuple(start if index == 0 else Binary("+", start, Literal(str(index * stride), ScalarType.INTEGER))
                                 for index in range(extent))
             axes.append(coordinates)
@@ -1243,8 +1259,9 @@ class _Lowerer:
                 raise CompilationError("untyped array constructor elements require matching kinds", location)
             elements.extend(self.convert(element, dtype, location) for element in
                             (value.elements if isinstance(value, _FixedVector) else (value,)))
-            if len(elements) > 256:
-                raise CompilationError("array constructor exceeds the 256-element scalarization budget", location)
+            if len(elements) > SCALARIZED_ELEMENTS:
+                raise CompilationError(f"array constructor exceeds the {SCALARIZED_ELEMENTS}-element scalarization budget",
+                                       location)
         if dtype is None:
             raise CompilationError("empty array constructors require an explicit supported type", location)
         return self.fixed_vector(dtype, elements, location)
@@ -1526,7 +1543,7 @@ class _Lowerer:
                 constants = tuple(constant_integer(index, location) for index in indices)
                 if any(index is None for index in constants):
                     if isinstance(symbol, _PrivateArray) and symbol.rank == 1 and id(node) != self.target_node \
-                            and symbol.bounds[0][1] - symbol.bounds[0][0] < 16:
+                            and symbol.bounds[0][1] - symbol.bounds[0][0] < _SELECTED_ELEMENTS:
                         # A read of a short private vector at an index known only when it runs: the element
                         # is chosen among all of them.
                         return self.selected_element(symbol, indices[0], location)
@@ -1568,8 +1585,9 @@ class _Lowerer:
                     widened = [value if self.dtype(value) is dtype else IntrinsicCall("dble", (value,), dtype)
                                for value in (left, right)]
                     return IntrinsicCall("pow", tuple(widened), dtype)
-                if exponent is None or not 0 <= exponent <= 16 or self.dtype(left) is ScalarType.LOGICAL:
-                    raise CompilationError("numerical powers require an INTEGER constant exponent from 0 through 16", location)
+                if exponent is None or not 0 <= exponent <= _POWER or self.dtype(left) is ScalarType.LOGICAL:
+                    raise CompilationError(f"numerical powers require an INTEGER constant exponent from 0 through {_POWER}",
+                                           location)
                 def power(value):
                     if exponent == 0:
                         return Literal("1" if self.dtype(left) is ScalarType.INTEGER else "1.0", self.dtype(left))
@@ -1649,7 +1667,7 @@ def _parse_file(path: Path, *, source_text: str | None = None) -> Any:
             source = StringIO(source_text)
             source.name = str(path)
         reader = FortranFileReader(source, ignore_comments=False)
-        return ParserFactory().create(std="f2008")(reader)
+        return parser()(reader)
     except OSError as error:
         raise CompilationError(f"cannot read source: {error}", SourceLocation(str(path))) from error
     except FortranSyntaxError as error:

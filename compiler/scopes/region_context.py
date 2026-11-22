@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from fparser.two.utils import Base
 
-from compiler.frontend.source_effects import _children, _kind
+from compiler.frontend.syntax import children_of, kind_of
 from compiler.ir import CompilationError
 
 # The nodes one context may look at.
@@ -108,15 +108,15 @@ def original_region_context(routine, sources):
             before.append(node)
         elif low > last:
             after.append(node)
-        elif _kind(node) in {"If_Construct", "Block_Nonlabel_Do_Construct"}:
+        elif kind_of(node) in {"If_Construct", "Block_Nonlabel_Do_Construct"}:
             for child in node.content:
                 visit(child)
-            if _kind(node) == "Block_Nonlabel_Do_Construct":
+            if kind_of(node) == "Block_Nonlabel_Do_Construct":
                 for child in node.content:
                     low, high = prepared_span(child)
-                    if high < first and _kind(child) not in {"Nonlabel_Do_Stmt", "Comment"}:
+                    if high < first and kind_of(child) not in {"Nonlabel_Do_Stmt", "Comment"}:
                         cyclic.append(child)
 
-    for node in _children(routine.execution):
+    for node in children_of(routine.execution):
         visit(node)
     return OriginalRegionContext(tuple(before), tuple(after), tuple(cyclic))

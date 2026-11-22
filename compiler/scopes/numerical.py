@@ -13,6 +13,11 @@ from fparser.two import Fortran2003 as F
 
 from compiler.ir import CompilationError
 
+# The types an entry takes as arrays and scalar values: REAL of either kind and default INTEGER.
+NUMERIC_TYPES = frozenset({("real", 4), ("real", 8), ("integer", 4)})
+# The LOGICAL kinds that the variables of an entry's own may have.
+LOGICAL_TYPES = frozenset({("logical", 1), ("logical", 4)})
+
 
 @dataclass(frozen=True)
 class Parameter:

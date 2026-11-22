@@ -19,7 +19,9 @@ import re
 from fparser.two import Fortran2003
 from fparser.two.utils import walk
 
-from .anchors import _get_parser, _logical_lines, _split_top_level_args, parse_fortran
+from compiler.frontend.syntax import parse_fortran, parser
+
+from .anchors import _logical_lines, _split_top_level_args
 
 _PARAMETERS = re.compile(r"(?i)^\s*integer\b[^!:]*\bparameter\b[^!:]*::(.*)$")
 _LITERAL = re.compile(r"[+-]?\d+\Z")
@@ -69,7 +71,7 @@ class _Conditions:
     """
 
     def __init__(self, conditions, constants):
-        _get_parser()  # the expression classes exist once a parser has been created
+        parser()  # the expression classes exist once a parser has been created
         self.constants = constants
         self.known = {}
         self.bounds = {}

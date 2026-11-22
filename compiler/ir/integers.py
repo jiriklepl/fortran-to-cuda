@@ -22,6 +22,16 @@ INTEGER_MIN = -(1 << 31)
 INTEGER_MAX = (1 << 31) - 1
 
 
+def fits_integer(value: int) -> bool:
+    """Whether a value is one of the default INTEGER's."""
+    return INTEGER_MIN <= value <= INTEGER_MAX
+
+
+def integer_text(value: int) -> str:
+    """A default INTEGER value as an expression of Fortran or C: the most negative one has no literal."""
+    return f"(-{INTEGER_MAX} - 1)" if value == INTEGER_MIN else str(value)
+
+
 def _checked(value: int, location: SourceLocation | None, *, literal: bool = False) -> int:
     if not INTEGER_MIN <= value <= INTEGER_MAX:
         reason = "literal is out of range" if literal else "constant expression overflows"

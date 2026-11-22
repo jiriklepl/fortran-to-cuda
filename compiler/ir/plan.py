@@ -27,11 +27,15 @@ class HostBlock:
     write_symbols: tuple[Symbol, ...] = ()
 
 
+# The threads of a block of every kernel.
+CUDA_BLOCK_THREADS = 256
+
+
 @dataclass(frozen=True)
 class RegionSchedule:
     axis_order: tuple[int, ...]
     tile_sizes: tuple[int, ...] = ()
-    cuda_threads: int = 256
+    cuda_threads: int = CUDA_BLOCK_THREADS
 
 
 @dataclass(frozen=True)

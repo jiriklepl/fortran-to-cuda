@@ -44,8 +44,10 @@ from fnmatch import fnmatchcase
 
 from fparser.two.utils import walk
 
-from .anchors import _strip_inline_comment, parse_fortran
-from .reductions import _heading, _kind, _part, _procedures, _span
+from compiler.frontend.syntax import kind_of, parse_fortran, part_of
+
+from .anchors import _strip_inline_comment
+from .reductions import _heading, _procedures, _span
 from .specialize import _fold
 
 _PRESENT = re.compile(r"(?i)\bpresent\s*\(\s*([a-z]\w*)\s*\)")
@@ -57,7 +59,7 @@ class _Literals:
     """Decides conditions made of the logical constants that ``present`` became."""
 
     def decide(self, node):
-        kind = _kind(node)
+        kind = kind_of(node)
         if kind == "Logical_Literal_Constant":
             return str(node.items[0]).upper() == ".TRUE."
         if kind == "Parenthesis":
@@ -80,12 +82,12 @@ def _optional_dummies(scope):
     dummies = [str(name).lower() for name in walk(heading.items[2], type(heading.items[1]))] \
         if len(heading.items) > 2 and heading.items[2] is not None else []
     optional = set()
-    specification = _part(scope.node, "Specification_Part")
+    specification = part_of(scope.node, "Specification_Part")
     for statement in (specification.content if specification is not None else ()):
-        if _kind(statement) == "Type_Declaration_Stmt" and statement.items[1] is not None \
+        if kind_of(statement) == "Type_Declaration_Stmt" and statement.items[1] is not None \
                 and any(str(item).upper() == "OPTIONAL" for item in statement.items[1].items):
             optional |= {str(entity.items[0]).lower() for entity in statement.items[2].items}
-        elif _kind(statement) == "Optional_Stmt":
+        elif kind_of(statement) == "Optional_Stmt":
             optional |= {str(name).lower() for name in walk(statement, type(heading.items[1]))}
     return dummies, optional & set(dummies)
 
@@ -106,7 +108,7 @@ def _given(call, dummies):
     arguments = list(getattr(call.items[1], "items", ())) if call.items[1] is not None else []
     given, keywords = set(), False
     for position, argument in enumerate(arguments):
-        if _kind(argument) == "Actual_Arg_Spec":
+        if kind_of(argument) == "Actual_Arg_Spec":
             keywords = True
             given.add(str(argument.items[0]).lower())
         elif keywords or position >= len(dummies):
@@ -132,18 +134,18 @@ def _copy(scope, lines, name, absent, optional):
     header = text[:match.start()] + match.group(1) + name + match.group(2) + ", ".join(kept) + match.group(4) \
         + text[match.end():]
     output = [header if header.endswith("\n") else header + "\n"]
-    specification = _part(scope.node, "Specification_Part")
+    specification = part_of(scope.node, "Specification_Part")
     statements = list(specification.content) if specification is not None else []
     covered = head_last
     for statement in statements:
-        span = _span(statement) if _kind(statement) != "Comment" else None
+        span = _span(statement) if kind_of(statement) != "Comment" else None
         if span is None:
             continue
         output += lines[covered:span[0] - 1]
         covered = span[1]
-        if _kind(statement) == "Optional_Stmt":
+        if kind_of(statement) == "Optional_Stmt":
             continue
-        if _kind(statement) != "Type_Declaration_Stmt" or not (
+        if kind_of(statement) != "Type_Declaration_Stmt" or not (
                 {str(entity.items[0]).lower() for entity in statement.items[2].items} & (absent | optional)):
             output += lines[span[0] - 1:span[1]]
             continue
@@ -156,7 +158,7 @@ def _copy(scope, lines, name, absent, optional):
         output.append(indent + str(statement.items[0]) + "".join(", " + item for item in attributes)
                       + " :: " + ", ".join(str(entity) for entity in entities) + "\n")
     # The statements, with present() of each dummy the constant it is here, and what that decides folded away.
-    execution = _part(scope.node, "Execution_Part")
+    execution = part_of(scope.node, "Execution_Part")
     rest = lines[covered:last]
     if execution is not None:
         start, stop = _span(execution)
@@ -164,7 +166,7 @@ def _copy(scope, lines, name, absent, optional):
                              if found.group(1).lower() in optional else found.group(0), line)
                 for line in lines[start - 1:stop]]
         wrapped = parse_fortran("subroutine fort_fold\n" + "".join(body) + "end subroutine\n")
-        folded_execution = _part(next(node for node in walk(wrapped) if _kind(node) == "Subroutine_Subprogram"),
+        folded_execution = part_of(next(node for node in walk(wrapped) if kind_of(node) == "Subroutine_Subprogram"),
                                  "Execution_Part")
         folded = _fold(list(folded_execution.content), ["\n", *body], _Literals(), [0], one_line=True) \
             if folded_execution is not None else []
@@ -180,18 +182,18 @@ def _copy(scope, lines, name, absent, optional):
 
 
 def _returns(node):
-    return sum(1 for item in walk(node) if _kind(item) == "Return_Stmt")
+    return sum(1 for item in walk(node) if kind_of(item) == "Return_Stmt")
 
 
 def _branches(construct):
     """The parts of an IF construct: (opening statement, body), and the END IF statement."""
     branches, end = [], None
     for item in construct.content:
-        if _kind(item) in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt"}:
+        if kind_of(item) in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt"}:
             branches.append([item, []])
-        elif _kind(item) == "End_If_Stmt":
+        elif kind_of(item) == "End_If_Stmt":
             end = item
-        elif branches and _kind(item) != "Comment":
+        elif branches and kind_of(item) != "Comment":
             branches[-1][1].append(item)
     return branches, end
 
@@ -202,16 +204,16 @@ def _return_edit(statements, lines):
     Returns (first, last, replacement lines), or a string with the reason when a
     RETURN stands where it cannot be taken out.
     """
-    statements = [item for item in statements if _kind(item) != "Comment"]
+    statements = [item for item in statements if kind_of(item) != "Comment"]
     for position, statement in enumerate(statements):
         if not _returns(statement):
             continue
         last = position == len(statements) - 1
         first_line, last_line = _span(statement)
-        if _kind(statement) == "Return_Stmt":
+        if kind_of(statement) == "Return_Stmt":
             # Nothing after it runs: it and what follows go.
             return first_line, _span(statements[-1])[1], []
-        if _kind(statement) == "If_Construct":
+        if kind_of(statement) == "If_Construct":
             branches, end = _branches(statement)
             if last:
                 # Each branch ends where the procedure does.
@@ -222,13 +224,13 @@ def _return_edit(statements, lines):
                 return "a RETURN in a branch cannot be taken out"
             returning, staying = [], []
             for header, body in branches:
-                if not _returns(header) and body and _kind(body[-1]) == "Return_Stmt" and _returns_list(body) == 1:
+                if not _returns(header) and body and kind_of(body[-1]) == "Return_Stmt" and _returns_list(body) == 1:
                     returning.append((header, body))
                 elif _returns_list(body):
                     return "a RETURN inside a branch is not its last statement"
                 else:
                     staying.append((header, body))
-            explicit_else = any(_kind(header) == "Else_Stmt" for header, _ in branches)
+            explicit_else = any(kind_of(header) == "Else_Stmt" for header, _ in branches)
             if len(staying) + (not explicit_else) != 1:
                 return "the statements after an early RETURN would be needed in two branches"
             rest = lines[last_line:_span(statements[-1])[1]]
@@ -251,7 +253,7 @@ def _return_edit(statements, lines):
                 cursor = ending
             replacement += lines[cursor - 1:last_line]
             return first_line, _span(statements[-1])[1], replacement
-        if _kind(statement) == "If_Stmt" and _kind(statement.items[1]) == "Return_Stmt":
+        if kind_of(statement) == "If_Stmt" and kind_of(statement.items[1]) == "Return_Stmt":
             indent = lines[first_line - 1][:len(lines[first_line - 1]) - len(lines[first_line - 1].lstrip())]
             rest = lines[last_line:_span(statements[-1])[1]]
             return first_line, _span(statements[-1])[1], [
@@ -266,19 +268,19 @@ def _flagged(statements, lines, flag):
     None where a RETURN stands in a loop or in another construct than IF.
     """
     output = []
-    statements = [item for item in statements if _kind(item) != "Comment"]
+    statements = [item for item in statements if kind_of(item) != "Comment"]
     for position, statement in enumerate(statements):
         first, last = _span(statement)
         indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
         if not _returns(statement):
             output += lines[first - 1:last]
             continue
-        if _kind(statement) == "Return_Stmt":
+        if kind_of(statement) == "Return_Stmt":
             # Nothing after it in this list runs.
             return output + [f"{indent}{flag} = .true.\n"]
-        if _kind(statement) == "If_Stmt" and _kind(statement.items[1]) == "Return_Stmt":
+        if kind_of(statement) == "If_Stmt" and kind_of(statement.items[1]) == "Return_Stmt":
             output.append(f"{indent}if ({statement.items[0]}) {flag} = .true.\n")
-        elif _kind(statement) == "If_Construct":
+        elif kind_of(statement) == "If_Construct":
             branches, end = _branches(statement)
             for header, body in branches:
                 inner = _flagged(body, lines, flag)
@@ -307,9 +309,9 @@ def _exits(node):
     """EXIT statements that leave the loop ``node`` belongs to: those outside loops nested in it."""
     found = []
     for item in getattr(node, "content", None) or getattr(node, "items", None) or ():
-        if _kind(item) == "Exit_Stmt":
+        if kind_of(item) == "Exit_Stmt":
             found.append(item)
-        elif _kind(item) not in {"Block_Nonlabel_Do_Construct", "Block_Label_Do_Construct"} and not isinstance(item, str):
+        elif kind_of(item) not in {"Block_Nonlabel_Do_Construct", "Block_Label_Do_Construct"} and not isinstance(item, str):
             found += _exits(item)
     return found
 
@@ -322,31 +324,31 @@ def _trip_bound(statements, loop, body):
     to a constant, and a statement at the top level of the body, after the
     addition, leaves the loop once the variable reaches a constant.
     """
-    before = [item for item in statements[:statements.index(loop)] if _kind(item) != "Comment"]
+    before = [item for item in statements[:statements.index(loop)] if kind_of(item) != "Comment"]
     for increment in body:
-        if _kind(increment) != "Assignment_Stmt" or _kind(increment.items[0]) != "Name":
+        if kind_of(increment) != "Assignment_Stmt" or kind_of(increment.items[0]) != "Name":
             continue
         counter = str(increment.items[0]).lower()
         if str(increment.items[2]).replace(" ", "").lower() not in {f"{counter}+1", f"1+{counter}"}:
             continue
-        if sum(1 for item in walk(body) if _kind(item) == "Assignment_Stmt"
+        if sum(1 for item in walk(body) if kind_of(item) == "Assignment_Stmt"
                and str(item.items[0]).lower() == counter) != 1:
             continue
         setting = [item for item in before if any(
-            _kind(node) == "Assignment_Stmt" and str(node.items[0]).lower() == counter for node in walk(item))]
-        if not setting or _kind(setting[-1]) != "Assignment_Stmt" \
-                or any(_kind(node) == "Call_Stmt" for item in before[before.index(setting[-1]):] for node in walk(item)):
+            kind_of(node) == "Assignment_Stmt" and str(node.items[0]).lower() == counter for node in walk(item))]
+        if not setting or kind_of(setting[-1]) != "Assignment_Stmt" \
+                or any(kind_of(node) == "Call_Stmt" for item in before[before.index(setting[-1]):] for node in walk(item)):
             continue
         start = str(setting[-1].items[2]).replace(" ", "")
         if not re.fullmatch(r"-?\d+", start):
             continue
         for item in body[body.index(increment) + 1:]:
             condition = None
-            if _kind(item) == "If_Stmt" and _kind(item.items[1]) == "Exit_Stmt":
+            if kind_of(item) == "If_Stmt" and kind_of(item.items[1]) == "Exit_Stmt":
                 condition = item.items[0]
-            elif _kind(item) == "If_Construct":
+            elif kind_of(item) == "If_Construct":
                 branches, _end = _branches(item)
-                if len(branches) == 1 and branches[0][1] and _kind(branches[0][1][-1]) == "Exit_Stmt":
+                if len(branches) == 1 and branches[0][1] and kind_of(branches[0][1][-1]) == "Exit_Stmt":
                     condition = branches[0][0].items[0]
             cap = _cap(condition, counter) if condition is not None else None
             if cap is not None:
@@ -357,13 +359,13 @@ def _trip_bound(statements, loop, body):
 
 def _cap(condition, counter):
     """The value of ``counter`` at which ``condition`` is surely true, or None: ``i >= 50``, ``i >= 50 .or. x > 1``."""
-    while _kind(condition) == "Parenthesis":
+    while kind_of(condition) == "Parenthesis":
         condition = condition.items[1]
-    if _kind(condition) in {"Or_Operand", "Equiv_Operand"} and str(condition.items[1]).upper() == ".OR.":
+    if kind_of(condition) in {"Or_Operand", "Equiv_Operand"} and str(condition.items[1]).upper() == ".OR.":
         found = [_cap(side, counter) for side in (condition.items[0], condition.items[2])]
         found = [value for value in found if value is not None]
         return min(found) if found else None
-    if _kind(condition) == "Level_4_Expr" and str(condition.items[0]).lower() == counter \
+    if kind_of(condition) == "Level_4_Expr" and str(condition.items[0]).lower() == counter \
             and str(condition.items[1]).upper() in _RELATION \
             and re.fullmatch(r"-?\d+", str(condition.items[2]).replace(" ", "")):
         return int(str(condition.items[2])) + _RELATION[str(condition.items[1]).upper()]
@@ -373,17 +375,17 @@ def _cap(condition, counter):
 def _counted_loop(statements, lines, number):
     """One edit that writes a loop without control, that counts its iterations up to a cap, as a counted loop."""
     for statement in statements:
-        if _kind(statement) not in {"If_Construct", "Block_Nonlabel_Do_Construct"}:
+        if kind_of(statement) not in {"If_Construct", "Block_Nonlabel_Do_Construct"}:
             continue
-        if _kind(statement) == "If_Construct":
+        if kind_of(statement) == "If_Construct":
             for _header, body in _branches(statement)[0]:
                 edit = _counted_loop(body, lines, number)
                 if edit is not None:
                     return edit
             continue
-        opening = next(item for item in statement.content if _kind(item) == "Nonlabel_Do_Stmt")
+        opening = next(item for item in statement.content if kind_of(item) == "Nonlabel_Do_Stmt")
         inside = [item for item in statement.content
-                  if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
+                  if kind_of(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
         if opening.items[1] is not None:
             edit = _counted_loop(inside, lines, number)
             if edit is not None:
@@ -391,7 +393,7 @@ def _counted_loop(statements, lines, number):
             continue
         body = inside
         trips = _trip_bound(statements, statement, body)
-        if trips is None or any(_kind(item) in {"Cycle_Stmt", "Goto_Stmt", "Return_Stmt"} for item in walk(statement)):
+        if trips is None or any(kind_of(item) in {"Cycle_Stmt", "Goto_Stmt", "Return_Stmt"} for item in walk(statement)):
             return "a loop without control whose iterations are not counted"
         flag, trip = f"fort_go_{number}", f"fort_trip_{number}"
         indent = lines[_span(opening)[0] - 1][:len(lines[_span(opening)[0] - 1]) - len(lines[_span(opening)[0] - 1].lstrip())]
@@ -402,12 +404,12 @@ def _counted_loop(statements, lines, number):
             text = lines[first - 1:last]
             leaves = _exits(item)
             if leaves:
-                if _kind(item) == "Exit_Stmt":
+                if kind_of(item) == "Exit_Stmt":
                     text = [f"{indent}    {flag} = .false.\n"]
-                elif _kind(item) == "If_Stmt" and _kind(item.items[1]) == "Exit_Stmt":
+                elif kind_of(item) == "If_Stmt" and kind_of(item.items[1]) == "Exit_Stmt":
                     text = [f"{indent}    if ({item.items[0]}) {flag} = .false.\n"]
-                elif _kind(item) == "If_Construct" and all(
-                        not _exits_list(body_part) or (_kind(body_part[-1]) == "Exit_Stmt"
+                elif kind_of(item) == "If_Construct" and all(
+                        not _exits_list(body_part) or (kind_of(body_part[-1]) == "Exit_Stmt"
                                                        and len(_exits_list(body_part)) == 1)
                         for _header, body_part in _branches(item)[0]):
                     text = list(text)
@@ -431,7 +433,7 @@ def _counted_loop(statements, lines, number):
 
 
 def _exits_list(statements):
-    return [leave for item in statements for leave in ([item] if _kind(item) == "Exit_Stmt" else _exits(item))]
+    return [leave for item in statements for leave in ([item] if kind_of(item) == "Exit_Stmt" else _exits(item))]
 
 
 def _reached(text, patterns):
@@ -444,10 +446,10 @@ def _reached(text, patterns):
         if scope.qualified in reached:
             continue
         reached.add(scope.qualified)
-        execution = _part(scope.node, "Execution_Part")
+        execution = part_of(scope.node, "Execution_Part")
         for call in walk(execution) if execution is not None else ():
             # Calls, and references to functions of the source.
-            if _kind(call) in {"Call_Stmt", "Part_Ref", "Function_Reference"} and _kind(call.items[0]) == "Name":
+            if kind_of(call) in {"Call_Stmt", "Part_Ref", "Function_Reference"} and kind_of(call.items[0]) == "Name":
                 callee = _resolve(scope, str(call.items[0]).lower(), scopes)
                 if callee is not None:
                     pending.append(callee)
@@ -461,9 +463,9 @@ def _optional_versions(text, patterns, versions):
     edits, records = [], []
     for qualified in sorted(reached):
         scope = scopes[qualified]
-        execution = _part(scope.node, "Execution_Part")
+        execution = part_of(scope.node, "Execution_Part")
         for call in walk(execution) if execution is not None else ():
-            if _kind(call) != "Call_Stmt" or _kind(call.items[0]) != "Name":
+            if kind_of(call) != "Call_Stmt" or kind_of(call.items[0]) != "Name":
                 continue
             callee = _resolve(scope, str(call.items[0]).lower(), scopes)
             if callee is None:
@@ -509,35 +511,35 @@ def _element_pointer(scope, lines):
     top level, pointing at the element the loop variable selects. One loop is
     rewritten per call. Returns (first, last, lines) or None.
     """
-    execution = _part(scope.node, "Execution_Part")
-    specification = _part(scope.node, "Specification_Part")
+    execution = part_of(scope.node, "Execution_Part")
+    specification = part_of(scope.node, "Specification_Part")
     pointers = set()
     for statement in (specification.content if specification is not None else ()):
-        if _kind(statement) == "Type_Declaration_Stmt" and statement.items[1] is not None \
+        if kind_of(statement) == "Type_Declaration_Stmt" and statement.items[1] is not None \
                 and any(str(item).upper() == "POINTER" for item in statement.items[1].items):
             pointers |= {str(entity.items[0]).lower() for entity in statement.items[2].items if entity.items[1] is None}
     if execution is None or not pointers:
         return None
     opened = {}
     for loop in walk(execution):
-        if _kind(loop) != "Block_Nonlabel_Do_Construct":
+        if kind_of(loop) != "Block_Nonlabel_Do_Construct":
             continue
-        opening = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt")
+        opening = next(item for item in loop.content if kind_of(item) == "Nonlabel_Do_Stmt")
         if opening.items[1] is None:
             continue
         variable = str(opening.items[1].items[1][0]).lower()
         for statement in loop.content:
-            if _kind(statement) == "Pointer_Assignment_Stmt" and str(statement.items[0]).lower() in pointers:
+            if kind_of(statement) == "Pointer_Assignment_Stmt" and str(statement.items[0]).lower() in pointers:
                 target = statement.items[2]
-                if _kind(target) == "Part_Ref" and _kind(target.items[0]) == "Name" \
+                if kind_of(target) == "Part_Ref" and kind_of(target.items[0]) == "Name" \
                         and [str(item).lower() for item in getattr(target.items[1], "items", ())] == [variable]:
                     opened.setdefault(str(statement.items[0]).lower(), []).append((loop, statement, variable))
     for name, places in sorted(opened.items()):
         assignments = [item for item in walk(execution)
-                       if _kind(item) == "Pointer_Assignment_Stmt" and str(item.items[0]).lower() == name]
-        uses = [item for item in walk(execution) if _kind(item) == "Name" and str(item).lower() == name
+                       if kind_of(item) == "Pointer_Assignment_Stmt" and str(item.items[0]).lower() == name]
+        uses = [item for item in walk(execution) if kind_of(item) == "Name" and str(item).lower() == name
                 and not any(item is assignment.items[0] for assignment in assignments)]
-        fields = [item for item in walk(execution) if _kind(item) == "Data_Ref" and _kind(item.items[0]) == "Name"
+        fields = [item for item in walk(execution) if kind_of(item) == "Data_Ref" and kind_of(item.items[0]) == "Name"
                   and str(item.items[0]).lower() == name]
         spans = [(_span(statement)[1], _span(loop)[1]) for loop, statement, _variable in places]
         if len(assignments) != len(places) or len(uses) != len(fields) \
@@ -562,32 +564,32 @@ def _select_case(scope, lines):
     DEFAULT becomes the ELSE, wherever it stands, since no two cases share a
     value. A selector compared with LOGICAL values is left as it is.
     """
-    execution = _part(scope.node, "Execution_Part")
+    execution = part_of(scope.node, "Execution_Part")
     for construct in walk(execution) if execution is not None else ():
-        if _kind(construct) != "Case_Construct":
+        if kind_of(construct) != "Case_Construct":
             continue
         opening = construct.content[0]
-        if _kind(opening) != "Select_Case_Stmt" or _kind(opening.items[0]) != "Name" \
+        if kind_of(opening) != "Select_Case_Stmt" or kind_of(opening.items[0]) != "Name" \
                 or getattr(opening.item, "name", None):
             continue
         selector = str(opening.items[0])
         cases, default, current = [], None, None
         for item in construct.content[1:-1]:
-            if _kind(item) == "Case_Stmt":
+            if kind_of(item) == "Case_Stmt":
                 current = (item, [])
                 if item.items[0].items[0] is None:
                     default = current
                 else:
                     cases.append(current)
-            elif current is not None and not (_kind(item) == "Comment" and item.item.span[0] == _span(current[0])[0]):
+            elif current is not None and not (kind_of(item) == "Comment" and item.item.span[0] == _span(current[0])[0]):
                 current[1].append(item)
-        if any("logical" in _kind(value).lower() for case, _body in cases for value in walk(case)):
+        if any("logical" in kind_of(value).lower() for case, _body in cases for value in walk(case)):
             continue
 
         def condition(case, selector=selector):
             terms = []
             for value in case.items[0].items[0].items:
-                if _kind(value) == "Case_Value_Range":
+                if kind_of(value) == "Case_Value_Range":
                     low, high = value.items
                     parts = ([f"{selector} >= ({low})"] if low is not None else []) + \
                             ([f"{selector} <= ({high})"] if high is not None else [])
@@ -622,9 +624,9 @@ def _line(node):
 def _declare(scope, lines, names):
     """An edit that declares ``names`` (Fortran declaration texts) after the procedure's specifications."""
     heading = _span(_heading(scope.node))[1]
-    specification = _part(scope.node, "Specification_Part")
+    specification = part_of(scope.node, "Specification_Part")
     ends = [_span(item)[1] for item in (specification.content if specification is not None else ())
-            if _kind(item) != "Comment" and _span(item) is not None]
+            if kind_of(item) != "Comment" and _span(item) is not None]
     after = max([heading, *ends])
     margin = " " * (len(lines[heading - 1]) - len(lines[heading - 1].lstrip()) + 2)
     return after + 1, after, [margin + item + "\n" for item in names]
@@ -671,7 +673,7 @@ def prepare_helpers(text, procedures):
                 break
             if any(fnmatchcase(qualified, pattern) for pattern in patterns) or qualified in refused:
                 continue
-            execution = _part(scope.node, "Execution_Part")
+            execution = part_of(scope.node, "Execution_Part")
             if execution is None:
                 continue
             if _returns(execution):
