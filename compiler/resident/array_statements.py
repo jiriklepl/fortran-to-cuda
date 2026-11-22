@@ -72,9 +72,6 @@ def _subscripts(reference):
     return list(listed.items) if kind_of(listed) == "Section_Subscript_List" else [listed]
 
 
-_USE = re.compile(r"(?i)use\b(?:\s*,\s*\w+)?\s*(?:::)?\s*(\w+)\s*(?:,\s*(only\s*:)?\s*(.*))?\Z")
-
-
 def _imports(node):
     """The USE statements of a scope: ``(module, only, {local name: name there})`` each."""
     found = []
@@ -82,15 +79,15 @@ def _imports(node):
     for statement in (specification.content if specification is not None else ()):
         if kind_of(statement) != "Use_Stmt":
             continue
-        match = _USE.match(" ".join(str(statement).split()))
-        if match is None:
-            continue
+        _nature, _colons, module, only, listed = statement.items
         names = {}
-        for item in (match.group(3) or "").split(","):
-            local, _, there = (part.strip().lower() for part in item.partition("=>"))
-            if re.fullmatch(r"\w+", local) and (not there or re.fullmatch(r"\w+", there)):
-                names[local] = there or local
-        found.append((match.group(1).lower(), match.group(2) is not None, names))
+        for item in (listed.items if listed is not None else ()):
+            # Operators and assignments are no names of variables.
+            local, there = ((str(item.items[1]), str(item.items[2])) if kind_of(item) == "Rename"
+                            else (str(item), str(item)))
+            if re.fullmatch(r"\w+", local) and re.fullmatch(r"\w+", there):
+                names[local.lower()] = there.lower()
+        found.append((str(module).lower(), "ONLY" in str(only or "").upper(), names))
     return found
 
 
@@ -106,14 +103,13 @@ class _Modules:
             self.read[module] = None
             pattern = re.compile(rf"(?im)^[ \t]*module[ \t]+{re.escape(module)}[ \t]*(?:!.*)?$")
             for text in (self.own, *([] if pattern.search(self.own) else self.others)):
-                start = pattern.search(text)
-                if start is None:
+                if pattern.search(text) is None:
                     continue
-                stop = re.compile(r"(?im)^[ \t]*(?:contains\b|end[ \t]*module\b)").search(text, start.end())
-                if stop is None:
+                # The whole source: the tree of a text that the passes read is parsed once.
+                node = next((item for item in walk(parse_fortran(text)) if kind_of(item) == "Module"
+                             and str(part_of(item, "Module_Stmt").items[1]).lower() == module), None)
+                if node is None:
                     continue
-                tree = parse_fortran(text[start.start():stop.start()] + f"end module {module}\n")
-                node = next(item for item in walk(tree) if kind_of(item) == "Module")
                 specification = part_of(node, "Specification_Part")
                 elsewhere = {str(name).lower() for statement in (specification.content if specification else ())
                              if kind_of(statement) in _ELSEWHERE for name in walk(statement) if kind_of(name) == "Name"}

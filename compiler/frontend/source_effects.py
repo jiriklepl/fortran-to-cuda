@@ -264,6 +264,8 @@ class SourceEffects:
         parent.procedures[str(stmt.items[1]).lower()] = qualified
         arguments = tuple(str(argument).lower() for argument in children_of(stmt.items[2]))
         issues = parent.issues + self._specification(child, arguments, qualified)
+        # Its internal procedures see what it declares: what is wrong with that is wrong for them.
+        child.issues = list(issues)
         routine = Routine(child, arguments, part_of(node, "Execution_Part"), qualified, issues, source_kind)
         self.routines[qualified] = routine
         self.numerical_helpers[qualified] = routine
@@ -287,6 +289,7 @@ class SourceEffects:
         scope = Scope("$program", filename, node)
         scope.qualified = qualified
         issues = self._specification(scope, (), qualified)
+        scope.issues = list(issues)
         # Main-program variables have SAVE duration; this supplies neither
         # allocation presence nor an initial payload definition.
         for binding in scope.bindings.values():
@@ -310,6 +313,7 @@ class SourceEffects:
         child.qualified = qualified
         arguments = tuple(str(argument).lower() for argument in children_of(stmt.items[2]))
         issues = parent.issues + self._specification(child, arguments, qualified)
+        child.issues = list(issues)
         prefix_type = next((item for item in children_of(stmt.items[0]) if kind_of(item) == "Intrinsic_Type_Spec"), None)
         result = str(stmt.items[3].items[0] if stmt.items[3] is not None else stmt.items[1]).lower()
         if prefix_type is not None and result not in child.bindings:

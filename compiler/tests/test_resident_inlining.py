@@ -74,6 +74,8 @@ def test_each_call_becomes_the_statements_its_arguments_select():
      "its scalar argument component is not INTENT(IN)"),
     ("    integer :: i, n\n", "    integer :: i, n\n    real(knd) :: work(4)\n", "its local work is more than a plain scalar"),
     ("    do i = 1, n\n      a(i)", "    if (n < 1) return\n    do i = 1, n\n      a(i)", "it has a RETURN statement"),
+    (SOURCE[SOURCE.index("    if (component==1)"):SOURCE.index("  end subroutine edge")], "",
+     "it is not a subroutine with statements"),
 ])
 def test_a_call_that_text_substitution_would_not_reproduce_stays_a_call(old, new, reason):
     assert old in SOURCE

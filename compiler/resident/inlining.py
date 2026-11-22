@@ -66,8 +66,10 @@ def _declarations(node):
 class _Callee:
     """What a procedure looks like to a caller that takes its statements; ``reason`` says why it cannot."""
 
-    def __init__(self, scope, lines):
+    def __init__(self, scope):
         self.scope, self.reason = scope, None
+        # What a procedure that cannot be taken in has: no dummies, declarations, changes or locals.
+        self.dummies, self.declared, self.assigned, self.locals = [], {}, set(), {}
         node = scope.node
         statement = part_of(node, "Subroutine_Stmt")
         self.execution = part_of(node, "Execution_Part")
@@ -109,7 +111,6 @@ class _Callee:
         if self.reason is None and scalar_dummies & assigned:
             self.reason = "it changes a scalar argument"
         self.locals = {name: dtype for name, (dtype, _a, _b, _i) in self.declared.items() if name not in self.dummies}
-        self.lines = lines
 
 
 def _substituted(lines, callee, indent):
@@ -154,7 +155,7 @@ def inline_calls(text, callers, callees, constants=None):
     lines = text.splitlines(keepends=True)
     tree = parse_fortran(text)
     scopes = list(_procedures(tree))
-    available = {scope.qualified: _Callee(scope, lines) for scope in scopes if scope.qualified in wanted}
+    available = {scope.qualified: _Callee(scope) for scope in scopes if scope.qualified in wanted}
     patterns = [pattern.lower() for pattern in callers]
     edits, records, number = [], [], 0
     for scope in scopes:

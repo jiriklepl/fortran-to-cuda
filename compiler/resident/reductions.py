@@ -212,15 +212,27 @@ def _operator(statement, name):
     return None
 
 
+# A character literal, to the end of the line where it is continued on the next.
+_LITERAL = re.compile(r"'(?:[^']|'')*(?:'|$)|\"(?:[^\"]|\"\")*(?:\"|$)")
+
+
 def _rename(lines, mapping):
-    """Replace whole names outside comments; a name after ``%`` is a field and stays."""
+    """Replace whole names outside comments and character literals; a name after ``%`` is a field and stays."""
     if not mapping:
         return list(lines)
     pattern = re.compile(r"(?<![\w%])(?<!%\s)(" + "|".join(map(re.escape, mapping)) + r")(?!\w)", re.IGNORECASE)
+
+    def names(code):
+        return pattern.sub(lambda match: mapping[match.group(1).lower()], code)
+
     renamed = []
     for line in lines:
         code, comment = _strip_inline_comment(line.rstrip("\n"))
-        renamed.append(pattern.sub(lambda match: mapping[match.group(1).lower()], code) + comment + "\n")
+        parts, cursor = [], 0
+        for literal in _LITERAL.finditer(code):
+            parts += [names(code[cursor:literal.start()]), literal.group(0)]
+            cursor = literal.end()
+        renamed.append("".join(parts) + names(code[cursor:]) + comment + "\n")
     return renamed
 
 

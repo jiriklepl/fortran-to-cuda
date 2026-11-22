@@ -127,6 +127,38 @@ end module
     assert lower_array_statements(data + source, ["work::add"])[1][0]["lowered"]
 
 
+def test_a_module_with_a_type_bound_procedure_is_looked_up_whole():
+    fields = """module fields
+  integer, parameter :: m = 4
+  real(8) :: grid(m, m)
+  type frame
+    integer :: count = 0
+  contains
+    procedure :: next
+  end type
+  real(8) :: late(m, m)
+contains
+  subroutine next(self)
+    class(frame), intent(inout) :: self
+    self%count = self%count + 1
+  end subroutine
+end module
+"""
+    source = """module work
+  use fields, only: grid, late
+contains
+  subroutine step(a)
+    real(8), intent(inout) :: a(:,:)
+    a = grid
+    a = late
+  end subroutine
+end module
+"""
+    # The CONTAINS of the type does not end the module's declarations: late is declared after it.
+    _text, records = lower_array_statements(source, ["work::step"], [fields])
+    assert [record.get("lowered") for record in records] == [True, True]
+
+
 def test_other_statements_and_other_procedures_are_left_alone():
     # A scalar assignment, an element, an assignment inside a loop (the front end's), a field of a type.
     source = HEAD + "    j = 1\n    a(1, 1) = w\n    do j = 1, n\n      a(:, j) = b(:, j)\n    end do\n" + TAIL
