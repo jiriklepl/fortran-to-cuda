@@ -22,7 +22,7 @@ from compiler.resident.directives import expand_directives
 from compiler.resident.helpers import prepare_helpers
 from compiler.resident.inlining import inline_calls
 from compiler.resident.procedures import holds_selected
-from compiler.resident.reductions import lower_reductions
+from compiler.resident.reductions import LOWERED_NESTS, lower_reductions, switch
 from compiler.resident.rewrites import inline_tile_scratch_nests, promote_line_snapshots
 from compiler.resident.specialize import integer_parameters, specialize
 from compiler.resident.storage import addressable_arrays, lend_storage
@@ -100,18 +100,6 @@ class ResidentProject:
     native: Callable[[dict, str], str | None] | None = None
     held: Mapping[tuple[str, str], str] = field(default_factory=dict)
     addressable: tuple[str | Path, ...] | None = None
-
-
-class _Lazy:
-    """A list that is made when it is first gone through."""
-
-    def __init__(self, make):
-        self.make, self.items = make, None
-
-    def __iter__(self):
-        if self.items is None:
-            self.items = self.make()
-        return iter(self.items)
 
 
 def _rewrite(name, text):
@@ -265,6 +253,151 @@ def _access_needed(extracted, packages, selected):
     return needed
 
 
+class _Sources:
+    """The text of each project source as the passes leave it, and the file the export reads it from.
+
+    A text that a pass changes is written to ``rewritten/`` under the name of
+    the file it was read from; ``changed`` are the sources that a pass changed.
+    """
+
+    def __init__(self, directory, files):
+        self.directory, self.files = directory, dict(files)
+        self.texts = {original: path.read_text() for original, path in self.files.items()}
+        self.changed = set()
+
+    def update(self, original, text):
+        if text == self.texts[original]:
+            return
+        path = self.directory / "rewritten" / self.files[original].name
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(text)
+        self.files[original], self.texts[original] = path, text
+        self.changed.add(original)
+
+    def each(self, rewrite):
+        """Apply ``rewrite(original, text) -> (text, records)`` to every source; its records, with their source."""
+        found = []
+        for original in self.files:
+            text, records = rewrite(original, self.texts[original])
+            self.update(original, text)
+            found += [{**record, "source": original} for record in records]
+        return found
+
+
+def _specialized(sources, selection, constants):
+    """Give the selected procedures their versions for the selection's assumed conditions."""
+    by_source = {}
+    for name in selection.procedures:
+        routine = name.rsplit("::", 1)[-1]
+        if any(character in name for character in "*?["):
+            raise ValueError("Assumed conditions need exact procedure names: " + name)
+        # The declaration, not a reference: a procedure statement or its END, in a source of its module.
+        holders = [original for original, text in sources.texts.items() if holds_selected(text, [name.lower()])
+                   and re.search(rf"(?im)^\s*(?:\w+\s+)*(?:subroutine|function)\s+{re.escape(routine)}\b", text)]
+        if len(holders) != 1:
+            raise ValueError(f"Expected one source that defines {name}, found {len(holders)}")
+        by_source.setdefault(holders[0], []).append(name)
+    for original, names in by_source.items():
+        sources.update(original, specialize(sources.texts[original], names, selection.assume, constants))
+
+
+def _rewritten_spans(sources, record, items):
+    """The spans of ``items`` that hold a nest one rewrite wrote: they name its tag."""
+    lines = sources.texts[record["source"]].splitlines()
+    return [item for item in items if item["procedure"] == record["procedure"]
+            and record["tag"] in "\n".join(lines[item["first_line"] - 1:item["last_line"]])]
+
+
+def _settle_reductions(package, lowered, chosen, sources):
+    """Keep a rewritten reduction's entries only where all its nests compiled; return the package without the rest.
+
+    A rewritten reduction runs on the device only when all its nests compiled.
+    Otherwise its original nest runs, and what the rewrite added is left out
+    of the entries and the report.
+    """
+    for record in lowered:
+        if not any(fnmatchcase(record["procedure"], pattern) for pattern in chosen):
+            continue
+        own = [item for item in package["entries"] if _reduction(item["region"], lowered) is record]
+        record["compiled"] = sum(len(item["region"]["source_loop_spans"]) for item in own) == LOWERED_NESTS
+        if record["compiled"]:
+            continue
+        mine = _rewritten_spans(sources, record, package["rejected"])
+        # A nest that was tried piece by piece says why at its outermost loop; the pieces only add
+        # that they do not stand on their own.
+        opened = _rewritten_spans(sources, record, package.get("descended", ()))
+        record["reason"] = "; ".join(sorted({item["reason"] for item in opened or mine})) \
+            or "its nests were not exported"
+        package = {**package, "entries": [item for item in package["entries"] if item not in own],
+                   "rejected": [item for item in package["rejected"] if item not in mine],
+                   "descended": [item for item in package.get("descended", ()) if item not in opened]}
+    return package
+
+
+def _reduction(entry, lowered):
+    """The rewritten nest an exported entry belongs to: its parameters carry the nest's names."""
+    return next((record for record in lowered if record["procedure"] == entry["procedure"]
+                 and any(parameter["name"].startswith(record["tag"]) for parameter in entry["parameters"])), None)
+
+
+def _settle_array_statements(package, array_statements, chosen, sources):
+    """Take the nests of array assignments that did not compile out of the rejections; return the package.
+
+    Such a nest stays in place and runs on the host, as the statement did: it
+    is host code for the audit, not a rejected nest.
+    """
+    for record in array_statements:
+        if "tag" not in record or not any(fnmatchcase(record["procedure"], pattern) for pattern in chosen):
+            continue
+        mine = _rewritten_spans(sources, record, package["rejected"])
+        if mine:
+            record.update(lowered=False, reason="; ".join(sorted({item["reason"] for item in mine})),
+                          nests=[{**item, "source": str(sources.files[record["source"]])} for item in mine])
+            package = {**package, "rejected": [item for item in package["rejected"] if item not in mine]}
+    return package
+
+
+def _compile_selection(selection, extracted, directory, *, host_threads, pool):
+    """Compile the entries of one selection's procedures (see ``compile_resident_entries``)."""
+    chosen = [name.lower() for name in selection.procedures]
+
+    def selected(item):
+        return any(fnmatchcase(item["procedure"], pattern) for pattern in chosen)
+
+    group = {**extracted, "entries": [item for item in extracted["entries"] if selected(item)],
+             "rejected": [item for item in extracted["rejected"] if selected(item)]}
+    group = pass_scalars_by_value(group, directory / (selection.label + "-values"))
+    retried = count(1)
+
+    def expand(region):
+        """The nests of an entry that did not compile, each exported as an entry of its own."""
+        more = extracted["retry"](region["procedure"], region["first_line"], region["last_line"])
+        return pass_scalars_by_value(more, directory / f"{selection.label}-values-{next(retried)}")
+
+    return compile_resident_entries(group, directory / (selection.label + "-entries"),
+                                    host_threads=host_threads, expand=expand, pool=pool)
+
+
+def _summary(selection, package):
+    """What a selection compiled; raises ValueError when it is fewer nests than the selection requires."""
+    nests = sum(len(item["region"]["source_loop_spans"]) for item in package["entries"])
+    if nests < selection.minimum_nests:
+        raise ValueError(f"Selection {selection.label} compiled {nests} loop nests; "
+                         f"at least {selection.minimum_nests} are required")
+    summary = {"label": selection.label, "entries": len(package["entries"]), "nests": nests,
+               "rejected": package["rejected"]}
+    if package.get("descended"):
+        # Loops the host runs around entries: each did not compile as a nest of its own.
+        summary["descended"] = package["descended"]
+    return summary
+
+
+def _without(records, keys):
+    """Records for the report: without the keys only the preparation uses, with their source as text."""
+    return [{key: str(value) if key == "source" else value for key, value in record.items() if key not in keys}
+            for record in records]
+
+
 def prepare(project, directory, *, fortran, host_threads=4, jobs=1):
     """Write the resident variant of the application's sources into ``directory``.
 
@@ -301,175 +434,99 @@ def prepare(project, directory, *, fortran, host_threads=4, jobs=1):
     unknown = set(project.rewrites) - {path.name for path in originals}
     if unknown:
         raise ValueError("Rewrites name files that are not project sources: " + ", ".join(sorted(unknown)))
-    current = {}
-    for item, original in zip(configured["sources"], originals, strict=True):
-        path = Path(item["prepared"]["path"])
-        passes = project.rewrites.get(original.name, ())
-        if passes:
-            text = path.read_text()
-            for name in passes:
-                text = _rewrite(name, text)
-            path = directory / "rewritten" / path.name
-            path.parent.mkdir(exist_ok=True)
-            path.write_text(text)
-        current[original] = path
+    sources = _Sources(directory, ((original, Path(item["prepared"]["path"]))
+                                   for item, original in zip(configured["sources"], originals, strict=True)))
+    for original in originals:
+        text = sources.texts[original]
+        for name in project.rewrites.get(original.name, ()):
+            text = _rewrite(name, text)
+        sources.update(original, text)
 
-    assumed = [selection for selection in project.selections if selection.assume]
-    inlining = [selection for selection in project.selections if selection.inline]
-    specialized, inlined = set(), []
-    if assumed or inlining:
-        texts = {original: path.read_text() for original, path in current.items()}
-        constants = integer_parameters(texts.values())
+    constants = integer_parameters(sources.texts.values()) if any(
+        selection.assume or selection.inline for selection in project.selections) else {}
     # Calls are replaced first, so that assumed conditions also fold what the calls brought in.
-    for selection in inlining:
-        for original in originals:
-            text, records = inline_calls(texts[original], selection.procedures, selection.inline, constants)
+    inlined = []
+    for selection in project.selections:
+        for original in originals if selection.inline else ():
+            text, records = inline_calls(sources.texts[original], selection.procedures, selection.inline, constants)
+            sources.update(original, text)
             inlined += records
-            if text != texts[original]:
-                texts[original] = text
-                path = directory / "rewritten" / current[original].name
-                path.parent.mkdir(exist_ok=True)
-                path.write_text(text)
-                current[original] = path
-                specialized.add(original)
-    for selection in assumed:
-        by_source = {}
-        for name in selection.procedures:
-            routine = name.rsplit("::", 1)[-1]
-            if any(character in name for character in "*?["):
-                raise ValueError("Assumed conditions need exact procedure names: " + name)
-            # The declaration, not a reference: a procedure statement or its END, in a source of its module.
-            holders = [original for original, text in texts.items() if holds_selected(text, [name.lower()])
-                       and re.search(rf"(?im)^\s*(?:\w+\s+)*(?:subroutine|function)\s+{re.escape(routine)}\b", text)]
-            if len(holders) != 1:
-                raise ValueError(f"Expected one source that defines {name}, found {len(holders)}")
-            by_source.setdefault(holders[0], []).append(name)
-        for original, names in by_source.items():
-            texts[original] = specialize(texts[original], names, selection.assume, constants)
-            path = directory / "rewritten" / current[original].name
-            path.parent.mkdir(exist_ok=True)
-            path.write_text(texts[original])
-            current[original] = path
-            specialized.add(original)
-
+    for selection in project.selections:
+        if selection.assume:
+            _specialized(sources, selection, constants)
     # What the selected procedures call is written in a form their loop nests can take in.
-    helpers = []
-    for original in originals:
-        text = current[original].read_text()
-        rewritten, records = prepare_helpers(text, patterns)
-        if rewritten != text:
-            path = directory / "rewritten" / current[original].name
-            path.parent.mkdir(exist_ok=True)
-            path.write_text(rewritten)
-            current[original] = path
-            specialized.add(original)
-        helpers += [{**record, "source": original} for record in records]
-
+    helpers = sources.each(lambda _original, text: prepare_helpers(text, patterns))
     # Array assignments outside loops become the loop nests they stand for.
-    array_statements = []
-    for original in originals:
-        text = current[original].read_text()
-        rewritten, records = lower_array_statements(
-            text, patterns, _Lazy(lambda skip=original: [path.read_text() for other, path in current.items()
-                                                         if other != skip]))
-        if rewritten != text:
-            path = directory / "rewritten" / current[original].name
-            path.parent.mkdir(exist_ok=True)
-            path.write_text(rewritten)
-            current[original] = path
-            specialized.add(original)
-        array_statements += [{**record, "source": original} for record in records]
-
+    array_statements = sources.each(lambda original, text: lower_array_statements(
+        text, patterns, [other for source, other in sources.texts.items() if source != original]))
     # Nests that only accumulate scalars get a form whose partial results the device can store.
-    reductions = []
-    for original in originals:
-        text = current[original].read_text()
-        lowered, records = lower_reductions(text, patterns)
-        if lowered != text:
-            path = directory / "rewritten" / current[original].name
-            path.parent.mkdir(exist_ok=True)
-            path.write_text(lowered)
-            current[original] = path
-            specialized.add(original)
-        reductions += [{**record, "source": original} for record in records]
+    reductions = sources.each(lambda _original, text: lower_reductions(text, patterns))
     lowered = [record for record in reductions if "tag" in record]
 
-    def reduction(entry):
-        """The rewritten nest an exported entry belongs to: its parameters carry the nest's names."""
-        return next((record for record in lowered if record["procedure"] == entry["procedure"]
-                     and any(parameter["name"].startswith(record["tag"]) for parameter in entry["parameters"])), None)
-
-    extracted = export_resident_entries(list(current.values()), patterns, directory / "extracted")
+    extracted = export_resident_entries(list(sources.files.values()), patterns, directory / "extracted")
     packages, summaries = [], []
     with compiling_pool(jobs) or nullcontext() as pool:
         for selection in project.selections:
             chosen = [name.lower() for name in selection.procedures]
+            package = _compile_selection(selection, extracted, directory, host_threads=host_threads, pool=pool)
+            package = _settle_reductions(package, lowered, chosen, sources)
+            package = _settle_array_statements(package, array_statements, chosen, sources)
+            summaries.append(_summary(selection, package))
+            packages.append(package if selection.native_rejections else {**package, "rejected": []})
 
-            def selected(item, chosen=chosen):
-                return any(fnmatchcase(item["procedure"], pattern) for pattern in chosen)
+    temporaries, findings, accessed = _host_access(extracted, packages, patterns, array_statements, sources)
+    spliced = splice_resident_entries(packages, directory / "spliced", domain=project.domain, native=project.native,
+                                      held=project.held, host=accessed)
+    replaced = {item["original"]["path"]: Path(item["replacement"]["path"]) for item in spliced["sources"]}
+    texts, touched = {}, set(sources.changed)
+    for original in originals:
+        before = str(sources.files[original].resolve())
+        texts[original] = replaced[before].read_text() if before in replaced else sources.texts[original]
+        if before in replaced:
+            touched.add(original)
+    by_source = {}
+    for item in temporaries:
+        by_source.setdefault(item["source"], {}).setdefault(item["procedure"], []).append(item["name"])
+    for original in originals:
+        names = by_source.get(str(sources.files[original].resolve())) or by_source.get(str(sources.files[original]))
+        if names:
+            texts[original] = lend_storage(texts[original], project.domain, names)
+            touched.add(original)
+    for record in lowered:
+        if not record.get("compiled"):
+            # Its original nest runs instead, after the device values are published.
+            if texts[record["source"]].count(switch(record["tag"])) != 1:
+                raise ValueError("Lost the switch of the rewritten reduction in " + record["procedure"])
+            texts[record["source"]] = texts[record["source"]].replace(switch(record["tag"]),
+                                                                      switch(record["tag"], compiled=False))
+    added = {}
+    if project.edit is not None:
+        for key, text in project.edit(dict(texts)).items():
+            if key in texts:
+                if text != texts[key]:
+                    texts[key] = text
+                    touched.add(key)
+            elif Path(key).name != str(key):
+                raise ValueError("An edit may add sources only under a plain file name: " + str(key))
+            else:
+                added[str(key)] = text
+    records, directives = _write_sources(project, directory / "sources", originals, texts, touched, added)
 
-            group = {**extracted, "entries": [item for item in extracted["entries"] if selected(item)],
-                     "rejected": [item for item in extracted["rejected"] if selected(item)]}
-            group = pass_scalars_by_value(group, directory / (selection.label + "-values"))
-            retried = count(1)
+    result = {"version": 1, "kind": "resident_application", "defines": list(project.defines),
+              "domain": {"module": project.domain.module, "object": project.domain.object,
+                         "default": project.domain == DEFAULT_DOMAIN},
+              "sources": records, "entries": [item["directory"] for package in packages for item in package["entries"]],
+              "selections": summaries, "directives": directives, "audit": findings, "inlined": inlined,
+              "helpers": _without(helpers, ()),
+              "array_statements": _without(array_statements, {"tag", "arrays", "text"}),
+              "reductions": _without(reductions, {"tag"}),
+              "temporaries": [{"procedure": item["procedure"], "name": item["name"]} for item in temporaries]}
+    (directory / "prepared.json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
 
-            def expand(region, label=selection.label, retried=retried):
-                """The nests of an entry that did not compile, each exported as an entry of its own."""
-                more = extracted["retry"](region["procedure"], region["first_line"], region["last_line"])
-                return pass_scalars_by_value(more, directory / f"{label}-values-{next(retried)}")
 
-            package = compile_resident_entries(group, directory / (selection.label + "-entries"),
-                                               host_threads=host_threads, expand=expand, pool=pool)
-            # A rewritten reduction runs on the device only when all three of its nests compiled. Otherwise
-            # its original nest runs, and what the rewrite added is left out of the entries and the report.
-            for record in lowered:
-                if not any(fnmatchcase(record["procedure"], pattern) for pattern in chosen):
-                    continue
-                own = [item for item in package["entries"] if reduction(item["region"]) is record]
-                record["compiled"] = sum(len(item["region"]["source_loop_spans"]) for item in own) == 3
-                if record["compiled"]:
-                    continue
-                lines = current[record["source"]].read_text().splitlines()
-
-                def belongs(item, record=record, lines=lines):
-                    return item["procedure"] == record["procedure"] and record["tag"] in "\n".join(
-                        lines[item["first_line"] - 1:item["last_line"]])
-
-                mine = [item for item in package["rejected"] if belongs(item)]
-                # A nest that was tried piece by piece says why at its outermost loop; the pieces only add
-                # that they do not stand on their own.
-                opened = [item for item in package.get("descended", ()) if belongs(item)]
-                record["reason"] = "; ".join(sorted({item["reason"] for item in opened or mine})) \
-                    or "its nests were not exported"
-                package = {**package, "entries": [item for item in package["entries"] if item not in own],
-                           "rejected": [item for item in package["rejected"] if item not in mine],
-                           "descended": [item for item in package.get("descended", ()) if item not in opened]}
-            # The nest of an array assignment that did not compile stays in place and runs on the host, as the
-            # statement did: it is host code for the audit, not a rejected nest.
-            for record in array_statements:
-                if "tag" not in record or not any(fnmatchcase(record["procedure"], pattern) for pattern in chosen):
-                    continue
-                lines = current[record["source"]].read_text().splitlines()
-                mine = [item for item in package["rejected"] if item["procedure"] == record["procedure"]
-                        and record["tag"] in "\n".join(lines[item["first_line"] - 1:item["last_line"]])]
-                if mine:
-                    record.update(lowered=False, reason="; ".join(sorted({item["reason"] for item in mine})),
-                                  nests=[{**item, "source": str(current[record["source"]])} for item in mine])
-                    package = {**package, "rejected": [item for item in package["rejected"] if item not in mine]}
-            nests = sum(len(item["region"]["source_loop_spans"]) for item in package["entries"])
-            if nests < selection.minimum_nests:
-                raise ValueError(f"Selection {selection.label} compiled {nests} loop nests; "
-                                 f"at least {selection.minimum_nests} are required")
-            summary = {"label": selection.label, "entries": len(package["entries"]), "nests": nests,
-                       "rejected": package["rejected"]}
-            if package.get("descended"):
-                # Loops the host runs around entries: each did not compile as a nest of its own.
-                summary["descended"] = package["descended"]
-            if not selection.native_rejections:
-                package = {**package, "rejected": []}
-            packages.append(package)
-            summaries.append(summary)
-
+def _host_access(extracted, packages, patterns, array_statements, sources):
+    """The lent temporaries, the audit's findings, and the host code that gets access generated around it."""
     # Temporary arrays of the selected procedures that entries keep on the device: the domain lends their
     # storage, so their ALLOCATE and DEALLOCATE are no host statements that need anything.
     resources = {resource["resource"] for package in packages for item in package["entries"]
@@ -499,48 +556,21 @@ def prepare(project, directory, *, fortran, host_threads=4, jobs=1):
         named = sorted(bound.intersection(record.get("arrays", ()))) if record.get("lowered") is False else []
         if named:
             # The same finding, with the same id, that the statement gives where it is not rewritten.
-            findings.append({"id": host_statement_id(record["procedure"], record["text"]), "procedure": record["procedure"], "source": str(current[record["source"]]),
+            findings.append({"id": host_statement_id(record["procedure"], record["text"]),
+                             "procedure": record["procedure"], "source": str(sources.files[record["source"]]),
                              "first_line": record["line"], "last_line": record["line"], "arrays": named, "calls": [],
                              "text": record["text"], "access": "arrays"})
             accessed += nests
-    spliced = splice_resident_entries(packages, directory / "spliced", domain=project.domain, native=project.native,
-                                      held=project.held, host=accessed)
-    replaced = {item["original"]["path"]: Path(item["replacement"]["path"]) for item in spliced["sources"]}
-    texts, touched = {}, set()
-    for original in originals:
-        before = str(current[original].resolve())
-        texts[original] = replaced.get(before, current[original]).read_text()
-        if before in replaced or project.rewrites.get(original.name) or original in specialized:
-            touched.add(original)
-    by_source = {}
-    for item in temporaries:
-        by_source.setdefault(item["source"], {}).setdefault(item["procedure"], []).append(item["name"])
-    for original in originals:
-        names = by_source.get(str(current[original].resolve())) or by_source.get(str(current[original]))
-        if names:
-            texts[original] = lend_storage(texts[original], project.domain, names)
-            touched.add(original)
-    for record in lowered:
-        if not record.get("compiled"):
-            # Its original nest runs instead, after the device values are published.
-            switch = f"logical, parameter :: {record['tag']}compiled = .true."
-            if texts[record["source"]].count(switch) != 1:
-                raise ValueError("Lost the switch of the rewritten reduction in " + record["procedure"])
-            texts[record["source"]] = texts[record["source"]].replace(switch, switch.replace(".true.", ".false."))
-    added = {}
-    if project.edit is not None:
-        for key, text in project.edit(dict(texts)).items():
-            if key in texts:
-                if text != texts[key]:
-                    texts[key] = text
-                    touched.add(key)
-            elif Path(key).name != str(key):
-                raise ValueError("An edit may add sources only under a plain file name: " + str(key))
-            else:
-                added[str(key)] = text
+    return temporaries, findings, accessed
+
+
+def _write_sources(project, output, originals, texts, touched, added):
+    """Expand the directives, add TARGET where bindings need it, and write each changed source into ``output``.
+
+    Returns one record per source and the number of directives expanded.
+    """
     bindable_sources = None if project.addressable is None else {
         item if isinstance(item, str) else Path(item).resolve() for item in project.addressable}
-    output = directory / "sources"
     output.mkdir()
     records, directives, names = [], 0, set(added)
     for original in originals:
@@ -564,18 +594,4 @@ def prepare(project, directory, *, fortran, host_threads=4, jobs=1):
         directives += len(expanded)
         (output / name).write_text(text)
         records.append({"original": None, "resident": str(output / name), "changed": True})
-
-    result = {"version": 1, "kind": "resident_application", "defines": list(project.defines),
-              "domain": {"module": project.domain.module, "object": project.domain.object,
-                         "default": project.domain == DEFAULT_DOMAIN},
-              "sources": records, "entries": [item["directory"] for package in packages for item in package["entries"]],
-              "selections": summaries, "directives": directives, "audit": findings, "inlined": inlined,
-              "helpers": [{key: str(value) if key == "source" else value for key, value in record.items()}
-                          for record in helpers],
-              "array_statements": [{key: str(value) if key == "source" else value for key, value in record.items()
-                                    if key not in {"tag", "arrays", "text"}} for record in array_statements],
-              "reductions": [{key: str(value) if key == "source" else value for key, value in record.items()
-                              if key != "tag"} for record in reductions],
-              "temporaries": [{"procedure": item["procedure"], "name": item["name"]} for item in temporaries]}
-    (directory / "prepared.json").write_text(json.dumps(result, indent=2) + "\n")
-    return result
+    return records, directives

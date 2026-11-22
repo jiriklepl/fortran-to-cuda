@@ -67,6 +67,14 @@ SLOTS = 65536
 FINAL = 256
 # A nest with at most this many iterations stores FINAL partial results directly.
 DIRECT = 65536
+# The nests a rewrite writes: SLOTS partial results, their fold into FINAL values, and FINAL partial results
+# stored directly.
+LOWERED_NESTS = 3
+
+
+def switch(tag, compiled=True):
+    """The declaration of a rewritten reduction that says whether its nests run, as the rewrite writes it."""
+    return f"logical, parameter :: {tag}compiled = {'.true.' if compiled else '.false.'}"
 
 _STATEMENTS = {"Nonlabel_Do_Stmt", "End_Do_Stmt", "If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt",
                "If_Stmt", "Assignment_Stmt"}
@@ -248,7 +256,7 @@ def _lowered(nest, info, number, lines):
     accumulators = {name: f"{tag}a{index}" for index, (name, _) in enumerate(reductions, 1)}
 
     declarations = [
-        f"logical, parameter :: {tag}compiled = .true.",
+        switch(tag),
         f"logical :: {tag}on, {tag}now",
         f"integer(selected_int_kind(18)) :: {tag}wide",
         f"integer :: {tag}slot, {tag}t, {tag}o, {tag}total, {tag}used, {tag}last",
