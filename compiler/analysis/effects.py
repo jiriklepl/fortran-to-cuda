@@ -4,10 +4,8 @@ from compiler.ir import (
     ArrayAccess,
     Assignment,
     If,
-    Literal,
     Loop,
     Reference,
-    ScalarType,
     block_writes,
     referenced_symbols,
     statement_reads,
@@ -15,12 +13,8 @@ from compiler.ir import (
 )
 
 
-def loop_step(loop):
-    return Literal(str(loop.step), ScalarType.INTEGER) if isinstance(loop.step, int) else loop.step
-
-
 def header_reads(loop):
-    return referenced_symbols(loop.lower) | referenced_symbols(loop.upper) | referenced_symbols(loop_step(loop))
+    return referenced_symbols(loop.lower) | referenced_symbols(loop.upper) | referenced_symbols(loop.step_expression())
 
 
 def all_loops(block):
@@ -52,7 +46,7 @@ def mapped_prefix(loop):
         inner = body.statements[0]
         header_values = frozenset(
             node.symbol
-            for expression in (inner.lower, inner.upper, loop_step(inner))
+            for expression in (inner.lower, inner.upper, inner.step_expression())
             for node in walk_expr(expression)
             if isinstance(node, (Reference, ArrayAccess))
         )
@@ -119,7 +113,7 @@ def array_effects(block):
                 reads.update(branch_reads)
                 writes.update(branch_writes)
         else:
-            for expression in (statement.lower, statement.upper, loop_step(statement)):
+            for expression in (statement.lower, statement.upper, statement.step_expression()):
                 add_reads(expression)
             body_reads, body_writes = array_effects(statement.body)
             reads.update(body_reads)

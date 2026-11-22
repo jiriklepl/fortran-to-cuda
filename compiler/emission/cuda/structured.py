@@ -2,7 +2,7 @@
 
 
 from compiler.emission.common.abi import dimension_name
-from compiler.emission.common.c_family import render_expression
+from compiler.emission.common.c_family import C_OPERATORS, render_expression
 from compiler.ir import (
     ArrayAccess,
     Binary,
@@ -45,20 +45,7 @@ def _query_expression(expression, scalar_indices):
         # Locals force checked evaluation in source order, including both
         # operands of LOGICAL expressions (no reliance on short circuiting).
         left, right = q(expression.left), q(expression.right)
-        operators = {
-            ".and.": "&&",
-            ".or.": "||",
-            ".eqv.": "==",
-            ".neqv.": "!=",
-            "/=": "!=",
-            ".eq.": "==",
-            ".ne.": "!=",
-            ".lt.": "<",
-            ".le.": "<=",
-            ".gt.": ">",
-            ".ge.": ">=",
-        }
-        operator = operators.get(expression.operator, expression.operator)
+        operator = C_OPERATORS.get(expression.operator, expression.operator)
         if operator == "/":
             result = "offload::query_divide(left, right, d.valid)"
         elif operator in {"+", "-", "*"}:

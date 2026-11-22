@@ -40,6 +40,11 @@ def wide_iterator_name(symbol: Symbol) -> str:
     return f"fort_internal_wide{symbol.id}"
 
 
+# The C operators of the Fortran ones that C spells differently.
+C_OPERATORS = {".and.": "&&", ".or.": "||", ".eqv.": "==", ".neqv.": "!=", "/=": "!=", ".eq.": "==", ".ne.": "!=",
+               ".lt.": "<", ".le.": "<=", ".gt.": ">", ".ge.": ">="}
+
+
 def _wide_expression(expression: Expr, addressing: RegionAddressing) -> str:
     """Render a proved subscript in one signed wide type, preserving its tree."""
     if isinstance(expression, Literal) and expression.dtype is ScalarType.INTEGER:
@@ -129,20 +134,7 @@ def render_expression(expression: Expr, *, addressing: RegionAddressing | None =
         operator = "!" if expression.operator == ".not." else expression.operator
         return f"({operator}{render_expression(expression.operand, addressing=addressing)})"
     if isinstance(expression, Binary):
-        operators = {
-            ".and.": "&&",
-            ".or.": "||",
-            ".eqv.": "==",
-            ".neqv.": "!=",
-            "/=": "!=",
-            ".eq.": "==",
-            ".ne.": "!=",
-            ".lt.": "<",
-            ".le.": "<=",
-            ".gt.": ">",
-            ".ge.": ">=",
-        }
-        operator = operators.get(expression.operator, expression.operator)
+        operator = C_OPERATORS.get(expression.operator, expression.operator)
         if operator not in {"+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "&&", "||"}:
             raise CompilationError(f"unsupported emission operator: {expression.operator}")
         if operator == "/" and referenced_symbols(expression.right):

@@ -45,9 +45,6 @@ from .effects import (
     header_reads as _header_reads,
 )
 from .effects import (
-    loop_step as _step,
-)
-from .effects import (
     mapped_prefix as _mapped_prefix,
 )
 from .effects import (
@@ -349,7 +346,7 @@ def _region_model(
         axis_number += 1
         axes = []
         bounds = []
-        for suffix, expression in (("lower", item.lower), ("upper", item.upper), ("step", _step(item))):
+        for suffix, expression in (("lower", item.lower), ("upper", item.upper), ("step", item.step_expression())):
             value = affine_or_unknown(expression, values, active, item.location)
             if value is None and (is_mapped or not (referenced_symbols(expression) & (set(active) | private))):
                 name = f"b{region_id}_{axis}_{suffix}"
@@ -495,7 +492,7 @@ def _region_model(
                     definitions.pop(symbol, None)
             else:
                 check_reads(_header_reads(statement), available, statement.location)
-                expressions = (statement.lower, statement.upper, _step(statement))
+                expressions = (statement.lower, statement.upper, statement.step_expression())
                 reads = tuple(node for expr in expressions for node in walk_expr(expr) if isinstance(node, ArrayAccess))
                 if reads:
                     events.append(
@@ -714,7 +711,7 @@ def _region_model(
     read_arrays.update(
         node.symbol
         for item in loops
-        for expr in (item.lower, item.upper, _step(item))
+        for expr in (item.lower, item.upper, item.step_expression())
         for node in walk_expr(expr)
         if isinstance(node, ArrayAccess)
     )

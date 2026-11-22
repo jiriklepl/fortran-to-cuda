@@ -126,7 +126,7 @@ def iterator_range(loop: Loop) -> IntegerRange:
     """
     lower = prove_range(loop.lower, {}).interval or FULL_INTEGER_RANGE
     upper = prove_range(loop.upper, {}).interval or FULL_INTEGER_RANGE
-    step = Literal(str(loop.step), ScalarType.INTEGER) if isinstance(loop.step, int) else loop.step
+    step = loop.step_expression()
     stride = prove_range(step, {}).interval or FULL_INTEGER_RANGE
     if lower.lower == lower.upper and upper.lower == upper.upper and stride.lower == stride.upper:
         start, stop, increment = lower.lower, upper.lower, stride.lower

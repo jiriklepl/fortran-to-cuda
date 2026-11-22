@@ -136,6 +136,14 @@ class Loop:
     location: SourceLocation
     step: Expr | int = 1
 
+    def header_expressions(self) -> tuple[Expr, ...]:
+        """The expressions of the DO statement: its bounds, and its step where one is written."""
+        return (self.lower, self.upper) + (() if isinstance(self.step, int) else (self.step,))
+
+    def step_expression(self) -> Expr:
+        """The step as an expression, the default 1 included."""
+        return Literal(str(self.step), ScalarType.INTEGER) if isinstance(self.step, int) else self.step
+
 
 @dataclass(frozen=True)
 class If:

@@ -1115,7 +1115,7 @@ class _Lowerer:
                 if self.has_floating_value(statement.value) or self.has_floating_value(statement.target):
                     return True
             elif isinstance(statement, Loop):
-                bounds = (statement.lower, statement.upper) + (() if isinstance(statement.step, int) else (statement.step,))
+                bounds = statement.header_expressions()
                 if any(self.has_floating_value(bound) for bound in bounds) or self.has_floating_work(statement.body.statements):
                     return True
             elif isinstance(statement, If) and (self.has_floating_value(statement.condition)

@@ -7,11 +7,9 @@ combined INTENT-based overwrite promise is manufactured by emission.
 
 from __future__ import annotations
 
-from compiler.emission.common.abi import abi_arguments
 from compiler.emission.common.c_family import cpp_type, indent
 from compiler.emission.common.schedules import region_schedule
-from compiler.emission.common.symbols import region_symbols
-from compiler.emission.cuda.kernels import group_kernel_name, kernel_name
+from compiler.emission.cuda.kernels import grid_blocks, group_kernel_name, kernel_arguments, kernel_name
 from compiler.ir import ArrayAccess, referenced_symbols, walk_expr
 
 
@@ -23,7 +21,7 @@ def graph_group_eligible(regions, units, protected):
         expressions = [
             expression
             for loop in region.loops
-            for expression in (loop.lower, loop.upper, *((loop.step,) if not isinstance(loop.step, int) else ()))
+            for expression in loop.header_expressions()
         ]
         expressions += [
             expression
@@ -40,29 +38,6 @@ def graph_group_eligible(regions, units, protected):
         if any(writes & referenced_symbols(expression) for expression in expressions):
             return False
     return True
-
-
-def _kernel_arguments(region):
-    arguments = []
-    for argument in abi_arguments(region_symbols(region)):
-        value = argument.name + "_device" if argument.dimension is None and argument.symbol.rank else argument.name
-        arguments.append(
-            (
-                f"std::decay_t<decltype({value})>",
-                value,
-                argument.symbol if argument.dimension is None and argument.symbol.rank else None,
-            )
-        )
-    for axis in range(len(region.loops)):
-        arguments.extend(
-            (
-                ("int", f"fort_internal_lower{axis}", None),
-                ("int", f"fort_internal_stride{axis}", None),
-                ("std::size_t", f"fort_internal_extent{axis}", None),
-            )
-        )
-    arguments.append(("std::size_t", "fort_internal_total", None))
-    return arguments
 
 
 def generate_graph_group(
@@ -129,7 +104,7 @@ def generate_graph_group(
             f"std::size_t {prefix}_binding_count = 0;",
             f"bool {prefix}_active = false;",
         ]
-        arguments = _kernel_arguments(region)
+        arguments = kernel_arguments(region)
         declarations += [f"struct {prefix}_arguments {{"]
         declarations += [f"    {dtype} value_{index}{{}};" for index, (dtype, _value, _array) in enumerate(arguments)]
         declarations += [
@@ -164,7 +139,7 @@ def generate_graph_group(
             f"    {prefix}_task.kernel.version = FORT_SCOPE_GRAPH_ABI_VERSION;",
             f"    {prefix}_task.kernel.function = reinterpret_cast<const void *>({kernel_name(region)});",
             f"    const std::size_t {prefix}_blocks = {blocks};",
-            f"    {prefix}_task.kernel.grid[0] = static_cast<unsigned int>({prefix}_blocks > 65535 ? 65535 : {prefix}_blocks);",
+            f"    {prefix}_task.kernel.grid[0] = static_cast<unsigned int>({grid_blocks(prefix + '_blocks')});",
             f"    {prefix}_task.kernel.grid[1] = {prefix}_task.kernel.grid[2] = 1;",
             f"    {prefix}_task.kernel.block[0] = {schedule.cuda_threads};",
             f"    {prefix}_task.kernel.block[1] = {prefix}_task.kernel.block[2] = 1;",
@@ -222,7 +197,7 @@ def generate_graph_group(
             f"fort_graph_kernel.function = reinterpret_cast<const void *>({group_kernel_name(regions)});",
             # Every thread strides through each member, so the largest member sizes the grid.
             f"const std::size_t fort_graph_blocks = (fort_graph_points - 1) / {threads} + 1;",
-            "fort_graph_kernel.grid[0] = static_cast<unsigned int>(fort_graph_blocks > 65535 ? 65535 : fort_graph_blocks);",
+            f"fort_graph_kernel.grid[0] = static_cast<unsigned int>({grid_blocks('fort_graph_blocks')});",
             "fort_graph_kernel.grid[1] = fort_graph_kernel.grid[2] = 1;",
             f"fort_graph_kernel.block[0] = {threads};",
             "fort_graph_kernel.block[1] = fort_graph_kernel.block[2] = 1;",

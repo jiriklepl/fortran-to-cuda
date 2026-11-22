@@ -69,18 +69,41 @@ def _kernel_body(region: ParallelRegion) -> list[str]:
     return lines
 
 
-def _kernel_parameters(region: ParallelRegion) -> list[str]:
-    parameters = [cpp_declaration(argument) for argument in abi_arguments(region_symbols(region))]
+# The largest number of blocks a launch has: blocks beyond it take more points each.
+MAX_GRID_BLOCKS = 65535
+
+
+def grid_blocks(blocks):
+    """The blocks of a launch that needs ``blocks``, at most ``MAX_GRID_BLOCKS``, as a C++ expression."""
+    return f"{blocks} > {MAX_GRID_BLOCKS} ? {MAX_GRID_BLOCKS} : {blocks}"
+
+
+def _work_parameters(region):
+    """``(C++ type, name)`` of what follows the arrays and scalars of a kernel: each loop's lower bound,
+    stride and extent, and the number of points."""
     for axis in range(len(region.loops)):
-        parameters.extend(
-            [
-                f"int fort_internal_lower{axis}",
-                f"int fort_internal_stride{axis}",
-                f"std::size_t fort_internal_extent{axis}",
-            ]
-        )
-    parameters.append("std::size_t fort_internal_total")
-    return parameters
+        yield "int", f"fort_internal_lower{axis}"
+        yield "int", f"fort_internal_stride{axis}"
+        yield "std::size_t", f"fort_internal_extent{axis}"
+    yield "std::size_t", "fort_internal_total"
+
+
+def kernel_arguments(region):
+    """``(C++ type, value, array)`` of each value a launch of the region's kernel passes, in order.
+
+    ``array`` is the symbol whose device pointer the value is, or None.
+    """
+    arguments = []
+    for argument in abi_arguments(region_symbols(region)):
+        pointer = argument.dimension is None and argument.symbol.rank
+        value = argument.name + "_device" if pointer else argument.name
+        arguments.append((f"std::decay_t<decltype({value})>", value, argument.symbol if pointer else None))
+    return [*arguments, *((ctype, name, None) for ctype, name in _work_parameters(region))]
+
+
+def _kernel_parameters(region: ParallelRegion) -> list[str]:
+    return [*(cpp_declaration(argument) for argument in abi_arguments(region_symbols(region))),
+            *(f"{ctype} {name}" for ctype, name in _work_parameters(region))]
 
 
 def _signature(prefix: str, parameters: list[str]) -> list[str]:
@@ -161,23 +184,10 @@ def generate_launch(
             f"        constexpr unsigned int fort_internal_threads = {schedule.cuda_threads};",
             f"        const std::size_t fort_internal_needed_blocks = {blocks};",
             "        const unsigned int fort_internal_blocks = static_cast<unsigned int>(",
-            "            fort_internal_needed_blocks > 65535 ? 65535 : fort_internal_needed_blocks);",
+            f"            {grid_blocks('fort_internal_needed_blocks')});",
         ]
     )
-    arguments: list[str] = []
-    for argument in abi_arguments(region_symbols(region)):
-        arguments.append(
-            argument.name + "_device" if argument.dimension is None and argument.symbol.rank else argument.name
-        )
-    for axis in range(len(region.loops)):
-        arguments.extend(
-            [
-                f"fort_internal_lower{axis}",
-                f"fort_internal_stride{axis}",
-                f"fort_internal_extent{axis}",
-            ]
-        )
-    arguments.append("fort_internal_total")
+    arguments = [value for _ctype, value, _array in kernel_arguments(region)]
     configuration = "fort_internal_blocks, fort_internal_threads" + (f", 0, {stream}" if stream else "")
     lines.append(f"            {kernel_name(region)}<<<{configuration}>>>(")
     lines.extend(

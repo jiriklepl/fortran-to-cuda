@@ -10,8 +10,8 @@ from compiler.emission.common.c_family import cpp_type, indent, render_assignmen
 from compiler.emission.common.loops import _loop_snapshot
 from compiler.emission.common.schedules import checked_product, region_schedule
 from compiler.emission.common.symbols import host_symbols, region_symbols
-from compiler.emission.cuda.graphs import _kernel_arguments, generate_graph_group, graph_group_eligible
-from compiler.emission.cuda.kernels import generate_group_kernel, generate_kernel, generate_launch
+from compiler.emission.cuda.graphs import generate_graph_group, graph_group_eligible
+from compiler.emission.cuda.kernels import generate_group_kernel, generate_kernel, generate_launch, kernel_arguments
 from compiler.emission.cuda.offload import _cpu_worker
 from compiler.emission.cuda.structured import _query_expression
 from compiler.emission.fortran.formatting import _fortran_list
@@ -131,7 +131,7 @@ def generate_scoped(function, plan, config, common_header):
     for region in plan.regions:
         used = set(region_symbols(region))
         for loop in region.loops:
-            for expression in (loop.lower, loop.upper) + (() if isinstance(loop.step, int) else (loop.step,)):
+            for expression in loop.header_expressions():
                 used.update(referenced_symbols(expression))
         captures[region.id] = tuple(s for s in locals_ if s in used)
         extra_signature = "".join(f", const {cpp_type(s)} &{s.cpp_name}" for s in captures[region.id])
@@ -205,7 +205,7 @@ def generate_scoped(function, plan, config, common_header):
                 continue
             member = isinstance(step, ParallelRegion) and groupable(step)
             if (member and all(independent(earlier, step) for earlier in run)
-                    and sum(len(_kernel_arguments(region)) for region in (*run, step)) <= _MERGED_ARGUMENTS):
+                    and sum(len(kernel_arguments(region)) for region in (*run, step)) <= _MERGED_ARGUMENTS):
                 run.append(step)
                 continue
             close()
@@ -291,7 +291,7 @@ def generate_scoped(function, plan, config, common_header):
         result = []
         for axis, loop in enumerate(region.loops):
             active = " && ".join(f"fort_internal_extent{k} > 0" for k in range(axis))
-            expressions = (loop.lower, loop.upper) + (() if isinstance(loop.step, int) else (loop.step,))
+            expressions = loop.header_expressions()
             reads = prefetch(expression_reads(expressions))
             if reads:
                 result += [f"if ({active or 'true'}) {{", *indent(reads), "}"]

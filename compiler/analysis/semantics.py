@@ -21,7 +21,7 @@ from compiler.ir import (
 from compiler.ir.integers import constant_integer
 from compiler.ir.intrinsics import intrinsic_kind, intrinsic_type
 
-from .effects import header_reads, loop_step
+from .effects import header_reads
 
 
 def expression_type(expression, location):
@@ -149,10 +149,10 @@ def validate_block(block: Block, defined: set, active=frozenset()):
             require(header_reads(statement), statement.location)
             if any(
                 expression_type(expr, statement.location) is not ScalarType.INTEGER
-                for expr in (statement.lower, statement.upper, loop_step(statement))
+                for expr in (statement.lower, statement.upper, statement.step_expression())
             ):
                 raise CompilationError("loop bounds and strides must be INTEGER expressions", statement.location)
-            stride = constant_integer(loop_step(statement))
+            stride = constant_integer(statement.step_expression())
             if stride == 0:
                 raise CompilationError("DO stride cannot be zero", statement.location)
             loop_written.update(block_writes(statement.body))
