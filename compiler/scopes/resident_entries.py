@@ -883,6 +883,223 @@ def _resolve_procedures(analysis, procedures):
     return selected
 
 
+def _alternative(outer):
+    """Marks what is used only where the loops of the given spans did not compile as entries."""
+    return {"alternative_of": [list(span) for span in outer]} if outer else {}
+
+
+def _touched(arrays, written, released, elsewhere):
+    return [{"name": binding.name, "resource": root, "type": binding.dtype, "kind": binding.kind,
+             "rank": binding.rank, "field": hasattr(binding, "component_object"),
+             # All the code does with the array is pass it whole to procedures.
+             "handed": root not in elsewhere,
+             # What must hold for the array to exist when the statements start.
+             "exists": sorted(_EXISTS[name] for name in binding.attributes if name in _EXISTS),
+             "access": "release" if root in released else "write" if root in written else "read"}
+            for root, binding in sorted(arrays.items())]
+
+
+class _ProcedureExport:
+    """What one procedure holds: its entries, rejected nests and host statements.
+
+    With ``splitting``, only the nests of those spans, each on its own (see
+    the ``retry`` of an export).
+    """
+
+    def __init__(self, analysis, directory, host_procedure, procedure, splitting=None):
+        self.analysis, self.directory, self.host_procedure = analysis, directory, host_procedure
+        self.procedure, self.routine, self.splitting = procedure, analysis.routines[procedure], splitting
+        self.entries, self.rejected, self.host_statements = [], [], []
+        # The procedure's tree changes only for the while that _as_values passes elements as values.
+        self.spans, self.context = Spans(), {}
+        self.scan(tuple(children_of(self.routine.execution)))
+
+    def emit(self, nodes, sequence, outer=()):
+        if len(nodes) > 1:
+            # Nests over different arrays of derived type bind, and are skipped when empty, separately.
+            objects = [_structure_objects(self.analysis, self.routine.scope, node) for node in nodes]
+            if len(set(objects)) > 1:
+                start = 0
+                for index in range(1, len(nodes) + 1):
+                    if index == len(nodes) or objects[index] != objects[start]:
+                        self.emit(nodes[start:index], sequence, outer)
+                        start = index
+                return
+        first = min(self.spans(node)[0] for node in nodes)
+        last = max(self.spans(node)[1] for node in nodes)
+        # Grouping can peel directive prefixes. Recover the actual
+        # source nodes instead of supplying manufactured syntax.
+        selected = tuple(node for node in sequence
+                         if first <= self.spans(node)[0] and self.spans(node)[1] <= last)
+        loops = [node for node in nodes if kind_of(node) == "Block_Nonlabel_Do_Construct"]
+        if self.splitting is not None:
+            if (first, last) in self.splitting and len(loops) > 1:
+                for node in loops:
+                    self.emit((node,), sequence, (*outer, (first, last)))
+                return
+            if not outer:
+                return
+        # Elements that are one value for the whole entry are read at the call and passed as scalars.
+        fixed = _fixed_elements(self.analysis, self.routine, selected) if len(loops) == len(nodes) else {}
+        undo, values = _as_values(self.analysis, self.routine, fixed)
+        try:
+            surroundings = original_region_context(self.routine, selected, self.context)
+            extracted = extract_region(self.analysis, self.routine, selected,
+                                       preceding=surroundings.preceding, following=surroundings.following,
+                                       cyclic_following=surroundings.cyclic_following, spans=self.spans)
+            path = extracted.write(self.directory)
+            public = extracted.public()
+            readable = sorted(parameter.name for parameter in extracted.parameters
+                              if _readable(self.analysis, self.routine, parameter))
+        except CompilationError as error:
+            undo()
+            # A larger interface can expose an unsupported association
+            # even when its individual source nests remain exportable.
+            if len(nodes) > 1 and len(loops) == len(nodes):
+                for node in nodes:
+                    self.emit((node,), sequence, outer)
+                return
+            if len(nodes) == 1 and _around_nests(nodes[0]):
+                # Not a nest but a loop around nests, such as an iteration or a time loop: the
+                # host runs it, and what stands in its body is looked at in its own right.
+                self.within(nodes[0], outer)
+                return
+            self.rejected.append({"procedure": self.procedure, "source": str(self.routine.scope.path),
+                             "first_line": first, "last_line": last,
+                             "reason": str(error), **_alternative(outer), **self.host_code(nodes)})
+            return
+        undo()
+        arrays_named = {root: str(references[0].items[0]) for root, references in fixed.items()}
+        structures = []
+        # Variables that a USE renamed: the call names them as the nests do. An element passed as a
+        # value is named as the nests write it.
+        spelled = dict(values)
+        for node in nodes:
+            for name in walk(node, Name):
+                binding = self.analysis._binding(self.routine.scope, name)
+                if binding is not None and _spelled(binding, name) is not binding:
+                    spelled[binding.root] = str(name)
+        for root in sorted(_structure_objects(self.analysis, self.routine.scope, nodes)):
+            structures.append({"name": spelled.get(root, root.rsplit("::", 1)[-1]), "resource": root})
+        runs = _runs(self.analysis, self.routine, nodes)
+        self.entries.append({"procedure": self.procedure, "source": str(self.routine.scope.path),
+                        "input_path": str(path.resolve()), **public,
+                        "source_loop_spans": [list(statement_span(node)) for node in loops],
+                        "structures": structures, "injective": _indirect_writes(self.analysis, self.routine, loops),
+                        # For the case that the entry does not compile and the nests stay host code.
+                        "host_code": self.host_code(nodes),
+                        # Where no nest has an iteration, there is nothing to bind and nothing to launch.
+                        **({"runs": runs} if runs else {}),
+                        **({"spelled": spelled} if spelled else {}),
+                        # Arrays whose elements the call reads on the host: their values must be there.
+                        **({"observed": sorted({arrays_named[root] for root in fixed})} if fixed else {}),
+                        "readable_scalars": readable,
+                        **_alternative(outer)})
+        if len(nodes) == 1 and _around_nests(nodes[0]):
+            # Whether the loop runs its iterations independently is decided when the entry is
+            # compiled. In case it does not, its body is exported as well, to be used then.
+            self.entries[-1]["descends"] = True
+            self.within(nodes[0], (*outer, (first, last)))
+
+    def within(self, loop, outer):
+        statement = next(item for item in loop.content if kind_of(item) == "Nonlabel_Do_Stmt")
+        self.host((statement,), False, outer)
+        self.scan(tuple(item for item in children_of(loop) if kind_of(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt"}),
+             outer)
+
+    def uses(self, nodes):
+        """The arrays host code touches, its calls, and the arrays the host procedures it calls may reach.
+
+        ``reached`` lists every array that such a procedure, or one it
+        calls, touches without being handed it: a module array, or a
+        variable of this procedure seen by its internal procedures. Each
+        comes with the name it has here, with the USE that gives it a
+        name here, or as ``unnameable``. Which of them count is decided
+        where the selected and the kept arrays are known.
+        """
+        arrays, calls, elsewhere, written, released = _array_uses(self.analysis, self.routine, nodes)
+        found, pending, seen = {}, sorted(calls), set()
+        while pending:
+            name = pending.pop()
+            record = self.host_procedure(name) if name not in seen else None
+            seen.add(name)
+            if record is None:
+                continue
+            pending += record["calls"]
+            for root, item in record["outside"].items():
+                # A variable of another procedure is that procedure's business.
+                if item["host"] is None or (self.procedure + "::").startswith(item["host"] + "::"):
+                    found[root] = item["binding"]
+        reached = []
+        for root, binding in sorted(found.items()):
+            entity = root.rsplit("::", 1)[-1]
+            module = root.split("::", 1)[0]
+            here = self.analysis._binding(self.routine.scope, entity)
+            item = {"name": entity, "resource": root, "type": binding.dtype, "kind": binding.kind,
+                    "rank": binding.rank, "field": False, "handed": False,
+                    "exists": sorted(_EXISTS[name] for name in binding.attributes if name in _EXISTS)}
+            if root in arrays:
+                item["name"] = arrays[root].name
+            elif here is not None and here.root == root:
+                pass
+            elif module in self.analysis.modules and root.count("::") == 1 and not self.procedure.startswith(module + "::") \
+                    and self.analysis._exported(self.analysis.modules[module], entity):
+                alias = f"fort_{module}_{entity}"
+                item.update(name=alias if len(alias) <= 63 else "fort_" + sha256(root.encode()).hexdigest()[:16],
+                            use=[module, entity])
+            else:
+                # A private array, or one a local name hides: it cannot be named here.
+                item["unnameable"] = True
+            reached.append(item)
+        return {"arrays": _touched(arrays, written, released, elsewhere), "calls": sorted(calls - {"$opaque"}),
+                **({"reached": reached} if reached else {}), **({"opaque": True} if "$opaque" in calls else {})}
+
+    def host_code(self, nodes):
+        """How a nest that stays on the host touches arrays, for the access it then needs; {} if unknown."""
+        try:
+            return {**self.uses(nodes), **_statement_form(nodes),
+                    **({"runs": runs} if (runs := _runs(self.analysis, self.routine, nodes)) else {})}
+        except CompilationError:
+            return {}
+
+    def host(self, nodes, acknowledged, outer=()):
+        """Record host code that touches arrays: it runs beside entries that may hold newer values."""
+        if self.splitting is not None and not outer:
+            return
+        used = self.uses(nodes)
+        if used["arrays"] or used.get("reached") or used.get("opaque"):
+            first = min(statement_span(node)[0] for node in nodes)
+            last = max(statement_span(node)[1] for node in nodes)
+            text = " ".join(" ".join(str(node).split()) for node in nodes)
+            self.host_statements.append({"procedure": self.procedure, "source": str(self.routine.scope.path),
+                                    "first_line": first, "last_line": last,
+                                    "text": text if len(text) <= 240 else text[:237] + "...",
+                                    "id": host_statement_id(self.procedure, text),
+                                    **used, **_statement_form(nodes), "acknowledged": acknowledged,
+                                    **_alternative(outer)})
+
+    def scan(self, sequence, outer=()):
+        follows = set()
+        for group in _entry_groups(sequence, follows):
+            nodes = tuple(group) if isinstance(group, tuple) else (group,)
+            carries = any(is_residency_directive(item) for node in nodes for item in walk(node)
+                          if kind_of(item) == "Comment")
+            if len(nodes) == 1 and kind_of(nodes[0]) in {"If_Construct", "Associate_Construct", "Block_Construct"}:
+                # The construct's own statements (its conditions, selectors) are host code as well.
+                self.host(tuple(item for item in nodes[0].content if kind_of(item) in _CONSTRUCT_HEADERS),
+                     id(nodes[0]) in follows or carries, outer)
+                self.scan(tuple(children_of(nodes[0])), outer)
+            elif any(kind_of(node) == "Block_Nonlabel_Do_Construct" for node in nodes) and not carries:
+                self.emit(nodes, sequence, outer)
+            elif len(nodes) == 1 and kind_of(nodes[0]) == "Block_Nonlabel_Do_Construct" \
+                    and _around_nests(nodes[0]):
+                # A loop around nests, with directives between them: the host runs it.
+                self.within(nodes[0], outer)
+            else:
+                # A nest that carries a residency directive is host code that manages its own access.
+                self.host(nodes, id(nodes[0]) in follows or carries, outer)
+
+
 def export_resident_entries(paths, procedures, directory):
     """Export resident numerical entries for explicit procedures or glob patterns.
 
@@ -930,224 +1147,21 @@ def export_resident_entries(paths, procedures, directory):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
     resolved_procedures = _resolve_procedures(analysis, procedures)
-    entries, rejected, host_statements, temporaries = [], [], [], []
+    temporaries = []
     host_procedure, host_procedures = _host_procedures(analysis, set(resolved_procedures))
-    def export(procedure, entries, rejected, host_statements, temporaries, splitting=None):
-        """Export what one procedure holds. With ``splitting``, only the nests of those spans, each on its own."""
-        routine = analysis.routines[procedure]
-        # The procedure's tree changes only for the while that _as_values passes elements as values.
-        spans, context = Spans(), {}
-
-        def emit(nodes, sequence, outer=()):
-            if len(nodes) > 1:
-                # Nests over different arrays of derived type bind, and are skipped when empty, separately.
-                objects = [_structure_objects(analysis, routine.scope, node) for node in nodes]
-                if len(set(objects)) > 1:
-                    start = 0
-                    for index in range(1, len(nodes) + 1):
-                        if index == len(nodes) or objects[index] != objects[start]:
-                            emit(nodes[start:index], sequence, outer)
-                            start = index
-                    return
-            first = min(spans(node)[0] for node in nodes)
-            last = max(spans(node)[1] for node in nodes)
-            # Grouping can peel directive prefixes. Recover the actual
-            # source nodes instead of supplying manufactured syntax.
-            selected = tuple(node for node in sequence
-                             if first <= spans(node)[0] and spans(node)[1] <= last)
-            loops = [node for node in nodes if kind_of(node) == "Block_Nonlabel_Do_Construct"]
-            if splitting is not None:
-                if (first, last) in splitting and len(loops) > 1:
-                    for node in loops:
-                        emit((node,), sequence, (*outer, (first, last)))
-                    return
-                if not outer:
-                    return
-            # Elements that are one value for the whole entry are read at the call and passed as scalars.
-            fixed = _fixed_elements(analysis, routine, selected) if len(loops) == len(nodes) else {}
-            undo, values = _as_values(analysis, routine, fixed)
-            try:
-                surroundings = original_region_context(routine, selected, context)
-                extracted = extract_region(analysis, routine, selected,
-                                           preceding=surroundings.preceding, following=surroundings.following,
-                                           cyclic_following=surroundings.cyclic_following, spans=spans)
-                path = extracted.write(directory)
-                public = extracted.public()
-                readable = sorted(parameter.name for parameter in extracted.parameters
-                                  if _readable(analysis, routine, parameter))
-            except CompilationError as error:
-                undo()
-                # A larger interface can expose an unsupported association
-                # even when its individual source nests remain exportable.
-                if len(nodes) > 1 and len(loops) == len(nodes):
-                    for node in nodes:
-                        emit((node,), sequence, outer)
-                    return
-                if len(nodes) == 1 and _around_nests(nodes[0]):
-                    # Not a nest but a loop around nests, such as an iteration or a time loop: the
-                    # host runs it, and what stands in its body is looked at in its own right.
-                    within(nodes[0], outer)
-                    return
-                rejected.append({"procedure": procedure, "source": str(routine.scope.path),
-                                 "first_line": first, "last_line": last,
-                                 "reason": str(error), **alternative(outer), **host_code(nodes)})
-                return
-            undo()
-            arrays_named = {root: str(references[0].items[0]) for root, references in fixed.items()}
-            structures = []
-            # Variables that a USE renamed: the call names them as the nests do. An element passed as a
-            # value is named as the nests write it.
-            spelled = dict(values)
-            for node in nodes:
-                for name in walk(node, Name):
-                    binding = analysis._binding(routine.scope, name)
-                    if binding is not None and _spelled(binding, name) is not binding:
-                        spelled[binding.root] = str(name)
-            for root in sorted(_structure_objects(analysis, routine.scope, nodes)):
-                structures.append({"name": spelled.get(root, root.rsplit("::", 1)[-1]), "resource": root})
-            runs = _runs(analysis, routine, nodes)
-            entries.append({"procedure": procedure, "source": str(routine.scope.path),
-                            "input_path": str(path.resolve()), **public,
-                            "source_loop_spans": [list(statement_span(node)) for node in loops],
-                            "structures": structures, "injective": _indirect_writes(analysis, routine, loops),
-                            # For the case that the entry does not compile and the nests stay host code.
-                            "host_code": host_code(nodes),
-                            # Where no nest has an iteration, there is nothing to bind and nothing to launch.
-                            **({"runs": runs} if runs else {}),
-                            **({"spelled": spelled} if spelled else {}),
-                            # Arrays whose elements the call reads on the host: their values must be there.
-                            **({"observed": sorted({arrays_named[root] for root in fixed})} if fixed else {}),
-                            "readable_scalars": readable,
-                            **alternative(outer)})
-            if len(nodes) == 1 and _around_nests(nodes[0]):
-                # Whether the loop runs its iterations independently is decided when the entry is
-                # compiled. In case it does not, its body is exported as well, to be used then.
-                entries[-1]["descends"] = True
-                within(nodes[0], (*outer, (first, last)))
-
-        def alternative(outer):
-            """Marks what is used only where the loops of the given spans did not compile as entries."""
-            return {"alternative_of": [list(span) for span in outer]} if outer else {}
-
-        def within(loop, outer):
-            statement = next(item for item in loop.content if kind_of(item) == "Nonlabel_Do_Stmt")
-            host((statement,), False, outer)
-            scan(tuple(item for item in children_of(loop) if kind_of(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt"}),
-                 outer)
-
-        def touched(arrays, written, released, elsewhere):
-            return [{"name": binding.name, "resource": root, "type": binding.dtype, "kind": binding.kind,
-                     "rank": binding.rank, "field": hasattr(binding, "component_object"),
-                     # All the code does with the array is pass it whole to procedures.
-                     "handed": root not in elsewhere,
-                     # What must hold for the array to exist when the statements start.
-                     "exists": sorted(_EXISTS[name] for name in binding.attributes if name in _EXISTS),
-                     "access": "release" if root in released else "write" if root in written else "read"}
-                    for root, binding in sorted(arrays.items())]
-
-        def uses(nodes):
-            """The arrays host code touches, its calls, and the arrays the host procedures it calls may reach.
-
-            ``reached`` lists every array that such a procedure, or one it
-            calls, touches without being handed it: a module array, or a
-            variable of this procedure seen by its internal procedures. Each
-            comes with the name it has here, with the USE that gives it a
-            name here, or as ``unnameable``. Which of them count is decided
-            where the selected and the kept arrays are known.
-            """
-            arrays, calls, elsewhere, written, released = _array_uses(analysis, routine, nodes)
-            found, pending, seen = {}, sorted(calls), set()
-            while pending:
-                name = pending.pop()
-                record = host_procedure(name) if name not in seen else None
-                seen.add(name)
-                if record is None:
-                    continue
-                pending += record["calls"]
-                for root, item in record["outside"].items():
-                    # A variable of another procedure is that procedure's business.
-                    if item["host"] is None or (procedure + "::").startswith(item["host"] + "::"):
-                        found[root] = item["binding"]
-            reached = []
-            for root, binding in sorted(found.items()):
-                entity = root.rsplit("::", 1)[-1]
-                module = root.split("::", 1)[0]
-                here = analysis._binding(routine.scope, entity)
-                item = {"name": entity, "resource": root, "type": binding.dtype, "kind": binding.kind,
-                        "rank": binding.rank, "field": False, "handed": False,
-                        "exists": sorted(_EXISTS[name] for name in binding.attributes if name in _EXISTS)}
-                if root in arrays:
-                    item["name"] = arrays[root].name
-                elif here is not None and here.root == root:
-                    pass
-                elif module in analysis.modules and root.count("::") == 1 and not procedure.startswith(module + "::") \
-                        and analysis._exported(analysis.modules[module], entity):
-                    alias = f"fort_{module}_{entity}"
-                    item.update(name=alias if len(alias) <= 63 else "fort_" + sha256(root.encode()).hexdigest()[:16],
-                                use=[module, entity])
-                else:
-                    # A private array, or one a local name hides: it cannot be named here.
-                    item["unnameable"] = True
-                reached.append(item)
-            return {"arrays": touched(arrays, written, released, elsewhere), "calls": sorted(calls - {"$opaque"}),
-                    **({"reached": reached} if reached else {}), **({"opaque": True} if "$opaque" in calls else {})}
-
-        def host_code(nodes):
-            """How a nest that stays on the host touches arrays, for the access it then needs; {} if unknown."""
-            try:
-                return {**uses(nodes), **_statement_form(nodes),
-                        **({"runs": runs} if (runs := _runs(analysis, routine, nodes)) else {})}
-            except CompilationError:
-                return {}
-
-        def host(nodes, acknowledged, outer=()):
-            """Record host code that touches arrays: it runs beside entries that may hold newer values."""
-            if splitting is not None and not outer:
-                return
-            used = uses(nodes)
-            if used["arrays"] or used.get("reached") or used.get("opaque"):
-                first = min(statement_span(node)[0] for node in nodes)
-                last = max(statement_span(node)[1] for node in nodes)
-                text = " ".join(" ".join(str(node).split()) for node in nodes)
-                host_statements.append({"procedure": procedure, "source": str(routine.scope.path),
-                                        "first_line": first, "last_line": last,
-                                        "text": text if len(text) <= 240 else text[:237] + "...",
-                                        "id": host_statement_id(procedure, text),
-                                        **used, **_statement_form(nodes), "acknowledged": acknowledged,
-                                        **alternative(outer)})
-
-        def scan(sequence, outer=()):
-            follows = set()
-            for group in _entry_groups(sequence, follows):
-                nodes = tuple(group) if isinstance(group, tuple) else (group,)
-                carries = any(is_residency_directive(item) for node in nodes for item in walk(node)
-                              if kind_of(item) == "Comment")
-                if len(nodes) == 1 and kind_of(nodes[0]) in {"If_Construct", "Associate_Construct", "Block_Construct"}:
-                    # The construct's own statements (its conditions, selectors) are host code as well.
-                    host(tuple(item for item in nodes[0].content if kind_of(item) in _CONSTRUCT_HEADERS),
-                         id(nodes[0]) in follows or carries, outer)
-                    scan(tuple(children_of(nodes[0])), outer)
-                elif any(kind_of(node) == "Block_Nonlabel_Do_Construct" for node in nodes) and not carries:
-                    emit(nodes, sequence, outer)
-                elif len(nodes) == 1 and kind_of(nodes[0]) == "Block_Nonlabel_Do_Construct" \
-                        and _around_nests(nodes[0]):
-                    # A loop around nests, with directives between them: the host runs it.
-                    within(nodes[0], outer)
-                else:
-                    # A nest that carries a residency directive is host code that manages its own access.
-                    host(nodes, id(nodes[0]) in follows or carries, outer)
-
-        scan(tuple(children_of(routine.execution)))
-        temporaries += _temporaries(analysis, routine, procedure)
-
+    exports = []
     for procedure in resolved_procedures:
-        export(procedure, entries, rejected, host_statements, temporaries)
+        exports.append(_ProcedureExport(analysis, directory, host_procedure, procedure))
+        temporaries += _temporaries(analysis, analysis.routines[procedure], procedure)
+    entries = [item for export in exports for item in export.entries]
+    rejected = [item for export in exports for item in export.rejected]
+    host_statements = [item for export in exports for item in export.host_statements]
 
     def retry(procedure, first, last):
         """The nests of a span that was exported as one entry, each as an entry of its own."""
-        more = {"entries": [], "rejected": [], "host_statements": []}
-        export(procedure, *more.values(), [], splitting={(first, last)})
-        return {"source_inputs": analysis.sources, **more}
+        export = _ProcedureExport(analysis, directory, host_procedure, procedure, splitting={(first, last)})
+        return {"source_inputs": analysis.sources, "entries": export.entries, "rejected": export.rejected,
+                "host_statements": export.host_statements}
 
     return {"version": 2, "kind": "caller_owned_resident_entries", "source_inputs": analysis.sources,
             "entries": entries, "rejected": rejected, "host_statements": host_statements, "temporaries": temporaries, "retry": retry,
