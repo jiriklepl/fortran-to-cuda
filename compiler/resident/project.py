@@ -31,6 +31,7 @@ from compiler.scopes.resident_splice import (
     ResidentDomain,
     addressable_arrays,
     lend_storage,
+    may_be_kept,
     splice_resident_entries,
 )
 
@@ -87,9 +88,6 @@ class ResidentProject:
     handle expression for arrays the domain binds itself. ``addressable`` lists
     the sources whose arrays get the TARGET attribute a binding needs, as
     paths or, where a file name is unique, as names; None means every source.
-    ``self_managed`` names procedures outside the selections that see to the
-    arrays they are handed themselves (with residency code of their own), so a
-    call to one needs no access around it (see ``audit``).
     """
 
     sources: tuple[Path, ...]
@@ -101,7 +99,6 @@ class ResidentProject:
     native: Callable[[dict, str], str | None] | None = None
     held: Mapping[tuple[str, str], str] = field(default_factory=dict)
     addressable: tuple[str | Path, ...] | None = None
-    self_managed: tuple[str, ...] = ()
 
 
 
@@ -132,7 +129,7 @@ def _rewrite(name, text):
     return text
 
 
-def audit(extracted, packages, selected, self_managed=()):
+def audit(extracted, packages, selected):
     """Host statements of the selected procedures that touch an array an entry binds.
 
     Compiled entries keep such an array's newest values on the device, so a
@@ -142,12 +139,16 @@ def audit(extracted, packages, selected, self_managed=()):
     ``resident_splice.host_access_block``). A statement is not listed when a
     residency directive directly precedes it or sits inside it (the source
     sees to it), or when all it does with arrays is pass them whole to
-    procedures that are selected themselves, that are named ``self_managed``,
-    or that only pass them on to such procedures. ``access`` is ``arrays`` for
+    procedures that are selected themselves or that only pass them on to
+    such procedures. A call through a type-bound procedure counts as a call of
+    every procedure bound under that name. ``access`` is ``arrays`` for
     access to the arrays the statement names, and ``leave`` where no access to
     arrays can be right and the values stop being kept on the device instead:
     a call into host code that itself reaches selected procedures, and a loop
     statement that reads an array while entries run in the loop.
+
+    A dummy array counts whatever it is called: the array it is associated
+    with may be one that an entry elsewhere binds under another name.
 
     The list is for reading: each entry is a place where arrays may travel.
     The audit looks inside the selected procedures only. It does not follow a
@@ -158,8 +159,8 @@ def audit(extracted, packages, selected, self_managed=()):
     forwarders = extracted.get("forwarders", {})
 
     def covered(call, visiting=()):
-        """A selected procedure, one that sees to its arrays itself, or a wrapper around such procedures."""
-        if any(fnmatchcase(call, pattern) for pattern in (*selected, *self_managed)):
+        """A selected procedure, or a wrapper around such procedures."""
+        if any(fnmatchcase(call, pattern) for pattern in selected):
             return True
         wrapper = forwarders.get(call)
         return bool(wrapper and wrapper["only_calls"] and call not in visiting
@@ -174,7 +175,7 @@ def audit(extracted, packages, selected, self_managed=()):
 
     findings = []
     for statement in extracted["host_statements"]:
-        arrays = [item["name"] for item in statement["arrays"] if item["resource"] in bound]
+        arrays = [item["name"] for item in statement["arrays"] if may_be_kept(item["resource"], bound)]
         if not arrays or statement["acknowledged"]:
             continue
         if statement["only_calls"] and statement["calls"] and all(covered(call) for call in statement["calls"]):
@@ -382,7 +383,7 @@ def prepare(project, directory, *, fortran, host_threads=4):
     reached = [item for item in extracted["host_statements"] if not item.get("alternative_of")]
     reached += [item for package in packages for item in package.get("host_statements", ())]
     reached = [item for item in reached if (item["source"], item["first_line"], item["last_line"]) not in lent]
-    findings = audit({**extracted, "host_statements": reached}, packages, patterns, project.self_managed)
+    findings = audit({**extracted, "host_statements": reached}, packages, patterns)
     bound = {resource["name"].lower().split("%")[0] for package in packages for item in package["entries"]
              for resource in item["region"]["resources"] if resource["rank"]}
     # Each of them gets the access it needs generated around it.

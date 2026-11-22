@@ -305,6 +305,56 @@ def _other_names(node):
     return found
 
 
+def _bound(analysis):
+    """``_bound_procedures`` of an analysis, worked out once."""
+    if not hasattr(analysis, "bound_procedures"):
+        analysis.bound_procedures = _bound_procedures(analysis)
+    return analysis.bound_procedures
+
+
+def _bound_procedures(analysis):
+    """What a call through a type-bound procedure may reach, by binding name.
+
+    A binding name maps to the procedures that any derived type of the sources
+    binds under it, each with whether the object is passed as its first
+    argument, or to None when one of them is not known here (bound to a
+    procedure of another module, or with a PASS attribute that names another
+    argument). The type of the object in a call is not looked at: a call may
+    reach every procedure bound under the name, which is more than it reaches
+    and never less. A generic binding stands for its specific ones.
+    """
+    found, generics = {}, {}
+    for module, scope in analysis.modules.items():
+        for definition in walk(scope.node):
+            if _kind(definition) != "Derived_Type_Def":
+                continue
+            for binding in walk(definition):
+                if _kind(binding) == "Generic_Binding":
+                    names = binding.items[2]
+                    generics.setdefault(str(binding.items[1]).lower(), set()).update(
+                        str(item).lower() for item in (_children(names) if _kind(names) != "Name" else (names,)))
+                    continue
+                if _kind(binding) != "Specific_Binding":
+                    continue
+                name = str(binding.items[3]).lower()
+                attributes = {item.split("(")[0].strip() for item in str(binding.items[1] or "").lower().split(",")}
+                if "deferred" in attributes:
+                    # Its implementations are the bindings of the same name in the extending types.
+                    found.setdefault(name, set())
+                    continue
+                procedure = module + "::" + str(binding.items[4] or binding.items[3]).lower()
+                known = procedure in analysis.routines or procedure in analysis.numerical_helpers
+                if not known or "pass" in attributes or found.get(name, set()) is None:
+                    found[name] = None
+                else:
+                    found.setdefault(name, set()).add((procedure, "nopass" not in attributes))
+    for name, specifics in generics.items():
+        targets = [found.get(item) for item in specifics]
+        found[name] = None if any(item is None for item in targets) or found.get(name, set()) is None else \
+            set().union(found.get(name, set()), *targets)
+    return found
+
+
 def _array_uses(analysis, routine, nodes):
     """The arrays ``nodes`` name, the procedures they call, and whether an array is used outside a call.
 
@@ -322,10 +372,14 @@ def _array_uses(analysis, routine, nodes):
         found = (analysis._binding(routine.scope, name) for name in walk(node, Name) if id(name) not in others)
         return {binding.root for binding in found if binding is not None and binding.rank}
 
-    def may_write(procedure, arguments):
-        """The arrays among the actual arguments that the called procedure may change."""
+    def may_write(procedure, arguments, first=0):
+        """The arrays among the actual arguments that the called procedure may change.
+
+        ``first`` is the position of the first actual argument among the dummies: one
+        where the object of a type-bound call is passed ahead of them.
+        """
         callee = analysis.routines.get(procedure) or analysis.numerical_helpers.get(procedure)
-        for position, argument in enumerate(_children(arguments) if arguments is not None else ()):
+        for position, argument in enumerate(_children(arguments) if arguments is not None else (), first):
             keyword = str(argument.items[0]).lower() if _kind(argument) == "Actual_Arg_Spec" else None
             value = argument.items[1] if keyword is not None else argument
             formal = None
@@ -347,6 +401,16 @@ def _array_uses(analysis, routine, nodes):
         others = _other_names(node)
         for call in walk(node, Call_Stmt):
             whole_arguments(call.items[1])
+            if _kind(call.items[0]) == "Procedure_Designator":
+                # Through a type-bound procedure: every procedure bound under the name, if they are known.
+                targets = _bound(analysis).get(str(call.items[0].items[2]).lower())
+                if not targets:
+                    calls.add("$unresolved")
+                    may_write(None, call.items[1])
+                for procedure, object_first in targets or ():
+                    calls.add(procedure)
+                    may_write(procedure, call.items[1], int(object_first))
+                continue
             try:
                 procedure = resolve_original_call(analysis, routine.scope, call).procedure
                 calls.add(procedure)

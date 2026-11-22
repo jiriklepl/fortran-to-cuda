@@ -525,8 +525,12 @@ precedes, or that only passes such arrays whole to procedures that are
 selected themselves. A wrapper that is not selected and only passes its arrays
 on counts as what it calls; a section or an expression of an array is a use,
 not a hand-over; asking for an array's bounds or allocation is not a read. A
-project names in `self_managed` the host procedures whose own code sees to the
-arrays they are handed. `prepared["audit"]` lists the statements that got
+call through a type-bound procedure counts as a call of every procedure that
+any type of the sources binds under that name, and an array it passes is
+changed only if one of them may change it. A dummy array counts whatever it
+is called, since the array it is associated with may be kept on the device
+under another name; the generated block asks the domain when it runs.
+`prepared["audit"]` lists the statements that got
 access, each with its procedure, lines, text, arrays and `access` (`arrays`,
 or `leave` where the stay on the device ends): every one is a place where
 arrays may travel, so a statement that shows up in a hot path is worth

@@ -205,6 +205,16 @@ def published_native_block(domain):
             f"      if ({domain.object}%active) call {domain.object}%publish()\n@ORIGINAL@\n    end block\n")
 
 
+def may_be_kept(resource, bound):
+    """Whether an array that host code names may be one that entries keep on the device.
+
+    ``bound`` holds the resources entries bind. A dummy argument is known by
+    its name only, and the array it is associated with may be bound under any
+    other: whether the domain holds it is asked when the statement runs.
+    """
+    return resource in bound or resource.startswith("argument::")
+
+
 def host_access_block(code, bound, domain):
     """The block around host statements that touch arrays entries keep on the device.
 
@@ -222,7 +232,7 @@ def host_access_block(code, bound, domain):
     the statements run, so an array that is empty, or that no entry has used
     yet, costs nothing. ``@ORIGINAL@`` marks the statements.
     """
-    arrays = [item for item in code.get("arrays", ()) if item["resource"] in bound]
+    arrays = [item for item in code.get("arrays", ()) if may_be_kept(item["resource"], bound)]
     if "arrays" not in code:
         return published_native_block(domain)
     if not arrays:

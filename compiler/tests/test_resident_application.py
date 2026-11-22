@@ -287,17 +287,21 @@ def audited(tmp_path, procedures, *, before="", **options):
 
 def test_the_audit_reports_host_statements_that_touch_arrays_an_entry_binds(tmp_path):
     first, second = audited(tmp_path, ("audited::step",))
-    # The element copy reads a on the host right after an entry updated it on the device.
+    # The element copy reads a on the host right after an entry updated it on the device. No entry of
+    # this procedure uses b, but b is a dummy: its array may be one that an entry elsewhere keeps there.
     assert (first["procedure"], first["arrays"], first["text"], first["access"]) == (
-        "audited::step", ["a"], "b(1) = a(n)", "arrays")
+        "audited::step", ["a", "b"], "b(1) = a(n)", "arrays")
     # The array then goes to a procedure that is not selected and so runs on the host.
     assert (second["arrays"], second["calls"], second["text"]) == (["a"], ["audited::finish"], "CALL finish(a)")
     # The line is that of the preprocessed source the entries were exported from.
     assert Path(first["source"]).read_text().splitlines()[first["first_line"] - 1] == "b(1) = a(n)"
     assert first["id"] != second["id"]
-    # Statements that name no bound array, and procedures without entries, are not reported.
-    assert not any("n = n + 1" in item["text"] or item["procedure"] == "audited::untouched"
-                   for item in audited(tmp_path / "all", ("audited::*",)))
+    # Statements that name no array are not reported. A selected procedure without a nest of its own
+    # still answers for what it does to the arrays it is handed: its callers hand them over as they are.
+    everything = audited(tmp_path / "all", ("audited::*",))
+    assert not any("n = n + 1" in item["text"] for item in everything)
+    assert [(item["text"], item["arrays"]) for item in everything if item["procedure"] == "audited::untouched"] == [
+        ("c(1) = 0", ["c"])]
 
 
 def test_a_directive_or_a_selected_callee_answers_a_finding(tmp_path):
@@ -340,11 +344,12 @@ def test_host_statements_get_their_access_generated(tmp_path):
     finding, = audited(tmp_path / "report", ("audited::step", "audited::finish"))
     assert finding["access"] == "arrays"
     text = (tmp_path / "report/prepared/sources/audited.f90").read_text()
-    # The copy reads a and changes b; only a is an array an entry keeps on the device.
+    # The copy reads a and changes b: a is brought up to date and stays on the device, b belongs to the
+    # host while the statement runs. Whether the domain holds either is asked at that moment.
     access = text[text.index("fort_host = resident%active"):text.index("call finish(a)")]
     assert "if (fort_host) call resident%observe([ &\n          resident%held(a)])" in access
-    assert "host_modify" not in access
-    assert access.index("observe") < access.index("b(1) = a(n)")
+    assert access.index("observe") < access.index("call resident%host_modify([ &\n          resident%held(b)])") \
+        < access.index("b(1) = a(n)") < access.index("call resident%host_done([ &\n          resident%held(b)])")
     # A directive in front of the statement says the source sees to it: then nothing is generated.
     assert audited(tmp_path / "directive", ("audited::step", "audited::finish"), before="!$fort observe(a)") == []
     assert "fort_host" not in (tmp_path / "directive/prepared/sources/audited.f90").read_text()
@@ -355,6 +360,7 @@ def test_a_call_into_host_code_hands_over_what_the_callee_may_change(tmp_path):
     assert (first["access"], second["access"], second["calls"]) == ("arrays", "arrays", ["audited::finish"])
     text = (tmp_path / "prepared/sources/audited.f90").read_text()
     call = text[text.index("b(1) = a(n)"):text.index("n = n + 1")]
+    call = call[call.index("end block"):]
     # finish takes its array INTENT(INOUT): the host owns it for the call, and the device copy is stale after.
     assert call.index("call resident%host_modify([ &") < call.index("call finish(a)") < call.index(
         "if (fort_host) call resident%host_done([ &")
@@ -718,3 +724,79 @@ end module
     call = text[text.index("fort_resident = resident%active"):]
     assert call.index("call resident_require(fort_device_run(") < call.index("      else\n") < call.index(
         "if (resident%active) call resident%publish()") < call.index("u(i) = u(i) + w(i)")
+
+
+FRAMES = """module frames
+integer :: n
+type, abstract :: frame
+  integer :: number = 0
+contains
+  procedure :: save => frame_save
+  procedure(fill_interface), deferred :: fill
+end type
+abstract interface
+  subroutine fill_interface(self, a)
+    import :: frame
+    class(frame), intent(inout) :: self
+    real(8), contiguous, intent(in) :: a(:)
+  end subroutine
+end interface
+type, extends(frame) :: plane
+  real(8) :: kept = 0
+contains
+  procedure :: fill => plane_fill
+end type
+type(plane) :: planes(2)
+contains
+subroutine step(a, due)
+real(8), contiguous, intent(inout) :: a(:)
+logical, intent(in) :: due
+integer :: i
+do i = 1, n
+a(i) = a(i) + 1
+enddo
+call save_all(a, due)
+end subroutine
+subroutine save_all(a, due)
+real(8), contiguous, intent(in) :: a(:)
+logical, intent(in) :: due
+integer :: i
+do i = 1, size(planes)
+call planes(i)%save(a, due)
+enddo
+end subroutine
+subroutine frame_save(self, a, due)
+class(frame), intent(inout) :: self
+real(8), contiguous, intent(in) :: a(:)
+logical, intent(in) :: due
+if (due) then
+self%number = self%number + 1
+call self%fill(a)
+end if
+end subroutine
+subroutine plane_fill(self, a)
+class(plane), intent(inout) :: self
+real(8), contiguous, intent(in) :: a(:)
+self%kept = a(1)
+end subroutine
+end module
+"""
+
+
+def test_a_call_through_a_type_bound_procedure_is_what_the_bound_procedures_are(tmp_path):
+    source = tmp_path / "frames.f90"
+    source.write_text(FRAMES)
+    prepared = prepare(ResidentProject((source,), (Selection("all", (
+        "frames::step", "frames::save_all", "frames::frame_save")),)), tmp_path / "prepared", fortran=fortran_compiler())
+    # save is bound to a selected procedure: the calls through it hand nothing over, in every step. fill is
+    # deferred; the one procedure an extending type binds under that name reads the array and is host code.
+    finding, = prepared["audit"]
+    assert (finding["procedure"], finding["text"], finding["calls"], finding["access"]) == (
+        "frames::frame_save", "CALL self % fill(a)", ["frames::plane_fill"], "arrays")
+    text = (tmp_path / "prepared/sources/frames.f90").read_text()
+    save = text[text.index("subroutine frame_save"):text.index("subroutine plane_fill")]
+    # The array comes back where a frame is due and stays on the device: the bound procedure only reads it.
+    assert save.index("if (due) then") < save.index("call resident%observe([ &\n          resident%held(a)])") \
+        < save.index("call self%fill(a)")
+    assert "host_modify" not in text
+    assert "fort_host" not in text[text.index("subroutine save_all"):text.index("subroutine frame_save")]
