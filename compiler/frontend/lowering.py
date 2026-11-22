@@ -684,7 +684,7 @@ class _Lowerer:
         statements: list[Assignment | Loop | If] = []
         for node in nodes:
             kind = type(node).__name__
-            if kind == "Comment":
+            if kind in {"Comment", "Continue_Stmt"}:
                 continue
             location = self.location(node, provenance)
             if kind == "Assignment_Stmt":

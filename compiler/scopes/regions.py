@@ -908,7 +908,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         raise CompilationError("source-observable floating-point exception flags prevent GPU helper closure: "
                                + "; ".join(observers))
     admitted = {"Execution_Part", "Block_Nonlabel_Do_Construct", "Nonlabel_Do_Stmt", "End_Do_Stmt", "Assignment_Stmt", "Call_Stmt",
-                "If_Stmt", "If_Construct", "If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt", "Comment"}
+                "If_Stmt", "If_Construct", "If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt", "Comment",
+                "Continue_Stmt"}
     bodies = [(routine, loop) for loop in loops] + [(helper, helper.execution) for helper in helpers.values()]
     for owner, loop in bodies:
         if helpers or vector_reduction:

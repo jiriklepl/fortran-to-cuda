@@ -262,6 +262,7 @@ def _indirect_writes(analysis, routine, loops):
     for loop in loops:
         computed = {str(statement.items[0]).lower() for statement in walk(loop, Assignment_Stmt)
                     if _kind(statement.items[0]) == "Name"}
+        forwarded = _forwarded(analysis, routine, loop, computed)
         accesses = {}
         for reference in walk(loop, Part_Ref):
             if _kind(reference.parent) == "Data_Ref" and reference.parent.items[0] is reference:
@@ -282,8 +283,11 @@ def _indirect_writes(analysis, routine, loops):
             uses_computed, by_tuple = False, []
             for reference in item["tuples"].values():
                 subscripts, indexed = _children(reference.items[1]), {}
-                uses_computed |= any(str(name).lower() in computed for part in subscripts for name in walk(part, Name))
-                for part in subscripts:
+                named = {str(name).lower() for part in subscripts for name in walk(part, Name)} & computed
+                # A scalar set from index values at the top of the iteration stands for those values.
+                uses_computed |= any(name not in forwarded or not _after(loop, forwarded[name], reference)
+                                     for name in named)
+                for part in (*subscripts, *(forwarded[name] .items[2] for name in named if name in forwarded)):
                     indexed.update((root_, access.binding.name)
                                    for root_, access in _structure_fields(analysis, routine.scope, part).items())
                     for inner in walk(part, Part_Ref):
@@ -308,12 +312,67 @@ def _indirect_writes(analysis, routine, loops):
                         break
                     node = getattr(node, "parent", None)
                 requirement = {"resource": root, "array": item["name"], "loops": enclosing[::-1],
-                               "indices": [_text(part) for part in _children(reference.items[1])],
+                               "indices": [_substituted(_text(part), forwarded) for part in _children(reference.items[1])],
                                "index_resources": sorted(indexed)}
                 if requirement not in found.setdefault(root, []):
                     found[root].append(requirement)
     return [requirement for root, requirements in sorted(found.items()) if root not in refused
             for requirement in requirements]
+
+
+def _forwarded(analysis, routine, loop, computed):
+    """Scalars that the body of ``loop`` sets once, at its top level, from values the loop does not change.
+
+    Each maps to its assignment. The values are those of loop variables,
+    constants, scalars the loop does not set and arrays it does not write,
+    so the scalar is the same function of the iteration wherever the loop
+    reads it after the assignment.
+    """
+    body = [item for item in loop.content if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"}]
+    written = set()
+    for statement in walk(loop, Assignment_Stmt):
+        target = statement.items[0]
+        while _kind(target) in {"Part_Ref", "Data_Ref"}:
+            target = target.items[0]
+        binding = analysis._binding(routine.scope, target) if _kind(target) == "Name" else None
+        if binding is not None and binding.rank:
+            written.add(binding.root)
+    counts = {}
+    for statement in walk(loop, Assignment_Stmt):
+        if _kind(statement.items[0]) == "Name":
+            counts[str(statement.items[0]).lower()] = counts.get(str(statement.items[0]).lower(), 0) + 1
+    found = {}
+    for statement in body:
+        if _kind(statement) != "Assignment_Stmt" or _kind(statement.items[0]) != "Name":
+            continue
+        name = str(statement.items[0]).lower()
+        if counts.get(name) != 1 or any(_kind(item) in {"Call_Stmt", "Function_Reference"} for item in walk(statement)):
+            continue
+        others = _other_names(statement.items[2])
+        names = [item for item in walk(statement.items[2], Name) if id(item) not in others]
+        values = [analysis._binding(routine.scope, item) for item in names]
+        if any(str(item).lower() in computed for item in names) or any(
+                binding is not None and binding.rank and binding.root in written for binding in values):
+            continue
+        found[name] = statement
+    return found
+
+
+def _after(loop, assignment, reference):
+    """Whether ``reference`` stands in a statement of the loop's body after ``assignment``."""
+    node = reference
+    while node is not None and getattr(node, "parent", None) is not loop:
+        node = getattr(node, "parent", None)
+    body = list(loop.content)
+    return node is not None and any(item is assignment for item in body[:next(
+        position for position, item in enumerate(body) if item is node)])
+
+
+def _substituted(text, forwarded):
+    """A subscript with each forwarded scalar written as the value it was set to."""
+    for name, statement in forwarded.items():
+        text = re.sub(rf"(?i)(?<![\w%]){re.escape(name)}(?!\w)", f"({_text(statement.items[2])})", text)
+    return text
 
 
 def _other_names(node):

@@ -57,24 +57,55 @@ def _key(node):
     return re.sub(r"\s+", "", str(node)).lower()
 
 
+_SYMBOLS = {".EQ.": "==", ".NE.": "/=", ".LT.": "<", ".LE.": "<=", ".GT.": ">", ".GE.": ">="}
+_MIRRORED = {"==": "==", "/=": "/=", "<": ">", "<=": ">=", ">": "<", ">=": "<="}
+
+
 class _Conditions:
-    """What a set of ``expression == constant`` conditions decides about other conditions."""
+    """What a set of conditions ``expression <relation> integer constant`` decides about other conditions.
+
+    An equality gives the expression its value. Another relation bounds it:
+    ``viscosity > 0`` decides ``viscosity <= 0``, for instance.
+    """
 
     def __init__(self, conditions, constants):
         _get_parser()  # the expression classes exist once a parser has been created
         self.constants = constants
         self.known = {}
+        self.bounds = {}
         self.names = set()
         for text in conditions:
             node = Fortran2003.Expr(text)
-            if type(node).__name__ != "Level_4_Expr" or not _COMPARISONS.get(str(node.items[1]).upper()):
-                raise ValueError("An assumed condition has the form <expression> == <integer constant>: " + text)
+            relation = _SYMBOLS.get(str(node.items[1]).upper(), str(node.items[1])) \
+                if type(node).__name__ == "Level_4_Expr" else None
+            if relation not in _MIRRORED or relation == "/=":
+                raise ValueError("An assumed condition has the form <expression> <relation> <integer constant>: " + text)
             value = self._value(node.items[2])
             if value is None:
                 raise ValueError("The constant of an assumed condition has no known integer value: " + text)
-            if self.known.setdefault(_key(node.items[0]), value) != value:
-                raise ValueError("Assumed conditions contradict each other: " + text)
+            key = _key(node.items[0])
+            if relation == "==":
+                if self.known.setdefault(key, value) != value:
+                    raise ValueError("Assumed conditions contradict each other: " + text)
+            else:
+                self.bounds.setdefault(key, []).append((relation, value))
             self.names |= {str(name).lower() for name in walk(node.items[0], Fortran2003.Name)}
+
+    def _implied(self, key, relation, value):
+        """Whether the bounds known for ``key`` make ``key <relation> value`` true or false; None if neither."""
+        lower, upper = (None, False), (None, False)
+        for bound, constant in self.bounds.get(key, ()):
+            if bound in {">", ">="} and (lower[0] is None or constant > lower[0] or (constant == lower[0] and bound == ">")):
+                lower = (constant, bound == ">")
+            if bound in {"<", "<="} and (upper[0] is None or constant < upper[0] or (constant == upper[0] and bound == "<")):
+                upper = (constant, bound == "<")
+        above = lower[0] is not None and (lower[0] > value or (lower[0] == value and lower[1]))   # every x > value
+        at_least = lower[0] is not None and lower[0] >= value                                  # every x >= value
+        below = upper[0] is not None and (upper[0] < value or (upper[0] == value and upper[1]))  # every x < value
+        at_most = upper[0] is not None and upper[0] <= value                                   # every x <= value
+        truth = {">": (above, at_most), ">=": (at_least, below), "<": (below, at_least), "<=": (at_most, above),
+                 "==": (False, above or below), "/=": (above or below, False)}[relation]
+        return True if truth[0] else False if truth[1] else None
 
     def _value(self, node):
         if type(node).__name__ == "Parenthesis":
@@ -102,15 +133,41 @@ class _Conditions:
             return both if sides == [both, both] else None
         if kind == "Level_4_Expr" and str(node.items[1]).upper() in _RELATIONS:
             left, right = self._value(node.items[0]), self._value(node.items[2])
-            if left is None or right is None:
-                return None
-            return _RELATIONS[str(node.items[1]).upper()](left, right)
+            if left is not None and right is not None:
+                return _RELATIONS[str(node.items[1]).upper()](left, right)
+            relation = _SYMBOLS.get(str(node.items[1]).upper(), str(node.items[1]))
+            if right is not None and _key(node.items[0]) in self.bounds:
+                return self._implied(_key(node.items[0]), relation, right)
+            if left is not None and _key(node.items[2]) in self.bounds:
+                return self._implied(_key(node.items[2]), _MIRRORED[relation], left)
         return None
 
 
 def _span(node):
     spans = [item.item.span for item in walk(node) if getattr(item, "item", None) is not None]
     return min(span[0] for span in spans), max(span[1] for span in spans)
+
+
+def _decides(node, conditions, one_line):
+    """Whether the conditions decide an IF somewhere in ``node``."""
+    kinds = {"If_Then_Stmt", "Else_If_Stmt", *(("If_Stmt",) if one_line else ())}
+    return any(type(item).__name__ in kinds and conditions.decide(item.items[0]) is not None for item in walk(node))
+
+
+def _leading(comments, lines):
+    """The lines of comments, and blank lines, the parser put in front of a construct that are lines of their own.
+
+    A comment at the end of the line before belongs to that line, which is
+    written with its statement.
+    """
+    found = []
+    for item in comments:
+        if getattr(item, "item", None) is None:
+            continue
+        text = lines[item.item.span[0] - 1:item.item.span[1]]
+        if all(not line.strip() or line.lstrip().startswith("!") for line in text):
+            found += text
+    return found
 
 
 def _fold(nodes, lines, conditions, counter, one_line=False):
@@ -126,6 +183,23 @@ def _fold(nodes, lines, conditions, counter, one_line=False):
                     indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
                     output.append(indent + str(node.items[1]) + "\n")
                 continue
+        if type(node).__name__ == "Block_Nonlabel_Do_Construct" and _decides(node, conditions, one_line):
+            # The branches in a loop's body are decided like any others; what lies between its
+            # statements stays as it is.
+            position = next(index for index, item in enumerate(node.content)
+                            if type(item).__name__ == "Nonlabel_Do_Stmt")
+            opening, ending = node.content[position], node.content[-1]
+            output += _leading(node.content[:position], lines)
+            output += lines[opening.item.span[0] - 1:opening.item.span[1]]
+            cursor = opening.item.span[1] + 1
+            for item in node.content[position + 1:-1]:
+                if type(item).__name__ == "Comment":
+                    continue
+                start, stop = _span(item)
+                output += lines[cursor - 1:start - 1] + _fold([item], lines, conditions, counter, one_line)
+                cursor = max(cursor, stop + 1)
+            output += lines[cursor - 1:ending.item.span[1]]
+            continue
         if type(node).__name__ != "If_Construct":
             output += lines[first - 1:last]
             continue
@@ -139,7 +213,7 @@ def _fold(nodes, lines, conditions, counter, one_line=False):
                 branches[-1][1].append(item)
             else:
                 # A comment the parser attached in front of the construct's first statement.
-                output += lines[item.item.span[0] - 1:item.item.span[1]]
+                output += _leading([item], lines)
         kept = []
         for header, body in branches:
             value = True if type(header).__name__ == "Else_Stmt" else conditions.decide(header.items[0])

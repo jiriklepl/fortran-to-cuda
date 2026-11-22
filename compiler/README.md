@@ -433,10 +433,11 @@ Forms beyond plain array loops that are supported in selected procedures:
   copy of the procedure without them, in which `present` of each dummy is
   the constant it is at that call and the branches this decides are gone; a
   RETURN that leaves early becomes the end of an IF branch whose ELSE holds
-  what follows; and a loop without control that counts its iterations up to
-  a cap (an iteration to convergence that gives up after fifty tries) becomes
-  a counted loop whose body runs while a flag says the loop has not been
-  left. `prepared.json` lists each rewrite under `helpers`, with the reason
+  what follows, or, where what follows would be needed in two branches, sets
+  a flag that guards it; and a loop without control that counts its
+  iterations up to a cap (an iteration to convergence that gives up after
+  fifty tries, also where the cap is one side of an `.or.`) becomes a counted
+  loop whose body runs while a flag says the loop has not been left. `prepared.json` lists each rewrite under `helpers`, with the reason
   where one could not be made.
 - **Elements that are one value for a nest.** A table of coefficients read as
   `rho(stage)`, where the nests do not change `stage`, is one number for the
@@ -454,20 +455,24 @@ Forms beyond plain array loops that are supported in selected procedures:
   published and the original loop runs. All subscript tuples an array is
   written through, in all nests of the entry, are marked in one mask, so the
   nests are also independent of each other and nests over the same iterations
-  become one launch. A tuple that is only read, or a subscript the nest
-  computes itself, is rejected as before.
+  become one launch. A scalar that the iteration sets once, at the top of
+  the loop's body and before it is used, from index values and other values
+  the nest does not change (`xi = points(i)%xi`) stands for those values. A
+  tuple that is only read, or a subscript the nest computes otherwise, is
+  rejected as before.
 
 Branches on run-time configuration keep nests apart: each branch is an entry
 of its own. When the application knows which values the configuration has
 while its fields are on the device, a selection lists them in `assume`, as
-comparisons `<expression> == <integer constant>`:
+comparisons `<expression> == <integer constant>`, or bounds such as
+`viscosity > 0` with another relation:
 
 ```python
 Selection("faces", ("boundaries::apply",), assume=("kind(west) == PERIODIC", "kind(east) == PERIODIC"))
 ```
 
 Each procedure of the selection then gets a second version of its body with
-the branches these conditions decide folded away. The procedure tests the
+the branches these conditions decide folded away, in loops as well. The procedure tests the
 conditions once at entry and runs that version while they hold and its
 original body otherwise, so nothing is assumed that is not checked. The nests
 that end up next to each other share an entry, and those that write different
@@ -663,6 +668,7 @@ end module example
   entry argument writes remain unsupported. Pure numerical helpers can write
   private scalar actuals with explicit `INTENT(OUT/INOUT)`. `contiguous` and `target` are accepted;
   pointers remain unsupported.
+- `CONTINUE` statements, which do nothing.
 - Counted `do` loops with positive or negative integer strides, including
   invariant runtime stride expressions. Constant zero strides reject; a runtime
   zero stride diagnoses at loop entry. Empty domains do not launch.

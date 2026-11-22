@@ -108,7 +108,8 @@ def test_an_order_comparison_of_known_values_is_decided_too():
 
 
 @pytest.mark.parametrize(("conditions", "message"), [
-    (("mode == 2 .or. mode == 3",), "has the form <expression> == <integer constant>"),
+    (("mode == 2 .or. mode == 3",), "has the form <expression> <relation> <integer constant>"),
+    (("mode /= 2",), "has the form <expression> <relation> <integer constant>"),
     (("bc(west) == east",), "no known integer value"),
     (("bc(west) == WALL", "bc(west) == PERIODIC"), "contradict each other"),
     (("n == 5",), "decide no branch of apply"),
@@ -133,3 +134,33 @@ def test_a_body_that_may_change_what_a_condition_tests_is_refused(statement):
     conditions = ("mode == 1",) if statement.startswith("mode") else ("bc(west) == PERIODIC",)
     with pytest.raises(ValueError, match="may change what an assumed condition tests"):
         specialize(changing, "apply", conditions, integer_parameters([PARAMETERS]))
+
+
+def test_a_bound_decides_the_comparisons_it_settles_also_inside_loops():
+    source = """module walls
+  implicit none
+  real :: viscosity
+contains
+  subroutine visc(u, n)
+    real, intent(inout) :: u(:)
+    integer, intent(in) :: n
+    integer :: i
+    do i = 1, n   ! every point
+
+      if (viscosity <= 0) then
+        call stop_run()
+      else if (u(i) > 0) then
+        u(i) = viscosity * u(i)
+      end if
+      if (viscosity < 1) u(i) = 2 * u(i)
+    end do
+  end subroutine
+end module
+"""
+    text = specialize(source, "visc", ("viscosity > 0",), {})
+    folded = text[text.index("if ((viscosity > 0)) then"):text.index("    else\n    do i")]
+    # The bound settles the first comparison, not the second; what lies between the statements stays.
+    assert "stop_run" not in folded
+    assert "      if (u(i) > 0) then\n        u(i) = viscosity * u(i)\n      end if\n" in folded
+    assert "if (viscosity < 1) u(i) = 2 * u(i)" in folded
+    assert "    do i = 1, n   ! every point\n\n      if (u(i) > 0) then" in folded

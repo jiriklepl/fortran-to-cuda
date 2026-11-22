@@ -252,6 +252,42 @@ def _return_edit(statements, lines):
     return None
 
 
+def _flagged(statements, lines, flag):
+    """The lines of ``statements`` with each RETURN setting ``flag``, and what may follow one guarded by it.
+
+    None where a RETURN stands in a loop or in another construct than IF.
+    """
+    output = []
+    statements = [item for item in statements if _kind(item) != "Comment"]
+    for position, statement in enumerate(statements):
+        first, last = _span(statement)
+        indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
+        if not _returns(statement):
+            output += lines[first - 1:last]
+            continue
+        if _kind(statement) == "Return_Stmt":
+            # Nothing after it in this list runs.
+            return output + [f"{indent}{flag} = .true.\n"]
+        if _kind(statement) == "If_Stmt" and _kind(statement.items[1]) == "Return_Stmt":
+            output.append(f"{indent}if ({statement.items[0]}) {flag} = .true.\n")
+        elif _kind(statement) == "If_Construct":
+            branches, end = _branches(statement)
+            for header, body in branches:
+                inner = _flagged(body, lines, flag)
+                if inner is None:
+                    return None
+                output += lines[_span(header)[0] - 1:_span(header)[1]] + inner
+            output += lines[_span(end)[0] - 1:_span(end)[1]]
+        else:
+            return None
+        if position < len(statements) - 1:
+            rest = _flagged(statements[position + 1:], lines, flag)
+            if rest is None:
+                return None
+            return output + [f"{indent}if (.not. {flag}) then\n", *rest, f"{indent}end if\n"]
+    return output
+
+
 def _returns_list(statements):
     return sum(_returns(item) for item in statements)
 
@@ -271,38 +307,58 @@ def _exits(node):
 
 
 def _trip_bound(statements, loop, body):
-    """The counter of a loop without control, and how many iterations it can make at most; None if not known.
+    """How many iterations a loop without control can make at most; None if that is not known.
 
-    The loop counts: the statement before it sets an INTEGER variable to a
-    constant, its body adds one to it at the top level, and a statement at the
-    top level of the body leaves the loop once the variable reaches a constant.
+    The loop counts: its body adds one to an INTEGER variable at the top
+    level, the last statement before the loop that sets that variable sets it
+    to a constant, and a statement at the top level of the body, after the
+    addition, leaves the loop once the variable reaches a constant.
     """
     before = [item for item in statements[:statements.index(loop)] if _kind(item) != "Comment"]
-    if not before or _kind(before[-1]) != "Assignment_Stmt" or _kind(before[-1].items[0]) != "Name":
-        return None
-    counter = str(before[-1].items[0]).lower()
-    start = str(before[-1].items[2]).replace(" ", "")
-    if not re.fullmatch(r"-?\d+", start):
-        return None
-    increments = [item for item in body if _kind(item) == "Assignment_Stmt" and str(item.items[0]).lower() == counter]
-    assigned = [item for item in walk(body) if _kind(item) == "Assignment_Stmt" and str(item.items[0]).lower() == counter]
-    if len(increments) != 1 or len(assigned) != 1 or \
-            str(increments[0].items[2]).replace(" ", "").lower() not in {f"{counter}+1", f"1+{counter}"}:
-        return None
-    after = body[body.index(increments[0]) + 1:]
-    for item in after:
-        condition = None
-        if _kind(item) == "If_Stmt" and _kind(item.items[1]) == "Exit_Stmt":
-            condition = item.items[0]
-        elif _kind(item) == "If_Construct":
-            branches, _end = _branches(item)
-            if len(branches) == 1 and branches[0][1] and _kind(branches[0][1][-1]) == "Exit_Stmt":
-                condition = branches[0][0].items[0]
-        if condition is not None and _kind(condition) == "Level_4_Expr" \
-                and str(condition.items[0]).lower() == counter and str(condition.items[1]).upper() in _RELATION \
-                and re.fullmatch(r"-?\d+", str(condition.items[2]).replace(" ", "")):
-            trips = int(str(condition.items[2])) - int(start) + _RELATION[str(condition.items[1]).upper()]
-            return trips if trips >= 1 else None
+    for increment in body:
+        if _kind(increment) != "Assignment_Stmt" or _kind(increment.items[0]) != "Name":
+            continue
+        counter = str(increment.items[0]).lower()
+        if str(increment.items[2]).replace(" ", "").lower() not in {f"{counter}+1", f"1+{counter}"}:
+            continue
+        if sum(1 for item in walk(body) if _kind(item) == "Assignment_Stmt"
+               and str(item.items[0]).lower() == counter) != 1:
+            continue
+        setting = [item for item in before if any(
+            _kind(node) == "Assignment_Stmt" and str(node.items[0]).lower() == counter for node in walk(item))]
+        if not setting or _kind(setting[-1]) != "Assignment_Stmt" \
+                or any(_kind(node) == "Call_Stmt" for item in before[before.index(setting[-1]):] for node in walk(item)):
+            continue
+        start = str(setting[-1].items[2]).replace(" ", "")
+        if not re.fullmatch(r"-?\d+", start):
+            continue
+        for item in body[body.index(increment) + 1:]:
+            condition = None
+            if _kind(item) == "If_Stmt" and _kind(item.items[1]) == "Exit_Stmt":
+                condition = item.items[0]
+            elif _kind(item) == "If_Construct":
+                branches, _end = _branches(item)
+                if len(branches) == 1 and branches[0][1] and _kind(branches[0][1][-1]) == "Exit_Stmt":
+                    condition = branches[0][0].items[0]
+            cap = _cap(condition, counter) if condition is not None else None
+            if cap is not None:
+                trips = cap - int(start)
+                return trips if trips >= 1 else None
+    return None
+
+
+def _cap(condition, counter):
+    """The value of ``counter`` at which ``condition`` is surely true, or None: ``i >= 50``, ``i >= 50 .or. x > 1``."""
+    while _kind(condition) == "Parenthesis":
+        condition = condition.items[1]
+    if _kind(condition) in {"Or_Operand", "Equiv_Operand"} and str(condition.items[1]).upper() == ".OR.":
+        found = [_cap(side, counter) for side in (condition.items[0], condition.items[2])]
+        found = [value for value in found if value is not None]
+        return min(found) if found else None
+    if _kind(condition) == "Level_4_Expr" and str(condition.items[0]).lower() == counter \
+            and str(condition.items[1]).upper() in _RELATION \
+            and re.fullmatch(r"-?\d+", str(condition.items[2]).replace(" ", "")):
+        return int(str(condition.items[2])) + _RELATION[str(condition.items[1]).upper()]
     return None
 
 
@@ -481,10 +537,20 @@ def prepare_helpers(text, procedures):
             if _returns(execution):
                 found = _return_edit(list(execution.content), lines)
                 if isinstance(found, str) or found is None:
-                    records.append({"procedure": qualified, "reason": found or "a RETURN stays"})
-                    refused.add(qualified)
-                    continue
-                edits = [found]
+                    # Where the statements after a RETURN cannot simply become a branch, a flag says it was reached.
+                    taken = re.findall(r"(?i)\bfort_left_(\d+)\b", text)
+                    flag = f"fort_left_{1 + max((int(item) for item in taken), default=0)}"
+                    flagged = _flagged(list(execution.content), lines, flag)
+                    if flagged is None:
+                        records.append({"procedure": qualified, "reason": found or "a RETURN stays"})
+                        refused.add(qualified)
+                        continue
+                    start, stop = _span(execution)
+                    indent = lines[start - 1][:len(lines[start - 1]) - len(lines[start - 1].lstrip())]
+                    found = (start, stop, [f"{indent}{flag} = .false.\n", *flagged])
+                    edits = [found, _declare(scope, lines, [f"logical :: {flag}"])]
+                else:
+                    edits = [found]
                 records.append({"procedure": qualified, "returns": True})
                 break
             number = 1 + max((int(found) for found in re.findall(r"(?i)\bfort_trip_(\d+)\b", text)), default=0)

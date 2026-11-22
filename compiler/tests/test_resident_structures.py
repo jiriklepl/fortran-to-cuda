@@ -93,6 +93,15 @@ do i = 1, n
   a(k) = a(k) + 1
 end do
 end subroutine
+subroutine accumulated(a)
+real(8), contiguous, intent(inout) :: a(:)
+integer :: i, k
+k = 0
+do i = 1, n
+  k = k + cell(i)
+  a(k) = a(k) + 1
+end do
+end subroutine
 subroutine unsupported(u)
 real(8), contiguous, intent(inout) :: u(0:,0:)
 integer :: i
@@ -173,11 +182,13 @@ def test_a_write_through_indices_names_what_the_caller_must_check(exported):
     both, = entries(exported, "pair")
     assert [(item["loops"], item["indices"]) for item in both["injective"]] == [
         (["DO i = 1, n"], ["cell(i)"]), (["DO i = 1, n"], ["cell(i) + 1"])]
-    # A tuple that is only read, one that does not go through index values, or a subscript the nest
-    # computes itself cannot be checked.
+    # A scalar the iteration sets once from index values, before it uses it, stands for those values.
+    assert [(item["indices"], item["index_resources"]) for item in entries(exported, "computed")[0]["injective"]] == [
+        (["(cell(i))"], ["walls::cell"])]
+    # A tuple that is only read, or one that does not go through index values, cannot be checked. Nor can a
+    # subscript the nest computes from what an earlier iteration left (see the rejection below).
     assert entries(exported, "shifted")[0]["injective"] == []
     assert entries(exported, "mixed")[0]["injective"] == []
-    assert entries(exported, "computed")[0]["injective"] == []
 
 
 def test_the_check_is_what_lets_the_scatter_run_on_the_device(exported, tmp_path):
@@ -206,9 +217,9 @@ def test_the_check_is_what_lets_the_scatter_run_on_the_device(exported, tmp_path
     # nest whose subscripts the caller cannot check stays rejected.
     package = compile_resident_entries(valued, tmp_path / "entries")
     compiled = {item["region"]["procedure"] for item in package["entries"]}
-    assert {"walls::correct", "walls::relax", "walls::by_index", "walls::pair"} <= compiled
+    assert {"walls::correct", "walls::relax", "walls::by_index", "walls::pair", "walls::computed"} <= compiled
     rejected = {item["procedure"] for item in package["rejected"]}
-    assert {"walls::shifted", "walls::mixed", "walls::computed"} <= rejected
+    assert {"walls::shifted", "walls::mixed", "walls::accumulated"} <= rejected
 
 
 def test_the_call_block_binds_fields_and_checks_before_it_runs(exported, tmp_path):

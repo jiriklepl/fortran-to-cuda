@@ -173,3 +173,72 @@ end module
     rewritten, records = prepare_helpers(text, ["m::top"])
     assert rewritten == text
     assert records == [{"procedure": "m::inner", "reason": "a RETURN inside a loop or another construct cannot be taken out"}]
+
+
+ROUGH = """module rough
+implicit none
+real(8) :: nu = 1d-5
+type point
+  integer :: xi
+  real(8) :: ustar
+  logical :: fixed
+end type
+type(point), allocatable :: points(:)
+real(8), allocatable :: visc(:)
+contains
+subroutine step(u)
+real(8), intent(in) :: u(:)
+integer :: i, xi
+do i = 1, size(points)
+  xi = points(i)%xi
+  call rough_ustar(points(i)%ustar, u(xi))
+  if (u(xi) > 1) then
+    continue
+  else
+    visc(xi) = nu * points(i)%ustar
+  end if
+end do
+end subroutine
+subroutine rough_ustar(ustar, vel)
+real(8), intent(inout) :: ustar
+real(8), intent(in) :: vel
+real(8) :: previous, zl
+integer :: i
+if (nu > 0) then
+  ustar = sqrt(nu * vel)
+  if (ustar > 1) return
+end if
+i = 0
+zl = 0
+do
+  i = i + 1
+  previous = ustar
+  zl = zl + (vel - zl) / 2
+  ustar = ustar + (vel * 0.4d0 / log(2 + zl) - ustar) / 2
+  if (abs(ustar - previous) < 1d-6) exit
+  if (i >= 30 .or. zl > 1d4) exit
+end do
+if (i >= 30) ustar = 0
+end subroutine
+end module
+"""
+
+
+def test_a_return_inside_a_branch_sets_a_flag_and_a_cap_may_be_one_side_of_an_or(tmp_path):
+    text, records = prepare_helpers(ROUGH, ["rough::step"])
+    assert [(item["procedure"], "returns" in item, "loop" in item) for item in records] == [
+        ("rough::rough_ustar", True, False), ("rough::rough_ustar", False, True)]
+    ustar = text[text.index("subroutine rough_ustar("):]
+    # What follows the RETURN runs where the flag is clear; the loop counts to the cap of its OR.
+    assert ustar.index("if (ustar > 1) fort_left_1 = .true.") < ustar.index("if (.not. fort_left_1) then") \
+        < ustar.index("do fort_trip_1 = 1, 30")
+    source = tmp_path / "rough.f90"
+    source.write_text(ROUGH)
+    prepared = prepare(ResidentProject((source,), (Selection("all", ("rough::step",), minimum_nests=1),)),
+                       tmp_path / "prepared", fortran=fortran_compiler())
+    summary, = prepared["selections"]
+    # The visc write goes through xi, which the iteration sets from the list: it is checked like a write
+    # through points(i)%xi. The CONTINUE does nothing.
+    assert (summary["entries"], summary["nests"], summary["rejected"]) == (1, 1, [])
+    entry = Path(prepared["sources"][0]["resident"]).read_text()
+    assert "fort_seen_1((points(i)%xi))" in entry.replace(" ", "")
