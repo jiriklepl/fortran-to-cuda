@@ -930,9 +930,7 @@ python -m ruff check compiler
 
 `compiler/tests/conftest.py` puts the repository on the import path, so the
 suite runs from any directory without `PYTHONPATH`. It needs no submodule.
-`compiler/tests/support/consumer` is a second, independent reader of what the
-compiler issues (the scope manifest, its build roles and the runtime's trace
-lines); the tests use it as an oracle for their own output. The complete suite
+The complete suite
 builds and runs CUDA programs; with
 `-n auto` (pytest-xdist) it takes several minutes on a workstation, and the
 parser/analysis subset below a few minutes. The pipeline, container and
@@ -973,8 +971,3 @@ python -m pytest compiler/tests -m "not native and not cuda"
 # The resident build of the small test application, without a GPU:
 python -m pytest compiler/tests/test_resident_application.py
 ```
-
-Shared numerical fixtures live in `tests/support/`. Read-only generated-source
-checks may reuse immutable source text and serialized manifests. CUDA fixtures
-reuse the original driver and strict arithmetic checks through
-`tests/support/numerical_cuda.py`.
