@@ -278,6 +278,8 @@ class _Lowerer:
         self.parents: dict[tuple[str, str], tuple[str, str] | None] = {}
         self.active_frames: list[tuple] = []
         self.pending: list = []
+        # The assignment target being lowered: an element chosen at run time cannot be one.
+        self.target_node = None
         self.inline_calls = 0
         self.private_array_groups = 0
         self.unrolled_values: dict[Symbol, int] = {}
@@ -552,6 +554,36 @@ class _Lowerer:
             )
         return result
 
+    def selected_element(self, symbol, index, location):
+        """The element of a private vector at a run-time index, as a chain of comparisons with each index.
+
+        An index outside the bounds, which Fortran leaves undefined, gives the last element.
+        """
+        lower, upper = symbol.bounds[0]
+        index_symbol = self.temporary(ScalarType.INTEGER, location, "fort_element_index")
+        value_symbol = self.temporary(symbol.dtype, location, "fort_element_value")
+        self.pending.append(Assignment(Reference(index_symbol), index, location))
+        selected = Block((Assignment(Reference(value_symbol), Reference(symbol.element((upper,), location)), location),))
+        for position in range(upper - 1, lower - 1, -1):
+            selected = Block((If(Binary("==", Reference(index_symbol), Literal(str(position), ScalarType.INTEGER)),
+                                 Block((Assignment(Reference(value_symbol), Reference(symbol.element((position,), location)),
+                                                   location),)), selected, location),))
+        self.pending.extend(selected.statements)
+        return Reference(value_symbol)
+
+    def private_array(self, declaration):
+        """A fixed array of the declaration's bounds, as one scalar per element."""
+        count = 1
+        for lower, upper in declaration.bounds:
+            count *= max(0, upper - lower + 1)
+        group_id = self.private_array_groups
+        self.private_array_groups += 1
+        elements = tuple(self.new_symbol(replace(declaration, spelling=f"{declaration.spelling}_{index}",
+                                                 rank=0, intent=None),
+                                         private_array_origin=PrivateArrayOrigin(group_id, declaration.bounds, index))
+                         for index in range(count))
+        return _PrivateArray(declaration.name, declaration.dtype, declaration.bounds, elements)
+
     def new_symbol(self, declaration: _Declaration, parameter: bool = False,
                    *, private_array_origin: PrivateArrayOrigin | None = None) -> Symbol:
         symbol = Symbol(
@@ -604,18 +636,7 @@ class _Lowerer:
                     bindings[declaration.name] = _ConstantArray(declaration.name, declaration.dtype,
                                                                  declaration.bounds, ())
                 elif declaration.bounds:
-                    count = 1
-                    for lower, upper in declaration.bounds:
-                        count *= max(0, upper - lower + 1)
-                    group_id = self.private_array_groups
-                    self.private_array_groups += 1
-                    elements = tuple(self.new_symbol(replace(declaration, spelling=f"{declaration.spelling}_{index}",
-                                                             rank=0, intent=None),
-                                                     private_array_origin=PrivateArrayOrigin(
-                                                         group_id, declaration.bounds, index))
-                                     for index in range(count))
-                    bindings[declaration.name] = _PrivateArray(declaration.name, declaration.dtype,
-                                                               declaration.bounds, elements)
+                    bindings[declaration.name] = self.private_array(declaration)
                 else:
                     bindings[declaration.name] = self.new_symbol(declaration)
         previous_kinds = self.active_kinds
@@ -689,7 +710,11 @@ class _Lowerer:
             location = self.location(node, provenance)
             if kind == "Assignment_Stmt":
                 target_node, _, value_node = node.items
-                target, target_prelude = self.evaluated(target_node, bindings, location)
+                self.target_node = id(target_node)
+                try:
+                    target, target_prelude = self.evaluated(target_node, bindings, location)
+                finally:
+                    self.target_node = None
                 targets = target.elements if isinstance(target, _FixedVector) else (target,)
                 if any(not isinstance(item, (Reference, ArrayAccess)) for item in targets):
                     raise CompilationError("assignment targets must be scalar variables or array elements", location)
@@ -892,6 +917,19 @@ class _Lowerer:
         if key in ancestors:
             raise CompilationError(f"recursive kernel call to {callee.name} is unsupported", location)
         actual_nodes = getattr(argument_list, "items", ())
+        if any(type(node).__name__ == "Actual_Arg_Spec" for node in actual_nodes):
+            # Keyword arguments, after the positional ones, name the dummies they are for.
+            ordered = dict(zip(callee.arguments, (node for node in actual_nodes
+                                                  if type(node).__name__ != "Actual_Arg_Spec"), strict=False))
+            for node in actual_nodes:
+                if type(node).__name__ == "Actual_Arg_Spec":
+                    keyword = str(node.items[0]).lower()
+                    if keyword not in callee.arguments or keyword in ordered:
+                        raise CompilationError(f"call to {callee.name} names argument {keyword} wrongly", location)
+                    ordered[keyword] = node.items[1]
+            if set(ordered) != set(callee.arguments):
+                raise CompilationError(f"call to {callee.name} has the wrong number of arguments", location)
+            actual_nodes = tuple(ordered[name] for name in callee.arguments)
         if len(actual_nodes) != len(callee.arguments):
             raise CompilationError(f"call to {callee.name} has the wrong number of arguments", location)
         formal_declarations = {declaration.name: declaration for declaration in callee.declarations}
@@ -907,6 +945,19 @@ class _Lowerer:
             actual = bindings.get(name) if name is not None else None
             if type(actual_node).__name__ == "Actual_Arg_Spec" or (name is None and not callee.pure):
                 raise CompilationError("call arguments must be positional whole variables for non-pure helpers", location)
+            if expected.rank and actual is None and expected.bounds and expected.intent == "in" \
+                    and type(actual_node).__name__ != "Actual_Arg_Spec":
+                # An expression for a fixed INTENT(IN) array, such as an array constructor: its values go into
+                # an array of the dummy's shape first.
+                value, prefix = self.evaluated(actual_node, bindings, location)
+                copy = self.private_array(replace(expected, intent=None))
+                if not isinstance(value, _FixedVector) or len(value.elements) != len(copy.elements) \
+                        or value.dtype is not expected.dtype:
+                    raise CompilationError(f"type or shape mismatch for argument {formal} of {callee.name}", location)
+                prelude.extend(prefix)
+                prelude.extend(Assignment(Reference(element), item, location)
+                               for element, item in zip(copy.elements, value.elements, strict=True))
+                actual = copy
             if expected.rank:
                 if actual is None or not actual.rank:
                     if actual is not None:
@@ -980,9 +1031,10 @@ class _Lowerer:
             if any(formal_declarations[name].intent != "in" for name in callee.arguments):
                 raise CompilationError("pure numerical function arguments must have INTENT(IN)", location)
             declaration = formal_declarations[callee.result]
-            if declaration.rank:
-                raise CompilationError("numerical helper function results must be scalar", location)
-            actuals[callee.result] = self.new_symbol(replace(declaration, intent=None))
+            if declaration.rank and not declaration.bounds:
+                raise CompilationError("numerical helper function results must be scalars or fixed arrays", location)
+            actuals[callee.result] = self.private_array(replace(declaration, intent=None)) if declaration.rank \
+                else self.new_symbol(replace(declaration, intent=None))
         for element, _copy in copied:
             # The element is the same one after the call: nothing the call may change selects it, and no
             # other argument passes its array.
@@ -1301,6 +1353,25 @@ class _Lowerer:
             )
         return result
 
+    def operands(self, left_node, right_node, bindings, location):
+        """Both operands of a binary operator.
+
+        An integer literal with a kind next to a REAL operand is converted to
+        that operand's kind before anything else is done with it, so it is the
+        REAL literal of its value.
+        """
+        def kinded(node):
+            return type(node).__name__ == "Int_Literal_Constant" and node.items[1] is not None
+
+        if kinded(left_node) != kinded(right_node):
+            other = self._expression(right_node if kinded(left_node) else left_node, bindings, location)
+            dtype = self.dtype(other)
+            if dtype in {ScalarType.REAL32, ScalarType.REAL}:
+                value = Literal(str(int(str(left_node.items[0] if kinded(left_node) else right_node.items[0]))) + ".0",
+                                dtype)
+                return (value, other) if kinded(left_node) else (other, value)
+        return (self._expression(left_node, bindings, location), self._expression(right_node, bindings, location))
+
     def norm2(self, argument_list, bindings, location):
         """NORM2 of a fixed real vector, computed the way GNU Fortran expands it.
 
@@ -1389,6 +1460,13 @@ class _Lowerer:
             else self._expression(arg, bindings, location)
             for index, arg in enumerate(args)
         )
+        kinds = {self.dtype(arg) for arg in arguments}
+        if name in {"min", "max"} and kinds == {ScalarType.REAL32, ScalarType.REAL} \
+                and not any(isinstance(arg, _FixedVector) for arg in arguments):
+            # GNU Fortran takes REAL arguments of two kinds, each in the wider kind: a single precision
+            # constant is the double of its single precision value.
+            arguments = tuple(arg if self.dtype(arg) is ScalarType.REAL else IntrinsicCall("dble", (arg,), ScalarType.REAL)
+                              for arg in arguments)
         dtype = intrinsic_type(
             name, tuple(self.dtype(arg) for arg in arguments), location, kind=intrinsic_kind(name, arguments, location)
         )
@@ -1478,6 +1556,11 @@ class _Lowerer:
                                                   location),)), selected, location),))
                         self.pending.extend(selected.statements)
                         return Reference(value_symbol)
+                    if isinstance(symbol, _PrivateArray) and symbol.rank == 1 and id(node) != self.target_node \
+                            and symbol.bounds[0][1] - symbol.bounds[0][0] < 16:
+                        # A read of a short private vector at an index known only when it runs: the element
+                        # is chosen among all of them.
+                        return self.selected_element(symbol, indices[0], location)
                     raise CompilationError("private fixed array accesses require constant subscripts", location)
                 value = symbol.element(constants, location)
                 return Reference(value) if isinstance(symbol, _PrivateArray) else value
@@ -1504,7 +1587,18 @@ class _Lowerer:
             operator = str(operator).lower()
             if operator == "**":
                 left = self._expression(left_node, bindings, location)
-                exponent = constant_integer(self._expression(right_node, bindings, location), location)
+                right = self._expression(right_node, bindings, location)
+                exponent = constant_integer(right, location)
+                if exponent is None and self.dtype(left) in {ScalarType.REAL32, ScalarType.REAL} \
+                        and self.dtype(right) in {ScalarType.REAL32, ScalarType.REAL} \
+                        and not isinstance(left, _FixedVector) and not isinstance(right, _FixedVector):
+                    # A REAL power of a REAL is POW of the two, in the kind of the wider one.
+                    self.requires_numerical_environment = True
+                    dtype = ScalarType.REAL if ScalarType.REAL in {self.dtype(left), self.dtype(right)} \
+                        else ScalarType.REAL32
+                    widened = [value if self.dtype(value) is dtype else IntrinsicCall("dble", (value,), dtype)
+                               for value in (left, right)]
+                    return IntrinsicCall("pow", tuple(widened), dtype)
                 if exponent is None or not 0 <= exponent <= 16 or self.dtype(left) is ScalarType.LOGICAL:
                     raise CompilationError("numerical powers require an INTEGER constant exponent from 0 through 16", location)
                 def power(value):
@@ -1538,8 +1632,7 @@ class _Lowerer:
                 ".neqv.",
             }
             if operator in operators:
-                left = self._expression(left_node, bindings, location)
-                right = self._expression(right_node, bindings, location)
+                left, right = self.operands(left_node, right_node, bindings, location)
                 logical_operator = operator in {".and.", ".or.", ".eqv.", ".neqv."}
                 if any((self.dtype(operand) is ScalarType.LOGICAL) != logical_operator for operand in (left, right)):
                     raise CompilationError("invalid operand types for operator " + operator, location)
@@ -1555,6 +1648,9 @@ class _Lowerer:
         body, result = self.call(callee, node.items[1], bindings, declarations,
                                  ancestors, provenance, active_iterators, location)
         self.pending.extend(body.statements)
+        if isinstance(result, _PrivateArray):
+            # A fixed array result is the vector of its elements.
+            return self.fixed_vector(result.dtype, tuple(Reference(element) for element in result.elements), location)
         return Reference(result)
 
     def dtype(self, expression: Expr) -> ScalarType:

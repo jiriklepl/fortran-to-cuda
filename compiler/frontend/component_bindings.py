@@ -216,9 +216,9 @@ def _element_field(analysis, scope, node):
     field_binding, _ = _field_binding(analysis, root.declaring_scope or scope, root, str(member).lower(), node,
                                       consumer_scope=scope)
     if field_binding.rank or (field_binding.dtype, field_binding.kind) not in {("real", 4), ("real", 8),
-                                                                                ("integer", 4)}:
-        raise ComponentStorageUnsupported("an element field needs a scalar REAL or default INTEGER component: "
-                                          + str(node))
+                                                                                ("integer", 4), ("logical", 4)}:
+        raise ComponentStorageUnsupported("an element field needs a scalar REAL, default INTEGER or default LOGICAL "
+                                          "component: " + str(node))
     binding = replace(field_binding, name=root.name + "%" + str(member).lower(), rank=root.rank,
                       attributes=frozenset((field_binding.attributes | {"element_field"}) - {"allocatable"}),
                       lower_bounds=root.lower_bounds, lower_bound_nodes=root.lower_bound_nodes,

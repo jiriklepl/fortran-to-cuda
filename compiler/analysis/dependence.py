@@ -115,7 +115,13 @@ def affine_expression(
 
 
 def ordered_conflicts(reads: isl.UnionMap, writes: isl.UnionMap, schedule: isl.UnionMap):
-    """Relations map earlier statement instances to later conflicting instances."""
+    """Relations map earlier statement instances to later conflicting instances.
+
+    Only statements that access arrays can conflict, so only their order is
+    worked out: a body with many scalar statements (inlined procedures, say)
+    would otherwise order every pair of its statements.
+    """
+    schedule = schedule.intersect_domain(reads.domain().union(writes.domain()))
     before = schedule.lex_lt_union_map(schedule)
     return {
         "RAW": writes.apply_range(reads.reverse()).intersect(before),

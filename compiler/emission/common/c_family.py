@@ -120,7 +120,7 @@ def render_expression(expression: Expr, *, addressing: RegionAddressing | None =
             return f"::generated_kernels::numeric::{name}({', '.join(arguments)})"
         if intrinsic == "abs":
             name = "abs" if expression.dtype is ScalarType.INTEGER else "fabs"
-        elif intrinsic in REAL_MATH or intrinsic == "atan2":
+        elif intrinsic in REAL_MATH or intrinsic in {"atan2", "pow"}:
             name = intrinsic
         else:
             raise CompilationError(f"unsupported emission intrinsic: {intrinsic}")

@@ -38,7 +38,9 @@ def _identity(path):
     return {"path": str(path), "sha256": sha256(path.read_bytes()).hexdigest()}
 
 
-_FIELD = {("real", 8): "FORT_SCOPE_REAL64", ("real", 4): "FORT_SCOPE_REAL32", ("integer", 4): "FORT_SCOPE_INTEGER32"}
+# A default LOGICAL field is kept as the INTEGER words it is stored in.
+_FIELD = {("real", 8): "FORT_SCOPE_REAL64", ("real", 4): "FORT_SCOPE_REAL32", ("integer", 4): "FORT_SCOPE_INTEGER32",
+          ("logical", 4): "FORT_SCOPE_INTEGER32"}
 
 
 def _distinct_check(requirements, number, domain, indent):
@@ -128,6 +130,9 @@ def entry_call_block(region, entry, domain, held=None):
             registration.append(f"        {handle}={domain.object}%{method}({name},lbound({name}),.true., &\n"
                                 f"          origin='{origin}',tolerant=.true.)")
             plain.append(handle)
+        elif binding["type"] == "logical" and binding["kind"] != 1:
+            # The entry takes LOGICAL values of the C kind.
+            actual[parameter["name"]] = f"logical({name}, c_bool)"
         else:
             actual[parameter["name"]] = name
     if region.get("observed"):

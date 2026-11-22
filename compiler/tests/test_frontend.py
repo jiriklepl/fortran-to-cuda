@@ -259,7 +259,7 @@ def test_unsupported_constructs_have_source_locations(
     [
         ("a(:),n", "whole variables"),
         ("a,n+1", "whole variables"),
-        ("a,n=n", "whole variables"),
+        ("a,b=n", "names argument b wrongly"),
         ("n,n", "type or rank mismatch"),
         ("a", "wrong number"),
     ],

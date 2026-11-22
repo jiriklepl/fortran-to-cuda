@@ -163,10 +163,12 @@ def test_nests_over_different_lists_get_entries_of_their_own(exported):
 
 def test_fields_the_entry_cannot_represent_are_rejected_with_their_reason(exported):
     reasons = [item["reason"] for item in exported[1]["rejected"] if item["procedure"] == "walls::unsupported"]
-    assert len(reasons) == 3
+    assert len(reasons) == 2
     assert "one element of a rank-one array of derived type" in reasons[0]
     assert "needs one scalar variable object: points(i) % history(2)" in reasons[1]
-    assert "scalar REAL or default INTEGER component" in reasons[2]
+    # A default LOGICAL field is read as the words it is stored in.
+    flag, = entries(exported, "unsupported")
+    assert [item["name"] for item in flag["resources"] if "%" in item["name"]] == ["points%active"]
 
 
 def test_a_write_through_indices_names_what_the_caller_must_check(exported):

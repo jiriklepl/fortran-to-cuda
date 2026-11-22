@@ -27,6 +27,8 @@ INTRINSICS = {
     "max": IntrinsicSignature(2, None, _NUMERIC),
     **{name: IntrinsicSignature(1, 1, _REAL) for name in REAL_MATH},
     "atan2": IntrinsicSignature(2, 2, _REAL),
+    # Not a Fortran intrinsic: the form a REAL power of a REAL takes.
+    "pow": IntrinsicSignature(2, 2, _REAL),
     **{name: IntrinsicSignature(2, 2, _NUMERIC) for name in ("mod", "modulo", "sign", "dim")},
     **{name: IntrinsicSignature(1, 2, _NUMERIC) for name in ("real", "int")},
     **{name: IntrinsicSignature(1, 2, _REAL) for name in ("nint", "floor", "ceiling")},

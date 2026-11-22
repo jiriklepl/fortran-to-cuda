@@ -420,16 +420,21 @@ Forms beyond plain array loops that are supported in selected procedures:
 
 - **Fields of an array of derived type.** A nest may read and write
   `points(i)%field` for a rank-one array of derived type and a scalar REAL or
-  default INTEGER field. Each field used is one array resource. Its values are
+  default INTEGER field, and read a default LOGICAL field, which the entry
+  takes as the INTEGER words it is stored in. Each field used is one array resource. Its values are
   strided through the structures, so the domain keeps a contiguous copy
   (`bind_field`), gathered when the field is first bound and written back to
   the structures at the next publication or `!$fort observe(points(:)%field)`.
   Nests over different lists get entries of their own.
 - **Procedures that a nest calls.** A nest that calls a procedure is an
   entry when the procedure's statements can be inlined into it (see the
-  supported subset below). Three things in the procedures that the selected
-  procedures reach by calls, in the same source, are rewritten first,
-  in the prepared source: a call that leaves out optional arguments calls a
+  supported subset below). These things in the procedures that the selected
+  procedures reach by calls or function references, in the same source, are
+  rewritten first, in the prepared source: a pointer that the first
+  statements of a loop's body point at the element the loop variable selects
+  (`p => points(i)`), and that is used only for its fields, is that element
+  (also in the selected procedures); a SELECT CASE on a variable is an IF
+  construct (also in the selected procedures); a call that leaves out optional arguments calls a
   copy of the procedure without them, in which `present` of each dummy is
   the constant it is at that call and the branches this decides are gone; a
   RETURN that leaves early becomes the end of an IF branch whose ELSE holds
@@ -437,8 +442,18 @@ Forms beyond plain array loops that are supported in selected procedures:
   a flag that guards it; and a loop without control that counts its
   iterations up to a cap (an iteration to convergence that gives up after
   fifty tries, also where the cap is one side of an `.or.`) becomes a counted
-  loop whose body runs while a flag says the loop has not been left. `prepared.json` lists each rewrite under `helpers`, with the reason
-  where one could not be made.
+  loop, after a copy of the body for the first iteration, whose body runs
+  while a flag says the loop has not been left. `prepared.json` lists each
+  rewrite under `helpers`, with the reason where one could not be made.
+- **Scalars and arrays that a loop's OpenMP directive makes private.** The
+  preparation removes the directive and writes `!$fort private(...)` at the
+  end of the DO statement. Those variables have no value when an iteration
+  starts or after the loop, as in OpenMP: where a branch reads one before
+  setting it, the entry gives it a value at the start of each iteration, and
+  what follows the loop does not need the region's value.
+- **Short local arrays that a nest only reads.** A local array of at most 16
+  elements that the procedure sets before the nest, such as a table of
+  reciprocals, comes to the entry one value per element.
 - **Elements that are one value for a nest.** A table of coefficients read as
   `rho(stage)`, where the nests do not change `stage`, is one number for the
   whole entry. The call reads it on the host and passes it; the array gets no
@@ -685,7 +700,11 @@ end module example
   `SIZE(array, dimension)`, and `SIZE(array)` total element counts.
   Default real literals retain single precision; `D` exponent literals use
   binary64. Explicit kind suffixes use their declared numeric precision.
-  Integer constant powers from zero through sixteen lower to ordered products.
+  Integer constant powers from zero through sixteen lower to ordered products;
+  a REAL power of a REAL is `pow`. An integer literal with a kind next to a
+  REAL operand is the REAL literal of its value. `MIN` and `MAX` of REAL
+  arguments of two kinds take each in the wider kind, as GNU Fortran does.
+  Default LOGICAL scalars of the application are passed in the entry's kind.
 - Affine access relations and constant-stride congruences are modeled exactly.
   Invariant non-affine bounds are captured as symbolic parameters. Unknown
   subscript coordinates are conservatively unconstrained, allowing read-only
@@ -693,9 +712,13 @@ end module example
   parallel iterations. Identical squared affine subscripts, such as `a(i*i)`,
   receive a simple injectivity proof when every access shares that expression
   and its operand is proven nonnegative or nonpositive throughout the region.
-- Positional whole-variable calls to same-module helpers. Inlining creates fresh
+- Calls to same-module helpers, by position or by keyword. Inlining creates fresh
   locals per call and preserves actual storage identities and case-insensitive
-  Fortran name resolution.
+  Fortran name resolution. An array constructor or another fixed vector may
+  be the actual for a fixed `INTENT(IN)` array dummy; it is copied into an
+  array of the dummy's shape. A function may return a fixed array. A short
+  private vector may be read at an index known only when the code runs; the
+  element is chosen by comparisons.
 - Source-backed pure module/internal functions and subroutines, including lexical
   captures and scalar function results. A procedure counts as pure when it is
   declared `PURE` or `ELEMENTAL`, or when it does what such a procedure may:
@@ -708,7 +731,7 @@ end module example
   at its original expression evaluation point, including guarded `ELSEIF` paths.
   Recursion rejects; numerical inlining is bounded to depth eight and 128 calls.
   In exported resident entries a helper's array arguments may declare constant
-  lower bounds (`a(-2:,-2:,-2:)`) when the helper uses them by element; the
+  lower bounds (`a(-2:,-2:,-2:)`, also in a DIMENSION attribute) when the helper uses them by element; the
   copied helper addresses them from one, which is the same element of the
   actual argument.
 - Fixed-size private numerical arrays with constant explicit bounds, including

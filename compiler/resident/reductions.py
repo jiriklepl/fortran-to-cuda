@@ -131,7 +131,9 @@ def serialize_openmp(lines, first, last):
     The loop nests of a selected procedure become entries that one serial
     caller dispatches. A directive with a ``reduction`` clause leaves a
     ``!$fort reduction`` line: what the clause says about the order of an
-    accumulation outlives the directive.
+    accumulation outlives the directive. A loop directive with a ``private``
+    clause and no reduction leaves ``!$fort private(...)`` at the end of the
+    DO statement: the scalars it names have no value when an iteration starts.
     """
     removed, index = [], first
     while index < last:
@@ -151,6 +153,15 @@ def serialize_openmp(lines, first, last):
         stated = license_line(text)
         if stated is not None:
             lines[index] = indent + stated + "\n"
+        elif re.search(r"(?i)\bdo\b", text) and parse_license(text)[1]:
+            # The scalars a loop's directive makes private have no value when an iteration starts. That is
+            # said at the end of the DO statement, where it stays with the loop through every rewrite.
+            loop = next((item for item in range(group[-1] + 1, min(last, group[-1] + 8))
+                         if re.match(r"(?i)\s*do\b", lines[item])), None)
+            if loop is not None and not lines[loop].rstrip().endswith("&"):
+                code, comment = _strip_inline_comment(lines[loop].rstrip("\n"))
+                lines[loop] = (code.rstrip() + "  !$fort private(" + ", ".join(sorted(parse_license(text)[1]))
+                               + ")" + (" " + comment if comment else "") + "\n")
         index = group[-1] + 1
     return removed
 

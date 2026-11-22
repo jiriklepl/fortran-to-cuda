@@ -41,7 +41,9 @@ _CONSTRUCT_HEADERS = {"If_Then_Stmt", "Else_If_Stmt", "Associate_Stmt"}
 
 
 def _residency_directive(node):
-    return str(node).lstrip().lower().startswith("!$fort")
+    """A ``!$fort`` line, other than the ``private`` one a loop's OpenMP directive left, which says nothing of residency."""
+    text = str(node).lstrip().lower()
+    return text.startswith("!$fort") and not re.match(r"!\$fort\s+private\b", text)
 
 
 def _entry_groups(sequence, acknowledged=None):
@@ -754,6 +756,9 @@ def _readable(analysis, routine, parameter):
     """
     if parameter.rank or parameter.lower_bound_dimension is not None or "%" in parameter.resource:
         return False
+    if parameter.resource.endswith(")"):
+        # An element of a short local array whose values the entry takes one by one: it is always there.
+        return True
     name = parameter.resource.rsplit("::", 1)[-1]
     binding = analysis._binding(routine.scope, name)
     if binding is None or binding.root != parameter.resource:
@@ -1182,7 +1187,8 @@ def pass_scalars_by_value(extracted, directory):
         values = []
         for name in (*sorted(bounds), *original.get("readable_scalars", ())):
             pattern = (
-                r"(?im)^([ \t]*(?:integer(?:\s*\([^)]+\))?|real(?:\s*\([^)]+\))?|double\s+precision)"
+                r"(?im)^([ \t]*(?:integer(?:\s*\([^)]+\))?|real(?:\s*\([^)]+\))?|double\s+precision"
+                r"|logical(?:\s*\([^)]+\))?)"
                 r"(?:(?!\bvalue\b)[^\n])*?),\s*intent\s*\(\s*in\s*\)\s*::\s*("
                 + re.escape(name)
                 + r")\s*$"

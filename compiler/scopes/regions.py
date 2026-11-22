@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import copy
 import math
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 from hashlib import sha256
 from pathlib import Path
 
@@ -215,6 +216,39 @@ def _host_associated_reads(analysis, routine, helper, active=frozenset()):
     for child in children.values():
         found.update(_host_associated_reads(analysis, routine, child, active))
     return found
+
+
+def _element_names(routine, binding):
+    """The variable, or for an array of rank two or more each of its elements, as assignment targets."""
+    if binding.rank < 2:
+        return [binding.name]
+    shape = [tuple(int(value) for value in axis.replace("(-2147483647 - 1)", str(-(2**31))).split(":"))
+             for axis in _fixed_shape(routine, binding)]
+    subscripts = [()]
+    for lower, upper in reversed(shape):
+        subscripts = [(index, *rest) for index in range(lower, upper + 1) for rest in subscripts]
+    return [f"{binding.name}({','.join(str(index) for index in subscript)})" for subscript in subscripts]
+
+
+def _openmp_private(loop):
+    """The scalars that the ``!$fort private`` comment of the loop's DO statement names.
+
+    The preparation writes it there where it removes the loop's OpenMP directive.
+    """
+    opening = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt")
+    names = set()
+    for item in loop.content:
+        if _kind(item) == "Comment" and getattr(item, "item", None) is not None \
+                and item.item.span[0] == opening.item.span[0]:
+            match = re.search(r"(?i)!\$fort\s+private\s*\(([^)]*)\)", str(item))
+            if match:
+                names |= {name.strip().lower() for name in match.group(1).split(",") if name.strip()}
+    return names
+
+
+def _logical_field(binding):
+    """A default LOGICAL field of the elements of a list: the entry reads the words it is stored in."""
+    return "element_field" in binding.attributes and binding.dtype == "logical"
 
 
 def _helper(analysis, routine, name):
@@ -1006,11 +1040,21 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             raise CompilationError("inline scalar effects must remain in the original owner: " + root)
         if binding.attributes & {"target", "pointer", "allocatable", "optional", "volatile", "asynchronous", "value"}:
             raise CompilationError("inline private scalar association is uncertain: " + root)
-        if (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1)}:
+        if (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1),
+                                                 ("logical", 4)}:
             raise CompilationError("unsupported inline private scalar type: " + root)
         if root in iterators and (binding.dtype, binding.kind) != ("integer", 4):
             raise CompilationError("inline loop iterators require default INTEGER: " + root)
-    if scalar_writes & _upward_reads(analysis, routine, loops):
+    # A scalar the original OpenMP directive of a loop made private has no value when an iteration starts:
+    # reading it before the iteration sets it reads nothing a previous iteration left. It is given one.
+    undefined = {}
+    for loop in loops:
+        named = _openmp_private(loop)
+        for root in scalar_writes & _upward_reads(analysis, routine, (loop,)):
+            if used[root].name.lower() in named:
+                undefined.setdefault(id(loop), []).append(used[root])
+    if scalar_writes & _upward_reads(analysis, routine, loops) - {binding.root for items in undefined.values()
+                                                                   for binding in items}:
         raise CompilationError("inline private scalar reads require a definition inside the region")
     # Following native statements need a read/liveness proof, not numerical
     # eligibility. Original fixed metadata fields can carry index reads here
@@ -1019,6 +1063,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     following_analysis._native_metadata = True
     live_scalars = (_upward_reads(following_analysis, routine, following)
                     | _upward_reads(following_analysis, routine, cyclic_following))
+    # Nor has such a scalar a value after its loop: what follows does not read the region's.
+    private_names = set().union(*(_openmp_private(loop) for loop in loops))
+    live_scalars -= {root for root in scalar_writes if used[root].name.lower() in private_names}
     final_iterators = ()
     if scalar_writes & live_scalars:
         only_counted = iterators - assigned_scalars
@@ -1027,6 +1074,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     # Read-only local fixed arrays can only be used if initialized inside the
     # reached numerical work. The ordinary frontend checks every scalarized
     # element's definition before use; they must not be captured as live arrays.
+    written_locals = set(local_arrays)
     local_arrays |= {root for root, binding in used.items()
                      if root.startswith(routine.qualified + "::") and binding.rank
                      and not hasattr(binding, "component_object")
@@ -1038,9 +1086,16 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             raise CompilationError("inline private array association is uncertain: " + root)
         if (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4)}:
             raise CompilationError("unsupported inline private array type: " + root)
-        if root in (_upward_array_reads(following_analysis, routine, following)
-                    | _upward_array_reads(following_analysis, routine, cyclic_following)):
+        if binding.name.lower() not in private_names and root in (
+                _upward_array_reads(following_analysis, routine, following)
+                | _upward_array_reads(following_analysis, routine, cyclic_following)):
             raise CompilationError("inline private array is live after the region")
+        for loop in loops:
+            # An array the loop's OpenMP directive made private has no values when an iteration starts either:
+            # each iteration gives it some where it may be read before it is set.
+            if binding.name.lower() in _openmp_private(loop) and binding not in undefined.get(id(loop), ()) \
+                    and root in _upward_array_reads(analysis, routine, (loop,)):
+                undefined.setdefault(id(loop), []).append(binding)
     private = {root: used[root] for root in sorted(scalar_writes | local_arrays)}
     occupied = {binding.name for binding in used.values()}
     occupied.update(name for helper in helpers.values() for name in helper.scope.bindings)
@@ -1051,11 +1106,40 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     captures = {root: binding for root, binding in used.items()
                 if root not in private and root not in immutable_reads and "parameter" not in binding.attributes}
     captures.update((binding.root, binding) for binding in constants.scalar_captures)
+    # A short local array that the region only reads holds the values the procedure gave it before: they come
+    # to the entry one scalar per element, and each iteration puts them into its own copy of the array.
+    valued = {}
+    for root in sorted(local_arrays - written_locals):
+        binding = used[root]
+        shape = [tuple(int(value) for value in axis.replace("(-2147483647 - 1)", str(-(2**31))).split(":"))
+                 for axis in _fixed_shape(routine, binding)]
+        count = math.prod(max(0, upper - lower + 1) for lower, upper in shape)
+        if binding.name.lower() in private_names or count > 16 or binding.dtype not in {"real", "integer"}:
+            continue
+        subscripts = [()]
+        for lower, upper in reversed(shape):
+            subscripts = [(index, *rest) for index in range(lower, upper + 1) for rest in subscripts]
+        values = []
+        for subscript in subscripts:
+            text = ",".join(str(index) for index in subscript)
+            element = replace(binding, name=f"{binding.name}({text})", root=f"{root}({text})", rank=0,
+                              attributes=frozenset(), lower_bounds=(), lower_bound_nodes=(), shape_nodes=())
+            captures[element.root] = element
+            values.append(element)
+        valued[root] = (binding, values)
     guards = []
     for binding in captures.values():
         if binding.attributes & {"pointer", "optional", "volatile", "asynchronous", "value"}:
             raise CompilationError("inline capture association is uncertain: " + binding.root)
-        if (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1)}:
+        if _logical_field(binding):
+            # Its values come to the entry as the INTEGER words they are stored in, and are only read.
+            if binding.root in writes:
+                raise CompilationError("a LOGICAL field of a list is only read by an entry: " + binding.root)
+        elif (binding.dtype, binding.kind, binding.rank) == ("logical", 4, 0):
+            # A default LOGICAL scalar comes to the entry converted to the entry's own kind, so it is only read.
+            if binding.root in writes:
+                raise CompilationError("a default LOGICAL scalar is only read by an entry: " + binding.root)
+        elif (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1)}:
             raise CompilationError("unsupported inline numerical capture type: " + binding.root)
         if "allocatable" in binding.attributes and binding.root.startswith(routine.qualified + "::"):
             guards.append(allocation_guard(analysis, routine, binding, preceding))
@@ -1065,9 +1149,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         raise CompilationError("inline numerical capture budget exceeded")
     capture_names = {root: binding.name for root, binding in captures.items()}
     for index, (root, binding) in enumerate(sorted(captures.items())):
-        if hasattr(binding, "component_object") or "parameter" in binding.attributes:
+        if hasattr(binding, "component_object") or "parameter" in binding.attributes or root.endswith(")"):
             name = ("fort_region_field_" if hasattr(binding, "component_object")
-                    else "fort_region_parameter_") + str(index)
+                    else "fort_region_value_" if root.endswith(")") else "fort_region_parameter_") + str(index)
             if name in occupied:
                 raise CompilationError("inline field parameter namespace conflicts")
             occupied.add(name)
@@ -1167,6 +1251,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             if not access.indices:
                 return F.Name(name)
             rendered = normalized_indices(name, access.indices, owner)
+            if _logical_field(binding):
+                return F.Parenthesis("(" + name + "(" + ",".join(rendered) + ") /= 0)")
             return F.Part_Ref(name + "(" + ",".join(rendered) + ")")
         if kind == "Comment":
             return value
@@ -1300,6 +1386,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         # The numerical ABI uses default INTEGER and its C-bool LOGICAL model.
         # Their original kinds were checked above. Real temporaries must retain
         # their precision as well as the array/scalar captures.
+        if _logical_field(binding):
+            return "integer"
         return binding.dtype if binding.dtype in {"integer", "logical"} else f"{binding.dtype}({binding.kind})"
 
     for binding in sorted(captures.values(), key=lambda item: item.root):
@@ -1325,7 +1413,22 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     runtime_guards = tuple(dict.fromkeys(guard for _, guards, _, _ in normalized for guard in guards))
     tile_domains = tuple(domain for _, _, domains, _ in normalized for domain in domains)
     preconditions = tuple(guard for _, _, _, guards in normalized for guard in guards)
-    body = [str(transformed(loop)) for loop, _, _, _ in normalized]
+    body = []
+    for (loop, _, _, _), original in zip(normalized, loops, strict=True):
+        text = str(transformed(loop))
+        given = [f"{element.name} = {capture_names[element.root]}" for _root, (array, values) in sorted(valued.items())
+                 for element in values if re.search(rf"(?i)(?<![\w%]){re.escape(array.name)}\s*\(", text)]
+        if id(original) in undefined or given:
+            lines = text.split("\n")
+            opening = next(index for index, line in enumerate(lines) if re.match(r"(?i)\s*do\b", line))
+            zero = {binding.root: ".false." if binding.dtype == "logical" else "0"
+                    for binding in undefined.get(id(original), ())}
+            lines[opening + 1:opening + 1] = [
+                f"{name} = {zero[binding.root]}" for binding in sorted(undefined.get(id(original), ()),
+                                                                     key=lambda item: item.name)
+                for name in _element_names(routine, binding)] + given
+            text = "\n".join(lines)
+        body.append(text)
     declarations += ["integer :: " + name for name in section_variables]
     runtime_guards = tuple(dict.fromkeys((*runtime_guards, *section_guards)))
     helper_sources = []
@@ -1355,16 +1458,24 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             entities.items = tuple(retained)
             own = [helper.scope.bindings[str(entity.items[0]).lower()] for entity in _children(entities)]
             if any(id(binding) in helper_lowers for binding in own):
-                if any(entity.items[1] is None for entity, binding in zip(retained, own, strict=True)
-                       if id(binding) in helper_lowers):
-                    raise CompilationError("inline helper array lower bounds in a DIMENSION attribute are unsupported")
+                # A DIMENSION attribute gives its shape to each entity, which then says it itself.
+                shared = next((item for item in _children(attributes) if _kind(item) == "Dimension_Attr_Spec"), None) \
+                    if attributes is not None else None
                 rebased = []
                 for entity, binding in zip(retained, own, strict=True):
                     if id(binding) in helper_lowers:
                         entity = copy.copy(entity)
                         entity.items = (entity.items[0], F.Array_Spec(",".join(":" * binding.rank)), *entity.items[2:])
+                    elif entity.items[1] is None and shared is not None:
+                        entity = copy.copy(entity)
+                        entity.items = (entity.items[0], shared.items[1], *entity.items[2:])
+                    elif entity.items[1] is None and binding.rank:
+                        raise CompilationError("inline helper array declaration is not understood")
                     rebased.append(entity)
                 entities.items = tuple(rebased)
+                if shared is not None:
+                    kept = [item for item in _children(attributes) if item is not shared]
+                    attributes = F.Attr_Spec_List(", ".join(str(item) for item in kept)) if kept else None
             if any(binding.attributes & {"save", "allocatable", "pointer", "optional", "target", "volatile", "asynchronous"} for binding in own):
                 raise CompilationError("inline numerical helper storage association is unsupported")
             # A helper's own variables are not passed to the entry: a LOGICAL of any kind is a flag in it.

@@ -20,11 +20,19 @@ prepared source and only there:
   holds the statements that follow. That is done where it is exact: each
   RETURN is the last statement of an IF branch, or a one-line IF, outside
   loops, and what follows is needed in one branch only.
+* A local pointer that the first statements of a loop's body point at the
+  element the loop variable selects, ``p => points(i)``, and that is used
+  only for its fields, is replaced by that element: ``p%ustar`` becomes
+  ``points(i)%ustar``. That is done in the selected procedures as well.
+* A SELECT CASE on a variable becomes an IF construct with one condition per
+  CASE and the CASE DEFAULT as its ELSE, in these procedures and in the
+  selected ones.
 * A loop without control that counts its iterations up to a cap, such as an
-  iteration to convergence that gives up after fifty tries, becomes a counted
-  loop around its body, which runs while a flag says the loop has not been
-  left; each EXIT clears the flag and the statements after it are guarded by
-  it. The two run the same statements in the same order.
+  iteration to convergence that gives up after fifty tries, becomes its body,
+  for the first iteration, which always runs, followed by a counted loop over
+  the others, whose body runs while a flag says the loop has not been left;
+  each EXIT clears the flag and the statements after it are guarded by it.
+  The two run the same statements in the same order.
 
 The calls followed are those in the selected procedures and in the procedures
 of the same source they call, to procedures of that source; the selected
@@ -413,8 +421,11 @@ def _counted_loop(statements, lines, number):
                 inner.append(f"{indent}    if ({flag}) then\n")
                 open_guards += 1
         inner += [f"{indent}    end if\n"] * open_guards
-        replacement = [f"{indent}{flag} = .true.\n", f"{indent}do {trip} = 1, {trips}\n",
-                       f"{indent}  if ({flag}) then\n", *inner, f"{indent}  end if\n", f"{indent}end do\n"]
+        # The first iteration always runs: written ahead of the loop, what it sets is set after the loop too.
+        replacement = [f"{indent}{flag} = .true.\n", *inner]
+        if trips > 1:
+            replacement += [f"{indent}do {trip} = 2, {trips}\n", f"{indent}  if ({flag}) then\n", *inner,
+                            f"{indent}  end if\n", f"{indent}end do\n"]
         return _span(statement)[0], _span(statement)[1], replacement, (flag, trip)
     return None
 
@@ -435,7 +446,8 @@ def _reached(text, patterns):
         reached.add(scope.qualified)
         execution = _part(scope.node, "Execution_Part")
         for call in walk(execution) if execution is not None else ():
-            if _kind(call) == "Call_Stmt" and _kind(call.items[0]) == "Name":
+            # Calls, and references to functions of the source.
+            if _kind(call) in {"Call_Stmt", "Part_Ref", "Function_Reference"} and _kind(call.items[0]) == "Name":
                 callee = _resolve(scope, str(call.items[0]).lower(), scopes)
                 if callee is not None:
                     pending.append(callee)
@@ -489,6 +501,124 @@ def _optional_versions(text, patterns, versions):
     return "".join(lines), records
 
 
+def _element_pointer(scope, lines):
+    """An edit that writes ``p%field`` as ``points(i)%field`` where ``p => points(i)`` opens the body of i's loop.
+
+    The pointer is a local scalar pointer that is used for nothing but its
+    fields, and only in loops whose body it opens by such a statement, at the
+    top level, pointing at the element the loop variable selects. One loop is
+    rewritten per call. Returns (first, last, lines) or None.
+    """
+    execution = _part(scope.node, "Execution_Part")
+    specification = _part(scope.node, "Specification_Part")
+    pointers = set()
+    for statement in (specification.content if specification is not None else ()):
+        if _kind(statement) == "Type_Declaration_Stmt" and statement.items[1] is not None \
+                and any(str(item).upper() == "POINTER" for item in statement.items[1].items):
+            pointers |= {str(entity.items[0]).lower() for entity in statement.items[2].items if entity.items[1] is None}
+    if execution is None or not pointers:
+        return None
+    opened = {}
+    for loop in walk(execution):
+        if _kind(loop) != "Block_Nonlabel_Do_Construct":
+            continue
+        opening = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt")
+        if opening.items[1] is None:
+            continue
+        variable = str(opening.items[1].items[1][0]).lower()
+        for statement in loop.content:
+            if _kind(statement) == "Pointer_Assignment_Stmt" and str(statement.items[0]).lower() in pointers:
+                target = statement.items[2]
+                if _kind(target) == "Part_Ref" and _kind(target.items[0]) == "Name" \
+                        and [str(item).lower() for item in getattr(target.items[1], "items", ())] == [variable]:
+                    opened.setdefault(str(statement.items[0]).lower(), []).append((loop, statement, variable))
+    for name, places in sorted(opened.items()):
+        assignments = [item for item in walk(execution)
+                       if _kind(item) == "Pointer_Assignment_Stmt" and str(item.items[0]).lower() == name]
+        uses = [item for item in walk(execution) if _kind(item) == "Name" and str(item).lower() == name
+                and not any(item is assignment.items[0] for assignment in assignments)]
+        fields = [item for item in walk(execution) if _kind(item) == "Data_Ref" and _kind(item.items[0]) == "Name"
+                  and str(item.items[0]).lower() == name]
+        spans = [(_span(statement)[1], _span(loop)[1]) for loop, statement, _variable in places]
+        if len(assignments) != len(places) or len(uses) != len(fields) \
+                or not all(any(after < _line(item) <= stop for after, stop in spans) for item in fields):
+            continue
+        loop, statement, variable = places[0]
+        first, last = _span(statement)
+        stop = _span(loop)[1]
+        element = f"{statement.items[2].items[0]}({variable})"
+        pattern = re.compile(r"(?i)(?<![\w%])" + re.escape(name) + r"(\s*%)")
+        rewritten = [pattern.sub(lambda found, element=element: element + found.group(1), line)
+                     for line in lines[last:stop]]
+        return first, stop, rewritten
+    return None
+
+
+def _select_case(scope, lines):
+    """An edit that writes one SELECT CASE construct of the procedure as an IF construct, or None.
+
+    Each CASE becomes a condition on the selector, which is evaluated once
+    per condition: that is done where the selector is a variable. A CASE
+    DEFAULT becomes the ELSE, wherever it stands, since no two cases share a
+    value. A selector compared with LOGICAL values is left as it is.
+    """
+    execution = _part(scope.node, "Execution_Part")
+    for construct in walk(execution) if execution is not None else ():
+        if _kind(construct) != "Case_Construct":
+            continue
+        opening = construct.content[0]
+        if _kind(opening) != "Select_Case_Stmt" or _kind(opening.items[0]) != "Name" \
+                or getattr(opening.item, "name", None):
+            continue
+        selector = str(opening.items[0])
+        cases, default, current = [], None, None
+        for item in construct.content[1:-1]:
+            if _kind(item) == "Case_Stmt":
+                current = (item, [])
+                if item.items[0].items[0] is None:
+                    default = current
+                else:
+                    cases.append(current)
+            elif current is not None and not (_kind(item) == "Comment" and item.item.span[0] == _span(current[0])[0]):
+                current[1].append(item)
+        if any("logical" in _kind(value).lower() for case, _body in cases for value in walk(case)):
+            continue
+
+        def condition(case, selector=selector):
+            terms = []
+            for value in case.items[0].items[0].items:
+                if _kind(value) == "Case_Value_Range":
+                    low, high = value.items
+                    parts = ([f"{selector} >= ({low})"] if low is not None else []) + \
+                            ([f"{selector} <= ({high})"] if high is not None else [])
+                    terms.append("(" + " .and. ".join(parts) + ")")
+                else:
+                    terms.append(f"{selector} == ({value})")
+            return " .or. ".join(terms)
+
+        first, last = _span(construct)
+        indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
+        output = []
+        for position, (case, body) in enumerate(cases):
+            output.append(f"{indent}{'if' if position == 0 else 'else if'} ({condition(case)}) then\n")
+            output += [line for item in body for line in lines[_span(item)[0] - 1:_span(item)[1]]] \
+                if body else []
+        if default is not None:
+            body = [line for item in default[1] for line in lines[_span(item)[0] - 1:_span(item)[1]]]
+            output += ([f"{indent}else\n"] if cases else []) + body
+        if cases:
+            output.append(f"{indent}end if\n")
+        return first, last, output
+    return None
+
+
+def _line(node):
+    """The source line a part of a statement stands on."""
+    while getattr(node, "item", None) is None and getattr(node, "parent", None) is not None:
+        node = node.parent
+    return node.item.span[0]
+
+
 def _declare(scope, lines, names):
     """An edit that declares ``names`` (Fortran declaration texts) after the procedure's specifications."""
     heading = _span(_heading(scope.node))[1]
@@ -529,6 +659,16 @@ def prepare_helpers(text, procedures):
         edits = None
         for qualified in sorted(reached):
             scope = scopes[qualified]
+            found = _element_pointer(scope, lines)
+            if found is not None:
+                edits = [found]
+                records.append({"procedure": qualified, "pointer": found[0]})
+                break
+            found = _select_case(scope, lines)
+            if found is not None:
+                edits = [found]
+                records.append({"procedure": qualified, "cases": found[0]})
+                break
             if any(fnmatchcase(qualified, pattern) for pattern in patterns) or qualified in refused:
                 continue
             execution = _part(scope.node, "Execution_Part")

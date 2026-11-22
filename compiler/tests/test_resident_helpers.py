@@ -112,7 +112,7 @@ def test_the_procedures_a_nest_calls_are_written_so_that_they_can_be_inlined():
     assert visc.index("wall = 0") < visc.index("else") < visc.index("call flat_stress_fort_1(")
     # The iteration to convergence counts to its cap; each EXIT clears the flag that guards what follows.
     ustar = text[text.index("subroutine flat_ustar("):]
-    assert "do fort_trip_1 = 1, 50" in ustar
+    assert "do fort_trip_1 = 2, 50" in ustar
     assert "exit" not in ustar.lower().split("end subroutine")[0]
     assert ustar.index("fort_go_1 = .false.") < ustar.index("if (fort_go_1) then", ustar.index("fort_go_1 = .false."))
     assert next(item for item in records if "loop" in item)["procedure"] == "walls::flat_ustar"
@@ -231,7 +231,7 @@ def test_a_return_inside_a_branch_sets_a_flag_and_a_cap_may_be_one_side_of_an_or
     ustar = text[text.index("subroutine rough_ustar("):]
     # What follows the RETURN runs where the flag is clear; the loop counts to the cap of its OR.
     assert ustar.index("if (ustar > 1) fort_left_1 = .true.") < ustar.index("if (.not. fort_left_1) then") \
-        < ustar.index("do fort_trip_1 = 1, 30")
+        < ustar.index("do fort_trip_1 = 2, 30")
     source = tmp_path / "rough.f90"
     source.write_text(ROUGH)
     prepared = prepare(ResidentProject((source,), (Selection("all", ("rough::step",), minimum_nests=1),)),
