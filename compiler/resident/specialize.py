@@ -113,11 +113,19 @@ def _span(node):
     return min(span[0] for span in spans), max(span[1] for span in spans)
 
 
-def _fold(nodes, lines, conditions, counter):
-    """The source lines of ``nodes`` with every decided IF construct folded."""
+def _fold(nodes, lines, conditions, counter, one_line=False):
+    """The source lines of ``nodes`` with every decided IF construct folded, and with ``one_line`` every IF statement."""
     output = []
     for node in nodes:
         first, last = _span(node)
+        if one_line and type(node).__name__ == "If_Stmt":
+            value = conditions.decide(node.items[0])
+            if value is not None:
+                counter[0] += 1
+                if value:
+                    indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
+                    output.append(indent + str(node.items[1]) + "\n")
+                continue
         if type(node).__name__ != "If_Construct":
             output += lines[first - 1:last]
             continue
@@ -145,7 +153,7 @@ def _fold(nodes, lines, conditions, counter):
         if not kept:
             continue
         if kept[0][2]:
-            output += _fold(kept[0][1], lines, conditions, counter)
+            output += _fold(kept[0][1], lines, conditions, counter, one_line)
             continue
         for position, (header, body, value) in enumerate(kept):
             start, stop = header.item.span
@@ -155,7 +163,7 @@ def _fold(nodes, lines, conditions, counter):
                 text = [indent + "else\n"]
             elif position == 0 and type(header).__name__ == "Else_If_Stmt":
                 text = [re.sub(r"(?i)^(\s*)else\s*if\b", r"\1if", text[0], count=1), *text[1:]]
-            output += text + _fold(body, lines, conditions, counter)
+            output += text + _fold(body, lines, conditions, counter, one_line)
         end = node.content[-1].item.span
         output += lines[end[0] - 1:end[1]]
     return output

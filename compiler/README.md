@@ -425,6 +425,19 @@ Forms beyond plain array loops that are supported in selected procedures:
   (`bind_field`), gathered when the field is first bound and written back to
   the structures at the next publication or `!$fort observe(points(:)%field)`.
   Nests over different lists get entries of their own.
+- **Procedures that a nest calls.** A nest that calls a procedure is an
+  entry when the procedure's statements can be inlined into it (see the
+  supported subset below). Three things in the procedures that the selected
+  procedures reach by calls, in the same source, are rewritten first,
+  in the prepared source: a call that leaves out optional arguments calls a
+  copy of the procedure without them, in which `present` of each dummy is
+  the constant it is at that call and the branches this decides are gone; a
+  RETURN that leaves early becomes the end of an IF branch whose ELSE holds
+  what follows; and a loop without control that counts its iterations up to
+  a cap (an iteration to convergence that gives up after fifty tries) becomes
+  a counted loop whose body runs while a flag says the loop has not been
+  left. `prepared.json` lists each rewrite under `helpers`, with the reason
+  where one could not be made.
 - **Elements that are one value for a nest.** A table of coefficients read as
   `rho(stage)`, where the nests do not change `stage`, is one number for the
   whole entry. The call reads it on the host and passes it; the array gets no
@@ -678,8 +691,14 @@ end module example
   locals per call and preserves actual storage identities and case-insensitive
   Fortran name resolution.
 - Source-backed pure module/internal functions and subroutines, including lexical
-  captures and scalar function results. Pure scalar input actuals may be
-  expressions; pure function arguments require `INTENT(IN)`. Helper work remains
+  captures and scalar function results. A procedure counts as pure when it is
+  declared `PURE` or `ELEMENTAL`, or when it does what such a procedure may:
+  it changes only its own locals and its `INTENT(OUT/INOUT)` dummies, keeps
+  nothing from one call to the next, does no input or output, does not stop,
+  gives every dummy an intent and calls only procedures that are pure in the
+  same sense. Pure scalar input actuals may be
+  expressions; pure function arguments require `INTENT(IN)`. An array element
+  passed to a writable scalar dummy is copied in and back around the call. Helper work remains
   at its original expression evaluation point, including guarded `ELSEIF` paths.
   Recursion rejects; numerical inlining is bounded to depth eight and 128 calls.
   In exported resident entries a helper's array arguments may declare constant
@@ -694,7 +713,8 @@ end module example
   Explicit-shape helper arrays require private fixed array actuals or read-only
   fixed `PARAMETER` vectors.
 - Fixed-cardinality sections with one varying axis support elementwise
-  expressions, private array assignments, short serial `SUM` and `DOT_PRODUCT`.
+  expressions, private array assignments, short serial `SUM` and `DOT_PRODUCT`,
+  and `NORM2` with GNU Fortran's scaling, in its order of operations.
   Captured-array section origins can depend on the mapped coordinates when the
   endpoint difference is provably constant. Each vector has at most 256 elements,
   with at most 4096 expanded elements per numerical closure. Nonzero constant

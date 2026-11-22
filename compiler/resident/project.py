@@ -19,6 +19,7 @@ from pathlib import Path
 from compiler.resident.array_statements import lower_array_statements
 from compiler.resident.configure import configure_sources
 from compiler.resident.directives import expand_directives
+from compiler.resident.helpers import prepare_helpers
 from compiler.resident.inlining import inline_calls
 from compiler.resident.reductions import lower_reductions
 from compiler.resident.rewrites import inline_tile_scratch_nests, promote_line_snapshots
@@ -278,7 +279,9 @@ def prepare(project, directory, *, fortran, host_threads=4):
     summary per selection; ``audit``, the host statements that touch bound
     arrays (see ``audit``); ``inlined``, the calls a selection asked to replace
     by the callee's statements, each ``inlined`` or with the ``reason`` it
-    stays a call; ``array_statements``, the array assignments outside loops in
+    stays a call; ``helpers``, the rewrites of the procedures the selected ones
+    call (see ``compiler.resident.helpers``); ``array_statements``, the array
+    assignments outside loops in
     the selected procedures, each ``lowered`` to its loop nest or with the
     ``reason`` it stays host code (see ``compiler.resident.array_statements``);
     ``reductions``, the loop nests that only
@@ -348,6 +351,19 @@ def prepare(project, directory, *, fortran, host_threads=4):
                 path.write_text(texts[holders[0]])
                 current[holders[0]] = path
                 specialized.add(holders[0])
+
+    # What the selected procedures call is written in a form their loop nests can take in.
+    helpers = []
+    for original in originals:
+        text = current[original].read_text()
+        rewritten, records = prepare_helpers(text, patterns)
+        if rewritten != text:
+            path = directory / "rewritten" / current[original].name
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(rewritten)
+            current[original] = path
+            specialized.add(original)
+        helpers += [{**record, "source": original} for record in records]
 
     # Array assignments outside loops become the loop nests they stand for.
     array_statements = []
@@ -554,6 +570,8 @@ def prepare(project, directory, *, fortran, host_threads=4):
                          "default": project.domain == DEFAULT_DOMAIN},
               "sources": records, "entries": [item["directory"] for package in packages for item in package["entries"]],
               "selections": summaries, "directives": directives, "audit": findings, "inlined": inlined,
+              "helpers": [{key: str(value) if key == "source" else value for key, value in record.items()}
+                          for record in helpers],
               "array_statements": [{key: str(value) if key == "source" else value for key, value in record.items()
                                     if key not in {"tag", "arrays", "text"}} for record in array_statements],
               "reductions": [{key: str(value) if key == "source" else value for key, value in record.items()

@@ -224,6 +224,72 @@ def _helper(analysis, routine, name):
     return analysis.numerical_helpers.get(candidates[0])
 
 
+# Statements a PURE procedure may not hold, or that act on storage beyond the procedure's own.
+_IMPURE = frozenset({"Write_Stmt", "Print_Stmt", "Read_Stmt", "Open_Stmt", "Close_Stmt", "Inquire_Stmt",
+                     "Backspace_Stmt", "Rewind_Stmt", "Endfile_Stmt", "Flush_Stmt", "Wait_Stmt", "Stop_Stmt",
+                     "Error_Stop_Stmt", "Pointer_Assignment_Stmt", "Allocate_Stmt", "Deallocate_Stmt",
+                     "Nullify_Stmt", "Entry_Stmt", "Data_Stmt", "Goto_Stmt", "Computed_Goto_Stmt"})
+
+
+def _declared_pure(helper):
+    statement = _part(helper.scope.node, "Subroutine_Stmt") or _part(helper.scope.node, "Function_Stmt")
+    return any(str(prefix).lower() in {"pure", "elemental"} for prefix in _children(statement.items[0]))
+
+
+def _pure(analysis, helper, visiting=()):
+    """Whether a helper does what a PURE procedure may, whether or not it says so.
+
+    It changes nothing but its own locals and its dummies that have INTENT(OUT)
+    or INTENT(INOUT), keeps nothing from one call to the next, does no input
+    or output, does not stop the program, and calls only procedures that are
+    pure in the same sense or intrinsic. Every dummy has an INTENT, as in a
+    PURE procedure. Such a helper can be inlined like one declared PURE.
+    """
+    if _declared_pure(helper):
+        return True
+    if helper.qualified in visiting or len(visiting) >= analysis.depth_limit:
+        return False
+    visiting = (*visiting, helper.qualified)
+    own = helper.qualified + "::"
+    for name, binding in helper.scope.bindings.items():
+        if name in helper.arguments:
+            if binding.intent is None and not binding.attributes & {"value"}:
+                return False
+        elif binding.root.startswith(own) and binding.attributes & {"save", "pointer", "target", "allocatable"}:
+            return False
+    specification = _part(helper.scope.node, "Specification_Part")
+    for declaration in walk(specification, F.Entity_Decl) if specification is not None else ():
+        name = str(declaration.items[0]).lower()
+        binding = helper.scope.bindings.get(name)
+        # An initialized local keeps its value from one call to the next.
+        if declaration.items[3] is not None and binding is not None and "parameter" not in binding.attributes:
+            return False
+    if any(_kind(node) in _IMPURE for node in walk(helper.execution)):
+        return False
+    for statement in walk(helper.execution, F.Assignment_Stmt):
+        target = statement.items[0]
+        while _kind(target) in {"Part_Ref", "Data_Ref"}:
+            target = target.items[0]
+        binding = analysis._binding(helper.scope, target) if _kind(target) == "Name" else None
+        if binding is None:
+            return False
+        if binding.root.startswith("argument::"):
+            if binding.intent not in {"out", "inout"}:
+                return False
+        elif not binding.root.startswith(own):
+            return False
+    for node in walk(helper.execution):
+        if _kind(node) not in {"Call_Stmt", "Part_Ref", "Function_Reference"} or _kind(node.items[0]) != "Name":
+            continue
+        child = _helper(analysis, helper, node.items[0])
+        if child is not None:
+            if not _pure(analysis, child, visiting):
+                return False
+        elif _kind(node) == "Call_Stmt":
+            return False
+    return True
+
+
 def _helper_actuals(analysis, routine, node, *, allow_omitted_optional=False):
     """Resolve ordinary numerical calls without evaluating their actuals."""
     if _kind(node) == "Call_Stmt":
@@ -293,9 +359,8 @@ def _helper_closure(analysis, routine, loops):
                 raise CompilationError("recursive inline numerical helper closure is unsupported")
             if helper.qualified in result:
                 continue
-            statement = _part(helper.scope.node, "Subroutine_Stmt") or _part(helper.scope.node, "Function_Stmt")
-            if not any(str(prefix).lower() == "pure" for prefix in _children(statement.items[0])):
-                raise CompilationError("inline numerical helper needs explicit PURE and transitive numerical proof")
+            if not _pure(analysis, helper):
+                raise CompilationError("inline numerical helper changes or keeps more than its own arguments and locals")
             if len(active) + 1 >= analysis.depth_limit or len(result) >= analysis.procedure_limit:
                 raise CompilationError("inline numerical helper closure budget exceeded")
             result[helper.qualified] = helper
@@ -1267,7 +1332,11 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         statement = _part(helper.scope.node, "Subroutine_Stmt") or _part(helper.scope.node, "Function_Stmt")
         function = _kind(statement) == "Function_Stmt"
         header = copy.copy(statement)
-        header.items = (transformed(statement.items[0], helper), F.Name(helper_names[qualified]), *statement.items[2:])
+        prefix = transformed(statement.items[0], helper)
+        if not _declared_pure(helper):
+            # The analysis found it pure; the entry's own copy says so.
+            prefix = F.Prefix(("pure " + str(prefix)) if prefix is not None else "pure")
+        header.items = (prefix, F.Name(helper_names[qualified]), *statement.items[2:])
         local_declarations = []
         for declaration in _children(_part(helper.scope.node, "Specification_Part")):
             if _kind(declaration) in {"Implicit_Part", "Comment", "Use_Stmt"}:
@@ -1297,7 +1366,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                 entities.items = tuple(rebased)
             if any(binding.attributes & {"save", "allocatable", "pointer", "optional", "target", "volatile", "asynchronous"} for binding in own):
                 raise CompilationError("inline numerical helper storage association is unsupported")
-            if any((binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1)} for binding in own):
+            # A helper's own variables are not passed to the entry: a LOGICAL of any kind is a flag in it.
+            if any((binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4), ("logical", 1),
+                                                         ("logical", 4)} for binding in own):
                 raise CompilationError("unsupported inline numerical helper declaration type")
             if any(binding.signature()[:2] != own[0].signature()[:2] for binding in own):
                 raise CompilationError("inline numerical helper declaration has inconsistent type")

@@ -895,7 +895,7 @@ class _Lowerer:
         if len(actual_nodes) != len(callee.arguments):
             raise CompilationError(f"call to {callee.name} has the wrong number of arguments", location)
         formal_declarations = {declaration.name: declaration for declaration in callee.declarations}
-        actuals, prelude, storage, writable = {}, [], [], set()
+        actuals, prelude, storage, writable, copied = {}, [], [], set(), []
         for formal, actual_node in zip(callee.arguments, actual_nodes, strict=True):
             expected = formal_declarations[formal]
             if not expected.rank and expected.intent in {"out", "inout"} and not callee.pure:
@@ -922,6 +922,26 @@ class _Lowerer:
                     actual = replace(actual, bounds=expected.bounds)
                 elif isinstance(actual, (_PrivateArray, _ConstantArray)):
                     actual = replace(actual, bounds=tuple((1, max(0, hi-lo+1)) for lo, hi in actual.bounds))
+            elif (actual is None or actual.rank) and expected.intent in {"out", "inout"} \
+                    and type(actual_node).__name__ == "Part_Ref" and callee.pure:
+                # An array element: the helper works on a copy, which goes back to the element after the call.
+                # A conforming call cannot reach the element by another way while the copy is changed.
+                element, element_prelude = self.evaluated(actual_node, bindings, location)
+                array = str(actual_node.items[0]).lower()
+                if not isinstance(element, ArrayAccess) or declarations[array].intent == "in" \
+                        or declarations[array].constant or element.symbol.intent == "in":
+                    raise CompilationError(f"writable argument {formal} of {callee.name} aliases a read-only variable", location)
+                if self.dtype(element) is not expected.dtype:
+                    raise CompilationError(f"type or rank mismatch for argument {formal} of {callee.name}", location)
+                prelude.extend(element_prelude)
+                actual = self.new_symbol(replace(expected, intent=None, rank=0))
+                if expected.intent == "inout":
+                    prelude.append(Assignment(Reference(actual), element, location))
+                copied.append((element, actual))
+                storage.append({actual})
+                writable.add(actual)
+                actuals[formal] = actual
+                continue
             elif actual is None or actual.rank:
                 if expected.intent != "in":
                     raise CompilationError("writable scalar helper arguments require private whole variables", location)
@@ -963,6 +983,13 @@ class _Lowerer:
             if declaration.rank:
                 raise CompilationError("numerical helper function results must be scalar", location)
             actuals[callee.result] = self.new_symbol(replace(declaration, intent=None))
+        for element, _copy in copied:
+            # The element is the same one after the call: nothing the call may change selects it, and no
+            # other argument passes its array.
+            indices = {value.symbol for index in element.indices for value in walk_expr(index) if isinstance(value, Reference)}
+            if indices & writable or any(element.symbol in symbols for symbols in storage):
+                raise CompilationError(f"an element passed to {callee.name} may not be the same one after the call",
+                                       location)
         call_provenance = (*provenance, f"{self.active_frames[-1][0].name} at {self.path}:{location.line} -> {callee.name}")
         body = self.inline(callee, actuals, ancestors, call_provenance, active_iterators)
         # INTENT(OUT) kills prior definitions, including values from a previous
@@ -978,7 +1005,8 @@ class _Lowerer:
             defined = validate_block(body, set(self.symbols) - output_symbols, active_iterators)
             if not output_symbols <= defined:
                 raise CompilationError("private INTENT(OUT) helper results require complete ordered definitions", location)
-        return Block(tuple(prelude) + body.statements), actuals.get(callee.result)
+        back = tuple(Assignment(element, Reference(copy), location) for element, copy in copied)
+        return Block(tuple(prelude) + body.statements + back), actuals.get(callee.result)
 
     @staticmethod
     def lookup(node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Symbol:
@@ -1273,6 +1301,39 @@ class _Lowerer:
             )
         return result
 
+    def norm2(self, argument_list, bindings, location):
+        """NORM2 of a fixed real vector, computed the way GNU Fortran expands it.
+
+        A running scale keeps the squares from overflowing: each nonzero
+        element either becomes the new scale, which rescales the sum, or adds
+        its square relative to the scale. The order of the operations is
+        GNU Fortran's, so the result agrees with the host's to the last bit.
+        """
+        args = getattr(argument_list, "items", ())
+        if len(args) == 1 and type(args[0]).__name__ == "Actual_Arg_Spec" and str(args[0].items[0]).lower() == "x":
+            args = (args[0].items[1],)
+        if len(args) != 1 or type(args[0]).__name__ == "Actual_Arg_Spec":
+            raise CompilationError("NORM2 supports one fixed real vector without DIM", location)
+        vector = self._expression(args[0], bindings, location)
+        if not isinstance(vector, _FixedVector) or vector.dtype not in {ScalarType.REAL32, ScalarType.REAL}:
+            raise CompilationError("NORM2 requires a fixed real vector", location)
+        self.requires_numerical_environment = True
+        dtype = vector.dtype
+        scale, total, size, ratio = (Reference(self.temporary(dtype, location, prefix))
+                                     for prefix in ("fort_norm_scale", "fort_norm_sum", "fort_norm_abs", "fort_norm_ratio"))
+        one, zero = Literal("1.0", dtype), Literal("0.0", dtype)
+        self.pending += [Assignment(scale, one, location), Assignment(total, zero, location)]
+        for element in vector.elements:
+            larger = Block((Assignment(ratio, Binary("/", scale, size), location),
+                            Assignment(total, Binary("+", Binary("*", Binary("*", ratio, ratio), total), one), location),
+                            Assignment(scale, size, location)))
+            smaller = Block((Assignment(ratio, Binary("/", size, scale), location),
+                             Assignment(total, Binary("+", Binary("*", ratio, ratio), total), location)))
+            self.pending.append(If(Binary("/=", element, zero), Block((
+                Assignment(size, IntrinsicCall("abs", (element,), dtype), location),
+                If(Binary(">", size, scale), larger, smaller, location))), Block(()), location))
+        return Binary("*", IntrinsicCall("sqrt", (total,), dtype), scale)
+
     def intrinsic(self, node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Expr:
         name_node, argument_list = node.items
         name = str(name_node).lower()
@@ -1310,6 +1371,8 @@ class _Lowerer:
             for a, b in zip(left.elements, right.elements, strict=True):
                 result = Binary("+", result, Binary("*", a, b))
             return result
+        if name == "norm2":
+            return self.norm2(argument_list, bindings, location)
         args = self.intrinsic_arguments(name, argument_list, location)
         if name in ARRAY_INQUIRIES:
             return self.array_inquiry(name, args, bindings, location)
