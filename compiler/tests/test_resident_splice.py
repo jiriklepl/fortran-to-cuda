@@ -66,10 +66,9 @@ def test_a_compiled_span_becomes_a_guarded_entry_call_with_the_original_as_fallb
 
 
 def test_a_rejected_span_publishes_first_unless_the_caller_supplies_its_text(tmp_path):
-    rejected = [{"procedure": "example::update", "first_line": 3, "last_line": 3, "reason": "unsupported"},
-                {"procedure": "example::update", "first_line": 4, "last_line": 4, "reason": "unsupported"},
-                # No span of this procedure compiled, so its caller owns the boundary.
-                {"procedure": "example::other", "first_line": 1, "last_line": 1, "reason": "unsupported"}]
+    source = str(tmp_path / "example.f90")
+    rejected = [{"procedure": "example::update", "source": source, "first_line": line, "last_line": line,
+                 "reason": "unsupported"} for line in (3, 4)]
     _source, compiled = package(tmp_path, rejected=rejected)
     seen = []
 
@@ -89,8 +88,8 @@ def test_a_rejected_span_publishes_first_unless_the_caller_supplies_its_text(tmp
 
 def test_changed_sources_overlaps_and_unknown_array_types_are_refused(tmp_path):
     source, compiled = package(tmp_path)
-    overlapping = {**compiled, "rejected": [{"procedure": "example::update", "first_line": 2, "last_line": 3,
-                                              "reason": "unsupported"}]}
+    overlapping = {**compiled, "rejected": [{"procedure": "example::update", "source": str(source),
+                                              "first_line": 2, "last_line": 3, "reason": "unsupported"}]}
     with pytest.raises(ValueError, match="Overlapping"):
         splice_resident_entries([overlapping], tmp_path / "overlap", domain=DOMAIN)
     compiled["entries"][0]["region"]["resources"][0]["kind"] = 16

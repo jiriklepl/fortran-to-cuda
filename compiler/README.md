@@ -263,8 +263,11 @@ not learn without an interface.
 selected procedures (one serial caller dispatches their nests), exports and
 compiles the entries, replaces each compiled nest by a call that runs while
 the domain is active and keeps the original loops for when it is not, and
-writes the changed sources. A nest the compiler rejects stays host code and
-gets the device values first. `minimum_nests` makes lost coverage an error.
+writes the changed sources. An entry is not called where none of its nests
+has an iteration: there is then nothing to bind and nothing to launch. A nest
+the compiler rejects stays host code and gets the access to its arrays that
+any host statement gets (see below). `minimum_nests` makes lost coverage an
+error.
 `build` generates a CMake project that compiles the application twice, from
 the original sources (`box-native`) and from the prepared ones with the entries
 and the runtime (`box`), both with the compiler's numerical options.
@@ -434,8 +437,7 @@ Forms beyond plain array loops that are supported in selected procedures:
   strided through the structures, so the domain keeps a contiguous copy
   (`bind_field`), gathered when the field is first bound and written back to
   the structures at the next publication or `!$fort observe(points(:)%field)`.
-  Nests over different lists get entries of their own, and when every nest of
-  an entry runs from one to `size(points)`, an empty list skips the entry.
+  Nests over different lists get entries of their own.
 - **Writes through index values.** A nest such as
   `a(idx(i)) = a(idx(i)) + v(i)`, or the same with index fields of a list, is
   independent across iterations exactly when its subscripts name a different
@@ -512,7 +514,8 @@ The generated block asks the domain which of the arrays it holds when the
 statement runs. An array that is empty, not allocated, or that no entry has
 used yet costs nothing, and a dummy that is part of a bound array stands for
 that array. The access of a one-line IF is taken inside its condition, and
-that of a host loop only when the loop runs at all. Where arrays cannot be
+that of a host loop, or of several loops next to each other, only when one
+of them runs at all. Where arrays cannot be
 handed over one by one (a field of an array of derived type, or statements
 that control can leave before the arrays are handed back) all device values
 are published first. A call into host code that itself reaches selected
@@ -525,9 +528,12 @@ precedes, or that only passes such arrays whole to procedures that are
 selected themselves. A wrapper that is not selected and only passes its arrays
 on counts as what it calls; a section or an expression of an array is a use,
 not a hand-over; asking for an array's bounds or allocation is not a read. A
-call through a type-bound procedure counts as a call of every procedure that
-any type of the sources binds under that name, and an array it passes is
-changed only if one of them may change it. A dummy array counts whatever it
+call through a type-bound procedure counts as a call of every procedure
+bound under that name in the declared type of the object, in the types it
+extends and in the types that extend it (in every type of the sources where
+the object is a component), and an array it passes is changed only if one of
+them may change it. An array that no entry keeps does not count, however the
+statement uses it. A dummy array counts whatever it
 is called, since the array it is associated with may be kept on the device
 under another name; the generated block asks the domain when it runs.
 `prepared["audit"]` lists the statements that got
@@ -583,8 +589,8 @@ steps, all in `compiler.scopes`:
 - `resident_splice.splice_resident_entries` writes each source with its
   compiled spans replaced by a block that binds the arrays through the domain
   object and calls the entry while the domain is active, and runs the original
-  statements otherwise. A rejected span stays native after the domain
-  publishes its device values; the caller can supply its own text for such a
+  statements otherwise. A rejected span stays native with the access of a
+  host statement around it; the caller can supply its own text for such a
   span instead. `resident_splice.addressable_arrays` adds `TARGET` to the
   arrays a domain can bind.
 

@@ -153,8 +153,10 @@ def entry_call_block(region, entry, domain, held=None):
             f"      use {domain.module}, only: {domain.object}, {domain.check}",
             "      use " + entry["fortran_module"] + f", only: {run} => run",
             *(["      integer(c_int64_t) :: " + ",".join(handles)] if handles else [])]
+    # Where no nest of the entry has an iteration, the original statements have nothing to do either.
+    active = f"{domain.object}%active" + (f" .and. ({region['runs']})" if region.get("runs") else "")
     if not structures and not checks and not conditional and not strided:
-        code += [f"      if ({domain.object}%active) then", *guards, *registration, *call,
+        code += [f"      if ({active}) then", *guards, *registration, *call,
                  "      else", "@ORIGINAL@", "      endif", "    end block"]
         return "\n".join(code) + "\n"
 
@@ -166,13 +168,9 @@ def entry_call_block(region, entry, domain, held=None):
                  f"      integer(c_int64_t), save :: {domain.prefix}_checked(2) = -1_c_int64_t"]
         code += [f"      logical, allocatable :: {domain.prefix}_seen_{number}({','.join(':' * len(group[0]['indices']))})"
                  for number, group in enumerate(checked_arrays.values(), 1)]
-    # When every nest runs once per element of an array, an empty array leaves nothing to do.
-    counted = [item["name"] for item in structures if item["counted"]]
-    others = [item["name"] for item in structures if not item["counted"]]
-    if counted:
-        code.append("      if (" + " .and. ".join(f"size({name}) > 0" for name in counted) + ") then")
-    code.append(f"      {resident} = {domain.object}%active"
-                + "".join(f" .and. size({name}) > 0" for name in others)
+    # An empty array of derived type has no element whose fields could be bound.
+    code.append(f"      {resident} = {active}"
+                + "".join(f" .and. size({item['name']}) > 0" for item in structures)
                 + "".join(f" .and. is_contiguous({name})" for name in strided))
     code += [f"      if ({resident}) then", *guards, *registration]
     if checks:
@@ -189,9 +187,7 @@ def entry_call_block(region, entry, domain, held=None):
     code += ["      endif", f"      if ({resident}) then", *call,
              # An entry that declines leaves everything as it was, for the original statements.
              *(["      endif", f"      if (.not. {resident}) then"] if conditional else ["      else"]),
-             f"        if ({domain.object}%active) call {domain.object}%publish()", "@ORIGINAL@", "      endif"]
-    if counted:
-        code.append("      endif")
+             f"        if ({active}) call {domain.object}%publish()", "@ORIGINAL@", "      endif"]
     code.append("    end block")
     return "\n".join(code) + "\n"
 
@@ -240,8 +236,9 @@ def host_access_block(code, bound, domain):
     if code.get("leave"):
         # Entries run somewhere inside these statements, beside host code that uses the same arrays: no
         # hand-over of arrays covers that. The values come back and stay until the application enters again.
+        runs = f" .and. ({code['runs']})" if code.get("runs") else ""
         return (f"    block\n      use {domain.module}, only: {domain.object}\n"
-                f"      if ({domain.object}%active) call {domain.object}%end_epoch()\n    end block\n")
+                f"      if ({domain.object}%active{runs}) call {domain.object}%end_epoch()\n    end block\n")
     modes = {mode: [item for item in arrays if item["access"] == mode] for mode in ("read", "write", "release")}
     # The opening statements of a construct take their access before the construct, and cannot hand
     # anything back after it.
@@ -326,9 +323,9 @@ def splice_resident_entries(packages, directory, *, domain, native=None, held=No
     """Write each source with its compiled spans replaced by entry calls.
 
     ``packages`` are records from ``compile_resident_entries``. A rejected span
-    is edited only when another span of the same procedure compiled; a
-    procedure with no entry at all is left to its caller. It gets the host
-    access its arrays need (see ``host_access_block``). ``native(region,
+    gets the host access its arrays need (see ``host_access_block``), also in
+    a procedure where no span compiled: its arrays may be ones that entries
+    of other procedures keep on the device. ``native(region,
     original)`` may return the complete replacement for a rejected span, or
     None for the default. ``held`` names arrays the domain already holds a
     handle for (see ``entry_call_block``). ``host`` lists host statements, as
@@ -357,15 +354,12 @@ def splice_resident_entries(packages, directory, *, domain, native=None, held=No
                 (region["first_line"], region["last_line"], entry_call_block(region, item["entry"], domain, held), None,
                  None))
         for region in package["rejected"]:
-            sources = {entry["region"]["source"] for entry in package["entries"]
-                       if entry["region"]["procedure"] == region["procedure"]}
-            if not sources:
-                continue
-            if len(sources) != 1:
-                raise ValueError("Ambiguous resident native source")
             block = host_access_block(region, bound, domain)
+            if block is not None and "@ORIGINAL@" not in block and "@ACTION@" not in block:
+                # A block without the statements goes in front of them.
+                block += "@ORIGINAL@\n"
             if block is not None or native is not None:
-                edits.setdefault(next(iter(sources)), []).append(
+                edits.setdefault(region["source"], []).append(
                     (region["first_line"], region["last_line"], block or "@ORIGINAL@\n", region, region.get("action")))
     records = []
     for source, replacements in edits.items():

@@ -131,7 +131,9 @@ def test_each_field_is_one_array_resource_with_the_shape_of_its_array(exported):
     assert (resources["points%xi"]["type"], resources["points%xi"]["kind"]) == ("integer", 4)
     assert all("element_field" in resources[name]["attributes"] for name in resources if name != "u")
     assert entry["written_resources"] == ["walls::points%flux"]
-    assert entry["structures"] == [{"name": "points", "resource": "walls::points", "counted": True}]
+    assert entry["structures"] == [{"name": "points", "resource": "walls::points"}]
+    # With an empty list the nest has no iteration, and the entry nothing to bind or to launch.
+    assert entry["runs"] == "(SIZE(points)) >= (1)"
     # In the entry the fields are plain arrays, and SIZE of the list is the extent of one of them.
     text = Path(entry["input_path"]).read_text()
     assert "intent(inout) :: fort_region_field_1(:)" in text
@@ -145,10 +147,9 @@ def test_nests_over_different_lists_get_entries_of_their_own(exported):
     first, second = entries(exported, "two_lists")
     assert [item["structures"][0]["name"] for item in (first, second)] == ["points", "others"]
     assert (len(first["source_loop_spans"]), len(second["source_loop_spans"])) == (1, 2)
-    # Every nest of the first entry runs once per element, so an empty list leaves it nothing to do.
-    assert first["structures"][0]["counted"] is True
-    # The second entry has a nest bounded by n: it is not known to do nothing when its list is empty.
-    assert second["structures"][0]["counted"] is False
+    # An entry has nothing to do where none of its nests has an iteration.
+    assert first["runs"] == "(SIZE(points)) >= (1)"
+    assert second["runs"] == "(SIZE(others)) >= (1) .or. (n) >= (1)"
 
 
 def test_fields_the_entry_cannot_represent_are_rejected_with_their_reason(exported):
@@ -222,12 +223,12 @@ def test_the_call_block_binds_fields_and_checks_before_it_runs(exported, tmp_pat
     # The fields' lower bounds are those of the list.
     assert block.count("lbound(points,1), &") + block.count("lbound(points,1)))") == 3
     order = [block.index(text) for text in (
-        "      if (size(points) > 0) then\n", "      fort_resident = flow%active\n",
+        "      fort_resident = flow%active .and. ((SIZE(points)) >= (1)) .and. size(points) > 0\n",
         "flow%bind_field(", "if (any(fort_checked /= [flow%generation, flow%stamp])) then",
         "DO i = 1, SIZE(points)", "fort_resident = fort_distinct", "call require(fort_device_run(",
-        "if (flow%active) call flow%publish()", "@ORIGINAL@")]
+        "if (flow%active .and. ((SIZE(points)) >= (1))) call flow%publish()", "@ORIGINAL@")]
     assert order == sorted(order)
-    assert block.rstrip().endswith("      endif\n      endif\n    end block")
+    assert block.rstrip().endswith("@ORIGINAL@\n      endif\n    end block")
 
 
 def test_all_tuples_of_an_array_are_checked_in_one_mask(exported, tmp_path):

@@ -141,7 +141,8 @@ def audit(extracted, packages, selected):
     sees to it), or when all it does with arrays is pass them whole to
     procedures that are selected themselves or that only pass them on to
     such procedures. A call through a type-bound procedure counts as a call of
-    every procedure bound under that name. ``access`` is ``arrays`` for
+    every procedure bound under that name in the type family of the object.
+    ``access`` is ``arrays`` for
     access to the arrays the statement names, and ``leave`` where no access to
     arrays can be right and the values stop being kept on the device instead:
     a call into host code that itself reaches selected procedures, and a loop
@@ -154,6 +155,26 @@ def audit(extracted, packages, selected):
     The audit looks inside the selected procedures only. It does not follow a
     module array into a host procedure that uses it without being handed it.
     """
+    needed = _access_needed(extracted, packages, selected)
+    findings = []
+    for statement in extracted["host_statements"]:
+        need = needed(statement)
+        if need is not None:
+            findings.append({"id": statement["id"], "procedure": statement["procedure"],
+                             # Lines of the preprocessed source the entries were exported from.
+                             "source": statement["source"],
+                             "first_line": statement["first_line"], "last_line": statement["last_line"],
+                             "arrays": need[0], "calls": statement["calls"], "text": statement["text"],
+                             "access": need[1], "statement": statement})
+    return findings
+
+
+def _access_needed(extracted, packages, selected):
+    """The judgment of ``audit`` on one piece of host code: None, or its arrays and ``arrays`` or ``leave``.
+
+    The code is a host statement, or a nest that stays on the host, as the
+    export describes them.
+    """
     bound = {resource["resource"] for package in packages for item in package["entries"]
              for resource in item["region"]["resources"] if resource["rank"]}
     forwarders = extracted.get("forwarders", {})
@@ -163,7 +184,8 @@ def audit(extracted, packages, selected):
         if any(fnmatchcase(call, pattern) for pattern in selected):
             return True
         wrapper = forwarders.get(call)
-        return bool(wrapper and wrapper["only_calls"] and call not in visiting
+        return bool(wrapper and call not in visiting
+                    and not any(may_be_kept(resource, bound) for resource in wrapper["used"])
                     and all(covered(item, (*visiting, call)) for item in wrapper["calls"]))
 
     def reaches(call, visiting=()):
@@ -173,25 +195,20 @@ def audit(extracted, packages, selected):
         return bool(wrapper and call not in visiting
                     and any(reaches(item, (*visiting, call)) for item in wrapper["calls"]))
 
-    findings = []
-    for statement in extracted["host_statements"]:
-        arrays = [item["name"] for item in statement["arrays"] if may_be_kept(item["resource"], bound)]
-        if not arrays or statement["acknowledged"]:
-            continue
-        if statement["only_calls"] and statement["calls"] and all(covered(call) for call in statement["calls"]):
-            continue
-        findings.append({"id": statement["id"], "procedure": statement["procedure"],
-                         # Lines of the preprocessed source the entries were exported from.
-                         "source": statement["source"],
-                         "first_line": statement["first_line"], "last_line": statement["last_line"],
-                         "arrays": arrays, "calls": statement["calls"], "text": statement["text"],
-                         # A call into host code that itself reaches selected procedures cannot simply be
-                         # given the arrays: the entries in there need them on the device. Nor can a loop
-                         # statement that reads an array while entries run in its loop.
-                         "access": "leave" if statement["kind"] == "Nonlabel_Do_Stmt" or any(
-                             reaches(call) for call in statement["calls"]) else "arrays",
-                         "statement": statement})
-    return findings
+    def needed(code):
+        kept = [item for item in code["arrays"] if may_be_kept(item["resource"], bound)]
+        arrays = [item["name"] for item in kept]
+        if not arrays or code.get("acknowledged"):
+            return None
+        if all(item["handed"] for item in kept) and code["calls"] and all(covered(call) for call in code["calls"]):
+            return None
+        # A call into host code that itself reaches selected procedures cannot simply be given the
+        # arrays: the entries in there need them on the device. Nor can a loop statement that reads an
+        # array while entries run in its loop.
+        return arrays, "leave" if code["kind"] == "Nonlabel_Do_Stmt" or any(
+            reaches(call) for call in code["calls"]) else "arrays"
+
+    return needed
 
 
 def prepare(project, directory, *, fortran, host_threads=4):
@@ -384,6 +401,13 @@ def prepare(project, directory, *, fortran, host_threads=4):
     reached += [item for package in packages for item in package.get("host_statements", ())]
     reached = [item for item in reached if (item["source"], item["first_line"], item["last_line"]) not in lent]
     findings = audit({**extracted, "host_statements": reached}, packages, patterns)
+    # A nest that stays on the host is host code like any statement, and is judged the same way.
+    needed = _access_needed(extracted, packages, patterns)
+    for package in packages:
+        for region in package["rejected"]:
+            if "arrays" in region:
+                need = needed(region)
+                region.update(arrays=region["arrays"] if need else [], leave=bool(need and need[1] == "leave"))
     bound = {resource["name"].lower().split("%")[0] for package in packages for item in package["entries"]
              for resource in item["region"]["resources"] if resource["rank"]}
     # Each of them gets the access it needs generated around it.

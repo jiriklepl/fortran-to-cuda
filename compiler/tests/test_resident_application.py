@@ -50,7 +50,8 @@ def test_entries_are_called_while_resident_and_the_original_loops_run_otherwise(
     directory, _prepared = box
     stepper = (directory / "sources/stepper.f90").read_text()
     store = stepper[stepper.index("subroutine store(a, b)"):stepper.index("end subroutine store")]
-    assert "if (resident%active) then" in store
+    # Where the nest has no iteration, the original statements have nothing to do either.
+    assert "if (resident%active .and. ((nz) >= (1))) then" in store
     assert "fort_handle_a=resident%bind_real64(a,lbound(a),.true., &\n          origin='stepper::store::a')" in store
     assert "call resident_require(fort_device_run(" in store
     # store is one array assignment in the source; the nest it stands for is what the entry replaces.
@@ -413,8 +414,8 @@ def test_fields_of_an_array_of_derived_type_are_bound_through_the_domain(box):
             "          .true.,origin='sources::sense::points%seen')") in sense
     assert "FORT_SCOPE_INTEGER32, &\n          .false.,origin='sources::sense::points%xi')" in sense
     assert "TYPE(source), ALLOCATABLE, TARGET :: points(:)" in text
-    # Every nest runs once per source, so an empty list skips the block, also when not resident.
-    assert sense.index("      if (size(points) > 0) then\n") < sense.index("fort_resident = resident%active")
+    # An empty list has no element whose fields could be bound, and leaves the nest without an iteration.
+    assert "fort_resident = resident%active .and. ((SIZE(points)) >= (1)) .and. size(points) > 0\n" in sense
     # Reading through indices needs no check; only the scatter in inject has one.
     assert "fort_distinct" not in sense
 
@@ -432,7 +433,7 @@ def test_a_write_through_indices_is_checked_once_per_publication_and_falls_back(
     assert "any([points(q) % xi, points(q) % yj, points(q) % zk] < lbound(a))" in inject
     # Sources that share a cell keep the original loop, after the device values are published.
     call = inject.index("call resident_require(fort_device_run(")
-    publish = inject.index("if (resident%active) call resident%publish()")
+    publish = inject.index("if (resident%active .and. ((SIZE(points)) >= (1))) call resident%publish()")
     assert call < publish < inject.index("a(points(q)%xi, points(q)%yj, points(q)%zk) = ", publish)
 
 
@@ -685,7 +686,7 @@ def test_a_nest_that_is_independent_for_some_values_of_its_scalars_checks_them_w
     # Called with equal levels the entry does nothing and says so; the original statements run instead.
     assert call.index("fort_resident = fort_status /= FORT_SCOPE_DECLINED") < call.index(
         "call resident_require(fort_status)") < call.index("if (.not. fort_resident) then") < call.index(
-            "if (resident%active) call resident%publish()") < call.index("u(i,j,new) = 0.25d0")
+            "if (resident%active .and. ((n) >= (1))) call resident%publish()") < call.index("u(i,j,new) = 0.25d0")
 
 
 def test_a_condition_that_only_says_a_loop_is_too_short_is_no_condition(tmp_path):
@@ -719,11 +720,11 @@ end module
     text = (tmp_path / "prepared/sources/strides.f90").read_text()
     # u may be every second element of its caller's array: bound by its first element and its extent, it
     # would be taken for the elements next to each other. w says that it is not such a section.
-    assert "fort_resident = resident%active .and. is_contiguous(u)\n" in text
+    assert "fort_resident = resident%active .and. ((n) >= (1)) .and. is_contiguous(u)\n" in text
     assert "is_contiguous(w)" not in text
     call = text[text.index("fort_resident = resident%active"):]
     assert call.index("call resident_require(fort_device_run(") < call.index("      else\n") < call.index(
-        "if (resident%active) call resident%publish()") < call.index("u(i) = u(i) + w(i)")
+        "if (resident%active .and. ((n) >= (1))) call resident%publish()") < call.index("u(i) = u(i) + w(i)")
 
 
 FRAMES = """module frames
@@ -747,6 +748,11 @@ contains
   procedure :: fill => plane_fill
 end type
 type(plane) :: planes(2)
+type :: record
+contains
+  procedure :: save => record_save
+  procedure :: fill => record_fill
+end type
 contains
 subroutine step(a, due)
 real(8), contiguous, intent(inout) :: a(:)
@@ -779,6 +785,17 @@ class(plane), intent(inout) :: self
 real(8), contiguous, intent(in) :: a(:)
 self%kept = a(1)
 end subroutine
+subroutine record_save(self, a, due)
+class(record), intent(inout) :: self
+real(8), contiguous, intent(inout) :: a(:)
+logical, intent(in) :: due
+if (due) a(1) = 0
+end subroutine
+subroutine record_fill(self, a)
+class(record), intent(inout) :: self
+real(8), contiguous, intent(inout) :: a(:)
+a(1) = 0
+end subroutine
 end module
 """
 
@@ -790,6 +807,7 @@ def test_a_call_through_a_type_bound_procedure_is_what_the_bound_procedures_are(
         "frames::step", "frames::save_all", "frames::frame_save")),)), tmp_path / "prepared", fortran=fortran_compiler())
     # save is bound to a selected procedure: the calls through it hand nothing over, in every step. fill is
     # deferred; the one procedure an extending type binds under that name reads the array and is host code.
+    # What an unrelated type binds under the same names, which would change the array, is not reached.
     finding, = prepared["audit"]
     assert (finding["procedure"], finding["text"], finding["calls"], finding["access"]) == (
         "frames::frame_save", "CALL self % fill(a)", ["frames::plane_fill"], "arrays")
@@ -799,4 +817,125 @@ def test_a_call_through_a_type_bound_procedure_is_what_the_bound_procedures_are(
     assert save.index("if (due) then") < save.index("call resident%observe([ &\n          resident%held(a)])") \
         < save.index("call self%fill(a)")
     assert "host_modify" not in text
-    assert "fort_host" not in text[text.index("subroutine save_all"):text.index("subroutine frame_save")]
+    # The loop over the frames only hands the array on, to a selected procedure: nothing happens there. That
+    # it names the list of frames, an array no entry keeps, is no use of an array that needs anything.
+    assert "resident" not in text[text.index("subroutine save_all"):text.index("subroutine frame_save")]
+
+
+def test_nests_left_to_the_host_together_get_their_arrays_only_where_one_of_them_runs(tmp_path):
+    source = tmp_path / "lists.f90"
+    source.write_text("""module lists
+integer :: n, m
+integer, allocatable :: counts(:)
+contains
+subroutine sweep(a, b)
+real(8), contiguous, intent(inout) :: a(:), b(:)
+integer :: i
+do i = 1, size(a)
+a(i) = a(i) + b(i)
+enddo
+m = m + 1
+do i = 2, n
+a(i) = a(i-1) + 1
+enddo
+do i = 2, m
+b(i) = b(i-1) + 1
+enddo
+m = m + 1
+do i = 2, counts(1)
+b(i) = b(i-1) + a(i)
+enddo
+end subroutine
+end module
+""")
+    project = ResidentProject(sources=(source,), selections=(Selection("all", ("lists::sweep",)),))
+    prepared = prepare(project, tmp_path / "prepared", fortran=fortran_compiler())
+    text = Path(prepared["sources"][0]["resident"]).read_text()
+    summary, = prepared["selections"]
+    assert [(item["first_line"], item["last_line"]) for item in summary["rejected"]] == [(14, 19), (21, 23)]
+    # Two nests that share a rejection share their access: nothing moves when neither has an iteration.
+    assert "fort_host = resident%active .and. ((n) >= (2) .or. (m) >= (2))\n" in text
+    # A bound that reads an array is not asked before the arrays are there: this nest always gets them.
+    last = text[text.index("m = m + 1", text.index("b(i) = b(i-1) + 1")):]
+    assert "fort_host = resident%active\n" in last
+    assert "counts(1)) >=" not in text
+
+
+def test_a_procedure_whose_only_nest_is_rejected_still_gets_its_arrays(tmp_path):
+    source = tmp_path / "apart.f90"
+    source.write_text("""module apart
+contains
+subroutine scale(a)
+real(8), contiguous, intent(inout) :: a(:)
+integer :: i
+do i = 1, size(a)
+a(i) = 2 * a(i)
+enddo
+end subroutine
+subroutine accumulate(b)
+real(8), contiguous, intent(inout) :: b(:)
+integer :: i
+do i = 2, size(b)
+b(i) = b(i-1) + b(i)
+enddo
+end subroutine
+end module
+""")
+    project = ResidentProject(sources=(source,), selections=(Selection("all", ("apart::*",)),))
+    prepared = prepare(project, tmp_path / "prepared", fortran=fortran_compiler())
+    text = Path(prepared["sources"][0]["resident"]).read_text()
+    # The array may be the one the other procedure's entry keeps on the device, whatever it is called here.
+    nest = text[text.index("subroutine accumulate"):]
+    assert nest.index("fort_host = resident%active .and. ((SIZE(b)) >= (2))") \
+        < nest.index("call resident%host_modify([ &\n          resident%held(b)])") \
+        < nest.index("b(i) = b(i-1) + b(i)") < nest.index("call resident%host_done([ &")
+
+
+def test_a_nest_left_to_the_host_that_reaches_entries_ends_the_stay_on_the_device(tmp_path):
+    source = tmp_path / "reach.f90"
+    source.write_text("""module reach
+contains
+subroutine scale(a)
+real(8), contiguous, intent(inout) :: a(:)
+integer :: i
+do i = 1, size(a)
+a(i) = 2 * a(i)
+enddo
+end subroutine
+subroutine helper(a, k)
+real(8), contiguous, intent(inout) :: a(:)
+integer, intent(in) :: k
+a(k) = 0
+call scale(a)
+end subroutine
+subroutine outer(a, steps)
+real(8), contiguous, intent(inout) :: a(:)
+integer, intent(in) :: steps
+integer :: i
+do i = 1, steps
+call helper(a, i)
+enddo
+end subroutine
+subroutine twice(a)
+real(8), contiguous, intent(inout) :: a(:)
+integer :: i
+do i = 1, 2
+call scale(a)
+enddo
+end subroutine
+end module
+""")
+    project = ResidentProject(sources=(source,), selections=(
+        Selection("all", ("reach::scale", "reach::outer", "reach::twice")),))
+    prepared = prepare(project, tmp_path / "prepared", fortran=fortran_compiler())
+    text = Path(prepared["sources"][0]["resident"]).read_text()
+    # The host cannot hold the array through the loop: the entry in there needs it on the device, and the
+    # statement before the entry needs it on the host. The loop keeps its statements.
+    outer = text[text.index("subroutine outer"):text.index("subroutine twice")]
+    assert outer.index("if (resident%active .and. ((steps) >= (1))) call resident%end_epoch()") \
+        < outer.index("do i = 1, steps\ncall helper(a, i)\nenddo")
+    assert "host_modify" not in outer
+    # A loop that only hands the array to a selected procedure needs nothing: the entry sees to it.
+    twice = text[text.index("subroutine twice"):]
+    assert "resident" not in twice
+    assert "do i = 1, 2\ncall scale(a)\nenddo" in twice

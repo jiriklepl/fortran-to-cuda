@@ -173,26 +173,50 @@ _LEAVING = {"Return_Stmt", "Goto_Stmt", "Computed_Goto_Stmt", "Stop_Stmt", "Erro
             "Cycle_Stmt"}
 
 
-def _runs(loop):
-    """A condition under which a counted loop with no stated step runs at all, or None."""
-    if _kind(loop) != "Block_Nonlabel_Do_Construct":
-        return None
-    control = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt").items[1]
-    counted = control.items[1] if control is not None and _kind(control) == "Loop_Control" else None
-    if not counted or len(counted) != 2 or len(counted[1]) != 2:
-        return None
-    return f"({_text(counted[1][1])}) >= ({_text(counted[1][0])})"
+def _runs(analysis, routine, nodes):
+    """A condition under which any of the given counted loops runs at all, or None.
+
+    Each loop has no stated step. The condition is asked before the first of
+    them: a later loop's bounds can only have changed where an earlier loop
+    ran. Bounds that read an array's values are not asked that early, since
+    the values on the host may not be the newest.
+    """
+    conditions = []
+    for loop in nodes:
+        if _kind(loop) != "Block_Nonlabel_Do_Construct":
+            return None
+        control = next(item for item in loop.content if _kind(item) == "Nonlabel_Do_Stmt").items[1]
+        counted = control.items[1] if control is not None and _kind(control) == "Loop_Control" else None
+        if not counted or len(counted) != 2 or len(counted[1]) != 2:
+            return None
+        for bound in counted[1]:
+            inquired = {id(reference.items[1].items[0]) for reference in walk(bound, Intrinsic_Function_Reference)
+                        if str(reference.items[0]).lower() in _INQUIRIES and reference.items[1] is not None
+                        and reference.items[1].items}
+            for name in walk(bound, Name):
+                binding = analysis._binding(routine.scope, name)
+                if binding is not None and binding.rank and id(name) not in inquired:
+                    return None
+        lower, upper = _text(counted[1][0]), _text(counted[1][1])
+        if lower.isdigit() and upper.isdigit() and int(upper) >= int(lower):
+            # A loop that always runs: there is nothing to ask.
+            return None
+        conditions.append(f"({upper}) >= ({lower})")
+    return " .or. ".join(dict.fromkeys(conditions)) or None
 
 
 def _statement_form(nodes):
     """What generated host access around host statements has to know about their shape.
 
-    ``kind`` is the kind of a single statement or ``group``. A one-line IF
-    comes with its ``condition``, the names in it and its ``action``, so that
-    the access can go inside the condition. ``leaves`` says that control can
-    leave from inside (RETURN, GOTO, EXIT ...), past whatever follows.
+    ``kind`` is the kind of a single statement, ``group`` for the statements
+    that open the parts of one construct, and ``statements`` for several
+    whole statements. A one-line IF comes with its ``condition``, the names
+    in it and its ``action``, so that the access can go inside the condition.
+    ``leaves`` says that control can leave from inside (RETURN, GOTO, EXIT
+    ...), past whatever follows.
     """
-    form = {"kind": _kind(nodes[0]) if len(nodes) == 1 else "group",
+    several = "group" if any(_kind(node) in _CONSTRUCT_HEADERS for node in nodes) else "statements"
+    form = {"kind": _kind(nodes[0]) if len(nodes) == 1 else several,
             "leaves": any(_kind(item) in _LEAVING for node in nodes for item in walk(node))}
     if form["kind"] == "If_Stmt":
         condition, action = nodes[0].items[0], nodes[0].items[1]
@@ -313,50 +337,89 @@ def _bound(analysis):
 
 
 def _bound_procedures(analysis):
-    """What a call through a type-bound procedure may reach, by binding name.
+    """The procedures the derived types of the sources bind, by type and binding name, and each type's parent.
 
-    A binding name maps to the procedures that any derived type of the sources
-    binds under it, each with whether the object is passed as its first
+    A type and a binding name map to the procedures bound under the name in
+    types of that name, each with whether the object is passed as its first
     argument, or to None when one of them is not known here (bound to a
     procedure of another module, or with a PASS attribute that names another
-    argument). The type of the object in a call is not looked at: a call may
-    reach every procedure bound under the name, which is more than it reaches
-    and never less. A generic binding stands for its specific ones.
+    argument). A generic binding stands for its specific ones, which
+    ``_reached`` resolves.
     """
-    found, generics = {}, {}
+    found, generics, parents = {}, {}, {}
     for module, scope in analysis.modules.items():
         for definition in walk(scope.node):
             if _kind(definition) != "Derived_Type_Def":
                 continue
+            header = definition.content[0]
+            owner = str(header.items[1]).lower()
+            extended = re.search(r"\bextends\s*\(\s*(\w+)\s*\)", str(header.items[0] or "").lower())
+            if extended:
+                parents.setdefault(owner, set()).add(extended[1])
             for binding in walk(definition):
                 if _kind(binding) == "Generic_Binding":
                     names = binding.items[2]
-                    generics.setdefault(str(binding.items[1]).lower(), set()).update(
+                    generics.setdefault((owner, str(binding.items[1]).lower()), set()).update(
                         str(item).lower() for item in (_children(names) if _kind(names) != "Name" else (names,)))
                     continue
                 if _kind(binding) != "Specific_Binding":
                     continue
-                name = str(binding.items[3]).lower()
+                key = owner, str(binding.items[3]).lower()
                 attributes = {item.split("(")[0].strip() for item in str(binding.items[1] or "").lower().split(",")}
                 if "deferred" in attributes:
                     # Its implementations are the bindings of the same name in the extending types.
-                    found.setdefault(name, set())
+                    found.setdefault(key, set())
                     continue
                 procedure = module + "::" + str(binding.items[4] or binding.items[3]).lower()
                 known = procedure in analysis.routines or procedure in analysis.numerical_helpers
-                if not known or "pass" in attributes or found.get(name, set()) is None:
-                    found[name] = None
+                if not known or "pass" in attributes or found.get(key, set()) is None:
+                    found[key] = None
                 else:
-                    found.setdefault(name, set()).add((procedure, "nopass" not in attributes))
-    for name, specifics in generics.items():
-        targets = [found.get(item) for item in specifics]
-        found[name] = None if any(item is None for item in targets) or found.get(name, set()) is None else \
-            set().union(found.get(name, set()), *targets)
-    return found
+                    found.setdefault(key, set()).add((procedure, "nopass" not in attributes))
+    return {"specific": found, "generic": generics, "parents": parents}
+
+
+def _reached(analysis, declared, name):
+    """What a call through the binding ``name`` of an object declared ``declared`` may reach, or None if unknown.
+
+    The object may be of the declared type, where the binding may be inherited
+    from any type it extends, or of a type that extends it and binds the name
+    anew. With no declared type (the object is a component, say) every type of
+    the sources counts. That is more than the call reaches and never less.
+    """
+    bound = _bound(analysis)
+    owners = {owner for owner, _name in (*bound["specific"], *bound["generic"])}
+    if declared is not None:
+        family, pending = set(), [declared]
+        while pending:
+            owner = pending.pop()
+            if owner not in family:
+                family.add(owner)
+                pending += bound["parents"].get(owner, ())
+        pending = [declared]
+        while pending:
+            owner = pending.pop()
+            children = [child for child, above in bound["parents"].items() if owner in above and child not in family]
+            family.update(children)
+            pending += children
+        owners &= family
+    targets, names, seen = set(), [name], set()
+    while names:
+        current = names.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        for owner in owners:
+            names += bound["generic"].get((owner, current), ())
+            specific = bound["specific"].get((owner, current), set())
+            if specific is None:
+                return None
+            targets |= specific
+    return targets
 
 
 def _array_uses(analysis, routine, nodes):
-    """The arrays ``nodes`` name, the procedures they call, and whether an array is used outside a call.
+    """The arrays ``nodes`` name, the procedures they call, and the arrays that are used outside a call.
 
     A whole array that is an actual argument is the called procedure's
     business. A section or an expression of it is evaluated here, so it counts
@@ -365,7 +428,7 @@ def _array_uses(analysis, routine, nodes):
     arrays the statements may change (an assignment target, input, an argument
     of a procedure that does not take it INTENT(IN)) and those they deallocate.
     """
-    arrays, calls, passed, elsewhere = {}, set(), set(), False
+    arrays, calls, passed, elsewhere = {}, set(), set(), set()
     written, released, others = set(), set(), set()
 
     def named(node):
@@ -403,7 +466,12 @@ def _array_uses(analysis, routine, nodes):
             whole_arguments(call.items[1])
             if _kind(call.items[0]) == "Procedure_Designator":
                 # Through a type-bound procedure: every procedure bound under the name, if they are known.
-                targets = _bound(analysis).get(str(call.items[0].items[2]).lower())
+                base = call.items[0].items[0]
+                base = base.items[0] if _kind(base) == "Part_Ref" else base
+                declared = analysis._binding(routine.scope, base) if _kind(base) == "Name" else None
+                declared = re.fullmatch(r"(?:type|class)\((\w+)\)", (declared.dtype or "").replace(" ", "")) \
+                    if declared is not None else None
+                targets = _reached(analysis, declared[1] if declared else None, str(call.items[0].items[2]).lower())
                 if not targets:
                     calls.add("$unresolved")
                     may_write(None, call.items[1])
@@ -442,7 +510,8 @@ def _array_uses(analysis, routine, nodes):
             binding = analysis._binding(routine.scope, name)
             if binding is not None and binding.rank and id(name) not in inquired and id(name) not in others:
                 arrays[binding.root] = binding
-                elsewhere |= id(name) not in passed
+                if id(name) not in passed:
+                    elsewhere.add(binding.root)
     return arrays, calls, elsewhere, written & set(arrays), released & set(arrays)
 
 
@@ -556,21 +625,22 @@ def _temporaries(analysis, routine, procedure):
     return [item for item in found if item["name"].lower() in kept]
 
 
-def _forwarders(analysis, selected, host_statements):
-    """Procedures outside the selection that host statements call, and whether each only passes arrays on.
+def _forwarders(analysis, selected, host_code):
+    """Procedures outside the selection that host code calls, and what each does with arrays itself.
 
     A wrapper that hands its arrays to other procedures and does nothing else
-    with them is as safe as what it calls. Each record has ``only_calls`` and
-    the procedures it ``calls``; the audit follows them.
+    with them is as safe as what it calls. Each record has the arrays the
+    procedure ``used`` otherwise, by resource, and the procedures it
+    ``calls``; the audit follows them.
     """
-    found, pending = {}, {call for statement in host_statements for call in statement["calls"]}
+    found, pending = {}, {call for code in host_code for call in code.get("calls", ())}
     while pending:
         name = pending.pop()
         routine = analysis.routines.get(name) or analysis.numerical_helpers.get(name)
         if name in found or name in selected or routine is None or routine.execution is None:
             continue
         _arrays, calls, elsewhere, _written, _released = _array_uses(analysis, routine, tuple(_children(routine.execution)))
-        found[name] = {"only_calls": not elsewhere, "calls": sorted(calls)}
+        found[name] = {"used": sorted(elsewhere), "calls": sorted(calls)}
         pending.update(calls)
     return found
 
@@ -692,23 +762,23 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                                                 "last_line": last, "reason": str(error)})
                     within(nodes[0], outer)
                     return
-                rejected.append({"procedure": procedure, "first_line": first, "last_line": last,
+                rejected.append({"procedure": procedure, "source": str(routine.scope.path),
+                                 "first_line": first, "last_line": last,
                                  "reason": str(error), **alternative(outer), **host_code(nodes)})
                 return
             path = extracted.write(directory)
             structures = []
             for root in sorted(_structure_objects(analysis, routine.scope, nodes)):
-                name = root.rsplit("::", 1)[-1]
-                # When every nest runs once per element, an empty array leaves the entry nothing to do.
-                counted = all(_text(next(part for part in node.content if _kind(part) == "Nonlabel_Do_Stmt")).lower()
-                              .replace(" ", "").endswith(f",size({name})") for node in loops)
-                structures.append({"name": name, "resource": root, "counted": bool(loops) and counted})
+                structures.append({"name": root.rsplit("::", 1)[-1], "resource": root})
+            runs = _runs(analysis, routine, nodes)
             entries.append({"procedure": procedure, "source": str(routine.scope.path),
                             "input_path": str(path.resolve()), **extracted.public(),
                             "source_loop_spans": [list(statement_span(node)) for node in loops],
                             "structures": structures, "injective": _indirect_writes(analysis, routine, loops),
                             # For the case that the entry does not compile and the nests stay host code.
                             "host_code": host_code(nodes),
+                            # Where no nest has an iteration, there is nothing to bind and nothing to launch.
+                            **({"runs": runs} if runs else {}),
                             "readable_scalars": sorted(parameter.name for parameter in extracted.parameters
                                                        if _readable(analysis, routine, parameter)),
                             **alternative(outer)})
@@ -734,9 +804,11 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
             scan(tuple(item for item in _children(loop) if _kind(item) not in {"Nonlabel_Do_Stmt", "End_Do_Stmt"}),
                  outer)
 
-        def touched(arrays, written, released):
+        def touched(arrays, written, released, elsewhere):
             return [{"name": binding.name, "resource": root, "type": binding.dtype, "kind": binding.kind,
                      "rank": binding.rank, "field": hasattr(binding, "component_object"),
+                     # All the code does with the array is pass it whole to procedures.
+                     "handed": root not in elsewhere,
                      # What must hold for the array to exist when the statements start.
                      "exists": sorted(_EXISTS[name] for name in binding.attributes if name in _EXISTS),
                      "access": "release" if root in released else "write" if root in written else "read"}
@@ -745,11 +817,12 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
         def host_code(nodes):
             """How a nest that stays on the host touches arrays, for the access it then needs; {} if unknown."""
             try:
-                arrays, _calls, _elsewhere, written, released = _array_uses(analysis, routine, nodes)
+                arrays, calls, elsewhere, written, released = _array_uses(analysis, routine, nodes)
             except CompilationError:
                 return {}
-            return {"arrays": touched(arrays, written, released), **_statement_form(nodes),
-                    **({"runs": _runs(nodes[0])} if len(nodes) == 1 and _runs(nodes[0]) else {})}
+            return {"arrays": touched(arrays, written, released, elsewhere), **_statement_form(nodes),
+                    "calls": sorted(calls),
+                    **({"runs": runs} if (runs := _runs(analysis, routine, nodes)) else {})}
 
         def host(nodes, acknowledged, outer=()):
             """Record host code that names arrays: it runs beside entries that may hold newer values."""
@@ -763,10 +836,10 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                                         "text": text if len(text) <= 240 else text[:237] + "...",
                                         # Stable while the statement and its procedure keep their text.
                                         "id": sha256((procedure + "\n" + text).encode()).hexdigest()[:16],
-                                        "arrays": touched(arrays, written, released),
+                                        "arrays": touched(arrays, written, released, elsewhere),
                                         **_statement_form(nodes),
                                         "calls": sorted(calls), "acknowledged": acknowledged,
-                                        "only_calls": not elsewhere, **alternative(outer)})
+                                        **alternative(outer)})
 
         def scan(sequence, outer=()):
             follows = set()
@@ -794,7 +867,8 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
     return {"version": 2, "kind": "caller_owned_resident_entries", "source_inputs": analysis.sources,
             "entries": entries, "rejected": rejected, "grouping_rejections": grouping_rejections,
             "host_statements": host_statements, "temporaries": temporaries,
-            "forwarders": _forwarders(analysis, set(resolved_procedures), host_statements),
+            "forwarders": _forwarders(analysis, set(resolved_procedures), [
+                *host_statements, *rejected, *(item["host_code"] for item in entries)]),
             "lifetime_authority": "caller storage epoch; numerical export grants no native-effect authority"}
 
 
@@ -906,7 +980,7 @@ def compile_resident_entries(extracted, directory, *, host_threads=4):
         if not counts(region, tried):
             continue
         target = directory / region["source_identity"][:16]
-        span = {"procedure": region["procedure"], "first_line": region["first_line"],
+        span = {"procedure": region["procedure"], "source": region["source"], "first_line": region["first_line"],
                 "last_line": region["last_line"], **{key: region[key] for key in ("alternative_of",) if key in region}}
         checked = {requirement["resource"] for requirement in region.get("injective", ())}
         unavailable = ()
