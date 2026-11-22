@@ -7,6 +7,7 @@ allocation epochs. Every exported entry still goes through ordinary numerical
 lowering and dependence analysis before it can execute on a device.
 """
 import re
+from dataclasses import replace
 from fnmatch import fnmatchcase
 from hashlib import sha256
 from pathlib import Path
@@ -473,7 +474,7 @@ def _array_uses(analysis, routine, nodes):
                     if declared is not None else None
                 targets = _reached(analysis, declared[1] if declared else None, str(call.items[0].items[2]).lower())
                 if not targets:
-                    calls.add("$unresolved")
+                    calls.update(("$unresolved", "$opaque"))
                     may_write(None, call.items[1])
                 for procedure, object_first in targets or ():
                     calls.add(procedure)
@@ -484,7 +485,10 @@ def _array_uses(analysis, routine, nodes):
                 calls.add(procedure)
             except CompilationError:
                 procedure = None
-                calls.update(analysis._candidates(routine.scope, call.items[0]) or ("$unresolved",))
+                candidates = analysis._candidates(routine.scope, call.items[0])
+                calls.update(candidates or ("$unresolved",))
+                if not candidates and _may_be_ours(analysis, routine, str(call.items[0]).lower()):
+                    calls.add("$opaque")
             may_write(procedure, call.items[1])
         for reference in walk(node, Part_Ref):
             candidates = analysis._candidates(routine.scope, reference.items[0]) or ()
@@ -509,10 +513,74 @@ def _array_uses(analysis, routine, nodes):
         for name in walk(node, Name):
             binding = analysis._binding(routine.scope, name)
             if binding is not None and binding.rank and id(name) not in inquired and id(name) not in others:
-                arrays[binding.root] = binding
+                arrays[binding.root] = _spelled(binding, name)
                 if id(name) not in passed:
                     elsewhere.add(binding.root)
     return arrays, calls, elsewhere, written & set(arrays), released & set(arrays)
+
+
+def _spelled(binding, name):
+    """The binding under the name the source gives the array here: a USE may have renamed it."""
+    if binding.name.lower() == str(name).lower() or hasattr(binding, "component_object"):
+        return binding
+    return replace(binding, name=str(name))
+
+
+def _may_be_ours(analysis, routine, name):
+    """Whether a call that did not resolve may still reach a procedure of the sources.
+
+    A dummy procedure may be any of them. Another name is one of them only if
+    the sources define a procedure of that name; else it is an intrinsic or a
+    library's, which sees no array it is not handed.
+    """
+    if not hasattr(analysis, "procedure_names"):
+        analysis.procedure_names = {key.rsplit("::", 1)[-1] for key in (*analysis.routines, *analysis.numerical_helpers)}
+    return name in routine.scope.procedure_arguments or name in analysis.procedure_names
+
+
+def _host_procedures(analysis, selected):
+    """What procedures outside the selection do with arrays: a function from a name to a record, and all records.
+
+    The function answers None for a selected procedure, which sees to its
+    own arrays, and for one that is no procedure of the sources: a library
+    procedure sees only what it is handed. A record has the arrays the
+    procedure ``used`` other than by passing them whole, by resource; the
+    procedures it ``calls``; ``opaque`` where a call of it may reach a
+    procedure of the sources that is not known; and under ``outside`` the
+    arrays it touches that are not its own dummies or locals, each with
+    whether it is only ``passed`` whole to procedures, may be ``written`` or
+    ``released``, and the ``host`` procedure it belongs to if it is no module
+    array (an internal procedure sees the variables of its host).
+    """
+    records = {}
+
+    def scan(name):
+        if name in records:
+            return records[name]
+        routine = analysis.routines.get(name) or analysis.numerical_helpers.get(name)
+        if name in selected or routine is None or routine.execution is None:
+            return None
+        try:
+            arrays, calls, elsewhere, written, released = _array_uses(
+                analysis, routine, tuple(_children(routine.execution)))
+        except CompilationError:
+            arrays, calls, elsewhere, written, released = {}, {"$opaque"}, set(), set(), set()
+        outside = {}
+        for root, binding in arrays.items():
+            entity = root.rsplit("::", 1)[-1]
+            own = root.startswith(name + "::") or (root.startswith("argument::") and entity in routine.arguments)
+            if own:
+                continue
+            module = root.split("::", 1)[0]
+            host = None if root.count("::") == 1 and module in analysis.modules and "%" not in root \
+                else name.rsplit("::", 1)[0]
+            outside[root] = {"binding": binding, "host": host, "passed": root not in elsewhere,
+                             "written": root in written, "released": root in released}
+        records[name] = {"used": sorted(elsewhere), "calls": sorted(calls - {"$opaque"}),
+                         "opaque": "$opaque" in calls, "outside": outside}
+        return records[name]
+
+    return scan, records
 
 
 def _readable(analysis, routine, parameter):
@@ -625,26 +693,6 @@ def _temporaries(analysis, routine, procedure):
     return [item for item in found if item["name"].lower() in kept]
 
 
-def _forwarders(analysis, selected, host_code):
-    """Procedures outside the selection that host code calls, and what each does with arrays itself.
-
-    A wrapper that hands its arrays to other procedures and does nothing else
-    with them is as safe as what it calls. Each record has the arrays the
-    procedure ``used`` otherwise, by resource, and the procedures it
-    ``calls``; the audit follows them.
-    """
-    found, pending = {}, {call for code in host_code for call in code.get("calls", ())}
-    while pending:
-        name = pending.pop()
-        routine = analysis.routines.get(name) or analysis.numerical_helpers.get(name)
-        if name in found or name in selected or routine is None or routine.execution is None:
-            continue
-        _arrays, calls, elsewhere, _written, _released = _array_uses(analysis, routine, tuple(_children(routine.execution)))
-        found[name] = {"used": sorted(elsewhere), "calls": sorted(calls)}
-        pending.update(calls)
-    return found
-
-
 def _resolve_procedures(analysis, procedures, *, allow_patterns=False):
     available = sorted(analysis.routines)
     if procedures is None:
@@ -719,6 +767,7 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
     directory.mkdir(parents=True, exist_ok=False)
     resolved_procedures = _resolve_procedures(analysis, procedures, allow_patterns=allow_patterns)
     entries, rejected, grouping_rejections, host_statements, temporaries = [], [], [], [], []
+    host_procedure, host_procedures = _host_procedures(analysis, set(resolved_procedures))
     for procedure in resolved_procedures:
         routine = analysis.routines[procedure]
 
@@ -768,8 +817,15 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                 return
             path = extracted.write(directory)
             structures = []
+            # Variables that a USE renamed: the call names them as the nests do.
+            spelled = {}
+            for node in nodes:
+                for name in walk(node, Name):
+                    binding = analysis._binding(routine.scope, name)
+                    if binding is not None and _spelled(binding, name) is not binding:
+                        spelled[binding.root] = str(name)
             for root in sorted(_structure_objects(analysis, routine.scope, nodes)):
-                structures.append({"name": root.rsplit("::", 1)[-1], "resource": root})
+                structures.append({"name": spelled.get(root, root.rsplit("::", 1)[-1]), "resource": root})
             runs = _runs(analysis, routine, nodes)
             entries.append({"procedure": procedure, "source": str(routine.scope.path),
                             "input_path": str(path.resolve()), **extracted.public(),
@@ -779,6 +835,7 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                             "host_code": host_code(nodes),
                             # Where no nest has an iteration, there is nothing to bind and nothing to launch.
                             **({"runs": runs} if runs else {}),
+                            **({"spelled": spelled} if spelled else {}),
                             "readable_scalars": sorted(parameter.name for parameter in extracted.parameters
                                                        if _readable(analysis, routine, parameter)),
                             **alternative(outer)})
@@ -814,20 +871,65 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                      "access": "release" if root in released else "write" if root in written else "read"}
                     for root, binding in sorted(arrays.items())]
 
+        def uses(nodes):
+            """The arrays host code touches, its calls, and the arrays the host procedures it calls may reach.
+
+            ``reached`` lists every array that such a procedure, or one it
+            calls, touches without being handed it: a module array, or a
+            variable of this procedure seen by its internal procedures. Each
+            comes with the name it has here, with the USE that gives it a
+            name here, or as ``unnameable``. Which of them count is decided
+            where the selected and the kept arrays are known.
+            """
+            arrays, calls, elsewhere, written, released = _array_uses(analysis, routine, nodes)
+            found, pending, seen = {}, sorted(calls), set()
+            while pending:
+                name = pending.pop()
+                record = host_procedure(name) if name not in seen else None
+                seen.add(name)
+                if record is None:
+                    continue
+                pending += record["calls"]
+                for root, item in record["outside"].items():
+                    # A variable of another procedure is that procedure's business.
+                    if item["host"] is None or (procedure + "::").startswith(item["host"] + "::"):
+                        found[root] = item["binding"]
+            reached = []
+            for root, binding in sorted(found.items()):
+                entity = root.rsplit("::", 1)[-1]
+                module = root.split("::", 1)[0]
+                here = analysis._binding(routine.scope, entity)
+                item = {"name": entity, "resource": root, "type": binding.dtype, "kind": binding.kind,
+                        "rank": binding.rank, "field": False, "handed": False,
+                        "exists": sorted(_EXISTS[name] for name in binding.attributes if name in _EXISTS)}
+                if root in arrays:
+                    item["name"] = arrays[root].name
+                elif here is not None and here.root == root:
+                    pass
+                elif module in analysis.modules and root.count("::") == 1 and not procedure.startswith(module + "::") \
+                        and analysis._exported(analysis.modules[module], entity):
+                    alias = f"fort_{module}_{entity}"
+                    item.update(name=alias if len(alias) <= 63 else "fort_" + sha256(root.encode()).hexdigest()[:16],
+                                use=[module, entity])
+                else:
+                    # A private array, or one a local name hides: it cannot be named here.
+                    item["unnameable"] = True
+                reached.append(item)
+            return {"arrays": touched(arrays, written, released, elsewhere), "calls": sorted(calls - {"$opaque"}),
+                    **({"reached": reached} if reached else {}), **({"opaque": True} if "$opaque" in calls else {})}
+
         def host_code(nodes):
             """How a nest that stays on the host touches arrays, for the access it then needs; {} if unknown."""
             try:
-                arrays, calls, elsewhere, written, released = _array_uses(analysis, routine, nodes)
+                return {**uses(nodes), **_statement_form(nodes),
+                        **({"runs": runs} if (runs := _runs(analysis, routine, nodes)) else {})}
             except CompilationError:
                 return {}
-            return {"arrays": touched(arrays, written, released, elsewhere), **_statement_form(nodes),
-                    "calls": sorted(calls),
-                    **({"runs": runs} if (runs := _runs(analysis, routine, nodes)) else {})}
 
         def host(nodes, acknowledged, outer=()):
-            """Record host code that names arrays: it runs beside entries that may hold newer values."""
-            arrays, calls, elsewhere, written, released = _array_uses(analysis, routine, nodes)
-            if arrays:
+            """Record host code that touches arrays: it runs beside entries that may hold newer values."""
+            used = uses(nodes)
+            if used["arrays"] or used.get("reached") or used.get("opaque"):
                 first = min(statement_span(node)[0] for node in nodes)
                 last = max(statement_span(node)[1] for node in nodes)
                 text = " ".join(" ".join(str(node).split()) for node in nodes)
@@ -836,9 +938,7 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
                                         "text": text if len(text) <= 240 else text[:237] + "...",
                                         # Stable while the statement and its procedure keep their text.
                                         "id": sha256((procedure + "\n" + text).encode()).hexdigest()[:16],
-                                        "arrays": touched(arrays, written, released, elsewhere),
-                                        **_statement_form(nodes),
-                                        "calls": sorted(calls), "acknowledged": acknowledged,
+                                        **used, **_statement_form(nodes), "acknowledged": acknowledged,
                                         **alternative(outer)})
 
         def scan(sequence, outer=()):
@@ -867,8 +967,9 @@ def export_resident_entries(paths, procedures, directory, *, allow_patterns=Fals
     return {"version": 2, "kind": "caller_owned_resident_entries", "source_inputs": analysis.sources,
             "entries": entries, "rejected": rejected, "grouping_rejections": grouping_rejections,
             "host_statements": host_statements, "temporaries": temporaries,
-            "forwarders": _forwarders(analysis, set(resolved_procedures), [
-                *host_statements, *rejected, *(item["host_code"] for item in entries)]),
+            "forwarders": {name: {**record, "outside": {
+                root: {key: value for key, value in item.items() if key != "binding"}
+                for root, item in record["outside"].items()}} for name, record in sorted(host_procedures.items())},
             "lifetime_authority": "caller storage epoch; numerical export grants no native-effect authority"}
 
 

@@ -536,13 +536,31 @@ them may change it. An array that no entry keeps does not count, however the
 statement uses it. A dummy array counts whatever it
 is called, since the array it is associated with may be kept on the device
 under another name; the generated block asks the domain when it runs.
+An array of derived type counts when entries keep
+one of its fields; its values come back to its elements with everything else.
+
+A host procedure called from a selected one may use arrays it is not handed:
+module arrays, or variables of the calling procedure where it is internal to
+it. The call gets access to those as well, followed through the host
+procedures that the called one calls in turn; an array a procedure only
+passes whole to selected procedures is theirs. A module array that is not
+visible at the call under its own name is brought in by a `USE` in the
+generated block. Every value is published first where an array cannot be
+named there (it is private to its module, or a local name hides it), and
+where a call may reach a procedure of the sources that is not known: one
+through a dummy procedure, or a type-bound call whose bindings are not all
+found. A procedure that is not of the sources, an intrinsic or a library's,
+sees only what it is handed. Where a called host procedure may deallocate a
+kept array, the stay on the device ends.
+
 `prepared["audit"]` lists the statements that got
 access, each with its procedure, lines, text, arrays and `access` (`arrays`,
-or `leave` where the stay on the device ends): every one is a place where
+`publish` where every value comes back, or `leave` where the stay on the
+device ends): every one is a place where
 arrays may travel, so a statement that shows up in a hot path is worth
-selecting or rewriting. The audit looks inside the selected procedures only;
-it does not follow a module array into a host procedure that uses it without
-being handed it.
+selecting or rewriting. The audit looks inside the selected procedures and
+follows their calls; host code that runs while values are kept on the device
+without a selected procedure calling it needs a residency directive.
 
 A selected procedure's temporary arrays get storage that the domain lends. An
 array that the procedure allocates and deallocates in each call would cost a

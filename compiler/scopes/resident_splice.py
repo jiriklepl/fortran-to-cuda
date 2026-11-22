@@ -99,21 +99,24 @@ def entry_call_block(region, entry, domain, held=None):
                       and "%" not in binding["name"]
                       and any(parameter["resource"] == binding["resource"] and parameter["rank"]
                               for parameter in region["parameters"])})
+    spelled = region.get("spelled", {})
     for parameter in region["parameters"]:
         binding = bindings[parameter["resource"]]
-        name = binding["name"]
+        declared = binding["name"]
         element = "element_field" in binding.get("attributes", ())
-        owner = name.split("%", 1)[0] if element else name
+        # The array as the nests name it: a USE may have renamed it, and its own name may be another's here.
+        owner = spelled.get(parameter["resource"].split("%", 1)[0], declared.split("%", 1)[0])
+        name = owner + declared[len(declared.split("%", 1)[0]):]
         if parameter["lower_bound_dimension"] is not None:
             actual[parameter["name"]] = f"lbound({owner},{parameter['lower_bound_dimension']})"
-        elif parameter["rank"] and (region["procedure"], name.lower()) in (held or {}):
-            actual[parameter["name"]] = held[region["procedure"], name.lower()]
+        elif parameter["rank"] and (region["procedure"], declared.lower()) in (held or {}):
+            actual[parameter["name"]] = held[region["procedure"], declared.lower()]
         elif parameter["rank"]:
             handle = f"{domain.prefix}_handle_{parameter['name']}"
             actual[parameter["name"]] = handle
             by_resource[parameter["resource"]] = handle
             handles.append(handle)
-            origin = region["procedure"] + "::" + name
+            origin = region["procedure"] + "::" + declared
             if element:
                 kind = _FIELD.get((binding["type"], binding["kind"]))
                 if kind is None:
@@ -206,9 +209,15 @@ def may_be_kept(resource, bound):
 
     ``bound`` holds the resources entries bind. A dummy argument is known by
     its name only, and the array it is associated with may be bound under any
-    other: whether the domain holds it is asked when the statement runs.
+    other: whether the domain holds it is asked when the statement runs. An
+    array of derived type counts when entries bind one of its fields.
     """
-    return resource in bound or resource.startswith("argument::")
+    return resource in bound or resource.startswith("argument::") or _holds_fields(resource, bound)
+
+
+def _holds_fields(resource, bound):
+    """Whether entries bind a field of the array of derived type ``resource``."""
+    return any(item.startswith(resource + "%") for item in bound)
 
 
 def host_access_block(code, bound, domain):
@@ -231,7 +240,7 @@ def host_access_block(code, bound, domain):
     arrays = [item for item in code.get("arrays", ()) if may_be_kept(item["resource"], bound)]
     if "arrays" not in code:
         return published_native_block(domain)
-    if not arrays:
+    if not arrays and not code.get("leave") and not code.get("publish"):
         return None
     if code.get("leave"):
         # Entries run somewhere inside these statements, beside host code that uses the same arrays: no
@@ -243,7 +252,9 @@ def host_access_block(code, bound, domain):
     # The opening statements of a construct take their access before the construct, and cannot hand
     # anything back after it.
     opening = code.get("kind") in _OPENING
-    precise = all(not item["field"] for item in arrays) \
+    # The fields of an array of derived type come back to its elements only with everything else.
+    precise = not code.get("publish") \
+        and all(not item["field"] and not _holds_fields(item["resource"], bound) for item in arrays) \
         and not (modes["write"] and (code.get("leaves") or opening)) \
         and all(item["type"] == "real" for item in modes["release"]) \
         and all(len(item.get("exists", ())) <= 1 for item in arrays)
@@ -274,6 +285,9 @@ def host_access_block(code, bound, domain):
         when = {None: f"{domain.prefix}_host",
                 **{id(item): f"{domain.prefix}_host{number}" for number, item in enumerate(maybe, 1)}}
         body = [f"{margin}block", f"{margin}  use {domain.module}, only: {domain.object}",
+                # Module arrays that host procedures called from here use, under names of their own.
+                *(f"{margin}  use {item['use'][0]}, only: {item['name']} => {item['use'][1]}"
+                  for item in arrays if item.get("use")),
                 f"{margin}  logical :: {', '.join(when.values())}",
                 f"{margin}  {domain.prefix}_host = {active}",
                 *(f"{margin}  {when[id(item)]} = {item['exists'][0]}({item['name']})" for item in maybe),
@@ -305,7 +319,8 @@ def _on_shared_lines(statements):
                 # A statement that opens a construct still cannot have anything handed back after it.
                 "kind": next((item["kind"] for item in (last, statement) if item.get("kind") in _OPENING), "statements"),
                 "leaves": bool(last.get("leaves") or statement.get("leaves")),
-                "leave": bool(last.get("leave") or statement.get("leave"))}
+                "leave": bool(last.get("leave") or statement.get("leave")),
+                "publish": bool(last.get("publish") or statement.get("publish"))}
         for key in ("condition", "action", "condition_names", "runs", "arrays"):
             both.pop(key, None)
         if "arrays" in last and "arrays" in statement:

@@ -143,17 +143,22 @@ def audit(extracted, packages, selected):
     such procedures. A call through a type-bound procedure counts as a call of
     every procedure bound under that name in the type family of the object.
     ``access`` is ``arrays`` for
-    access to the arrays the statement names, and ``leave`` where no access to
-    arrays can be right and the values stop being kept on the device instead:
-    a call into host code that itself reaches selected procedures, and a loop
-    statement that reads an array while entries run in the loop.
+    access to the arrays the statement touches, ``publish`` where every value
+    comes back first (what the statement reaches is not all known, or cannot
+    be named where it stands), and ``leave`` where no access to arrays can be
+    right and the values stop being kept on the device instead: a call into
+    host code that itself reaches selected procedures or that may deallocate
+    a kept array, and a loop statement that reads an array while entries run
+    in the loop.
 
     A dummy array counts whatever it is called: the array it is associated
-    with may be one that an entry elsewhere binds under another name.
+    with may be one that an entry elsewhere binds under another name. So do
+    the arrays that a called host procedure, or one it calls, uses without
+    being handed them: module arrays, and variables of the calling procedure
+    seen by its internal procedures.
 
     The list is for reading: each entry is a place where arrays may travel.
-    The audit looks inside the selected procedures only. It does not follow a
-    module array into a host procedure that uses it without being handed it.
+    The audit looks inside the selected procedures and follows their calls.
     """
     needed = _access_needed(extracted, packages, selected)
     findings = []
@@ -165,15 +170,17 @@ def audit(extracted, packages, selected):
                              "source": statement["source"],
                              "first_line": statement["first_line"], "last_line": statement["last_line"],
                              "arrays": need[0], "calls": statement["calls"], "text": statement["text"],
-                             "access": need[1], "statement": statement})
+                             "access": need[1], "statement": {**statement, "arrays": need[2]}})
     return findings
 
 
 def _access_needed(extracted, packages, selected):
-    """The judgment of ``audit`` on one piece of host code: None, or its arrays and ``arrays`` or ``leave``.
+    """The judgment of ``audit`` on one piece of host code.
 
     The code is a host statement, or a nest that stays on the host, as the
-    export describes them.
+    export describes them. The answer is None, or the names of the arrays it
+    needs, the kind of access, and the records of those arrays for the block
+    that ``resident_splice.host_access_block`` generates.
     """
     bound = {resource["resource"] for package in packages for item in package["entries"]
              for resource in item["region"]["resources"] if resource["rank"]}
@@ -195,10 +202,58 @@ def _access_needed(extracted, packages, selected):
         return bool(wrapper and call not in visiting
                     and any(reaches(item, (*visiting, call)) for item in wrapper["calls"]))
 
+    def reached(calls):
+        """The arrays that the host procedures behind ``calls`` touch without being handed them, and a flag.
+
+        Each array comes with whether it may be ``written`` or ``released``.
+        An array that a procedure only passes whole to selected procedures,
+        or to wrappers around them, is theirs. The flag says that a call may
+        reach a procedure that is not known.
+        """
+        found, opaque, pending, seen = {}, False, list(calls), set()
+        while pending:
+            name = pending.pop()
+            record = forwarders.get(name) if name not in seen else None
+            seen.add(name)
+            if record is None:
+                continue
+            opaque = opaque or record["opaque"]
+            pending += record["calls"]
+            handed_on = all(covered(call) for call in record["calls"])
+            for root, item in record["outside"].items():
+                if item["passed"] and handed_on:
+                    continue
+                known = found.setdefault(root, {"written": False, "released": False})
+                known.update(written=known["written"] or item["written"], released=known["released"] or item["released"])
+        return found, opaque
+
     def needed(code):
-        kept = [item for item in code["arrays"] if may_be_kept(item["resource"], bound)]
-        arrays = [item["name"] for item in kept]
-        if not arrays or code.get("acknowledged"):
+        items = {item["resource"]: item for item in code["arrays"] if may_be_kept(item["resource"], bound)}
+        if code.get("acknowledged"):
+            return None
+        touched, opaque = reached(code["calls"])
+        opaque, forgets = opaque or code.get("opaque", False), False
+        for item in code.get("reached", ()):
+            use = touched.get(item["resource"])
+            if use is None or not may_be_kept(item["resource"], bound):
+                continue
+            # What the code cannot name, it cannot ask for alone.
+            opaque = opaque or item.get("unnameable", False)
+            forgets = forgets or use["released"]
+            access = "write" if use["written"] else "read"
+            known = items.get(item["resource"], {**item, "access": "read"})
+            items[item["resource"]] = {**known, "handed": False,
+                                       "access": known["access"] if known["access"] != "read" else access}
+        kept = [items[resource] for resource in sorted(items) if not items[resource].get("unnameable")]
+        # A module array the code reaches through a call goes by the name its module gives it.
+        arrays = [item["use"][1] if item.get("use") else item["name"] for item in kept]
+        if forgets:
+            # Host code in there may deallocate an array: nothing of it may stay registered.
+            return arrays, "leave", kept
+        if opaque:
+            # What the code reaches is not all known, or cannot be named here: every value comes back first.
+            return arrays, "publish", kept
+        if not arrays:
             return None
         if all(item["handed"] for item in kept) and code["calls"] and all(covered(call) for call in code["calls"]):
             return None
@@ -206,7 +261,7 @@ def _access_needed(extracted, packages, selected):
         # arrays: the entries in there need them on the device. Nor can a loop statement that reads an
         # array while entries run in its loop.
         return arrays, "leave" if code["kind"] == "Nonlabel_Do_Stmt" or any(
-            reaches(call) for call in code["calls"]) else "arrays"
+            reaches(call) for call in code["calls"]) else "arrays", kept
 
     return needed
 
@@ -407,11 +462,13 @@ def prepare(project, directory, *, fortran, host_threads=4):
         for region in package["rejected"]:
             if "arrays" in region:
                 need = needed(region)
-                region.update(arrays=region["arrays"] if need else [], leave=bool(need and need[1] == "leave"))
+                region.update(arrays=need[2] if need else [], leave=bool(need and need[1] == "leave"),
+                              publish=bool(need and need[1] == "publish"))
     bound = {resource["name"].lower().split("%")[0] for package in packages for item in package["entries"]
              for resource in item["region"]["resources"] if resource["rank"]}
     # Each of them gets the access it needs generated around it.
-    accessed = [{**finding.pop("statement"), "leave": finding["access"] == "leave"} for finding in findings]
+    accessed = [{**finding.pop("statement"), "leave": finding["access"] == "leave",
+                 "publish": finding["access"] == "publish"} for finding in findings]
     for record in array_statements:
         nests = record.pop("nests", ())
         named = sorted(bound.intersection(record.get("arrays", ()))) if record.get("lowered") is False else []
