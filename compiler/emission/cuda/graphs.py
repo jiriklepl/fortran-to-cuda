@@ -62,8 +62,6 @@ def _kernel_arguments(region):
             )
         )
     arguments.append(("std::size_t", "fort_internal_total", None))
-    if region_schedule(region).tile_sizes:
-        arguments.append(("std::size_t", "fort_internal_tile_volume", None))
     return arguments
 
 
@@ -102,9 +100,8 @@ def generate_graph_group(
     if prepared_access is not None and not enqueue:
         raise ValueError("Only a deferred enqueue shares its caller's access batch")
     if merged and (not enqueue or prepared_access is not None or len(regions) < 2
-                   or len({region_schedule(region).cuda_threads for region in regions}) != 1
-                   or any(region_schedule(region).tile_sizes for region in regions)):
-        raise ValueError("A merged launch queues several untiled regions with one block size")
+                   or len({region_schedule(region).cuda_threads for region in regions}) != 1):
+        raise ValueError("A merged launch queues several regions with one block size")
     declarations = [*prologue] + ([
         f"fort_scope_graph_member_v1 fort_graph_members[{len(regions)}]{{}};",
         "std::size_t fort_graph_count = 0, fort_graph_points = 0;",
@@ -153,11 +150,7 @@ def generate_graph_group(
             ]
         all_arguments += [f"{prefix}_values.value_{index}" for index in range(len(arguments))]
         schedule = region_schedule(region)
-        blocks = (
-            "fort_internal_total"
-            if schedule.tile_sizes
-            else (f"(fort_internal_total - 1) / {schedule.cuda_threads} + 1")
-        )
+        blocks = f"(fort_internal_total - 1) / {schedule.cuda_threads} + 1"
         code = [
             *(bounds(region) if prepared_access is None else ()),
             "if (fort_internal_total) {",

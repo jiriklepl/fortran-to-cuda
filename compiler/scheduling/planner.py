@@ -10,7 +10,6 @@ from compiler.ir import (
     ArrayAccess,
     Assignment,
     Binary,
-    CompilationError,
     ConditionalRegion,
     If,
     Loop,
@@ -99,14 +98,6 @@ def _axis_scores(region: ParallelRegion) -> tuple[tuple[int, ...], ...]:
 
 def schedule_plan(function: FunctionIR, plan: ExecutionPlan, *, options: CompilerOptions) -> ExecutionPlan:
     """Attach schedules without changing source loops or their bound evaluation order."""
-    maximum_rank = max((len(region.loops) for region in plan.regions), default=0)
-    if len(options.tile_sizes) > maximum_rank:
-        raise CompilationError(
-            f"Tile specification has {len(options.tile_sizes)} axes but maximum mapped rank is {maximum_rank}"
-        )
-    if any(size <= 0 or size > 2**64 - 1 for size in options.tile_sizes):
-        raise CompilationError("Tile sizes must be positive and fit in an unsigned 64-bit integer")
-
     def schedule(current: ExecutionPlan) -> ExecutionPlan:
         steps = []
         reports = list(current.reports)
@@ -121,17 +112,11 @@ def schedule_plan(function: FunctionIR, plan: ExecutionPlan, *, options: Compile
             axes = tuple(reversed(range(len(step.loops))))
             if options.resolved_schedule == "auto":
                 axes = tuple(sorted(axes, key=lambda axis: (scores[axis], axis), reverse=True))
-            tiles: tuple[int, ...] = ()
-            if options.tile_sizes:
-                by_axis = [1] * len(axes)
-                for axis, size in zip(axes, options.tile_sizes, strict=False):
-                    by_axis[axis] = size
-                tiles = tuple(by_axis)
-            steps.append(replace(step, schedule=RegionSchedule(axes, tiles, 256)))
+            steps.append(replace(step, schedule=RegionSchedule(axes, (), 256)))
             order = ",".join(step.loops[axis].iterator.name for axis in axes)
             reports.append(
                 f"region {step.id}: {options.resolved_schedule} schedule fastest-first [{order}], "
-                f"locality scores={scores}, tiles={tuple(tiles[axis] for axis in axes) if tiles else 'none'}"
+                f"locality scores={scores}, tiles=none"
             )
         return replace(current, steps=tuple(steps), reports=tuple(reports))
 

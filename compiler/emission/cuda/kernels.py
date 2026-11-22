@@ -8,7 +8,7 @@ from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import abi_arguments
 from compiler.emission.common.c_family import cpp_type, indent
 from compiler.emission.common.loops import mapped_coordinates, mapped_snapshots, sequential_block
-from compiler.emission.common.schedules import checked_product, region_schedule, tile_counts
+from compiler.emission.common.schedules import checked_product, region_schedule
 from compiler.emission.common.symbols import region_body, region_symbols
 
 if TYPE_CHECKING:
@@ -34,7 +34,7 @@ def _point_body(region: ParallelRegion, depth: int) -> list[str]:
     return lines
 
 
-def _untiled_body(region: ParallelRegion) -> list[str]:
+def _kernel_body(region: ParallelRegion) -> list[str]:
     schedule = region_schedule(region)
     lines = [
         "    const std::size_t fort_internal_grid_stride = static_cast<std::size_t>(gridDim.x) * blockDim.x;",
@@ -69,73 +69,7 @@ def _untiled_body(region: ParallelRegion) -> list[str]:
     return lines
 
 
-def _tiled_body(region: ParallelRegion) -> list[str]:
-    schedule = region_schedule(region)
-    lines = indent(tile_counts(region))
-    for axis, size in enumerate(schedule.tile_sizes):
-        lines.extend(
-            indent(
-                [
-                    f"const std::size_t fort_internal_width{axis} = "
-                    f"fort_internal_extent{axis} < {size}ULL ? fort_internal_extent{axis} : {size}ULL;"
-                ]
-            )
-        )
-    lines.extend(
-        [
-            "    std::size_t fort_internal_tile = blockIdx.x;",
-            "    while (fort_internal_tile < fort_internal_total) {",
-            "        std::size_t fort_internal_tile_index = fort_internal_tile;",
-        ]
-    )
-    for axis in schedule.axis_order:
-        lines.extend(
-            indent(
-                [
-                    f"const std::size_t fort_internal_begin{axis} = "
-                    f"(fort_internal_tile_index % fort_internal_tiles{axis}) * fort_internal_width{axis};",
-                    f"fort_internal_tile_index /= fort_internal_tiles{axis};",
-                ],
-                2,
-            )
-        )
-    lines.extend(
-        [
-            "        std::size_t fort_internal_point = threadIdx.x;",
-            "        while (fort_internal_point < fort_internal_tile_volume) {",
-            "            std::size_t fort_internal_point_index = fort_internal_point;",
-        ]
-    )
-    for axis in schedule.axis_order:
-        lines.extend(
-            indent(
-                [
-                    f"const std::size_t fort_internal_ordinal{axis} = fort_internal_begin{axis} + "
-                    f"fort_internal_point_index % fort_internal_width{axis};",
-                    f"fort_internal_point_index /= fort_internal_width{axis};",
-                ],
-                3,
-            )
-        )
-    active = " && ".join(f"fort_internal_ordinal{axis} < fort_internal_extent{axis}" for axis in schedule.axis_order)
-    lines.extend(indent([f"if ({active}) {{"], 3))
-    lines.extend(_point_body(region, 4))
-    lines.extend(
-        [
-            "            }",
-            "            if (fort_internal_tile_volume - fort_internal_point <= blockDim.x) break;",
-            "            fort_internal_point += blockDim.x;",
-            "        }",
-            "        if (fort_internal_total - fort_internal_tile <= gridDim.x) break;",
-            "        fort_internal_tile += gridDim.x;",
-            "    }",
-        ]
-    )
-    return lines
-
-
 def _kernel_parameters(region: ParallelRegion) -> list[str]:
-    schedule = region_schedule(region)
     parameters = [cpp_declaration(argument) for argument in abi_arguments(region_symbols(region))]
     for axis in range(len(region.loops)):
         parameters.extend(
@@ -146,8 +80,6 @@ def _kernel_parameters(region: ParallelRegion) -> list[str]:
             ]
         )
     parameters.append("std::size_t fort_internal_total")
-    if schedule.tile_sizes:
-        parameters.append("std::size_t fort_internal_tile_volume")
     return parameters
 
 
@@ -161,15 +93,14 @@ def _signature(prefix: str, parameters: list[str]) -> list[str]:
 
 
 def generate_kernel(region: ParallelRegion) -> list[str]:
-    schedule = region_schedule(region)
     lines = _signature(f"static __global__ void {kernel_name(region)}", _kernel_parameters(region))
-    lines.extend(_tiled_body(region) if schedule.tile_sizes else _untiled_body(region))
+    lines.extend(_kernel_body(region))
     lines.extend(["}", ""])
     return lines
 
 
 def generate_group_kernel(regions) -> list[str]:
-    """One kernel that runs several untiled regions, for regions that do not depend on each other.
+    """One kernel that runs several regions, for regions that do not depend on each other.
 
     Every thread takes its share of the points of each member in turn, so the
     members interleave across threads exactly as independent launches could.
@@ -179,15 +110,13 @@ def generate_group_kernel(regions) -> list[str]:
     lines = []
     parameters, calls = [], []
     for position, region in enumerate(regions):
-        if region_schedule(region).tile_sizes:
-            raise ValueError("A group kernel takes untiled regions only")
         own = _kernel_parameters(region)
         lines.extend(_signature(
             f"static __device__ __forceinline__ void {points_name(region)}",
             [*own, "const std::size_t fort_internal_grid_stride", "std::size_t fort_internal_point"],
         ))
         # The region's point loop, without the two declarations these parameters replace.
-        lines.extend(_untiled_body(region)[2:])
+        lines.extend(_kernel_body(region)[2:])
         lines.extend(["}", ""])
         names = []
         for index, parameter in enumerate(own):
@@ -212,16 +141,7 @@ def launch_bounds(region: ParallelRegion) -> list[str]:
     """Capture protected bounds and checked work dimensions in source order."""
     schedule = region_schedule(region)
     lines = mapped_snapshots(region)
-    if schedule.tile_sizes:
-        lines.extend(tile_counts(region))
-        total_factors = tuple(f"fort_internal_tiles{axis}" for axis in schedule.axis_order)
-        volume_factors = tuple(
-            f"(fort_internal_extent{axis} < {size}ULL ? fort_internal_extent{axis} : {size}ULL)"
-            for axis, size in enumerate(schedule.tile_sizes)
-        )
-        lines.extend(checked_product("fort_internal_tile_volume", volume_factors))
-    else:
-        total_factors = tuple(f"fort_internal_extent{axis}" for axis in schedule.axis_order)
+    total_factors = tuple(f"fort_internal_extent{axis}" for axis in schedule.axis_order)
     lines.extend(checked_product("fort_internal_total", total_factors))
     return lines
 
@@ -234,7 +154,7 @@ def generate_launch(
     lines = ["{", f"    // Scheduled parallel region {region.id}."]
     if not prepared_bounds:
         lines.extend(indent(launch_bounds(region)))
-    blocks = "fort_internal_total" if schedule.tile_sizes else "(fort_internal_total - 1) / fort_internal_threads + 1"
+    blocks = "(fort_internal_total - 1) / fort_internal_threads + 1"
     lines.extend(
         [
             "    if (fort_internal_total > 0) {",
@@ -258,8 +178,6 @@ def generate_launch(
             ]
         )
     arguments.append("fort_internal_total")
-    if schedule.tile_sizes:
-        arguments.append("fort_internal_tile_volume")
     if profile:
         lines.append("        timing::measure_kernel_executions([&]() {")
     configuration = "fort_internal_blocks, fort_internal_threads" + (f", 0, {stream}" if stream else "")

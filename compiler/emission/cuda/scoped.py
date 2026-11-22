@@ -8,7 +8,7 @@ from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import abi_arguments, dimension_name
 from compiler.emission.common.c_family import cpp_type, indent, render_assignment, render_expression
 from compiler.emission.common.loops import _loop_snapshot, sequential_block
-from compiler.emission.common.schedules import checked_product, region_schedule, tile_counts
+from compiler.emission.common.schedules import checked_product, region_schedule
 from compiler.emission.common.symbols import host_symbols, region_symbols
 from compiler.emission.cuda.graphs import _kernel_arguments, generate_graph_group, graph_group_eligible
 from compiler.emission.cuda.kernels import generate_group_kernel, generate_kernel, generate_launch
@@ -159,8 +159,7 @@ def generate_scoped(function, plan, config, common_header):
                     {fp.symbol for fp in footprints if fp.writes or fp.full_write})
 
         def groupable(region):
-            schedule = region_schedule(region)
-            return (not schedule.tile_sizes and graph_group_eligible((region,), units, protected)
+            return (graph_group_eligible((region,), units, protected)
                     and not any(not symbol.rank and symbol not in region.private_symbols
                                 for symbol in region.write_symbols))
 
@@ -294,15 +293,7 @@ def generate_scoped(function, plan, config, common_header):
             if reads:
                 result += [f"if ({active or 'true'}) {{", *indent(reads), "}"]
             result += _loop_snapshot(loop, str(axis), active or None)
-        schedule = region_schedule(region)
-        if schedule.tile_sizes:
-            result += tile_counts(region)
-            result += checked_product("fort_internal_tile_volume", tuple(
-                f"(fort_internal_extent{a} < {size}ULL ? fort_internal_extent{a} : {size}ULL)"
-                for a, size in enumerate(schedule.tile_sizes)))
-            factors = tuple(f"fort_internal_tiles{a}" for a in schedule.axis_order)
-        else:
-            factors = tuple(f"fort_internal_extent{a}" for a in schedule.axis_order)
+        factors = tuple(f"fort_internal_extent{a}" for a in region_schedule(region).axis_order)
         return [*result, *checked_product("fort_internal_total", factors)]
 
     def descriptors(unit):

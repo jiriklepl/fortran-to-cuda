@@ -53,8 +53,8 @@ independent; inconclusive candidates keep their original passes. A rectangular
 perfect prefix maps to parallel iterations; its remaining ordered body can contain
 assignments, conditionals, and sequential inner loops. `--opt-level 0` retains the
 source regions, source indexing, and source axis order unless overridden by
-`--indexing` or `--schedule`. Automatic axis ordering favors Fortran locality;
-spatial tiling is explicit through `--tile-sizes`. Strict parallelization is the
+`--indexing` or `--schedule`. Automatic axis ordering favors Fortran locality.
+Strict parallelization is the
 default; `--fallback host` executes valid regions whose independence is unproved
 sequentially on the host.
 
@@ -67,7 +67,7 @@ compiler/
 ├── ir/                      Immutable computation nodes and execution plans
 ├── analysis/                Semantics, effects, dependence proofs, array sections
 ├── transforms/              Checked scalar motion and loop fusion
-├── scheduling/              Axis ordering and explicit spatial tiles
+├── scheduling/              Axis ordering
 ├── addressing/              Static integer ranges and proved subscript widths
 ├── offload/                 Footprints of a region and what a launch needs prepared
 ├── scopes/                  Extraction of loop nests into entries and their calls
@@ -98,7 +98,7 @@ from its caller and always runs its regions on the device, falling back to its
 generated host loops only when the device budget cannot hold a region's arrays.
 `--list-candidates` reports which procedures of a file compile, and
 `--emit-scoped-runtime` writes the runtime alone. `--opt-level`, `--schedule`,
-`--indexing`, `--tile-sizes`, `--fallback`, `--host-threads`, `--verbose` and the
+`--indexing`, `--fallback`, `--host-threads`, `--verbose` and the
 header options shape the entry. Output is published only after every stage
 succeeded.
 
@@ -866,26 +866,19 @@ source provenance are preserved. Fusion stays inside each host branch. Invalid
 source remains a compilation error; an inconclusive optimization keeps its original
 form. Verbose reports explain each applied or skipped candidate.
 
-### Scheduling and explicit tiles
+### Scheduling
 
 Scheduling follows legality analysis and fusion. `RegionSchedule` records axis
-order, optional tile sizes, and CUDA thread count; emitters render those choices.
+order and CUDA thread count; emitters render those choices.
 Automatic ordering scores unit-stride accesses in Fortran storage order, weighting
 writes twice as heavily as reads. Unknown accesses receive no locality credit,
 and ties keep original innermost-first order. `--schedule source` preserves that
 order; either explicit schedule choice overrides the optimization-level default.
 
-For example, `--schedule auto --tile-sizes 32,4` sets sizes for the two fastest
-scheduled axes; remaining axes use size 1. The compiler rejects specifications
-longer than the maximum mapped rank. Omitting `--tile-sizes` keeps execution
-untiled; no default tile size is selected.
-
 Bounds are captured in source order, with inner bounds suppressed when an outer
 loop is empty. The schedule reorders ordinal coordinates and reconstructs signed
-Fortran indices. CPU emission parallelizes a flattened tile loop and executes
-points sequentially inside each tile. CUDA maps tiles to blocks and distributes
-points across threads, including tiles larger than a block, with guards for tile
-tails. Flattened tile coordinates support arbitrary rank. Iteration products are
+Fortran indices. Host workers and CUDA threads each take every n-th point of
+the flattened domain, for any rank. Iteration products are
 checked for overflow before launch, and zero factors suppress spurious overflow
 errors for empty domains.
 
@@ -913,8 +906,8 @@ Loop-bound snapshots, retained-loop headers, host statements, and sequential
 fallback remain unchanged. Source-order bound evaluation and empty-loop
 suppression are preserved. No array bounds checks are introduced.
 
-Use `--indexing source` and `--indexing auto` with the same optimization level,
-schedule, and tiles to measure addressing independently. Both choices override
+Use `--indexing source` and `--indexing auto` with the same optimization level
+and schedule to measure addressing independently. Both choices override
 the optimization-level default. Plans constructed without addressing metadata
 use source indexing. Verbose reports count promoted and retained subscript
 occurrences and explain decisions; accesses in unchanged loop headers are excluded.
@@ -975,8 +968,8 @@ relations against brute-force ordered accesses, rejection without publication,
 and deterministic generation. Fusion tests cover scalar motion, shifted conflicts,
 unequal domains, conservative accesses, branch boundaries, and signed-stride small
 domains compared with source execution. Scheduling tests execute serial/OpenMP
-and simulated CUDA coordinate maps for signed strides, tile tails, oversized
-tiles, and arbitrary rank; CUDA launches are also compiled with nvcc when available.
+and simulated CUDA coordinate maps for signed strides
+and arbitrary rank; CUDA launches are also compiled with nvcc when available.
 Native tests exercise both optimization
 levels and compile and compare original Fortran
 and generated CUDA using deterministic nonuniform inputs and

@@ -9,7 +9,6 @@ from compiler.ir import CompilationError
 class CompilerOptions:
     opt_level: int = 1
     schedule: str | None = None
-    tile_sizes: tuple[int, ...] = ()
     fallback: str = "error"
     indexing: str | None = None
     # Arrays whose subscript tuple the caller checks, before the entry runs, to
@@ -21,8 +20,6 @@ class CompilerOptions:
             raise CompilationError("optimization level must be 0 or 1")
         if self.schedule not in (None, "source", "auto"):
             raise CompilationError("schedule must be source or auto")
-        if any(isinstance(size, bool) or not isinstance(size, int) or size <= 0 for size in self.tile_sizes):
-            raise CompilationError("tile sizes must be positive integers")
         if self.fallback not in ("error", "host"):
             raise CompilationError("fallback must be error or host")
         if self.indexing not in (None, "source", "auto"):

@@ -21,16 +21,6 @@ from compiler.ir import CompilationError, format_ir
 from compiler.offload.config import OffloadConfig
 
 
-def _tile_sizes(value: str) -> tuple[int, ...]:
-    try:
-        result = tuple(int(item) for item in value.split(","))
-    except ValueError as error:
-        raise argparse.ArgumentTypeError("tile sizes must be comma-separated positive integers") from error
-    if not result or any(size <= 0 for size in result):
-        raise argparse.ArgumentTypeError("tile sizes must be comma-separated positive integers")
-    return result
-
-
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m compiler",
@@ -90,9 +80,6 @@ def _parse_args() -> argparse.Namespace:
         "--indexing",
         choices=("source", "auto"),
         help="Array addressing: source INTEGER arithmetic or proved wide indices (default: auto at level 1, source at 0).",
-    )
-    parser.add_argument(
-        "--tile-sizes", type=_tile_sizes, default=(), metavar="N[,N...]", help="Spatial tiles, fastest axis first."
     )
     parser.add_argument(
         "--fallback",
@@ -177,7 +164,6 @@ def main() -> None:
         options = CompilerOptions(
             opt_level=args.opt_level,
             schedule=args.schedule,
-            tile_sizes=args.tile_sizes,
             fallback=args.fallback,
             indexing=args.indexing,
         )

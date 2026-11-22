@@ -34,12 +34,3 @@ def checked_product(name: str, factors: tuple[str, ...]) -> list[str]:
         )
     lines.append("}")
     return lines
-
-
-def tile_counts(region: ParallelRegion) -> list[str]:
-    schedule = region_schedule(region)
-    return [
-        f"const std::size_t fort_internal_tiles{axis} = fort_internal_extent{axis} == 0 ? 0 : "
-        f"(fort_internal_extent{axis} - 1) / {size}ULL + 1;"
-        for axis, size in enumerate(schedule.tile_sizes)
-    ]
