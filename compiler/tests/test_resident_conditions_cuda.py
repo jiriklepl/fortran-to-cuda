@@ -60,9 +60,13 @@ program march
   ! One level blended with itself: every point reads neighbours that the same nest changes.
   call blend(u, 1, 1)
   call blend(u, 2, 1)
-  ! A whole array, and every second element of it.
+  ! A whole array, every second element of it, a part of it, and nothing of it.
   call double(line)
   call double(line(1:n:2))
+  call double(line(2:n-1))
+  call double(line(1:0))
+  ! The whole array again: what the host did to its parts is what the device goes on from.
+  call double(line)
   !$fort leave
   print '(3es24.16)', sum(u(:,:,1)), sum(u(:,:,2)), sum(line)
   !$fort close
@@ -99,5 +103,8 @@ def test_the_entry_runs_for_the_values_it_was_compiled_for_and_the_host_for_the_
     assert output == run("march-native")[0]
     launches = sum(line.startswith(("FORT_SCOPED launch ", "FORT_SCOPED graph_kernel ")) for line in trace.splitlines())
     # Seven calls with two different levels run on the device; the one with equal levels runs on the host.
-    # So does the doubling of a strided section, which the entry could only take for adjacent elements.
-    assert launches == 7 + 1
+    # So does the doubling of a strided section, which the entry could only take for adjacent elements,
+    # and that of a part of the array that is kept as a whole; of an empty section there is nothing to do.
+    assert launches == 7 + 2
+    # The part is named once, where it was first met.
+    assert trace.count("Resident array cannot be kept on the device as it is bound at levels::double::v") == 1

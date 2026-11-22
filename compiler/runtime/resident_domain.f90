@@ -58,6 +58,8 @@ module fort_resident_domain
     ! The team size to give back when the epoch ends, if the epoch narrowed it.
     integer, private :: outer_threads=0
     type(registered_storage), allocatable, private :: storage(:)
+    ! Where a tolerant binding was declined, each place once: its report was made.
+    character(len=96), allocatable, private :: declined_origins(:)
     type(field_mirror), allocatable, private :: mirrors(:)
     ! Blocks a field copy could not use because the memory is still registered
     ! for an array its owner has freed. They stay allocated until the next
@@ -257,8 +259,14 @@ contains
   ! itself: storage already registered at or across it belongs to an array that
   ! no longer exists. The function then returns no handle and sets collision,
   ! so that the caller can take another block.
+  !
+  ! With declined present, storage that cannot be kept as it is asked for is
+  ! no error: an empty array, storage registered under another shape or type,
+  ! or storage that shares memory with other registered storage (a dummy that
+  ! is associated with part of a kept array). The function returns no handle
+  ! and sets declined; the caller leaves its statements to the host.
   function register_storage(self, host, extents, lower, element_type, element_bytes, initialized, persistent, origin, &
-                            collision) result(handle)
+                            collision, declined) result(handle)
     class(resident_domain), intent(inout) :: self
     type(c_ptr), intent(in) :: host
     integer(c_size_t), target, intent(in) :: extents(:)
@@ -267,7 +275,7 @@ contains
     integer(c_size_t), intent(in) :: element_bytes
     logical, intent(in) :: initialized, persistent
     character(*), optional, intent(in) :: origin
-    logical, optional, intent(out) :: collision
+    logical, optional, intent(out) :: collision, declined
     integer(c_int64_t) :: handle, allocation_id, generation
     type(fort_scope_layout) :: layout
     type(registered_storage) :: item
@@ -275,9 +283,14 @@ contains
     integer :: i
     handle=0
     if (present(collision)) collision=.false.
+    if (present(declined)) declined=.false.
     if (.not. self%active) error stop 'registration outside a storage epoch'
-    if (size(extents) /= size(lower) .or. any(extents == 0) .or. .not. c_associated(host)) &
-      error stop 'invalid or empty resident allocation'
+    if (size(extents) /= size(lower)) error stop 'invalid resident allocation'
+    if (any(extents == 0) .or. .not. c_associated(host)) then
+      if (.not. present(declined)) error stop 'invalid or empty resident allocation'
+      declined=.true.
+      return
+    endif
     allocation_id = transfer(host,allocation_id)
     do i=1,size(self%storage)
       if (self%storage(i)%identity /= allocation_id) cycle
@@ -288,14 +301,17 @@ contains
       ! Storage the domain keeps may be bound like any array by the code it is lent to.
       if (self%storage(i)%element_type /= element_type .or. self%storage(i)%element_bytes /= element_bytes .or. &
           (persistent .and. .not. self%storage(i)%persistent)) then
+        if (decline()) return
         call report_storage_conflict(self,self%storage(i),extents,element_type,element_bytes,persistent,origin)
         error stop 'storage contract changed inside an epoch'
       endif
       if (size(self%storage(i)%extents) /= size(extents)) then
+        if (decline()) return
         call report_storage_conflict(self,self%storage(i),extents,element_type,element_bytes,persistent,origin)
         error stop 'storage rank changed inside an epoch'
       endif
       if (any(self%storage(i)%extents /= extents)) then
+        if (decline()) return
         call report_storage_conflict(self,self%storage(i),extents,element_type,element_bytes,persistent,origin)
         error stop 'storage shape changed inside an epoch'
       endif
@@ -320,6 +336,7 @@ contains
         handle=0
         return
       endif
+      if (decline()) return
       call report_overlap(self,allocation_id,product(extents)*element_bytes,origin)
     endif
     call resident_require(status)
@@ -328,6 +345,24 @@ contains
     item%origin='unknown'
     if (present(origin)) item%origin=origin
     self%storage=[self%storage,item]
+  contains
+    ! Whether the caller takes no for an answer. The first time a place gets it, the standard error says
+    ! which storage stood in the way: the statements there run on the host from now on, which is slower.
+    logical function decline()
+      character(len=96) :: place
+      decline=present(declined)
+      if (.not. decline) return
+      declined=.true.
+      handle=0
+      place='unknown'
+      if (present(origin)) place=origin
+      if (.not. allocated(self%declined_origins)) allocate(self%declined_origins(0))
+      if (any(self%declined_origins == place)) return
+      self%declined_origins=[self%declined_origins,place]
+      write(error_unit,'(a,a,a)') 'Resident array cannot be kept on the device as it is bound at ',trim(place), &
+        '; the statements there run on the host.'
+      call report_overlap(self,allocation_id,product(extents)*element_bytes,origin)
+    end function
   end function
 
   ! Name the registered storage that overlaps count bytes at address. The
@@ -362,52 +397,96 @@ contains
   ! for an actual argument it cannot see to be contiguous, a compiler may then
   ! hand over a packed copy, whose address is not the array's and dies with
   ! the call. Whether the array is contiguous is asked when it is bound.
-  function bind_real32(self, values, lower, initialized, persistent, origin) result(handle)
+  ! A tolerant binding answers with no handle (0) where the array cannot be
+  ! kept as it is: see register_storage.
+  function bind_real32(self, values, lower, initialized, persistent, origin, tolerant) result(handle)
     class(resident_domain), intent(inout) :: self
     real(c_float), target, intent(in) :: values(..)
     integer, intent(in) :: lower(:)
     logical, intent(in) :: initialized
     logical, optional, intent(in) :: persistent
     character(*), optional, intent(in) :: origin
+    logical, optional, intent(in) :: tolerant
     integer(c_int64_t) :: handle
-    logical :: saved
+    logical :: saved, forgiving, declined
+    forgiving=.false.
+    if (present(tolerant)) forgiving=tolerant
+    handle=0
+    if (forgiving) then
+      ! Nothing of an empty array or of a strided section can be kept: the caller hears so.
+      if (size(values)==0) return
+      if (.not. is_contiguous(values)) return
+    endif
     if (.not. is_contiguous(values)) error stop 'a strided array section cannot be kept on the device'
     saved=.false.
     if (present(persistent)) saved=persistent
-    handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
-                                 FORT_SCOPE_REAL32,4_c_size_t,initialized,saved,origin)
+    if (forgiving) then
+      handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
+                                   FORT_SCOPE_REAL32,4_c_size_t,initialized,saved,origin,declined=declined)
+    else
+      handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
+                                   FORT_SCOPE_REAL32,4_c_size_t,initialized,saved,origin)
+    endif
   end function
 
-  function bind_real64(self, values, lower, initialized, persistent, origin) result(handle)
+  function bind_real64(self, values, lower, initialized, persistent, origin, tolerant) result(handle)
     class(resident_domain), intent(inout) :: self
     real(c_double), target, intent(in) :: values(..)
     integer, intent(in) :: lower(:)
     logical, intent(in) :: initialized
     logical, optional, intent(in) :: persistent
     character(*), optional, intent(in) :: origin
+    logical, optional, intent(in) :: tolerant
     integer(c_int64_t) :: handle
-    logical :: saved
+    logical :: saved, forgiving, declined
+    forgiving=.false.
+    if (present(tolerant)) forgiving=tolerant
+    handle=0
+    if (forgiving) then
+      ! Nothing of an empty array or of a strided section can be kept: the caller hears so.
+      if (size(values)==0) return
+      if (.not. is_contiguous(values)) return
+    endif
     if (.not. is_contiguous(values)) error stop 'a strided array section cannot be kept on the device'
     saved=.false.
     if (present(persistent)) saved=persistent
-    handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
-                                 FORT_SCOPE_REAL64,8_c_size_t,initialized,saved,origin)
+    if (forgiving) then
+      handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
+                                   FORT_SCOPE_REAL64,8_c_size_t,initialized,saved,origin,declined=declined)
+    else
+      handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
+                                   FORT_SCOPE_REAL64,8_c_size_t,initialized,saved,origin)
+    endif
   end function
 
-  function bind_integer32(self, values, lower, initialized, persistent, origin) result(handle)
+  function bind_integer32(self, values, lower, initialized, persistent, origin, tolerant) result(handle)
     class(resident_domain), intent(inout) :: self
     integer(c_int), target, intent(in) :: values(..)
     integer, intent(in) :: lower(:)
     logical, intent(in) :: initialized
     logical, optional, intent(in) :: persistent
     character(*), optional, intent(in) :: origin
+    logical, optional, intent(in) :: tolerant
     integer(c_int64_t) :: handle
-    logical :: saved
+    logical :: saved, forgiving, declined
+    forgiving=.false.
+    if (present(tolerant)) forgiving=tolerant
+    handle=0
+    if (forgiving) then
+      ! Nothing of an empty array or of a strided section can be kept: the caller hears so.
+      if (size(values)==0) return
+      if (.not. is_contiguous(values)) return
+    endif
     if (.not. is_contiguous(values)) error stop 'a strided array section cannot be kept on the device'
     saved=.false.
     if (present(persistent)) saved=persistent
-    handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
-                                 FORT_SCOPE_INTEGER32,4_c_size_t,initialized,saved,origin)
+    if (forgiving) then
+      handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
+                                   FORT_SCOPE_INTEGER32,4_c_size_t,initialized,saved,origin,declined=declined)
+    else
+      handle=self%register_storage(c_loc(values),shape(values,kind=c_size_t),int(lower,c_int64_t), &
+                                   FORT_SCOPE_INTEGER32,4_c_size_t,initialized,saved,origin)
+    endif
   end function
 
   ! The handle of the registered storage that holds the first of these values,

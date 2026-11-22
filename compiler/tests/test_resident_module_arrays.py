@@ -127,7 +127,7 @@ def test_an_entry_binds_a_renamed_module_array_under_the_name_its_nest_uses(prep
     _record, text = prepared
     step = text[text.index("subroutine step"):text.index("call relax()")]
     # In step the module's u is called w, and u is a local array that the nest does not touch.
-    assert "resident%bind_real64(w,lbound(w),.true., &\n          origin='work::step::u')" in step
+    assert "resident%bind_real64(w,lbound(w),.true., &\n          origin='work::step::u',tolerant=.true.)" in step
     assert "bind_real64(u," not in step
     assert "lbound(w,1)" in step
 

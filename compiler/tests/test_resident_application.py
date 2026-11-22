@@ -51,13 +51,15 @@ def test_entries_are_called_while_resident_and_the_original_loops_run_otherwise(
     stepper = (directory / "sources/stepper.f90").read_text()
     store = stepper[stepper.index("subroutine store(a, b)"):stepper.index("end subroutine store")]
     # Where the nest has no iteration, the original statements have nothing to do either.
-    assert "if (resident%active .and. ((nz) >= (1))) then" in store
-    assert "fort_handle_a=resident%bind_real64(a,lbound(a),.true., &\n          origin='stepper::store::a')" in store
+    assert "fort_resident = resident%active .and. ((nz) >= (1))\n" in store
+    # An array that cannot be kept as it is bound here leaves the nest to the host as well.
+    assert "fort_resident = all([fort_handle_a, fort_handle_b] /= 0_c_int64_t)\n" in store
+    assert "fort_handle_a=resident%bind_real64(a,lbound(a),.true., &\n          origin='stepper::store::a',tolerant=.true.)" in store
     assert "call resident_require(fort_device_run(" in store
     # store is one array assignment in the source; the nest it stands for is what the entry replaces.
     assert "a(1:nx,1:ny,1:nz) = b(1:nx,1:ny,1:nz)" not in store
     assert (store.index("      else\n") < store.index("a(fort_arr1_1, fort_arr1_2, fort_arr1_3) = b(fort_arr1_1, ")
-            < store.index("      endif\n"))
+            < store.rindex("      endif\n"))
     # The selected procedures run from one serial caller, so their directives are gone; the precision is fixed.
     assert "!$omp" not in stepper
     assert "#ifdef" not in (directory / "sources/fields.f90").read_text()
@@ -179,7 +181,7 @@ def test_adjacent_nests_share_an_entry_and_a_rejected_nest_gets_its_arrays_first
     nest = tail.index("b(i) = b(i-1) + a(i)")
     done = tail.index("if (fort_host) call resident%host_done([ &\n          resident%held(b)])")
     assert begin < observe < modify < nest < done
-    assert "publish" not in text
+    assert "publish" not in tail[begin:]
 
 
 def test_a_directive_between_two_nests_separates_their_entries_and_stays_in_place(tmp_path):
@@ -198,13 +200,14 @@ def test_a_nest_with_a_directive_inside_is_left_to_the_host(tmp_path):
     assert (summary["entries"], summary["nests"], summary["rejected"]) == (1, 2, [])
     loop = text.index("do i = 2, n")
     assert text.index("call resident%observe(fort_observed)", loop) < text.index("b(i) = b(i-1) + a(i)", loop)
-    assert "call resident%publish()" not in text
+    assert "call resident%publish()" not in text[loop:]
 
 
 def test_rejected_nests_may_be_declared_unreachable_and_coverage_is_enforced(tmp_path):
     prepared, text = prepare_pair(tmp_path / "unreachable", native_rejections=False)
     assert len(prepared["selections"][0]["rejected"]) == 1
-    assert "call resident%publish()" not in text
+    # The rejected nest is the source it was.
+    assert text.rstrip().endswith("n = size(a)\ndo i = 2, n\n\nb(i) = b(i-1) + a(i)\nenddo\nend subroutine\nend module")
     with pytest.raises(ValueError, match="compiled 2 loop nests; at least 3 are required"):
         prepare_pair(tmp_path / "floor", minimum_nests=3)
 
@@ -580,7 +583,6 @@ def test_the_host_runs_a_loop_that_repeats_one_nest(tmp_path):
     loop = text[text.index("do step = 1, steps"):]
     assert loop.index("do step = 1, steps") < loop.index("call resident_require(fort_device_run(") < loop.index(
         "\nenddo\n\nend subroutine")
-    assert "publish" not in text
 
 
 def test_the_host_runs_a_sweep_through_planes_that_each_use_the_one_before(tmp_path):
@@ -600,7 +602,6 @@ enddo""")
         (11, 24), (11, 17), (18, 24)]
     sweep = text[text.index("do step = 2, steps"):]
     assert sweep.index("call resident_require(fort_device_run(") < sweep.index("\nenddo\n")
-    assert "publish" not in text
 
 
 def test_a_loop_is_rejected_as_a_whole_when_nothing_inside_it_compiles(tmp_path):
@@ -719,9 +720,10 @@ end module
             fortran=fortran_compiler())
     text = (tmp_path / "prepared/sources/strides.f90").read_text()
     # u may be every second element of its caller's array: bound by its first element and its extent, it
-    # would be taken for the elements next to each other. w says that it is not such a section.
-    assert "fort_resident = resident%active .and. ((n) >= (1)) .and. is_contiguous(u)\n" in text
-    assert "is_contiguous(w)" not in text
+    # would be taken for the elements next to each other. The domain gives such a section no handle, and
+    # the nest stays with the host.
+    assert "fort_handle_u=resident%bind_real64(u,lbound(u),.true., &\n          origin='strides::add::u',tolerant=.true.)" in text
+    assert "fort_resident = all([fort_handle_u, fort_handle_w] /= 0_c_int64_t)\n" in text
     call = text[text.index("fort_resident = resident%active"):]
     assert call.index("call resident_require(fort_device_run(") < call.index("      else\n") < call.index(
         "if (resident%active .and. ((n) >= (1))) call resident%publish()") < call.index("u(i) = u(i) + w(i)")

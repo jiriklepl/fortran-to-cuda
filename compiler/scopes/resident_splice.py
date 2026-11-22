@@ -80,9 +80,10 @@ def entry_call_block(region, entry, domain, held=None):
     device values are published and the original statements run. The same
     happens where an entry that was compiled for some values of its scalars
     only (its ``conditions``) says that it was called with others, and where
-    an assumed-shape dummy that is not declared CONTIGUOUS is associated with
-    storage that is not: an array is bound by the address of its first
-    element and its extents.
+    an array cannot be kept as it is bound here: an array is bound by the
+    address of its first element and its extents, so an empty array, a
+    strided section and a part of an array that is kept as a whole get no
+    handle.
     """
     bindings = {binding["resource"]: binding for binding in region["resources"]}
     written = set(region.get("written_resources", ()))
@@ -91,14 +92,7 @@ def entry_call_block(region, entry, domain, held=None):
     checked_arrays = {}
     for check in checks:
         checked_arrays.setdefault(check["resource"], []).append(check)
-    actual, registration, handles, by_resource, kinds = {}, [], [], {}, set()
-    # Dummies that may be associated with a strided section, by what their declaration says.
-    strided = sorted({binding["name"] for binding in bindings.values()
-                      if binding.get("intent") and "contiguous" not in binding.get("attributes", ())
-                      and any(axis["kind"] == "Assumed_Shape_Spec" for axis in binding.get("shape", ()))
-                      and "%" not in binding["name"]
-                      and any(parameter["resource"] == binding["resource"] and parameter["rank"]
-                              for parameter in region["parameters"])})
+    actual, registration, handles, plain, by_resource, kinds = {}, [], [], [], {}, set()
     spelled = region.get("spelled", {})
     for parameter in region["parameters"]:
         binding = bindings[parameter["resource"]]
@@ -132,7 +126,8 @@ def entry_call_block(region, entry, domain, held=None):
             if method is None:
                 raise ValueError("Unsupported resident array ABI: " + str(binding))
             registration.append(f"        {handle}={domain.object}%{method}({name},lbound({name}),.true., &\n"
-                                f"          origin='{origin}')")
+                                f"          origin='{origin}',tolerant=.true.)")
+            plain.append(handle)
         else:
             actual[parameter["name"]] = name
     if region.get("observed"):
@@ -163,11 +158,6 @@ def entry_call_block(region, entry, domain, held=None):
             *(["      integer(c_int64_t) :: " + ",".join(handles)] if handles else [])]
     # Where no nest of the entry has an iteration, the original statements have nothing to do either.
     active = f"{domain.object}%active" + (f" .and. ({region['runs']})" if region.get("runs") else "")
-    if not structures and not checks and not conditional and not strided:
-        code += [f"      if ({active}) then", *guards, *registration, *call,
-                 "      else", "@ORIGINAL@", "      endif", "    end block"]
-        return "\n".join(code) + "\n"
-
     code.append(f"      logical :: {resident}")
     if conditional:
         code.append(f"      integer(c_int) :: {status}")
@@ -177,22 +167,26 @@ def entry_call_block(region, entry, domain, held=None):
         code += [f"      logical, allocatable :: {domain.prefix}_seen_{number}({','.join(':' * len(group[0]['indices']))})"
                  for number, group in enumerate(checked_arrays.values(), 1)]
     # An empty array of derived type has no element whose fields could be bound.
-    code.append(f"      {resident} = {active}"
-                + "".join(f" .and. size({item['name']}) > 0" for item in structures)
-                + "".join(f" .and. is_contiguous({name})" for name in strided))
+    code.append(f"      {resident} = {active}" + "".join(f" .and. size({item['name']}) > 0" for item in structures))
     code += [f"      if ({resident}) then", *guards, *registration]
+    if plain:
+        # An array that cannot be kept as it is bound here (it is empty, a strided section, or part of
+        # an array that is kept as a whole) has no handle: the statements stay with the host.
+        code.append(f"        {resident} = all([" + ", ".join(plain) + "] /= 0_c_int64_t)")
+    code.append("      endif")
     if checks:
         indices = sorted({by_resource[root] for check in checks for root in check["index_resources"]
                           if root in by_resource})
-        code += [f"        if (any({domain.prefix}_checked /= [{domain.object}%generation, {domain.object}%stamp])) then"]
+        code += [f"      if ({resident}) then",
+                 f"        if (any({domain.prefix}_checked /= [{domain.object}%generation, {domain.object}%stamp])) then"]
         if indices:
             code.append(f"          call {domain.object}%observe([" + ", ".join(indices) + "])")
         code.append(f"          {domain.prefix}_distinct = .true.")
         for number, group in enumerate(checked_arrays.values(), 1):
             code += _distinct_check(group, number, domain, "          ")
         code += [f"          {domain.prefix}_checked = [{domain.object}%generation, {domain.object}%stamp]",
-                 "        endif", f"        {resident} = {domain.prefix}_distinct"]
-    code += ["      endif", f"      if ({resident}) then", *call,
+                 "        endif", f"        {resident} = {domain.prefix}_distinct", "      endif"]
+    code += [f"      if ({resident}) then", *call,
              # An entry that declines leaves everything as it was, for the original statements.
              *(["      endif", f"      if (.not. {resident}) then"] if conditional else ["      else"]),
              f"        if ({active}) call {domain.object}%publish()", "@ORIGINAL@", "      endif"]

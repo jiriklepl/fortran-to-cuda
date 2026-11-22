@@ -55,14 +55,16 @@ def test_a_compiled_span_becomes_a_guarded_entry_call_with_the_original_as_fallb
     assert "      use fort_example, only: fort_device_run => run" in lines
     assert "      integer(c_int64_t) :: fort_handle_u,fort_handle_mask" in lines
     assert "        if (.not. (n > 2)) error stop 'resident numerical geometry changed'" in lines
-    assert "fort_handle_u=flow%bind_real64(u,lbound(u),.true., &\n          origin='example::update::u')" in generated
-    assert "fort_handle_mask=flow%bind_integer32(mask,lbound(mask),.true., &\n          origin='example::update::mask')" in generated
+    assert "fort_handle_u=flow%bind_real64(u,lbound(u),.true., &\n          origin='example::update::u',tolerant=.true.)" in generated
+    assert "fort_handle_mask=flow%bind_integer32(mask,lbound(mask),.true., &\n          origin='example::update::mask',tolerant=.true.)" in generated
     # Arrays pass as handles, lower bounds as inquiries and scalars by name, in the entry's order.
     call = generated.split("call require(fort_device_run( &\n", 1)[1].split("))", 1)[0]
     assert [argument.strip() for argument in call.split(", &\n")] == [
         "flow%context", "FORT_SCOPE_GPU", "fort_handle_u", "lbound(u,2)", "fort_handle_mask", "n"]
-    active = lines.index("      if (flow%active) then")
-    assert lines[lines.index("      else", active) + 1] == "  u=1"
+    # The original statement runs where the domain is not active, and after a publication where an array
+    # could not be kept as it is bound here.
+    active = lines.index("      fort_resident = flow%active")
+    assert lines[lines.index("      else", active) + 1:][:2] == ["        if (flow%active) call flow%publish()", "  u=1"]
 
 
 def test_a_rejected_span_publishes_first_unless_the_caller_supplies_its_text(tmp_path):
@@ -83,7 +85,7 @@ def test_a_rejected_span_publishes_first_unless_the_caller_supplies_its_text(tmp
     assert ("    block\n      use flow_state, only: flow\n      if (flow%active) call flow%publish()\n"
             "  mask=0\n    end block\n") in generated
     assert "  ! kept by the caller\n  n=n+1\nend subroutine\n" in generated
-    assert generated.count("publish()") == 1
+    assert generated.count("publish()") == 2
 
 
 def test_changed_sources_overlaps_and_unknown_array_types_are_refused(tmp_path):
