@@ -140,7 +140,7 @@ zero-based physical coordinates with exclusive upper bounds. Access descriptors
 separate reads, possible writes, and proven overwrites.
 After bounded union and subtraction, adjacent rectangles merge only when their
 union is itself a rectangle. This reduces copy submissions without adding cells
-or filling holes. The 32-rectangle and 1,024-intersection limits remain in force.
+or filling holes. A section holds at most 128 rectangles, and at most 8,192 intersections are formed.
 
 `fort_scope_register_sections` accepts partially initialized host coverage.
 `fort_scope_forget_definition` clears semantic definition coverage while
@@ -190,8 +190,7 @@ python -m compiler --input input.f90 --kernel advance --json --output-dir out/sc
 Scoped numerical generation publishes artifact schema 2: `shared_entry.cu`,
 `shared_interface.f90`, the common header, and runtime artifacts. Its JSON lists
 only the shared-entry and common-runtime build sources, including argument order,
-array types and execution modes. It does not generate an additional ordinary
-CUDA/C++ backend, owned-session interface, or ordinary fallback query.
+array types and execution modes.
 Consumers take the files from `build_sources` rather than by globbing the
 directory.
 
@@ -479,8 +478,9 @@ Forms beyond plain array loops that are supported in selected procedures:
 Branches on run-time configuration keep nests apart: each branch is an entry
 of its own. When the application knows which values the configuration has
 while its fields are on the device, a selection lists them in `assume`, as
-comparisons `<expression> == <integer constant>`, or bounds such as
-`viscosity > 0` with another relation:
+comparisons `<expression> == <integer constant>`, bounds such as
+`viscosity > 0` with another relation, or a LOGICAL variable or its
+negation (`.not. buoyant`):
 
 ```python
 Selection("faces", ("boundaries::apply",), assume=("kind(west) == PERIODIC", "kind(east) == PERIODIC"))

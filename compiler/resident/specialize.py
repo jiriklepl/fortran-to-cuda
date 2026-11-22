@@ -65,7 +65,8 @@ class _Conditions:
     """What a set of conditions ``expression <relation> integer constant`` decides about other conditions.
 
     An equality gives the expression its value. Another relation bounds it:
-    ``viscosity > 0`` decides ``viscosity <= 0``, for instance.
+    ``viscosity > 0`` decides ``viscosity <= 0``, for instance. A LOGICAL
+    variable, or ``.not.`` one, gives the variable its value.
     """
 
     def __init__(self, conditions, constants):
@@ -74,8 +75,16 @@ class _Conditions:
         self.known = {}
         self.bounds = {}
         self.names = set()
+        self.truths = {}
         for text in conditions:
             node = Fortran2003.Expr(text)
+            # A LOGICAL variable, or its negation, is a value of its own.
+            negated = type(node).__name__ == "And_Operand" and str(node.items[0]).upper() == ".NOT."
+            variable = node.items[1] if negated else node
+            if type(variable).__name__ in {"Name", "Data_Ref"}:
+                self.truths[_key(variable)] = not negated
+                self.names |= {str(name).lower() for name in walk(variable, Fortran2003.Name)}
+                continue
             relation = _SYMBOLS.get(str(node.items[1]).upper(), str(node.items[1])) \
                 if type(node).__name__ == "Level_4_Expr" else None
             if relation not in _MIRRORED or relation == "/=":
@@ -122,6 +131,8 @@ class _Conditions:
         kind = type(node).__name__
         if kind == "Parenthesis":
             return self.decide(node.items[1])
+        if kind in {"Name", "Data_Ref"} and _key(node) in self.truths:
+            return self.truths[_key(node)]
         if kind == "And_Operand" and str(node.items[0]).upper() == ".NOT.":
             value = self.decide(node.items[1])
             return None if value is None else not value

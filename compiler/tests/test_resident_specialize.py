@@ -164,3 +164,28 @@ end module
     assert "      if (u(i) > 0) then\n        u(i) = viscosity * u(i)\n      end if\n" in folded
     assert "if (viscosity < 1) u(i) = 2 * u(i)" in folded
     assert "    do i = 1, n   ! every point\n\n      if (u(i) > 0) then" in folded
+
+
+def test_a_logical_variable_or_its_negation_decides_the_branches_on_it():
+    source = """module flags
+  implicit none
+  logical :: buoyant, moist
+contains
+  subroutine step(u, n)
+    real, intent(inout) :: u(:)
+    integer, intent(in) :: n
+    integer :: i
+    do i = 1, n
+      if (buoyant .and. u(i) > 0) then
+        u(i) = 2 * u(i)
+      else if (moist) then
+        u(i) = 0
+      end if
+    end do
+  end subroutine
+end module
+"""
+    text = specialize(source, "step", (".not. buoyant",), {})
+    folded = text[text.index("if ((.not. buoyant)) then"):text.index("    else\n    do i")]
+    assert "2 * u(i)" not in folded
+    assert "      if (moist) then\n        u(i) = 0\n      end if\n" in folded

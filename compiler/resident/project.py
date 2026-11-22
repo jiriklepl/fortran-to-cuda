@@ -52,7 +52,8 @@ class Selection:
     must end up compiled; fewer is an error, so lost coverage is not silent.
     With ``native_rejections`` off, a nest the compiler rejects is left exactly
     as it is, for code the activation condition makes unreachable. ``assume``
-    lists comparisons ``<expression> <relation> <integer constant>`` that usually hold
+    lists comparisons ``<expression> <relation> <integer constant>``, or LOGICAL
+    variables and their negations, that usually hold
     when the procedures run: each procedure gets a second version of its body
     with the branches they decide folded away, used while they hold, so that
     loop nests the branches kept apart can share an entry and a launch (see
