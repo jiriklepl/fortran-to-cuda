@@ -20,9 +20,10 @@ from fparser.two import Fortran2003
 from fparser.two.utils import walk
 
 from compiler.frontend.syntax import parse_fortran, parser
+from compiler.resident.procedures import normalized, procedures_of
+from compiler.scopes.segments import statement_span
 
 from .anchors import _logical_lines, _split_top_level_args
-from .reductions import _procedures
 
 _PARAMETERS = re.compile(r"(?i)^\s*integer\b[^!:]*\bparameter\b[^!:]*::(.*)$")
 _LITERAL = re.compile(r"[+-]?\d+\Z")
@@ -55,10 +56,6 @@ def integer_parameters(texts):
     return {name: value for name, value in values.items() if name not in conflicting}
 
 
-def _key(node):
-    return re.sub(r"\s+", "", str(node)).lower()
-
-
 _SYMBOLS = {".EQ.": "==", ".NE.": "/=", ".LT.": "<", ".LE.": "<=", ".GT.": ">", ".GE.": ">="}
 _MIRRORED = {"==": "==", "/=": "/=", "<": ">", "<=": ">=", ">": "<", ">=": "<="}
 
@@ -84,7 +81,7 @@ class _Conditions:
             negated = type(node).__name__ == "And_Operand" and str(node.items[0]).upper() == ".NOT."
             variable = node.items[1] if negated else node
             if type(variable).__name__ in {"Name", "Data_Ref"}:
-                self.truths[_key(variable)] = not negated
+                self.truths[normalized(variable)] = not negated
                 self.names |= {str(name).lower() for name in walk(variable, Fortran2003.Name)}
                 continue
             relation = _SYMBOLS.get(str(node.items[1]).upper(), str(node.items[1])) \
@@ -94,7 +91,7 @@ class _Conditions:
             value = self._value(node.items[2])
             if value is None:
                 raise ValueError("The constant of an assumed condition has no known integer value: " + text)
-            key = _key(node.items[0])
+            key = normalized(node.items[0])
             if relation == "==":
                 if self.known.setdefault(key, value) != value:
                     raise ValueError("Assumed conditions contradict each other: " + text)
@@ -121,7 +118,7 @@ class _Conditions:
     def _value(self, node):
         if type(node).__name__ == "Parenthesis":
             return self._value(node.items[1])
-        key = _key(node)
+        key = normalized(node)
         if key in self.known:
             return self.known[key]
         if _LITERAL.match(key):
@@ -133,8 +130,8 @@ class _Conditions:
         kind = type(node).__name__
         if kind == "Parenthesis":
             return self.decide(node.items[1])
-        if kind in {"Name", "Data_Ref"} and _key(node) in self.truths:
-            return self.truths[_key(node)]
+        if kind in {"Name", "Data_Ref"} and normalized(node) in self.truths:
+            return self.truths[normalized(node)]
         if kind == "And_Operand" and str(node.items[0]).upper() == ".NOT.":
             value = self.decide(node.items[1])
             return None if value is None else not value
@@ -149,16 +146,11 @@ class _Conditions:
             if left is not None and right is not None:
                 return _RELATIONS[str(node.items[1]).upper()](left, right)
             relation = _SYMBOLS.get(str(node.items[1]).upper(), str(node.items[1]))
-            if right is not None and _key(node.items[0]) in self.bounds:
-                return self._implied(_key(node.items[0]), relation, right)
-            if left is not None and _key(node.items[2]) in self.bounds:
-                return self._implied(_key(node.items[2]), _MIRRORED[relation], left)
+            if right is not None and normalized(node.items[0]) in self.bounds:
+                return self._implied(normalized(node.items[0]), relation, right)
+            if left is not None and normalized(node.items[2]) in self.bounds:
+                return self._implied(normalized(node.items[2]), _MIRRORED[relation], left)
         return None
-
-
-def _span(node):
-    spans = [item.item.span for item in walk(node) if getattr(item, "item", None) is not None]
-    return min(span[0] for span in spans), max(span[1] for span in spans)
 
 
 def _decides(node, conditions, one_line):
@@ -187,7 +179,7 @@ def _fold(nodes, lines, conditions, counter, one_line=False):
     """The source lines of ``nodes`` with every decided IF construct folded, and with ``one_line`` every IF statement."""
     output = []
     for node in nodes:
-        first, last = _span(node)
+        first, last = statement_span(node)
         if one_line and type(node).__name__ == "If_Stmt":
             value = conditions.decide(node.items[0])
             if value is not None:
@@ -208,7 +200,7 @@ def _fold(nodes, lines, conditions, counter, one_line=False):
             for item in node.content[position + 1:-1]:
                 if type(item).__name__ == "Comment":
                     continue
-                start, stop = _span(item)
+                start, stop = statement_span(item)
                 output += lines[cursor - 1:start - 1] + _fold([item], lines, conditions, counter, one_line)
                 cursor = max(cursor, stop + 1)
             output += lines[cursor - 1:ending.item.span[1]]
@@ -272,7 +264,7 @@ def specialize(text, procedures, conditions, constants):
     written twice.
     """
     known = _Conditions(conditions, constants)
-    scopes = {scope.qualified: scope for scope in _procedures(parse_fortran(text))}
+    scopes = {scope.qualified: scope for scope in procedures_of(parse_fortran(text))}
     lines = text.splitlines(keepends=True)
     edits = []
     for name in procedures:
@@ -303,7 +295,7 @@ def _specialized(procedure, name, lines, conditions, known):
         if any(str(item).lower() in known.names for item in changed):
             raise ValueError(f"Procedure {name} may change what an assumed condition tests: "
                              + " ".join(str(node).split()))
-    first, last = _span(execution)
+    first, last = statement_span(execution)
     counter = [0]
     folded = _fold(execution.content, lines, known, counter)
     if not counter[0]:

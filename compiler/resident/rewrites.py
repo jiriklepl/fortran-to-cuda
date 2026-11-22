@@ -284,7 +284,7 @@ def promote_line_snapshots(source_text: str) -> tuple[str, list[dict]]:
 
     The snapshot is a local allocatable that the procedure allocates at its
     start and deallocates at its end: a temporary whose storage the domain
-    lends (see ``resident_splice.lend_storage``).
+    lends (see ``storage.lend_storage``).
     """
     tree = parse_fortran(source_text)
     edits: list[dict] = []

@@ -4,7 +4,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.scopes.resident_splice import ResidentDomain, addressable_arrays, splice_resident_entries
+from compiler.resident.storage import addressable_arrays
+from compiler.scopes.resident_splice import ResidentDomain, splice_resident_entries
 
 DOMAIN = ResidentDomain("flow_state", "flow", "require")
 

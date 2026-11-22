@@ -45,9 +45,9 @@ from fnmatch import fnmatchcase
 from fparser.two.utils import walk
 
 from compiler.frontend.syntax import children_of, kind_of, parse_fortran, part_of
+from compiler.resident.procedures import declarations_end, heading_of, holds_selected, line_span, procedures_of
 
 from .anchors import _strip_inline_comment
-from .reductions import _heading, _procedures, _span, holds_selected
 from .specialize import _fold
 
 _PRESENT = re.compile(r"(?i)\bpresent\s*\(\s*([a-z]\w*)\s*\)")
@@ -78,7 +78,7 @@ class _Literals:
 
 def _optional_dummies(scope):
     """The dummies of a procedure, in order, and those of them that are OPTIONAL."""
-    heading = _heading(scope.node)
+    heading = heading_of(scope.node)
     dummies = [str(name).lower() for name in walk(heading.items[2], type(heading.items[1]))] \
         if len(heading.items) > 2 and heading.items[2] is not None else []
     optional = set()
@@ -120,9 +120,9 @@ def _given(call, dummies):
 
 def _copy(scope, lines, name, absent, optional):
     """The text of the procedure as a version without ``absent``, called ``name``; None where that is not exact."""
-    first, last = _span(scope.node)
-    heading = _heading(scope.node)
-    head_first, head_last = _span(heading)
+    first, last = line_span(scope.node)
+    heading = heading_of(scope.node)
+    head_first, head_last = line_span(heading)
     original = str(heading.items[1])
     text = "".join(lines[head_first - 1:head_last])
     pattern = re.compile(r"(?is)(\b(?:subroutine|function)\s+)" + re.escape(original) + r"(\s*\()([^)]*)(\))")
@@ -138,7 +138,7 @@ def _copy(scope, lines, name, absent, optional):
     statements = list(specification.content) if specification is not None else []
     covered = head_last
     for statement in statements:
-        span = _span(statement) if kind_of(statement) != "Comment" else None
+        span = line_span(statement) if kind_of(statement) != "Comment" else None
         if span is None:
             continue
         output += lines[covered:span[0] - 1]
@@ -161,7 +161,7 @@ def _copy(scope, lines, name, absent, optional):
     execution = part_of(scope.node, "Execution_Part")
     rest = lines[covered:last]
     if execution is not None:
-        start, stop = _span(execution)
+        start, stop = line_span(execution)
         body = [_PRESENT.sub(lambda found: (".false." if found.group(1).lower() in absent else ".true.")
                              if found.group(1).lower() in optional else found.group(0), line)
                 for line in lines[start - 1:stop]]
@@ -209,10 +209,10 @@ def _return_edit(statements, lines):
         if not _returns(statement):
             continue
         last = position == len(statements) - 1
-        first_line, last_line = _span(statement)
+        first_line, last_line = line_span(statement)
         if kind_of(statement) == "Return_Stmt":
             # Nothing after it runs: it and what follows go.
-            return first_line, _span(statements[-1])[1], []
+            return first_line, line_span(statements[-1])[1], []
         if kind_of(statement) == "If_Construct":
             branches, end = _branches(statement)
             if last:
@@ -233,17 +233,17 @@ def _return_edit(statements, lines):
             explicit_else = any(kind_of(header) == "Else_Stmt" for header, _ in branches)
             if len(staying) + (not explicit_else) != 1:
                 return "the statements after an early RETURN would be needed in two branches"
-            rest = lines[last_line:_span(statements[-1])[1]]
+            rest = lines[last_line:line_span(statements[-1])[1]]
             replacement = []
             cursor = first_line
-            ending = _span(end)[0]
+            ending = line_span(end)[0]
             for header, body in branches:
                 if (header, body) in returning:
-                    stop = _span(body[-1])
+                    stop = line_span(body[-1])
                     replacement += lines[cursor - 1:stop[0] - 1]
                     cursor = stop[1] + 1
                 elif (header, body) in staying:
-                    following = next((_span(other)[0] for other, _ in branches if _span(other)[0] > _span(header)[0]),
+                    following = next((line_span(other)[0] for other, _ in branches if line_span(other)[0] > line_span(header)[0]),
                                      ending)
                     replacement += lines[cursor - 1:following - 1] + rest
                     cursor = following
@@ -252,11 +252,11 @@ def _return_edit(statements, lines):
                 replacement += lines[cursor - 1:ending - 1] + [indent + "else\n"] + rest
                 cursor = ending
             replacement += lines[cursor - 1:last_line]
-            return first_line, _span(statements[-1])[1], replacement
+            return first_line, line_span(statements[-1])[1], replacement
         if kind_of(statement) == "If_Stmt" and kind_of(statement.items[1]) == "Return_Stmt":
             indent = lines[first_line - 1][:len(lines[first_line - 1]) - len(lines[first_line - 1].lstrip())]
-            rest = lines[last_line:_span(statements[-1])[1]]
-            return first_line, _span(statements[-1])[1], [
+            rest = lines[last_line:line_span(statements[-1])[1]]
+            return first_line, line_span(statements[-1])[1], [
                 f"{indent}if (.not. ({statement.items[0]})) then\n", *rest, f"{indent}end if\n"]
         return "a RETURN inside a loop or another construct cannot be taken out"
     return None
@@ -270,7 +270,7 @@ def _flagged(statements, lines, flag):
     output = []
     statements = [item for item in statements if kind_of(item) != "Comment"]
     for position, statement in enumerate(statements):
-        first, last = _span(statement)
+        first, last = line_span(statement)
         indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
         if not _returns(statement):
             output += lines[first - 1:last]
@@ -286,8 +286,8 @@ def _flagged(statements, lines, flag):
                 inner = _flagged(body, lines, flag)
                 if inner is None:
                     return None
-                output += lines[_span(header)[0] - 1:_span(header)[1]] + inner
-            output += lines[_span(end)[0] - 1:_span(end)[1]]
+                output += lines[line_span(header)[0] - 1:line_span(header)[1]] + inner
+            output += lines[line_span(end)[0] - 1:line_span(end)[1]]
         else:
             return None
         if position < len(statements) - 1:
@@ -396,11 +396,11 @@ def _counted_loop(statements, lines, number):
         if trips is None or any(kind_of(item) in {"Cycle_Stmt", "Goto_Stmt", "Return_Stmt"} for item in walk(statement)):
             return "a loop without control whose iterations are not counted"
         flag, trip = f"fort_go_{number}", f"fort_trip_{number}"
-        indent = lines[_span(opening)[0] - 1][:len(lines[_span(opening)[0] - 1]) - len(lines[_span(opening)[0] - 1].lstrip())]
+        indent = lines[line_span(opening)[0] - 1][:len(lines[line_span(opening)[0] - 1]) - len(lines[line_span(opening)[0] - 1].lstrip())]
         inner = []
         open_guards = 0
         for position, item in enumerate(body):
-            first, last = _span(item)
+            first, last = line_span(item)
             text = lines[first - 1:last]
             leaves = _exits(item)
             if leaves:
@@ -414,7 +414,7 @@ def _counted_loop(statements, lines, number):
                         for _header, body_part in _branches(item)[0]):
                     text = list(text)
                     for leave in leaves:
-                        line = _span(leave)[0] - first
+                        line = line_span(leave)[0] - first
                         text[line] = re.sub(r"(?i)\bexit\b", f"{flag} = .false.", text[line], count=1)
                 else:
                     return "an EXIT that is not the last statement of a branch"
@@ -428,7 +428,7 @@ def _counted_loop(statements, lines, number):
         if trips > 1:
             replacement += [f"{indent}do {trip} = 2, {trips}\n", f"{indent}  if ({flag}) then\n", *inner,
                             f"{indent}  end if\n", f"{indent}end do\n"]
-        return _span(statement)[0], _span(statement)[1], replacement, (flag, trip)
+        return line_span(statement)[0], line_span(statement)[1], replacement, (flag, trip)
     return None
 
 
@@ -439,7 +439,7 @@ def _exits_list(statements):
 def _reached(text, patterns):
     """The parsed text, its procedures by qualified name, and those the selected procedures reach by calls."""
     tree = parse_fortran(text)
-    scopes = {scope.qualified: scope for scope in _procedures(tree)}
+    scopes = {scope.qualified: scope for scope in procedures_of(tree)}
     reached, pending = set(), [scope for name, scope in scopes.items() if any(fnmatchcase(name, p) for p in patterns)]
     while pending:
         scope = pending.pop()
@@ -475,7 +475,7 @@ def _optional_versions(text, patterns, versions):
             if not optional or given is None or optional <= given:
                 continue
             absent = frozenset(optional - given)
-            first, _last = _span(call)
+            first, _last = line_span(call)
             record = {"caller": qualified, "callee": callee.qualified, "line": first, "absent": sorted(absent)}
             name = str(call.items[0])
             if not re.match(r"(?i)\s*call\s+" + re.escape(name) + r"\b", lines[first - 1]):
@@ -493,7 +493,7 @@ def _optional_versions(text, patterns, versions):
                     records.append({**record, "reason": "the statements name an absent dummy"})
                     continue
                 versions[key] = f"{base}_fort_{number}"
-                edits.append((_span(callee.node)[1] + 1, _span(callee.node)[1], ["\n", *copy]))
+                edits.append((line_span(callee.node)[1] + 1, line_span(callee.node)[1], ["\n", *copy]))
             changed = re.sub(r"(?i)(\s*call\s+)" + re.escape(name) + r"\b",
                              lambda found, version=versions[key]: found.group(1) + version, lines[first - 1], count=1)
             edits.append((first, first, [changed]))
@@ -541,13 +541,13 @@ def _element_pointer(scope, lines):
                 and not any(item is assignment.items[0] for assignment in assignments)]
         fields = [item for item in walk(execution) if kind_of(item) == "Data_Ref" and kind_of(item.items[0]) == "Name"
                   and str(item.items[0]).lower() == name]
-        spans = [(_span(statement)[1], _span(loop)[1]) for loop, statement, _variable in places]
+        spans = [(line_span(statement)[1], line_span(loop)[1]) for loop, statement, _variable in places]
         if len(assignments) != len(places) or len(uses) != len(fields) \
                 or not all(any(after < _line(item) <= stop for after, stop in spans) for item in fields):
             continue
         loop, statement, variable = places[0]
-        first, last = _span(statement)
-        stop = _span(loop)[1]
+        first, last = line_span(statement)
+        stop = line_span(loop)[1]
         element = f"{statement.items[2].items[0]}({variable})"
         pattern = re.compile(r"(?i)(?<![\w%])" + re.escape(name) + r"(\s*%)")
         rewritten = [pattern.sub(lambda found, element=element: element + found.group(1), line)
@@ -581,7 +581,7 @@ def _select_case(scope, lines):
                     default = current
                 else:
                     cases.append(current)
-            elif current is not None and not (kind_of(item) == "Comment" and item.item.span[0] == _span(current[0])[0]):
+            elif current is not None and not (kind_of(item) == "Comment" and item.item.span[0] == line_span(current[0])[0]):
                 current[1].append(item)
         if any("logical" in kind_of(value).lower() for case, _body in cases for value in walk(case)):
             continue
@@ -598,15 +598,15 @@ def _select_case(scope, lines):
                     terms.append(f"{selector} == ({value})")
             return " .or. ".join(terms)
 
-        first, last = _span(construct)
+        first, last = line_span(construct)
         indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
         output = []
         for position, (case, body) in enumerate(cases):
             output.append(f"{indent}{'if' if position == 0 else 'else if'} ({condition(case)}) then\n")
-            output += [line for item in body for line in lines[_span(item)[0] - 1:_span(item)[1]]] \
+            output += [line for item in body for line in lines[line_span(item)[0] - 1:line_span(item)[1]]] \
                 if body else []
         if default is not None:
-            body = [line for item in default[1] for line in lines[_span(item)[0] - 1:_span(item)[1]]]
+            body = [line for item in default[1] for line in lines[line_span(item)[0] - 1:line_span(item)[1]]]
             output += ([f"{indent}else\n"] if cases else []) + body
         if cases:
             output.append(f"{indent}end if\n")
@@ -623,11 +623,8 @@ def _line(node):
 
 def _declare(scope, lines, names):
     """An edit that declares ``names`` (Fortran declaration texts) after the procedure's specifications."""
-    heading = _span(_heading(scope.node))[1]
-    specification = part_of(scope.node, "Specification_Part")
-    ends = [_span(item)[1] for item in (specification.content if specification is not None else ())
-            if kind_of(item) != "Comment" and _span(item) is not None]
-    after = max([heading, *ends])
+    heading = line_span(heading_of(scope.node))[1]
+    after = declarations_end(scope.node)
     margin = " " * (len(lines[heading - 1]) - len(lines[heading - 1].lstrip()) + 2)
     return after + 1, after, [margin + item + "\n" for item in names]
 
@@ -677,7 +674,7 @@ def _rewrite(node, qualified, lines, text, selected):
         flagged = _flagged(list(execution.content), lines, flag)
         if flagged is None:
             return [], {"procedure": qualified, "reason": found or "a RETURN stays"}
-        start, stop = _span(execution)
+        start, stop = line_span(execution)
         indent = lines[start - 1][:len(lines[start - 1]) - len(lines[start - 1].lstrip())]
         return ([(start, stop, [f"{indent}{flag} = .false.\n", *flagged]), _declare(scope, lines, [f"logical :: {flag}"])],
                 {"procedure": qualified, "returns": True})
@@ -727,7 +724,7 @@ def prepare_helpers(text, procedures):
     moves = []
     for qualified in sorted(reached):
         selected = any(fnmatchcase(qualified, pattern) for pattern in patterns)
-        first, last = (_moved(line, moves) for line in _span(scopes[qualified].node))
+        first, last = (_moved(line, moves) for line in line_span(scopes[qualified].node))
         node = scopes[qualified].node if not moves else None
         for _round in range(_ROUNDS):
             lines = text.splitlines(keepends=True)

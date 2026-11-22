@@ -5,8 +5,9 @@ import pytest
 
 from compiler.resident.configure import configure_sources
 from compiler.resident.directives import expand_directives
+from compiler.resident.procedures import renamed_lines
 from compiler.resident.project import ResidentProject, Selection, prepare
-from compiler.resident.reductions import DIRECT, FINAL, SLOTS, _rename, lower_reductions
+from compiler.resident.reductions import DIRECT, FINAL, SLOTS, lower_reductions
 from compiler.scopes.resident_splice import ResidentDomain
 from compiler.scopes.segments import license_line, parse_license
 from compiler.tests.resident_application_support import fortran_compiler
@@ -75,7 +76,7 @@ def test_an_openmp_reduction_clause_becomes_a_statement_about_the_order():
 
 
 def test_a_renamed_variable_keeps_its_name_in_character_literals_comments_and_fields():
-    assert _rename(["  print *, 'i = ', i, \"i\", a%i ! i\n", "  x = 'it''s i' // trim(i)\n"], {"i": "k"}) == [
+    assert renamed_lines(["  print *, 'i = ', i, \"i\", a%i ! i\n", "  x = 'it''s i' // trim(i)\n"], {"i": "k"}) == [
         "  print *, 'i = ', k, \"i\", a%i ! i\n", "  x = 'it''s i' // trim(k)\n"]
 
 

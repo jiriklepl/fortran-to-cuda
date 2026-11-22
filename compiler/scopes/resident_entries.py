@@ -769,7 +769,7 @@ def _temporaries(analysis, routine, procedure):
 
     Between the two statements such an array belongs to one call, and its
     values are dead before and after. That is all the domain needs to know to
-    lend storage that stays from call to call (see ``resident_splice.lend_storage``),
+    lend storage that stays from call to call (see ``compiler.resident.storage.lend_storage``),
     which takes a pointer in place of the allocatable. The exchange is exact
     only where the array is used like any array: by its elements and sections,
     by its bounds, or passed whole to a procedure that takes an ordinary array.

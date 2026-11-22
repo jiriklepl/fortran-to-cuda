@@ -21,9 +21,11 @@ from compiler.resident.configure import configure_sources, distinct_name
 from compiler.resident.directives import expand_directives
 from compiler.resident.helpers import prepare_helpers
 from compiler.resident.inlining import inline_calls
-from compiler.resident.reductions import holds_selected, lower_reductions
+from compiler.resident.procedures import holds_selected
+from compiler.resident.reductions import lower_reductions
 from compiler.resident.rewrites import inline_tile_scratch_nests, promote_line_snapshots
 from compiler.resident.specialize import integer_parameters, specialize
+from compiler.resident.storage import addressable_arrays, lend_storage
 from compiler.scopes.resident_entries import (
     compile_resident_entries,
     compiling_pool,
@@ -31,13 +33,7 @@ from compiler.scopes.resident_entries import (
     host_statement_id,
     pass_scalars_by_value,
 )
-from compiler.scopes.resident_splice import (
-    ResidentDomain,
-    addressable_arrays,
-    lend_storage,
-    may_be_kept,
-    splice_resident_entries,
-)
+from compiler.scopes.resident_splice import ResidentDomain, may_be_kept, splice_resident_entries
 
 # The domain of an application that keeps no residency state of its own; the
 # runtime provides this module (``resident_application.f90``).
@@ -289,7 +285,7 @@ def prepare(project, directory, *, fortran, host_threads=4, jobs=1):
     accumulate scalars, each with ``compiled`` or the ``reason`` it stays on
     the host (see ``compiler.resident.reductions``); and ``temporaries``, the
     arrays a selected procedure allocates and deallocates in each call, whose
-    storage the domain lends instead (see ``resident_splice.lend_storage``).
+    storage the domain lends instead (see ``storage.lend_storage``).
     The directory must not exist. The entries are compiled ``jobs`` at a time,
     which changes nothing of what is written.
     """
@@ -522,7 +518,7 @@ def prepare(project, directory, *, fortran, host_threads=4, jobs=1):
     for original in originals:
         names = by_source.get(str(current[original].resolve())) or by_source.get(str(current[original]))
         if names:
-            texts[original], _lent = lend_storage(texts[original], project.domain, names)
+            texts[original] = lend_storage(texts[original], project.domain, names)
             touched.add(original)
     for record in lowered:
         if not record.get("compiled"):

@@ -32,35 +32,26 @@ from fnmatch import fnmatchcase
 from fparser.two.utils import walk
 
 from compiler.frontend.syntax import kind_of, parse_fortran, part_of
+from compiler.resident.procedures import (
+    declarations_end,
+    declarations_of,
+    heading_of,
+    holds_selected,
+    line_span,
+    names_in,
+    procedures_of,
+    renamed_lines,
+)
 
 from .anchors import _strip_inline_comment
 from .configure import serialize_openmp
-from .reductions import _heading, _names, _procedures, _rename, _span, holds_selected
 from .specialize import _Conditions, _fold
 
 _LITERAL = re.compile(r"[+-]?\d+\Z")
 
 
-def _normal(text):
+def normalized(text):
     return re.sub(r"\s+", "", str(text)).lower()
-
-
-def _declarations(node):
-    """name -> (type text, attribute text, array bounds text or None) for the entities a procedure declares."""
-    found = {}
-    specification = part_of(node, "Specification_Part")
-    for statement in (specification.content if specification is not None else ()):
-        if kind_of(statement) != "Type_Declaration_Stmt":
-            continue
-        dtype, attributes, entities = statement.items
-        attrs = str(attributes).lower() if attributes is not None else ""
-        shared = re.search(r"dimension\s*\((.*)\)", attrs)
-        for entity in entities.items:
-            bounds = entity.items[1] if entity.items[1] is not None else (shared.group(1) if shared else None)
-            found[str(entity.items[0]).lower()] = (
-                str(dtype), re.sub(r"dimension\s*\(.*\)", "", attrs), None if bounds is None else _normal(bounds),
-                entity.items[3] is not None)
-    return found
 
 
 class _Callee:
@@ -77,7 +68,7 @@ class _Callee:
             self.reason = "it is not a subroutine with statements"
             return
         self.dummies = [str(item).lower() for item in getattr(statement.items[2], "items", ())]
-        self.declared = _declarations(node)
+        self.declared = declarations_of(node)
         specification = part_of(node, "Specification_Part")
         kinds = {kind_of(item) for item in (specification.content if specification is not None else ())}
         if part_of(node, "Internal_Subprogram_Part") is not None or kinds - {
@@ -86,7 +77,7 @@ class _Callee:
             return
         for name, (_dtype, attributes, bounds, initialized) in self.declared.items():
             if name in self.dummies:
-                if bounds is None and "intent(in)" not in _normal(attributes):
+                if bounds is None and "intent(in)" not in normalized(attributes):
                     self.reason = f"its scalar argument {name} is not INTENT(IN)"
             elif bounds is not None or initialized or attributes.replace(",", "").strip():
                 self.reason = f"its local {name} is more than a plain scalar"
@@ -105,7 +96,7 @@ class _Callee:
                 assigned.add(str(item.items[1].items[1][0]).lower())
             if kind == "Call_Stmt":
                 # What a call changes is not visible here; the arguments could be the dummies.
-                assigned.update(_names(item.items[1]))
+                assigned.update(names_in(item.items[1]))
         self.assigned = assigned
         scalar_dummies = {name for name in self.dummies if self.declared.get(name, (None, None, None))[2] is None}
         if self.reason is None and scalar_dummies & assigned:
@@ -136,7 +127,7 @@ def _substituted(lines, callee, indent):
         else:
             kept.append(lines[index])
         depth += opens
-    kept = _rename(kept, replaced)
+    kept = renamed_lines(kept, replaced)
     return [indent + line[base:] if line.strip() else line for line in kept], set(replaced)
 
 
@@ -154,7 +145,7 @@ def inline_calls(text, callers, callees, constants=None):
         return text, []
     lines = text.splitlines(keepends=True)
     tree = parse_fortran(text)
-    scopes = list(_procedures(tree))
+    scopes = list(procedures_of(tree))
     available = {scope.qualified: _Callee(scope) for scope in scopes if scope.qualified in wanted}
     patterns = [pattern.lower() for pattern in callers]
     edits, records, number = [], [], 0
@@ -166,14 +157,14 @@ def inline_calls(text, callers, callees, constants=None):
             continue
         module = scope.qualified.split("::", 1)[0]
         # A module's own arrays are whole arrays too; the caller's declarations come first.
-        declared, added = {**_declarations(scope.hosts[-1]), **_declarations(scope.node)}, []
+        declared, added = {**declarations_of(scope.hosts[-1]), **declarations_of(scope.node)}, []
         for call in walk(execution):
             if kind_of(call) != "Call_Stmt":
                 continue
             callee = available.get(module + "::" + str(call.items[0]).lower())
             if callee is None:
                 continue
-            first, last = _span(call)
+            first, last = line_span(call)
             record = {"caller": scope.qualified, "callee": callee.scope.qualified, "line": first}
             arguments = list(getattr(call.items[1], "items", ())) if call.items[1] is not None else []
             reason = callee.reason
@@ -194,7 +185,7 @@ def inline_calls(text, callers, callees, constants=None):
                     if kind_of(actual) != "Name" or mine is None or mine[2] != bounds:
                         reason = f"{value} is not a whole array declared with the bounds of {dummy}"
                     mapping[dummy] = value
-                elif {name for name in _names(actual)} & callee.assigned:
+                elif {name for name in names_in(actual)} & callee.assigned:
                     reason = f"the statements change what the argument {value} names"
                 else:
                     mapping[dummy] = value if re.fullmatch(r"[\w.+-]+", value) else f"({value})"
@@ -208,7 +199,7 @@ def inline_calls(text, callers, callees, constants=None):
             if facts:
                 body_lines = _fold(body, lines, _Conditions(facts, constants or {}), [0])
             else:
-                start, stop = _span(callee.execution)
+                start, stop = line_span(callee.execution)
                 body_lines = lines[start - 1:stop]
             indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
             # The caller is a selected procedure: what it takes in runs serially like its own statements.
@@ -218,16 +209,13 @@ def inline_calls(text, callers, callees, constants=None):
             fresh = {name: f"fort_inl{number}_{name}" for name in callee.locals if name not in gone}
             used = {name for name in fresh if any(re.search(rf"(?i)(?<![\w%]){re.escape(name)}(?!\w)", line)
                                                   for line in body_lines)}
-            body_lines = _rename(body_lines, {**{name: fresh[name] for name in used}, **mapping})
+            body_lines = renamed_lines(body_lines, {**{name: fresh[name] for name in used}, **mapping})
             added += [f"{callee.locals[name]} :: {fresh[name]}" for name in sorted(used)]
             edits.append((first, last, body_lines))
             records.append({**record, "inlined": True})
         if added:
-            heading = _span(_heading(scope.node))[1]
-            specification = part_of(scope.node, "Specification_Part")
-            ends = [_span(item)[1] for item in (specification.content if specification is not None else ())
-                    if kind_of(item) != "Comment" and _span(item) is not None]
-            after = max([heading, *ends])
+            heading = line_span(heading_of(scope.node))[1]
+            after = declarations_end(scope.node)
             margin = " " * (len(lines[heading - 1]) - len(lines[heading - 1].lstrip()) + 2)
             edits.append((after + 1, after, [margin + item + "\n" for item in added]))
     for first, last, replacement in sorted(edits, key=lambda edit: (edit[0], edit[1]), reverse=True):

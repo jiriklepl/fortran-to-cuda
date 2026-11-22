@@ -27,10 +27,6 @@ class ComponentStorageUnsupported(CompilationError):
     """Fixed payload layout is unavailable; no storage-read proof is implied."""
 
 
-
-
-
-
 @dataclass(frozen=True)
 class ComponentSchema:
     name: str

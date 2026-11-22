@@ -636,7 +636,7 @@ steps, all in `compiler.scopes`:
   object and calls the entry while the domain is active, and runs the original
   statements otherwise. A rejected span stays native with the access of a
   host statement around it; the caller can supply its own text for such a
-  span instead. `resident_splice.addressable_arrays` adds `TARGET` to the
+  span instead. `storage.addressable_arrays` adds `TARGET` to the
   arrays a domain can bind.
 
 The caller names its domain with `ResidentDomain(module, object, check)`. It

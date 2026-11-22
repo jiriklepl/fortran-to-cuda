@@ -763,5 +763,3 @@ def prove_region(region_id, loop, environment, defined, later, *, injective=froz
         return ParallelProof(region=_region(region_id, loop, environment, defined, later, injective))
     except ParallelizationError as error:
         return ParallelProof(failure=error.failure)
-
-

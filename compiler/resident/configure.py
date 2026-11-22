@@ -7,7 +7,7 @@ from pathlib import Path
 
 from compiler.frontend.syntax import parse_fortran
 from compiler.resident.anchors import _strip_inline_comment
-from compiler.resident.reductions import _heading, _procedures, holds_selected
+from compiler.resident.procedures import heading_of, holds_selected, procedures_of
 from compiler.scopes.segments import license_line, parse_license, private_marker
 
 
@@ -50,10 +50,10 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
         removed = []
         if holds_selected(result.stdout, [name for name in selected if "::" in name]):
             tree = parse_fortran(result.stdout)
-            for scope in _procedures(tree):
+            for scope in procedures_of(tree):
                 if not any(fnmatchcase(scope.qualified, pattern) for pattern in selected):
                     continue
-                first, last = _heading(scope.node).item.span[0], scope.node.content[-1].item.span[1]
+                first, last = heading_of(scope.node).item.span[0], scope.node.content[-1].item.span[1]
                 removed += [{"line": index + 1, "directive": directive, "procedure": scope.qualified}
                             for index, directive in serialize_openmp(lines, first - 1, last)]
         target = directory / distinct_name(source)

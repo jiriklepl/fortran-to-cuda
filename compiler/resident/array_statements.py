@@ -41,10 +41,17 @@ from fnmatch import fnmatchcase
 from fparser.two.utils import walk
 
 from compiler.frontend.syntax import kind_of, parse_fortran, part_of
+from compiler.resident.procedures import (
+    declarations_end,
+    declarations_of,
+    heading_of,
+    holds_selected,
+    line_span,
+    normalized,
+    procedures_of,
+)
 
 from .anchors import _strip_inline_comment
-from .inlining import _declarations
-from .reductions import _heading, _procedures, _span, holds_selected
 
 # Intrinsic functions whose result for arrays is the function of each element.
 _ELEMENTAL = frozenset({
@@ -61,10 +68,6 @@ _WIDTH = 110
 
 class _Unchanged(Exception):
     """Why a statement stays as it is."""
-
-
-def _normal(node):
-    return re.sub(r"\s+", "", str(node)).lower()
 
 
 def _subscripts(reference):
@@ -113,7 +116,7 @@ class _Modules:
                 specification = part_of(node, "Specification_Part")
                 elsewhere = {str(name).lower() for statement in (specification.content if specification else ())
                              if kind_of(statement) in _ELSEWHERE for name in walk(statement) if kind_of(name) == "Name"}
-                self.read[module] = (_declarations(node), _imports(node), elsewhere)
+                self.read[module] = (declarations_of(node), _imports(node), elsewhere)
                 break
         return self.read[module]
 
@@ -150,15 +153,15 @@ class _Names:
         self.modules = modules
         # Innermost first: the procedure's own USE statements, then its hosts'.
         self.imports = [item for node in (scope.node, *scope.hosts) for item in _imports(node)]
-        self.own = _declarations(scope.node)
-        heading = _heading(scope.node)
+        self.own = declarations_of(scope.node)
+        heading = heading_of(scope.node)
         # The arrays of a main program live as long as the run, like a module's.
         self.program = kind_of(heading) == "Program_Stmt"
         # A main program has no arguments.
         self.dummies = {str(item).lower() for item in getattr(heading.items[2], "items", ())} \
             if kind_of(heading) != "Program_Stmt" else set()
         for node in (*reversed(scope.hosts), scope.node):
-            self.declared.update(_declarations(node))
+            self.declared.update(declarations_of(node))
             specification = part_of(node, "Specification_Part")
             for statement in (specification.content if specification is not None else ()):
                 if kind_of(statement) in _ELSEWHERE:
@@ -282,8 +285,8 @@ def _element(reference, positions, names):
 def _position(variable, target, source):
     """Where a section stands when the assigned section stands at ``variable``."""
     (first, _last, step), (other_first, _other_last, other_step) = target, source
-    if _normal(step or "1") == _normal(other_step or "1"):
-        if _normal(first) == _normal(other_first):
+    if normalized(step or "1") == normalized(other_step or "1"):
+        if normalized(first) == normalized(other_first):
             return variable
         return f"{variable} - ({first}) + ({other_first})"
     return f"({other_first}) + (({variable} - ({first})) / ({step or 1})) * ({other_step or 1})"
@@ -324,9 +327,9 @@ def _nest(statement, names, number, indent):
     whole = kind == "Name"
     for operand in operands:
         own = str(operand if kind_of(operand) == "Name" else operand.items[0]).lower()
-        if own == name and _normal(operand) != _normal(target):
+        if own == name and normalized(operand) != normalized(target):
             raise _Unchanged(f"it reads other elements of {name} than it assigns")
-    if whole and names.allocatable(name) and operands and not any(_normal(item) == name for item in operands):
+    if whole and names.allocatable(name) and operands and not any(normalized(item) == name for item in operands):
         raise _Unchanged(f"it may give {name} a new shape")
     ranges = _sections(target, names)
     variables = [f"fort_arr{number}_{axis}" for axis in range(1, len(ranges) + 1)]
@@ -396,7 +399,7 @@ def lower_array_statements(text, procedures, sources=()):
     lines = text.splitlines(keepends=True)
     edits, records, number = [], [], 0
     modules = _Modules(text, sources)
-    for scope in _procedures(parse_fortran(text)):
+    for scope in procedures_of(parse_fortran(text)):
         if not any(fnmatchcase(scope.qualified, pattern) for pattern in patterns):
             continue
         execution = part_of(scope.node, "Execution_Part")
@@ -404,7 +407,7 @@ def lower_array_statements(text, procedures, sources=()):
             continue
         names, added = _Names(scope, modules), []
         for node, condition, statement in _assignments(execution.content):
-            first, last = _span(node)
+            first, last = line_span(node)
             record = {"procedure": scope.qualified, "line": first}
             indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
             try:
@@ -428,11 +431,8 @@ def lower_array_statements(text, procedures, sources=()):
             records.append({**record, "lowered": True, "tag": f"fort_arr{number}_", "arrays": arrays,
                             "text": " ".join(str(node).split())})
         if added:
-            heading = _span(_heading(scope.node))[1]
-            specification = part_of(scope.node, "Specification_Part")
-            ends = [_span(item)[1] for item in (specification.content if specification is not None else ())
-                    if kind_of(item) != "Comment" and _span(item) is not None]
-            after = max([heading, *ends])
+            heading = line_span(heading_of(scope.node))[1]
+            after = declarations_end(scope.node)
             margin = " " * (len(lines[heading - 1]) - len(lines[heading - 1].lstrip()) + 2)
             edits.append((after + 1, after, _wrapped("integer :: " + ", ".join(added), margin)))
     for first, last, replacement in sorted(edits, key=lambda edit: (edit[0], edit[1]), reverse=True):

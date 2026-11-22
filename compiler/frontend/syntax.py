@@ -66,4 +66,3 @@ def declared_type(spec, kinds, location):
     if selector is None:
         return base, 4
     return base, kinds.integer(selector.items[1], location)
-
