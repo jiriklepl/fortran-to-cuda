@@ -440,7 +440,7 @@ def generate_scoped(function, plan, config, common_header):
                     pointer = f"static_cast<{cpp_type(s)} *>(fort_access.device({s.cpp_name}_handle))"
                     body += [f"if (fort_gpu) {s.cpp_name}_device = {pointer};"]
                 body += ["fort_access.executing();", *(["fort_entry_work_started=true;"]), "if (fort_gpu) {", *indent(generate_launch(
-                    step, stream="static_cast<cudaStream_t>(fort_gpu_call.stream)", profile=False, prepared_bounds=True,
+                    step, stream="static_cast<cudaStream_t>(fort_gpu_call.stream)", prepared_bounds=True,
                     error_check='if (const auto error = cudaGetLastError(); error != cudaSuccess) return fort_scope_execution_error(fort_context, cudaGetErrorString(error));',
                     launch_record="FORT_SHARED_CHECK(fort_scope_note_launch(fort_context));")), "} else {"]
                 arguments = worker_arguments + "".join(f", {s.cpp_name}" for s in captures[step.id])

@@ -957,9 +957,8 @@ CDU/CDV/CDW, signed/runtime strides, rank-5 integer arrays, rank-15 bridge
 compilation, imperfect nests, fresh host/device values, indirect gathers,
 squared indices, and default-real arithmetic. Rejection tests cover recurrences,
 scalar live-outs and conflicts between iterations, apart from invalid source.
-Runtime tests also check CPU ownership, selective host/device coherence, pinned
-registration lifetimes, stale tokens, shape/size errors, and profiling events with
-instrumented CUDA calls.
+Runtime tests also check CPU ownership, selective host/device coherence,
+stale tokens and shape/size errors.
 Native compiler absence skips the corresponding capability;
 CUDA compilation requires `nvcc`, and execution also requires a usable device. Once
 those capabilities are available, build or runtime failures fail the tests. All builds and outputs use temporary directories.

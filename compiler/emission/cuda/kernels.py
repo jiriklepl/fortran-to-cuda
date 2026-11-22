@@ -147,7 +147,7 @@ def launch_bounds(region: ParallelRegion) -> list[str]:
 
 
 def generate_launch(
-    region: ParallelRegion, *, stream: str | None = None, profile: bool = True,
+    region: ParallelRegion, *, stream: str | None = None,
     prepared_bounds: bool = False, error_check: str | None = None, launch_record: str | None = None,
 ) -> list[str]:
     schedule = region_schedule(region)
@@ -178,18 +178,14 @@ def generate_launch(
             ]
         )
     arguments.append("fort_internal_total")
-    if profile:
-        lines.append("        timing::measure_kernel_executions([&]() {")
     configuration = "fort_internal_blocks, fort_internal_threads" + (f", 0, {stream}" if stream else "")
     lines.append(f"            {kernel_name(region)}<<<{configuration}>>>(")
     lines.extend(
         indent([argument + ("," if index < len(arguments) - 1 else "") for index, argument in enumerate(arguments)], 4)
     )
     lines.append("            );")
-    if profile:
-        lines.append("        });")
-    lines.extend([
-        "        " + (error_check or "CUCH(cudaGetLastError());"),
-        "        " + (launch_record or 'storage::trace("kernel");'), "    }", "}",
-    ])
+    lines.append("        " + (error_check or "CUCH(cudaGetLastError());"))
+    if launch_record:
+        lines.append("        " + launch_record)
+    lines.extend(["    }", "}"])
     return lines

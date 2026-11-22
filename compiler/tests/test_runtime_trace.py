@@ -1,4 +1,4 @@
-"""Concurrent runtime and placement diagnostics retain whole line records."""
+"""Concurrent placement diagnostics retain whole line records."""
 
 import os
 import shutil
@@ -11,7 +11,7 @@ from compiler.emission.common.resources import read_common_header
 
 
 @pytest.mark.native
-def test_concurrent_storage_and_placement_records(tmp_path):
+def test_concurrent_placement_records(tmp_path):
     cxx = shutil.which("g++")
     if not cxx:
         pytest.skip("C++ compiler required")
@@ -26,15 +26,10 @@ int main() {
     std::atomic<bool> ready{false};
     std::vector<std::thread> threads;
     for (int thread = 0; thread < 8; ++thread) {
-        threads.emplace_back([&, thread] {
+        threads.emplace_back([&] {
             while (!ready.load()) std::this_thread::yield();
             for (int i = 0; i < 2000; ++i) {
-                if (thread % 2) {
-                    storage::trace("pool_alloc", 34881600);
-                    storage::trace("release");
-                } else {
-                    offload::decision_trace_single("sample", "native", 0, 3);
-                }
+                offload::decision_trace_single("sample", "native", 0, 3);
             }
         });
     }
@@ -47,13 +42,11 @@ int main() {
                            cwd=tmp_path, capture_output=True, text=True, timeout=120)
     assert build.returncode == 0, build.stdout + build.stderr
     expected = Counter({
-        "FORT_RUNTIME pool_alloc bytes=34881600": 8000,
-        "FORT_RUNTIME release": 8000,
-        "FORT_OFFLOAD entry=sample mode=native gpu_units=0 cpu_units=3 unit_kind=regions": 8000,
+        "FORT_OFFLOAD entry=sample mode=native gpu_units=0 cpu_units=3 unit_kind=regions": 16000,
     })
     for enabled in ("1", "0"):
         result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30,
-                                env={**os.environ, "FORT_RUNTIME_TRACE": enabled, "FORT_OFFLOAD_TRACE": enabled})
+                                env={**os.environ, "FORT_OFFLOAD_TRACE": enabled})
         assert result.returncode == 0, result.stderr
         assert not result.stdout
         assert Counter(result.stderr.splitlines()) == (expected if enabled == "1" else Counter())
