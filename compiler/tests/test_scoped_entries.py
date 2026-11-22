@@ -175,7 +175,6 @@ def generated(tmp_path_factory):
                                  "--json", "--output-dir", str(output), *optimization], directory=directory, env=env).stdout)
         reports[name] = report
         assert report["artifact_schema_version"] == 2
-        assert report["memory_model"] == "scoped"
         assert "offload" not in report
         assert all(item["role"] in {"common_runtime", "shared_entry"} for item in report["build_sources"])
         assert not {"generated_code.cu", "generated_cpp_impl.cpp", "generated_interface.f90"} & set(report["outputs"])

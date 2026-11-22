@@ -379,11 +379,7 @@ def generate_scoped(function, plan, config, common_header):
         if not graph_group_eligible((step,), units, protected):
             return []
         key = int(sha256(f"{name}:graph:{step.id}".encode()).hexdigest()[:16], 16)
-        graph_launch_groups[key] = {"key": key, "regions": [step.id],
-            "ordering": "checked task order; runtime groups across numerical entries",
-            "effects": "owned per-task effects and arguments; virtual ordered definitions",
-            "empty_domains": "omitted before argument capture and resource acquisition",
-            "fallback": "original task only before enqueue; accepted work is never replayed"}
+        graph_launch_groups[key] = {"key": key, "regions": [step.id]}
         return generate_graph_group((step,), units=units, arrays=arrays, capacity=capacity,
             bounds=bounds, descriptors=descriptors, array_argument=array_argument,
             group_key=key, fallback=(), enqueue=True,
@@ -391,11 +387,7 @@ def generate_scoped(function, plan, config, common_header):
 
     def merged_launch(group, fallback):
         key = int(sha256(f"{name}:group:{'-'.join(str(region.id) for region in group)}".encode()).hexdigest()[:16], 16)
-        graph_launch_groups[key] = {"key": key, "regions": [region.id for region in group],
-            "ordering": "members of one launch; no member touches an array another writes",
-            "effects": "per-member effects; the runtime accepts only independent actual sections and queues their union",
-            "empty_domains": "omitted before argument capture and resource acquisition",
-            "fallback": "the members' own tasks in order, before enqueue; accepted work is never replayed"}
+        graph_launch_groups[key] = {"key": key, "regions": [region.id for region in group]}
         position = (f'fort_scoped::TracePosition fort_worker_trace(fort_context, "{procedure_id}", '
                     f'"{implementation_ids[group[0].id, "cuda"]}");')
         return generate_graph_group(group, units=units, arrays=arrays, capacity=capacity,
@@ -502,17 +494,10 @@ def generate_scoped(function, plan, config, common_header):
         "numerical_environment": {
             "required": function.requires_numerical_environment,
             "check": "fort_scope_numerical_environment_supported",
-            "rounding": "round to nearest", "exceptions": "host traps disabled",
-            "caller_contract": "floating-point exception flags are not observed",
-            "check_position": "before entry work; every run",
-            "unsupported": "pre-work boundary; original-source caller executes its coherent native operation",
-            "generated_cpu_fallback": "does not replace the original source for unsupported environments",
         },
         "runtime_provenance": provenance.public(),
         "host_threads": config.host_threads,
         "definition_changes": [s.name for s in arrays if s.intent == "out"],
-        "resource_failure": "continue native at current worker before execution; never replay completed work",
-        "transfer_volume": "missing physical read/preservation sections from shared runtime state",
         "parallel_regions": len(plan.regions), "source": function.source,
         "region_execution": [{"region": r.id, "gpu_available": not protected[r.id],
                               "protected_scalars": [s.name for s in sorted(protected[r.id], key=lambda s: s.id)],
@@ -521,9 +506,5 @@ def generate_scoped(function, plan, config, common_header):
                              for r in plan.regions],
     }
     report["graph_execution"] = {"abi_version": 1, "runtime_api": "fort_scope_graph_enqueue_v1",
-        "groups": list(graph_launch_groups.values()),
-        "selection": "device-mode tasks enqueue; host-mode tasks acquire host effects",
-        "submission": "context queue spans numerical calls; conflicting host tasks drain dependencies",
-        "parameter_lifetime": "runtime owns nonempty task values and effects until submission",
-        "fusion": "fresh dependence proofs before graph launch planning"}
+                                 "groups": list(graph_launch_groups.values())}
     return ScopedEmission(numerical_source_prologue() + "\n".join(lines), "\n".join(fortran), report)

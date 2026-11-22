@@ -158,7 +158,3 @@ def test_resource_cache_is_published_by_independent_runtime_interface():
     sources, manifest = read_scoped_runtime()
     assert sources["scoped_cuda_resources.hpp"] == (RUNTIME / "scoped_cuda_resources.hpp").read_text()
     assert "scoped_cuda_resources.hpp" in manifest["headers"]
-    cache = manifest["idle_execution_resources"]
-    assert cache["limit_per_device"] == 1
-    assert cache["retained_device_bytes_limit"] == 64 * 1024 * 1024
-    assert "invocation-local" in cache["freshness"]

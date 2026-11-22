@@ -69,14 +69,12 @@ enddo
     assert set(report["outputs"]) >= OUTPUTS
     assert {path.name for path in output.iterdir()} == set(report["outputs"])
     assert report["artifact_schema_version"] == 2
-    assert report["memory_model"] == "scoped"
     assert "generated_cpp_impl.cpp" not in report["outputs"]
     assert "offload" not in report
     assert report["execution_plan"].count("parallel legality PROVEN") == 2
     graph = report["scoped"]["graph_execution"]
     assert graph["runtime_api"] == "fort_scope_graph_enqueue_v1"
     assert [group["regions"] for group in graph["groups"]] == [[0], [1]]
-    assert "Caller-owned domain" in report["memory_plan"]
     assert "Normalized IR:" in result.stderr
 
 
@@ -107,7 +105,6 @@ endif
     assert report["parallel_regions"] == 2
     assert "host conditional" in report["execution_plan"]
     assert "retained sequential loops: 1" in report["execution_plan"]
-    assert report["memory_model"] == "scoped"
     assert len(report["scoped"]["region_execution"]) == 2
 
 

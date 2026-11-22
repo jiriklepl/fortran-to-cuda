@@ -34,12 +34,10 @@ def kernel_entry_report(kernel, plan, sources, outputs):
     return {
         "kernel": kernel,
         "artifact_schema_version": 2,
-        "memory_model": "scoped",
         "supported": True,
         "reason": None,
         "parallel_regions": len(plan.regions),
         "execution_plan": format_plan(plan),
-        "memory_plan": "Caller-owned domain; shared entries borrow canonical handles and preserve replicas.",
         "outputs": list(outputs),
         "numerical_contract": sources.numerical_contract,
         "build_sources": [
