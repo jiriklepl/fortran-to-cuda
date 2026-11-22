@@ -249,8 +249,6 @@ void touch_device(Context &c,Buffer &b) noexcept {
     }
     b.last_device_use=++c.residency_clock;
 }
-std::mutex driver_mutex;
-std::unordered_set<int> initialized_devices;
 std::mutex registry_mutex;
 std::mutex trace_mutex;
 std::unordered_map<fort_scope_t, std::shared_ptr<Context>> contexts;
@@ -411,7 +409,6 @@ void initialize(Context &c) {
     if (reused) trace(c, "initialize_reuse", nullptr, resources.retained_bytes);
 #endif
     c.ready = true;
-    { std::lock_guard<std::mutex> lock(driver_mutex); initialized_devices.insert(c.device); }
     trace(c, "initialize");
 }
 void mark_context_pending(Context &c) noexcept {
@@ -1695,9 +1692,6 @@ extern "C" int fort_scope_domain_workspace_release_v1(fort_scope_domain_t domain
         workspace_changed(*owner);
     });
 }
-extern "C" int fort_scope_numerical_environment_supported(void) {
-    return fort_runtime::numerical_environment_supported() ? 1 : 0;
-}
 extern "C" int fort_scope_set_device_budget(fort_scope_t h, size_t bytes) {
     return with(h, [&](Context &c) {
         if(c.borrowed_domain && c.ready) {
@@ -1757,11 +1751,6 @@ extern "C" int fort_scope_domain_budget_get_v1(fort_scope_domain_t domain,size_t
         const size_t claimed=owner->workspace_bytes+owner->scratch_capacity+owner->stats.allocated_bytes;
         *unclaimed=claimed<owner->device_budget ? owner->device_budget-claimed : 0;
     });
-}
-extern "C" int fort_scope_set_transfers(fort_scope_t h, uint32_t mode) {
-    return with(h, [&](Context &) {
-        require(mode == FORT_SCOPE_TRANSFERS_DIRECT, FORT_SCOPE_ARGUMENT, "invalid scoped transfer mode");
-    }, Change::None);
 }
 static int register_buffer(fort_scope_t h, uint64_t identity, uint64_t generation,
                            const fort_scope_layout *layout, bool full_initialized,

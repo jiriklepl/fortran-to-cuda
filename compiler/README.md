@@ -177,9 +177,7 @@ launch over a whole field goes out at once. `FORT_SCOPE_GRAPH_QUEUE_WORK` sets
 another thread count (0: no limit); the fields do not depend on it.
 
 Sections travel directly between a host array and its device copy, as the
-exact rectangles an access names. Generated interfaces publish a
-`configure(context)` helper that states this one transfer mode through
-`fort_scope_set_transfers`.
+exact rectangles an access names.
 
 Emit a numerical entry that borrows common buffer handles:
 

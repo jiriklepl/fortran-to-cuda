@@ -86,7 +86,6 @@ def generate_scoped(function, plan, config, common_header):
 
     def trace_cpu(region):
         return f'fort_worker_trace.implementation("{implementation_ids[region.id, "generated_cpu"]}");'
-    configure_name = c_name + "_configure"
     scalar_signature = [(f"const {cpp_type(s)} fort_value_{s.cpp_name}" if s.by_value else
                          f"const {cpp_type(s)} *fort_scalar_{s.cpp_name}") for s in scalars]
     def array_argument(symbol):
@@ -124,8 +123,6 @@ def generate_scoped(function, plan, config, common_header):
                   for e in (*box.lower, *box.upper))
         for r in plan.regions
     }
-    lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
-              "    return fort_scope_set_transfers(fort_context, FORT_SCOPE_TRANSFERS_DIRECT);", "}"]
     captures = {}
     locals_ = host_symbols(function, plan)
     for region in plan.regions:
@@ -471,17 +468,14 @@ def generate_scoped(function, plan, config, common_header):
     lines += ["}", "#undef FORT_SHARED_CHECK", ""]
     parameters = ["fort_context", "fort_mode", *[array_argument(s) for s in arrays], *[s.cpp_name for s in scalars]]
     fortran = [f"module {name}", "  use iso_c_binding",
-               "  implicit none", "  private", "  public :: run, configure", "  interface"]
+               "  implicit none", "  private", "  public :: run", "  interface"]
     fortran += _fortran_list("function run(", parameters, f") bind(C, name='{c_name}') result(fort_status)", 4)
     fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool", "      integer(c_int) :: fort_status",
                 "      integer(c_int64_t), value :: fort_context", "      integer(c_int), value :: fort_mode"]
     fortran += [f"      integer(c_int64_t), value :: {s.cpp_name}_handle" for s in arrays]
     fortran += [f"      {TYPES[s.dtype][1]}, intent(in)" + (", value" if s.by_value else "") + f" :: {s.cpp_name}" for s in scalars]
     fortran += ["    end function"]
-    fortran += [f"    function configure(fort_context) bind(C, name='{configure_name}') result(fort_status)",
-                "      import :: c_int, c_int64_t", "      integer(c_int) :: fort_status",
-                "      integer(c_int64_t), value :: fort_context", "    end function",
-                "  end interface", f"end module {name}", ""]
+    fortran += ["  end interface", f"end module {name}", ""]
     report = {
         "schema_version": 1, "abi_version": 1, "entry_abi_version": ENTRY_ABI_VERSION,
         "numerical_contract": numerical_build_contract(),
@@ -497,7 +491,7 @@ def generate_scoped(function, plan, config, common_header):
         "conditions": [render_expression(expression) for expression in assumptions],
         "numerical_environment": {
             "required": function.requires_numerical_environment,
-            "check": "fort_scope_numerical_environment_supported",
+            "check": "fort_runtime::numerical_environment_supported",
         },
         "runtime_provenance": provenance.public(),
         "host_threads": config.host_threads,

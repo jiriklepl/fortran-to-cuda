@@ -85,9 +85,6 @@ module fort_resident_domain
     procedure :: host_end
     procedure :: host_modify
     procedure :: host_done
-    procedure :: host_box_real32
-    procedure :: host_box_real64
-    generic :: host_box_real => host_box_real32, host_box_real64
     procedure :: release_real32
     procedure :: release_real64
     generic :: release_real => release_real32, release_real64
@@ -694,50 +691,6 @@ contains
       call self%host_end(bound(i))
     enddo
   end subroutine
-
-  function host_box_real32(self, values, lower, first, last, writing) result(handle)
-    class(resident_domain), intent(inout) :: self
-    real(c_float), target, intent(in) :: values(:,:,:)
-    integer, intent(in) :: lower(3), first(3), last(3)
-    logical, intent(in) :: writing
-    integer(c_int64_t) :: handle
-    integer(c_size_t), target :: lo(3), hi(3)
-    type(fort_scope_section), target :: section
-    type(fort_scope_access) :: access
-    if (any(first>last) .or. any(last<lower) .or. any(first>lower+shape(values)-1)) &
-      error stop 'invalid resident native section'
-    handle=self%bind_real32(values,lower,.true.)
-    lo=int(max(first,lower)-lower,c_size_t)
-    hi=int(min(last,lower+shape(values)-1)-lower+1,c_size_t)
-    section%lower=c_loc(lo); section%upper=c_loc(hi)
-    access%read_count=1; access%reads=c_loc(section)
-    if (writing) then
-      access%write_count=1; access%writes=c_loc(section)
-    endif
-    call self%host_begin(handle,access)
-  end function
-
-  function host_box_real64(self, values, lower, first, last, writing) result(handle)
-    class(resident_domain), intent(inout) :: self
-    real(c_double), target, intent(in) :: values(:,:,:)
-    integer, intent(in) :: lower(3), first(3), last(3)
-    logical, intent(in) :: writing
-    integer(c_int64_t) :: handle
-    integer(c_size_t), target :: lo(3), hi(3)
-    type(fort_scope_section), target :: section
-    type(fort_scope_access) :: access
-    if (any(first>last) .or. any(last<lower) .or. any(first>lower+shape(values)-1)) &
-      error stop 'invalid resident native section'
-    handle=self%bind_real64(values,lower,.true.)
-    lo=int(max(first,lower)-lower,c_size_t)
-    hi=int(min(last,lower+shape(values)-1)-lower+1,c_size_t)
-    section%lower=c_loc(lo); section%upper=c_loc(hi)
-    access%read_count=1; access%reads=c_loc(section)
-    if (writing) then
-      access%write_count=1; access%writes=c_loc(section)
-    endif
-    call self%host_begin(handle,access)
-  end function
 
   subroutine release_real32(self, values)
     class(resident_domain), intent(inout) :: self

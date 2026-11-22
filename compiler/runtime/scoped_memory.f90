@@ -18,9 +18,7 @@ module fort_scoped_memory
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_SEGMENT=4, FORT_SCOPE_TRACE_OPERATION=8
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_IMPLEMENTATION=16, FORT_SCOPE_TRACE_BOUNDARY=32
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_ALL=63
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_DIRECT=0
 
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_VIEW_ABI_VERSION=1
 
   type, bind(C), public :: fort_scope_trace_state_v1
     integer(c_int32_t) :: version=0, reserved=0
@@ -93,7 +91,6 @@ module fort_scoped_memory
   public :: fort_scope_domain_close_v1, fort_scope_domain_abandon_v1
   public :: fort_scope_domain_stats_get_v1
   public :: fort_scope_domain_device_get_v1, fort_scope_identity_swap_v1
-  public :: fort_scope_resident_create_v1, fort_scope_resident_close_v1
   public :: fort_scope_domain_workspace_reserve_v1, fort_scope_domain_workspace_resize_v1
   public :: fort_scope_domain_workspace_release_v1, fort_scope_external_execute_v1
   public :: fort_scope_trace_set_v1, fort_scope_trace_restore_v1
@@ -104,8 +101,6 @@ module fort_scoped_memory
   public :: fort_scope_set_device_budget
   public :: fort_scope_device_budget_default_v1, fort_scope_domain_budget_get_v1
   public :: fort_scope_scratch_acquire_v1, fort_scope_scratch_release_v1, fort_scope_scratch_stats_get_v1
-  public :: fort_scope_set_transfers
-  public :: fort_scope_numerical_environment_supported
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
   public :: fort_scope_access_begin_v1
   public :: fort_scope_original_host_begin_v1
@@ -162,17 +157,6 @@ module fort_scoped_memory
     end function
 
 
-    function fort_scope_set_transfers(context, mode) bind(C) result(status)
-      import c_int, c_int32_t, c_int64_t
-      integer(c_int64_t), value :: context
-      integer(c_int32_t), value :: mode
-      integer(c_int) :: status
-    end function
-
-    function fort_scope_numerical_environment_supported() bind(C) result(supported)
-      import c_int
-      integer(c_int) :: supported
-    end function
     function fort_scope_abi_version() bind(C) result(version)
       import c_int32_t
       integer(c_int32_t) :: version
@@ -443,33 +427,4 @@ module fort_scoped_memory
       integer(c_int) :: status
     end function
   end interface
-contains
-  ! Owning source epochs create lazily. Checked children borrow their parent's
-  ! context; an unknown native cut or unmanaged return retires the whole domain.
-  function fort_scope_resident_create_v1(device, context) result(status)
-    integer(c_int), value :: device
-    integer(c_int64_t), intent(out) :: context
-    integer(c_int) :: status, cleanup
-    integer(c_int64_t) :: domain
-    context = 0
-    domain = 0
-    status = fort_scope_domain_create_v1(device, domain)
-    if (status /= FORT_SCOPE_OK) return
-    status = fort_scope_create_in_domain_v1(domain, context)
-    if (status /= FORT_SCOPE_OK) then
-      cleanup = fort_scope_domain_close_v1(domain)
-      if (cleanup /= FORT_SCOPE_OK) error stop 'unattached residency domain cleanup failed'
-    end if
-  end function
-
-  function fort_scope_resident_close_v1(context) result(status)
-    integer(c_int64_t), value :: context
-    integer(c_int) :: status
-    integer(c_int64_t) :: domain
-    status = fort_scope_domain_get_v1(context, domain)
-    if (status /= FORT_SCOPE_OK) return
-    status = fort_scope_close(context)
-    if (status /= FORT_SCOPE_OK) return
-    if (domain /= 0) status = fort_scope_domain_close_v1(domain)
-  end function
 end module fort_scoped_memory

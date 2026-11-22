@@ -55,7 +55,6 @@ enum fort_scope_access_flags {
     FORT_SCOPE_READ_ALL = 1, FORT_SCOPE_WRITE_ALL = 2, FORT_SCOPE_OVERWRITE_ALL = 4
 };
 enum fort_scope_execution_mode { FORT_SCOPE_NATIVE = 0, FORT_SCOPE_GPU = 1 };
-enum fort_scope_transfer_mode { FORT_SCOPE_TRANSFERS_DIRECT = 0 };
 #define FORT_SCOPE_COMPLETION_ABI_VERSION 1
 typedef struct fort_scope_completion_stats_v1 {
     uint32_t version, reserved;
@@ -164,8 +163,6 @@ int fort_scope_domain_abandon_v1(fort_scope_domain_t domain);
 int fort_scope_domain_workspace_reserve_v1(fort_scope_domain_t domain, size_t bytes, uint64_t *lease);
 int fort_scope_domain_workspace_resize_v1(fort_scope_domain_t domain, uint64_t lease, size_t bytes);
 int fort_scope_domain_workspace_release_v1(fort_scope_domain_t domain, uint64_t lease);
-/* Metadata-only check of the ORIGINAL calling thread's IEEE control state. */
-int fort_scope_numerical_environment_supported(void);
 /* Configure before CUDA initialization. Budget counts full-layout payloads
  * plus cached context scratch, independently of the sections transferred. */
 int fort_scope_set_device_budget(fort_scope_t context, size_t bytes);
@@ -190,9 +187,6 @@ int fort_scope_scratch_acquire_v1(fort_scope_t context, size_t bytes,
                                   fort_scope_scratch_lease_v1 *lease);
 int fort_scope_scratch_release_v1(fort_scope_t context, uint64_t token);
 int fort_scope_scratch_stats_get_v1(fort_scope_t context, fort_scope_scratch_stats_v1 *stats);
-/* Metadata-only. Sections are copied directly between the host array and its
- * device copy; DIRECT is the one mode. */
-int fort_scope_set_transfers(fort_scope_t context, uint32_t mode);
 int fort_scope_completion_stats_get_v1(fort_scope_t context, fort_scope_completion_stats_v1 *stats);
 int fort_scope_register(fort_scope_t context, uint64_t identity, uint64_t generation,
                         const fort_scope_layout *layout, int host_initialized, fort_buffer_t *buffer);
