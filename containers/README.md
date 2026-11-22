@@ -359,7 +359,7 @@ saved six-policy microbenchmark report into `ordinary-figures`.
 `doctor` reports the tools, selected GPU, CPU affinity and effective memory
 headroom; it needs no GPU. `run-benchmarks` is a separate, bounded generic
 microbenchmark check and timing run; it does not measure the ELMM application.
-It runs under the pipeline's memory guard, which keeps a 3 GiB reserve using
+It runs under the memory guard (`guard.py`), which keeps a 3 GiB reserve using
 the tighter of host and applicable cgroup budgets and admits one guarded job at
 a time. If the guarded command fails, the launcher prints the end of `run.log`
 and the paths of the full log and `guard.json`; the failure status is returned.

@@ -81,7 +81,7 @@ def selected_gpu(requested=None):
 
 def doctor(args, *, require_gpu=False, fortran=None):
     require_pipeline()
-    from elmm_pipeline.guard import memory_headroom
+    from guard import memory_headroom
     fortran = fortran or os.environ.get("FC", "gfortran")
     result = {"python": sys.version, "cpu_affinity": sorted(os.sched_getaffinity(0)),
               "memory_headroom_bytes": memory_headroom(), "tools": {},
@@ -101,7 +101,7 @@ def doctor(args, *, require_gpu=False, fortran=None):
     if require_gpu:
         if not shutil.which(fortran):
             raise RuntimeError("native Fortran compiler is unavailable")
-        from elmm_pipeline.gpu_toolchain import discover_toolchain
+        from gpu_toolchain import discover_toolchain
         gpu = result["gpu"]
         architecture = gpu["compute_capability"].replace(".", "")
         explicit = args.arch.removeprefix("sm_").replace(".", "")
@@ -133,12 +133,12 @@ def guarded(args):
     require_pipeline()
     if args.worker:
         return True
-    from elmm_pipeline.guard import available
+    from guard import available
     if available() < 3 * 2**30:
         raise RuntimeError("less than 3 GiB effective available memory; no job started")
     print("Output directory:", args.output_dir, flush=True)
     print("Progress log:", args.output_dir / "run.log", flush=True)
-    command = [sys.executable, "-m", "elmm_pipeline.guard",
+    command = [sys.executable, str(HERE / "guard.py"),
                "--record", str(args.output_dir / "guard.json"),
                "--log", str(args.output_dir / "run.log"), "--",
                sys.executable, str(HERE / "workflow.py"), *sys.argv[1:], "--worker"]

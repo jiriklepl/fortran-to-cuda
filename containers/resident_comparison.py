@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import math
 import os
@@ -28,8 +29,6 @@ except RuntimeError as error:
 
 from elmm_pipeline.configuration import parse_domain_size_spec, parse_grid_spec, prepare_config
 from elmm_pipeline.fields import compare_fields, fields
-from elmm_pipeline.launch import environment
-from elmm_pipeline.resident_rk import verify_resident_execution
 from elmm_pipeline.validation import compare_vtk, read_vtk, validate_log
 
 REQUIRED_FIELDS = {"fields-" + name + ".bin" for name in
@@ -214,6 +213,39 @@ def command(argv, *, cwd, env, log, timeout):
             process.wait()
 
 
+def verify_resident_execution(packages, trace, required_procedures):
+    """Require submitted GPU kernels, and reject observed generated-CPU work.
+
+    A generated CUDA file or a GPU placement request does not establish actual
+    execution. Match the runtime ledger to compiler-issued implementation IDs.
+    This check is for traced milestones, outside untraced performance runs.
+    """
+    implementations = {}
+    for package in packages:
+        for entry in package["entries"]:
+            for record in entry["entry"]["runtime_provenance"]["records"]:
+                if record["kind"] == "implementation":
+                    implementations[record["id"]] = (entry["region"]["procedure"], record["backend"])
+    kernels, native = Counter(), Counter()
+    for line in trace.splitlines():
+        event = re.match(r"FORT_SCOPED (\w+)", line)
+        identity = re.search(r" implementation=([a-f0-9]{64})\b", line)
+        if event is None or identity is None or identity[1] not in implementations:
+            continue
+        procedure, backend = implementations[identity[1]]
+        if backend == "generated_cpu":
+            native[procedure] += 1
+        elif backend == "cuda" and event[1] in {"launch", "graph_kernel"}:
+            kernels[procedure] += 1
+    if native:
+        raise ValueError("Resident entries executed on CPU: " + repr(dict(native)))
+    missing = sorted(set(required_procedures) - kernels.keys())
+    if missing:
+        raise ValueError("No GPU kernel execution recorded for: " + ", ".join(missing))
+    return {"gpu_kernels_by_procedure": dict(sorted(kernels.items())), "generated_cpu_events": dict(native),
+            "evidence": "runtime launch/graph-kernel ledger matched to compiler implementation identities"}
+
+
 def application_environment(threads, gpu, cache, *, traced, resident_threads=None, device_budget=None):
     """The environment of one application run.
 
@@ -222,10 +254,11 @@ def application_environment(threads, gpu, cache, *, traced, resident_threads=Non
     the time its fields are on the device. ``device_budget`` states the device memory the GPU run
     may hold; without it the run takes what the device has free.
     """
-    env = environment(threads, traced=traced)
-    for key in list(env):
-        if key.startswith(("FORT_", "POISSON_", "VKFFT_")) or key == "LD_PRELOAD":
-            env.pop(key)
+    # No inherited application, runtime or solver switches.
+    env = {name: value for name, value in os.environ.items()
+           if not name.startswith(("ELMM_", "FORT_", "POISSON_", "VKFFT_")) and name not in {"CUDA_LAUNCH_BLOCKING", "LD_PRELOAD"}}
+    env.update(OMP_NUM_THREADS=str(threads), OMP_DYNAMIC="FALSE", OMP_SCHEDULE="static",
+               OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1")
     if traced:
         env.update(FORT_RUNTIME_TRACE="1", FORT_OFFLOAD_TRACE="1")
     if resident_threads is not None:

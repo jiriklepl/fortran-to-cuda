@@ -379,7 +379,7 @@ def test_resident_accepts_single_precision_and_rejects_invalid_grid(tmp_path, mo
 
 def test_doctor_checks_explicit_fortran_not_ambient_fc(monkeypatch):
     import workflow
-    import elmm_pipeline.gpu_toolchain as gpu_toolchain
+    import gpu_toolchain
 
     monkeypatch.setenv("FC", "missing-ambient-compiler")
     monkeypatch.setattr(workflow, "selected_gpu", lambda _requested: {
@@ -741,3 +741,13 @@ def test_nsys_options_and_isolated_profile_run(tmp_path, monkeypatch):
     failed = json.loads((tmp_path / "out-failed/resident/report.json").read_text())
     assert failed["status"] == "passed" and len(failed["runs"]) == 2
     assert "error" in failed["nsys"] and failed["nsys"]["steps_cap"] == 20
+
+
+def test_an_application_run_inherits_no_application_or_runtime_switches(monkeypatch):
+    for name, value in {"ELMM_INPUTDIR": "elsewhere/", "FORT_RUNTIME_TRACE": "1", "OMP_NUM_THREADS": "200",
+                        "OPENBLAS_NUM_THREADS": "200"}.items():
+        monkeypatch.setenv(name, value)
+    environment = runner.application_environment(3, "0", None, traced=False)
+    assert not any(key.startswith(("ELMM_", "FORT_")) for key in environment)
+    assert (environment["OMP_NUM_THREADS"], environment["OMP_DYNAMIC"], environment["OPENBLAS_NUM_THREADS"]) == (
+        "3", "FALSE", "1")

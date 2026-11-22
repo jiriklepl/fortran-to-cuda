@@ -9,6 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 spec = importlib.util.spec_from_file_location('container_workflow', Path(__file__).resolve().parents[1] / 'workflow.py')
 workflow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(workflow)
@@ -53,7 +55,7 @@ def test_source_identity_does_not_visit_results_or_caches(tmp_path, monkeypatch)
 
 @pytest.mark.parametrize("exit_code", [1, 37])
 def test_guard_failure_prints_cuda_root_cause_and_preserves_status(tmp_path, monkeypatch, capsys, exit_code):
-    from elmm_pipeline import guard
+    import guard
     monkeypatch.setattr(guard, "available", lambda: 8 * 2**30)
     reason = ("error: CUDA runtime libcudart.so for host target 'x86_64-redhat-linux' was not found "
               "beneath /usr/local/cuda-13.4; supply cuda_runtime_dir explicitly")
@@ -77,7 +79,7 @@ def test_guard_failure_prints_cuda_root_cause_and_preserves_status(tmp_path, mon
 
 
 def test_guard_bootstrap_failure_reports_stderr_without_a_progress_log(tmp_path, monkeypatch, capsys):
-    from elmm_pipeline import guard
+    import guard
     monkeypatch.setattr(guard, "available", lambda: 8 * 2**30)
     reason = "another guarded campaign job is active; no process started"
     monkeypatch.setattr(workflow.subprocess, "run", lambda *args, **kwargs:
@@ -91,7 +93,7 @@ def test_guard_bootstrap_failure_reports_stderr_without_a_progress_log(tmp_path,
 
 
 def test_successful_guard_keeps_normal_return_and_log_announcements(tmp_path, monkeypatch, capsys):
-    from elmm_pipeline import guard
+    import guard
     monkeypatch.setattr(guard, "available", lambda: 8 * 2**30)
     monkeypatch.setattr(workflow.subprocess, "run", lambda *args, **kwargs:
                         SimpleNamespace(returncode=0, stderr=""))
