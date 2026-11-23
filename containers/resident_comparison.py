@@ -27,9 +27,9 @@ try:
 except RuntimeError as error:
     raise SystemExit(f"error: {error}") from None
 
-from elmm_pipeline.configuration import parse_domain_size_spec, parse_grid_spec, prepare_config
-from elmm_pipeline.fields import compare_fields, fields
-from elmm_pipeline.validation import compare_vtk, read_vtk, validate_log
+from configuration import parse_domain_size_spec, parse_grid_spec, prepare_config
+from fields import compare_fields, fields
+from validation import compare_vtk, read_vtk, validate_log
 
 REQUIRED_FIELDS = {"fields-" + name + ".bin" for name in
                    "U V W Pr Viscosity U2 V2 W2 Ustar Vstar Wstar".split()}

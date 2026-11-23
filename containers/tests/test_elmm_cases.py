@@ -11,7 +11,7 @@ import elmm_cases as cases
 
 
 def test_the_channel_case_preserves_duration_and_original_inputs(tmp_path):
-    from elmm_pipeline.configuration import prepare_config
+    from configuration import prepare_config
     upstream = tmp_path / "elmm/examples/channel"
     upstream.mkdir(parents=True)
     (upstream / "main.conf").write_text("! upstream method\n4\n")
