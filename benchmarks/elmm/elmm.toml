@@ -1,0 +1,599 @@
+# ELMM, the large-eddy simulation of the atmospheric boundary layer, with its time step on the GPU.
+#
+# The step of the supported configuration (see templates/rk-supported.f90) runs as compiled entries of ELMM's
+# own loops: the subgrid model, the momentum terms, the boundaries, advection, the filter, the pressure step
+# around a device Poisson solver (sources/), the diagnostics, the outputs, the forces and the wall model.
+name = "ELMMResident"
+
+# The sources of ELMM's serial build, in the order of its SConstruct, and PoisFFT's.
+sources = [
+    "elmm:src/dummy_par.f90",
+    "elmm:src/parameters.f90",
+    "elmm:src/numerical_operators.f90",
+    "elmm:src/rng_par_zig.f90",
+    "elmm:src/stop.f90",
+    "elmm:src/interpolation.f90",
+    "elmm:src/strings.f90",
+    "elmm:src/lists.f90",
+    "elmm:src/alternate_ieee_isnan.f90",
+    "elmm:src/endianness.f90",
+    "elmm:src/freeunit.f90",
+    "elmm:src/arrayutilities.f90",
+    "elmm:src/tiling.f90",
+    "elmm:src/simplevtk.f90",
+    "elmm:src/limiters.f90",
+    "elmm:src/multigrid.f90",
+    "elmm:src/multigrid2d.f90",
+    "elmm:src/large_scale_processes.f90",
+    "elmm:src/radiation.f90",
+    "elmm:src/diabatic_processes.f90",
+    "elmm:src/solarradiation.f90",
+    "elmm:src/wallmodels.f90",
+    "elmm:src/volumesources.f90",
+    "elmm:src/areasources.f90",
+    "elmm:src/linesources.f90",
+    "elmm:src/pointsources.f90",
+    "elmm:src/puffs.f90",
+    "elmm:src/dummy_cgal_polyhedra.f90",
+    "elmm:src/elevationmodels.f90",
+    "elmm:src/geometricshapes.f90",
+    "elmm:src/geometricshapes2d.f90",
+    "elmm:src/solidbodies.f90",
+    "elmm:src/immersedboundary.f90",
+    "elmm:src/turbinlet.f90",
+    "elmm:src/boundaries.f90",
+    "elmm:src/scalarboundaries.f90",
+    "elmm:src/scalar_advection.f90",
+    "elmm:src/scalar_diffusion.f90",
+    "elmm:src/scalars.f90",
+    "elmm:src/filters.f90",
+    "elmm:src/subgrid_mixedtimescale.f90",
+    "elmm:src/subgrid.f90",
+    "elmm:src/pthreads.f90",
+    "elmm:src/frames_common.f90",
+    "elmm:src/frames.f90",
+    "elmm:src/output_helpers.f90",
+    "elmm:src/vtkframes.f90",
+    "elmm:src/surfacemapframes.f90",
+    "elmm:src/vertical_profiles.f90",
+    "elmm:src/outputs.f90",
+    "elmm:src/poisson.f90",
+    "elmm:src/pressure.f90",
+    "elmm:src/initial.f90",
+    "elmm:src/advection.f90",
+    "elmm:src/linearforcing.f90",
+    "elmm:src/sponge.f90",
+    "elmm:src/water_thermodynamics.f90",
+    "elmm:src/buoyant_gases.f90",
+    "elmm:src/dynamics.f90",
+    "elmm:src/advection_variable_z.f90",
+    "elmm:src/momentum_diffusion.f90",
+    "elmm:src/tsteps.f90",
+    "elmm:src/main.f90",
+    "PoisFFT:src/customfftw3.f90",
+    "PoisFFT:src/precisions.f90",
+    "PoisFFT:src/parameters.f90",
+    "PoisFFT:src/fft.f90",
+    "PoisFFT:src/poisfft.f90",
+    "PoisFFT:src/main.f90",
+]
+program = "elmm:src/main.f90"
+
+# The sources whose arrays an entry or a residency block binds.
+addressable = [
+    "elmm:src/parameters.f90",
+    "elmm:src/arrayutilities.f90",
+    "elmm:src/subgrid.f90",
+    "elmm:src/dynamics.f90",
+    "elmm:src/momentum_diffusion.f90",
+    "elmm:src/advection.f90",
+    "elmm:src/scalarboundaries.f90",
+    "elmm:src/boundaries.f90",
+    "elmm:src/tsteps.f90",
+    "elmm:src/linearforcing.f90",
+    "elmm:src/volumesources.f90",
+    "elmm:src/sponge.f90",
+    "elmm:src/tiling.f90",
+    "elmm:src/filters.f90",
+    "elmm:src/wallmodels.f90",
+    "elmm:src/advection_variable_z.f90",
+    "elmm:src/water_thermodynamics.f90",
+    "elmm:src/scalar_diffusion.f90",
+    "elmm:src/pressure.f90",
+    "elmm:src/main.f90",
+    "elmm:src/outputs.f90",
+    "elmm:src/frames_common.f90",
+    "elmm:src/vtkframes.f90",
+    "elmm:src/frames.f90",
+    "elmm:src/surfacemapframes.f90",
+]
+
+[inputs.elmm]
+url = "https://bitbucket.org/LadaF/elmm.git"
+revision = "ddb426fca5b020216083f02a218292fea70c1df2"
+copy = ["src"]
+suffixes = [".f90", ".f", ".c", ".h", ".cc", ".cpp"]
+names = ["SConstruct"]
+
+[inputs.PoisFFT]
+url = "https://github.com/LadaF/PoisFFT.git"
+revision = "256a2338254c08f611881b2df5e72bdfa73bc257"
+copy = ["src"]
+suffixes = [".f90", ".f", ".c", ".h", ".cc", ".cpp"]
+names = ["SConstruct"]
+
+# The device Poisson solver: a local checkout, based on the revision below, built with the application.
+[inputs.solver]
+url = "https://github.com/jiriklepl/poisson-solver.git"
+revision = "4a1f1bb7e6f9dab6a2934b62d9b8655cf3a9f99a"
+copy = ["CMakeLists.txt", "dependencies.lock.json", "src", "include", "cmake", "docs"]
+
+# The solver's FFT library, used in place.
+[inputs.VkFFT]
+url = "https://github.com/DTolm/VkFFT.git"
+revision = "066a17c17068c0f11c9298d848c2976c71fad1c1"
+clean = true
+
+[variants.dp]
+defines = ["DPREC"]
+
+[variants.sp]
+defines = []
+
+# The pressure step's state, which holds the domain of the time step and the solver.
+[domain]
+module = "elmm_resident_pressure_state"
+object = "resident_flow"
+check = "pressure_require"
+prefix = "rk"
+
+# The solver's scratch arrays are bound once per pressure step and passed to entries by handle.
+[[held]]
+procedure = "pressure::prepoisson"
+array = "rhs"
+handle = "resident_flow%rhs"
+
+[[held]]
+procedure = "boundaries::bound_phi"
+array = "phi"
+handle = "resident_flow%phi"
+
+[[held]]
+procedure = "pressure::postpoisson"
+array = "phi"
+handle = "resident_flow%phi"
+
+# The procedures whose loop nests become entries. A selection compiles at least its minimum of source nests;
+# a loop that only accumulates scalars counts as the three nests it becomes.
+# What a step computes: the subgrid model, the terms of the momentum equations and their array utilities.
+# The immersed-boundary procedures loop over point lists; selected, their loops take the fields to the
+# host where there are points, and cost nothing where there are none.
+[[selection]]
+label = "rk"
+procedures = [
+    "subgrid::sgs_sigma_uniform",
+    "dynamics::convection",
+    "dynamics::pressuregrad",
+    "momentumdiffusion::momentumdiffusion_nobranch_2ord",
+    "momentumdiffusion::momentumdiffusion_4ord_5point",
+    "scalarboundaries::boundviscosity",
+    "arrayutilities::add_3d",
+    "arrayutilities::set_3d",
+    "arrayutilities::set_int_3d",
+    "arrayutilities::multiply_3d",
+    "timesteps::ibmomentum",
+    "timesteps::ibmasssources",
+    "timesteps::nullinterior",
+]
+minimum_nests = 131
+
+# The boundaries of the velocity components, and of the mass sources of the pressure equation. The
+# boundary types of the supported configuration decide the faces' branches: the six faces of a
+# boundary application are one entry, and the corner and edge copies of the three components stand
+# next to them. Its other boundary modes are excluded by the activation condition.
+[[selection]]
+label = "boundary"
+procedures = ["boundaries::bounduvw_do_bc", "boundaries::bound_q"]
+minimum_nests = 236
+native_rejections = false
+inline = ["boundaries::periodic_corners_edges"]
+assume = ["Btype(We) == BC_PERIODIC", "Btype(Ea) == BC_PERIODIC", "Btype(So) == BC_PERIODIC", "Btype(No) == BC_PERIODIC", "Btype(Bo) == BC_NOSLIP", "Btype(To) == BC_NOSLIP"]
+
+[[selection]]
+label = "advection"
+procedures = ["momentumadvection::*"]
+minimum_nests = 15
+
+[[selection]]
+label = "filter"
+procedures = ["filters::filter3ord"]
+minimum_nests = 4
+
+# The pressure step: the Poisson right-hand side, the halo of the solution, the correction, and the
+# reference of the pressure.
+[[selection]]
+label = "pressure"
+procedures = ["pressure::prepoisson", "pressure::postpoisson", "pressure::fixpressuretoreference"]
+minimum_nests = 48
+
+# The halos of the solution and the pressure, for the pressure boundary types that follow from
+# the supported configuration.
+[[selection]]
+label = "pressure_halo"
+procedures = ["boundaries::bound_phi", "boundaries::bound_pr"]
+minimum_nests = 48
+assume = ["PrBtype(We) == BC_PERIODIC", "PrBtype(Ea) == BC_PERIODIC", "PrBtype(So) == BC_PERIODIC", "PrBtype(No) == BC_PERIODIC", "PrBtype(Bo) == BC_NEUMANN", "PrBtype(To) == BC_NEUMANN"]
+
+# What a step reads of the flow without changing it: the CFL number and the mean friction velocities.
+[[selection]]
+label = "diagnostics"
+procedures = ["dynamics::timesteplength::get_u_dx_max", "wallmodels::groundustar", "wallmodels::groundustarflat"]
+minimum_nests = 21
+
+# What a step adds to the running averages, and the frame writers, which hand the fields to the code
+# that fills a frame where one is due.
+[[selection]]
+label = "outputs"
+procedures = [
+    "outputs::outtstep",
+    "vtkframes::savevtkframes",
+    "surfaceframes::savesurfaceframes",
+    "staggeredframes::savestaggeredframes",
+    "frames_common::tframebase_save",
+]
+minimum_nests = 15
+
+# Forces that every step calls and that act only in configurations where the fields are not kept on
+# the device. Selected, their loops and calls take care of their arrays should they ever run there.
+[[selection]]
+label = "forces"
+procedures = [
+    "dynamics::coriolisforce",
+    "dynamics::buoyancyforce",
+    "dynamics::stressboundaryflux",
+    "linearforcing::linear_forcing",
+    "volumesources::resistanceforce",
+    "volumesources::resistanceforce::apply",
+    "sponge::rayleigh_damping_uvw",
+]
+minimum_nests = 4
+
+# The wall model: the eddy viscosity and friction velocity at the wall points, and the wall fluxes of
+# each list of velocity points. It stops the run where the viscosity is not positive, and its default
+# is the one the step's configuration selects.
+[[selection]]
+label = "walls"
+procedures = ["wallmodels::computeviscswm", "wallmodels::computeuvwfluxeswm::fluxes"]
+minimum_nests = 2
+assume = ["molecular_viscosity > 0", "wallmodeltype == 1", ".not. enable_buoyancy", ".not. enable_moisture"]
+
+[rewrites]
+"advection.f90" = ["tile_scratch"]
+"filters.f90" = ["line_snapshot"]
+
+# ELMM sums the pressure of its reference plane with an OpenMP reduction, whose partial sums combine in the order
+# the threads finish: two runs of one executable differ in rounding, and over thousands of steps in their step
+# count. The master thread sums the plane; the directive says the order is free where the fields are on the device.
+[[patch]]
+file = "pressure.f90"
+action = "replace"
+at = '''
+        !$omp do reduction(+:Phi_ref)
+        do j = 1, Prny
+          do i = 1, Prnx
+            Phi_ref = Phi_ref + Pr(i,j,k_ref)
+          end do
+        end do
+        !$omp end do
+
+        !$omp single
+        Phi_ref = Phi_ref / (Prnx*Prny)
+        !$omp end single
+'''
+template = "templates/serial-pressure-reference.f90"
+
+# ELMM's mean friction velocity at the ground reaches the lists of wall points through pointer components of an
+# array of derived type, which an entry cannot bind. With points only on the walls below and above, four module
+# arrays hold all of them: a procedure of its own accumulates over those, in ELMM's order, on the device.
+[[rewrite]]
+file = "wallmodels.f90"
+procedure = "GroundUstarUVW"
+function = true
+between = ["      !$omp parallel reduction(+:res,n)\n", "      !$omp end parallel\n"]
+action = "replace"
+text = '''
+      if (size(UxmWMpoints) + size(UxpWMpoints) + size(UymWMpoints) + size(UypWMpoints) + size(VxmWMpoints) + size(VxpWMpoints) + size(VymWMpoints) + size(VypWMpoints) == 0) then
+        call GroundUstarFlat(res, n)
+      else
+{original}      end if
+'''
+
+[[rewrite]]
+file = "wallmodels.f90"
+procedure = "GroundUstarUVW"
+function = true
+action = "before"
+template = "templates/ground-ustar-flat.f90"
+
+# The pressure step: the device solver in place of PoisFFT, its scratch arrays bound once, and the epoch of a
+# pressure correction outside the time step's ended with it.
+[[edit]]
+file = "pressure.f90"
+at = '''
+  use Parameters
+'''
+action = "after"
+text = '''
+  use, intrinsic :: iso_c_binding
+  use fort_scoped_memory, only: FORT_SCOPE_GPU
+  use elmm_gpu_pressure, only: elmm_gpu_pressure_config_v1
+  use elmm_resident_pressure_state, only: resident_pressure => resident_flow, pressure_require
+'''
+
+[[edit]]
+file = "pressure.f90"
+at = '''
+  type(pressure_solution_control) :: pressure_solution
+'''
+action = "after"
+text = '''
+  public :: FinalizeResidentPressure
+'''
+
+[[edit]]
+file = "pressure.f90"
+at = '    call PrePoisson(U,V,W,Q,RHS,dt2,mass_flux)'
+action = "before"
+text = '''
+    call StartResidentPressure(Phi,RHS)
+
+'''
+
+[[edit]]
+file = "pressure.f90"
+procedure = 'PressureCorrection'
+call = 'Poiss_PoisFFT'
+action = "replace"
+text = '''
+          if (resident_pressure%active) then
+            call resident_pressure%solve()
+          else
+{original}
+          endif'''
+
+[[edit]]
+file = "pressure.f90"
+procedure = 'PressureCorrection'
+call = 'Poiss_Residue'
+action = "replace"
+text = '''
+      if (resident_pressure%active) call resident_pressure%observe_scratch()
+{original}'''
+
+[[edit]]
+file = "pressure.f90"
+at = '    end if !update_pressure'
+action = "after"
+text = '''
+
+    if (resident_pressure%active .and. .not. resident_pressure%joined) call resident_pressure%publish()'''
+
+[[edit]]
+file = "pressure.f90"
+at = '  end subroutine PressureCorrection'
+action = "before"
+text = '''
+    if (resident_pressure%active .and. .not. resident_pressure%joined) call resident_pressure%end_epoch()
+'''
+
+[[edit]]
+file = "pressure.f90"
+module_end = 'Pressure'
+action = "before"
+template = "templates/pressure-solver.f90"
+
+# Every value comes back while all fields still exist.
+[[edit]]
+file = "elmm:src/main.f90"
+at = '  call Dynamics_Deallocate'
+action = "before"
+text = '''
+  block
+    use Pressure, only: FinalizeResidentPressure
+    call FinalizeResidentPressure()
+  end block
+'''
+
+# One epoch for the time step's stages, opened where ELMM's configuration is the supported one.
+[[edit]]
+file = "tsteps.f90"
+procedure = 'TMarchRK3'
+at = '''
+    use RungeKutta_coefficients
+'''
+action = "after"
+text = '''
+    use, intrinsic :: iso_c_binding
+    use elmm_resident_pressure_state, only: resident_flow
+'''
+
+[[edit]]
+file = "tsteps.f90"
+procedure = 'TMarchRK3'
+call = 'SubgridStresses'
+action = "before"
+text = '''
+      if (.not. resident_flow%joined) then
+        if (ResidentRKSupported()) then
+          call resident_flow%begin_epoch(0_c_int)
+          resident_flow%joined=.true.
+        endif
+      endif
+
+'''
+
+# ELMM applies the velocity boundaries before and after IBMomentum. Without immersed-boundary points IBMomentum
+# changes nothing, and the supported boundaries only copy interior values: the second application would
+# rewrite what the first one wrote.
+[[edit]]
+file = "tsteps.f90"
+procedure = 'TMarchRK3'
+at = '''
+call IBMomentum(U2, V2, W2)
+
+      call BoundUVW(U2, V2, W2)
+'''
+action = "replace"
+text = '''
+call IBMomentum(U2, V2, W2)
+
+      block
+        use ImmersedBoundary, only: UIBPoints, VIBPoints, WIBPoints
+        if (.not. resident_flow%active .or. size(UIBPoints)+size(VIBPoints)+size(WIBPoints)>0) &
+          call BoundUVW(U2, V2, W2)
+      end block
+'''
+
+[[edit]]
+file = "tsteps.f90"
+procedure = 'TMarchRK3'
+at = '''
+call IBMomentum(U, V, W)
+
+      call BoundUVW(U, V, W)
+'''
+action = "replace"
+text = '''
+call IBMomentum(U, V, W)
+
+      block
+        use ImmersedBoundary, only: UIBPoints, VIBPoints, WIBPoints
+        if (.not. resident_flow%active .or. size(UIBPoints)+size(VIBPoints)+size(WIBPoints)>0) &
+          call BoundUVW(U, V, W)
+      end block
+'''
+
+[[edit]]
+file = "tsteps.f90"
+module_end = 'TimeSteps'
+action = "before"
+template = "templates/rk-supported.f90"
+
+[build]
+fortran_options = ["-O3", "-fopenmp", "-ffree-line-length-none", "-fbacktrace", "-g"]
+include = ["elmm:src", "PoisFFT:src", "sources"]
+extra = ["elmm:src/lapack.f", "elmm:src/rng_par_zig_c.c", "elmm:src/pthreads.c"]
+resident = ["sources/gpu_pressure.f90", "sources/resident_pressure_state.f90", "sources/gpu_pressure.cpp"]
+libraries = ["fftw3_omp", "fftw3f_omp", "fftw3", "fftw3f", "blas", "lapack"]
+link = ["OpenMP::OpenMP_Fortran", "pthread"]
+resident_link = ["poisson-solver", "CUDA::cudart"]
+cmake = '''
+set(POISSON_SOLVER_BUILD_FORTRAN ON CACHE BOOL "" FORCE)
+set(POISSON_SOLVER_USE_MPI OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
+set(POISSON_SOLVER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(POISSON_SOLVER_BUILD_API_TESTS OFF CACHE BOOL "" FORCE)
+set(POISSON_SOLVER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(POISSON_SOLVER_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(POISSON_SOLVER_ENABLE_BENCHMARKS OFF CACHE BOOL "" FORCE)
+set(FETCHCONTENT_SOURCE_DIR_VKFFT {input:VkFFT} CACHE PATH "" FORCE)
+add_subdirectory({input:solver} provider)
+'''
+
+[build.source_options]
+"elmm:src/alternate_ieee_isnan.f90" = ["-O0"]
+
+# The resident executable and its native control, each also in a form that dumps all fields at the end.
+[[executable]]
+name = "ELMM"
+library = "resident"
+edits = ["timing"]
+
+[[executable]]
+name = "ELMM-full20"
+library = "resident"
+edits = ["timing", "fields"]
+
+[[executable]]
+name = "ELMM-native"
+library = "native"
+edits = ["timing"]
+
+[[executable]]
+name = "ELMM-native-full20"
+library = "native"
+edits = ["timing", "fields"]
+
+# Wall clock time of initialization, the time-stepping loop and finalization.
+[[program_edit.timing]]
+file = "elmm:src/main.f90"
+at = '''
+  logical :: error_exit = .false.
+'''
+action = "after"
+text = '''
+  integer(dbl) :: phase_timer_start = 0, phase_timer_loop_start = 0, &
+                  phase_timer_loop_end = 0, phase_timer_end = 0
+'''
+
+[[program_edit.timing]]
+file = "elmm:src/main.f90"
+at = '''
+  call par_init
+'''
+action = "before"
+text = '''
+  call system_clock(count = phase_timer_start)
+'''
+
+[[program_edit.timing]]
+file = "elmm:src/main.f90"
+at = '''
+  if (time_stepping%end_time > time_stepping%start_time) then
+'''
+action = "before"
+text = '''
+  call system_clock(count = phase_timer_loop_start)
+'''
+
+[[program_edit.timing]]
+file = "elmm:src/main.f90"
+at = '''
+  call par_sync_all
+  if (master .and. time_steps_time>0) &
+'''
+action = "before"
+text = '''
+  call system_clock(count = phase_timer_loop_end)
+'''
+
+[[program_edit.timing]]
+file = "elmm:src/main.f90"
+at = '''
+  call DeallocateGlobals
+'''
+action = "after"
+text = '''
+  call system_clock(count = phase_timer_end)
+  if (master .and. timer_rate > 0) then
+    write(*,'(1x,a,f0.6)') "Wall clock time for initialization: ", &
+      real(max(0_dbl, phase_timer_loop_start - phase_timer_start), dbl) / real(timer_rate, dbl)
+    write(*,'(1x,a,f0.6)') "Wall clock time for loop: ", &
+      real(max(0_dbl, phase_timer_loop_end - phase_timer_loop_start), dbl) / real(timer_rate, dbl)
+    write(*,'(1x,a,f0.6)') "Wall clock time for finalization: ", &
+      real(max(0_dbl, phase_timer_end - phase_timer_loop_end), dbl) / real(timer_rate, dbl)
+  end if
+'''
+
+# Every field and running average dumped in full, at its last observable point.
+[[program_edit.fields]]
+file = "elmm:src/main.f90"
+at = '  call Dynamics_Deallocate'
+action = "before"
+template = "templates/field-dumps.f90"
+
+[[program_edit.fields]]
+file = "elmm:src/main.f90"
+at = '  call DeallocateGlobals'
+action = "before"
+template = "templates/average-dumps.f90"

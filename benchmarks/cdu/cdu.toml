@@ -1,0 +1,46 @@
+# The advection of the zonal velocity, the kernel of ELMM that the first benchmarks timed: a module of OpenMP loop
+# nests and a driver that times them. The kernel's nests become entries; the driver keeps the fields on the device
+# from the warm-up to the end of the timed loop, and gets them back for its report.
+name = "CDU"
+sources = ["src/cdu.f90", "src/main.f90"]
+program = "src/main.f90"
+
+[variants.default]
+defines = []
+
+[[selection]]
+label = "advection"
+procedures = ["momentumadvection::*"]
+minimum_nests = 4
+
+# The fields stay on the device from the first warm-up step to the end of the timed loop.
+[[edit]]
+file = "main.f90"
+at = "    ! ---- warm-up ----\n"
+action = "before"
+text = "    !$fort enter\n"
+
+[[edit]]
+file = "main.f90"
+at = "    call system_clock(t_end)\n"
+action = "before"
+text = "    !$fort leave\n"
+
+[[edit]]
+file = "main.f90"
+at = "    deallocate(U, V, W, U2)\n"
+action = "before"
+text = "    !$fort close\n"
+
+[build]
+fortran_options = ["-O3", "-fopenmp", "-ffree-line-length-none"]
+link = ["OpenMP::OpenMP_Fortran"]
+resident_link = ["CUDA::cudart"]
+
+[[executable]]
+name = "cdu"
+library = "resident"
+
+[[executable]]
+name = "cdu-native"
+library = "native"
