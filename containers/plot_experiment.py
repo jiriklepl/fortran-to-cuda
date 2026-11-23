@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render paired ELMM receipts with Python 3.9+ and Matplotlib/NumPy only.
 
-This entry point deliberately imports neither the pipeline nor the compiler.
+This entry point deliberately does not import the compiler.
 """
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import json
 import math
 from pathlib import Path
 import statistics
-import sys
 
 
 PHASE_SPECS = (

@@ -27,15 +27,12 @@ OUTPUT_DIR="$(directory "$OUTPUT_DIR")"
 
 flags=(run --cleanenv --no-home --pwd /output --bind "$OUTPUT_DIR:/output"
        --env OUTPUT_DIR=/output --env WORK_DIR=/output/work
-       --env WORKSPACE_ROOT=/workspace --env PIPELINE_ROOT=/workspace/elmm-pipeline
+       --env WORKSPACE_ROOT=/workspace
        --env HOME=/output --env MPLCONFIGDIR=/tmp/matplotlib)
 workspace_host=
 if [[ ${WORKSPACE_ROOT+x} ]]; then
     workspace_host="$(directory "$WORKSPACE_ROOT")"
     flags+=(--bind "$workspace_host:/workspace:ro")
-fi
-if [[ ${PIPELINE_ROOT+x} ]]; then
-    flags+=(--bind "$(directory "$PIPELINE_ROOT"):/workspace/elmm-pipeline:ro")
 fi
 if [[ ${COMPILER_ROOT+x} ]]; then
     flags+=(--bind "$(directory "$COMPILER_ROOT"):/compiler-source:ro"

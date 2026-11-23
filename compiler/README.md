@@ -980,11 +980,10 @@ suite runs from any directory without `PYTHONPATH`. It needs no submodule.
 The complete suite
 builds and runs CUDA programs; with
 `-n auto` (pytest-xdist) it takes several minutes on a workstation, and the
-parser/analysis subset below a few minutes. The pipeline and container suites
-run the same way:
+parser/analysis subset below a few minutes. The container suite runs the same
+way:
 
 ```bash
-python -m pytest elmm-pipeline/tests -n auto
 python -m pytest containers/tests
 ```
 

@@ -32,7 +32,7 @@ host_uid="$(id -u)"
 flags=(run --rm --user "$host_uid:$(id -g)" --workdir /output
        --volume "$OUTPUT_DIR:/output"
        --env OUTPUT_DIR=/output --env WORK_DIR=/output/work
-       --env WORKSPACE_ROOT=/workspace --env PIPELINE_ROOT=/workspace/elmm-pipeline
+       --env WORKSPACE_ROOT=/workspace
        --env HOME=/output --env MPLCONFIGDIR=/tmp/matplotlib)
 if [[ "$ENGINE_KIND" == podman && "$host_uid" != 0 ]]; then
     # Keep the caller's IDs mapped to themselves so host-owned output is writable.
@@ -41,9 +41,6 @@ fi
 if [[ -t 0 && -t 1 ]]; then flags+=(-it); fi
 if [[ ${WORKSPACE_ROOT+x} ]]; then
     flags+=(--volume "$(directory "$WORKSPACE_ROOT"):/workspace:ro")
-fi
-if [[ ${PIPELINE_ROOT+x} ]]; then
-    flags+=(--volume "$(directory "$PIPELINE_ROOT"):/workspace/elmm-pipeline:ro")
 fi
 if [[ ${COMPILER_ROOT+x} ]]; then
     flags+=(--volume "$(directory "$COMPILER_ROOT"):/compiler-source:ro"

@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import math
-import os
 from pathlib import Path
 import struct
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from configuration import prepare_config  # noqa: E402

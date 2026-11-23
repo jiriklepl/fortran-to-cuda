@@ -35,7 +35,7 @@ def test_apptainer_announces_paths_and_preserves_command_status(tmp_path, engine
     marker = tmp_path / "must-not-run"
     argv = ["resident", "--label", f"$(touch {marker}) & literal"]
     env = {key: value for key, value in os.environ.items()
-           if key not in {"WORKSPACE_ROOT", "PIPELINE_ROOT", "COMPILER_ROOT", "GPU_DEVICES",
+           if key not in {"WORKSPACE_ROOT", "COMPILER_ROOT", "GPU_DEVICES",
                           "CUDA_VISIBLE_DEVICES"}
            and not key.startswith(("APPTAINER", "SINGULARITY"))}
     env.update(PATH=str(commands), SIF_FILE=str(image), OUTPUT_DIR=str(output), CAPTURE=str(capture))

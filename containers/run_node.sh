@@ -148,14 +148,6 @@ for name in threads gpu_threads jobs repeats cpus gpus; do positive "$name" "${!
 esac
 workspace="$(cd -- "$workspace" && pwd -P)"
 [[ -x "$workspace/containers/entrypoint.sh" ]] || fail "workspace entrypoint is missing"
-pipeline="${PIPELINE_ROOT:-$workspace/elmm-pipeline}"
-if [[ ! -f "$pipeline/pipeline.py" || ! -f "$pipeline/elmm_pipeline/__init__.py" ]]; then
-    if [[ ${PIPELINE_ROOT+x} ]]; then
-        fail "ELMM pipeline checkout is missing or incomplete: $pipeline; set PIPELINE_ROOT to a complete checkout"
-    fi
-    printf -v initialize '%q ' git -C "$workspace" submodule update --init -- elmm-pipeline
-    fail "ELMM pipeline checkout is missing or incomplete: $pipeline; initialize it with: ${initialize% }"
-fi
 if [[ -n "$deps" ]]; then
     [[ -f "$deps/elmm/src/SConstruct" || -f "$deps/ELMM/src/SConstruct" ]] || \
         fail "ELMM dependency checkout is missing in $deps; prepare the pinned checkouts as described in containers/README.md"
@@ -315,10 +307,10 @@ if [[ -z "${PYTHON:-}" ]]; then
     done
 fi
 if [[ -z "${PYTHON:-}" ]] || ! "$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 12))'; then
-    echo 'ERROR: Native compiler/pipeline execution requires Python 3.12+; load its module or set PYTHON.' >&2
+    echo 'ERROR: Native compiler execution requires Python 3.12+; load its module or set PYTHON.' >&2
     exit 2
 fi
-printf 'Running natively; compiler/pipeline Python: %s\n' "$PYTHON"
+printf 'Running natively; compiler Python: %s\n' "$PYTHON"
 if [[ -z "${FC:-}" ]] && command -v gfortran-15 >/dev/null; then
     export FC=gfortran-15
 fi

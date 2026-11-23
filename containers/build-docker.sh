@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# build-docker.sh — Build the Docker image for the pipeline
+# build-docker.sh — Build the Docker image of the compiler, the benchmarks and the container runner
 # ==============================================================================
 set -euo pipefail
 

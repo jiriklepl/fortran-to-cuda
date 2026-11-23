@@ -26,9 +26,6 @@ builds.json
 **/builds.json
 
 # Mount evidence explicitly; no historical timings or host binaries in images.
-elmm-pipeline/.cache/
-elmm-pipeline/work/
-elmm-pipeline/results/
 *.sif
 results/
 compiler/CODE_MAP.md

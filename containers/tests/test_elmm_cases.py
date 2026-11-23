@@ -6,7 +6,7 @@ import sys
 import pytest
 
 CONTAINERS = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(CONTAINERS), str(CONTAINERS.parent / "elmm-pipeline")]
+sys.path[:0] = [str(CONTAINERS)]
 import elmm_cases as cases
 
 

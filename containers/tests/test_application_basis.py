@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -151,3 +152,9 @@ def test_whole_checkout_rejects_wrong_pin_dirty_or_untracked_inputs(tmp_path):
     answers[("ls-files", "--others", "-z")] = "scratch.o\0src/ignored.f90\0"
     with pytest.raises(ValueError, match="untracked input"):
         basis.repository_provenance({"elmm": tmp_path}, contract, command)
+
+
+def test_the_basis_pins_the_revisions_elmm_s_description_builds_from():
+    inputs = tomllib.loads((CONTAINERS.parent / "benchmarks/elmm/elmm.toml").read_text())["inputs"]
+    contract = json.loads(basis.DEFAULT_CONTRACT.read_text())["repositories"]
+    assert contract == {name: {"url": inputs[name]["url"], "revision": inputs[name]["revision"]} for name in contract}

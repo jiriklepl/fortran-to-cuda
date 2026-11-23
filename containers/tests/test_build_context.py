@@ -14,13 +14,10 @@ def test_apptainer_build_context_excludes_large_artifacts(tmp_path):
     shutil.copy2(source / 'build-apptainer.sh', workspace / 'containers/build-apptainer.sh')
     (workspace / 'containers/Apptainer.def').write_text('definition')
     (workspace / 'requirements.txt').write_text('requirements')
-    for name in ('compiler', 'elmm-pipeline'):
-        (workspace / name).mkdir()
+    for name in ('compiler', 'benchmarks/elmm'):
+        (workspace / name).mkdir(parents=True)
         (workspace / name / 'source.py').write_text('source')
-    (workspace / 'elmm-pipeline/pipeline.py').write_text('pipeline')
-    (workspace / 'elmm-pipeline/elmm_pipeline').mkdir()
-    (workspace / 'elmm-pipeline/elmm_pipeline/__init__.py').write_text('')
-    for directory in ('elmm-pipeline/.cache', 'compiler/__pycache__'):
+    for directory in ('benchmarks/elmm/.cache', 'benchmarks/results', 'compiler/__pycache__'):
         (workspace / directory).mkdir(parents=True)
         (workspace / directory / 'do-not-copy').write_text('cached result')
     (workspace / 'compiler/CODE_MAP.md').write_text('private plan')
@@ -41,23 +38,4 @@ def test_apptainer_build_context_excludes_large_artifacts(tmp_path):
     observed = json.loads(capture.read_text())
     assert observed['argv'] == ['build', str(output), 'containers/Apptainer.def']
     assert set(observed['files']) == {'requirements.txt', 'containers/Apptainer.def',
-        'containers/build-apptainer.sh', 'compiler/source.py', 'elmm-pipeline/source.py',
-        'elmm-pipeline/pipeline.py', 'elmm-pipeline/elmm_pipeline/__init__.py'}
-
-
-def test_apptainer_build_rejects_uninitialized_pipeline(tmp_path):
-    workspace = tmp_path / 'workspace with spaces'
-    (workspace / 'containers').mkdir(parents=True)
-    source = Path(__file__).resolve().parents[1]
-    shutil.copy2(source / 'build-apptainer.sh', workspace / 'containers/build-apptainer.sh')
-    commands = tmp_path / 'commands'
-    commands.mkdir()
-    engine = commands / 'apptainer'
-    engine.write_text('#!/bin/sh\nexit 99\n')
-    engine.chmod(0o755)
-    result = subprocess.run(['bash', str(workspace / 'containers/build-apptainer.sh'), '-o', str(tmp_path / 'image.sif')],
-                            env={**os.environ, 'PATH': str(commands) + os.pathsep + os.environ['PATH']},
-                            text=True, capture_output=True, timeout=10)
-    assert result.returncode == 1
-    assert 'ELMM pipeline checkout is missing or incomplete' in result.stderr
-    assert 'submodule update --init -- elmm-pipeline' in result.stderr
+        'containers/build-apptainer.sh', 'compiler/source.py', 'benchmarks/elmm/source.py'}

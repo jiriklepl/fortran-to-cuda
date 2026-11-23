@@ -9,16 +9,13 @@ import json
 import os
 from pathlib import Path
 import shutil
-import shlex
 import subprocess
 import sys
 import uuid
 
 HERE = Path(__file__).resolve().parent
 WORKSPACE = Path(os.environ.get("WORKSPACE_ROOT", HERE.parent)).resolve()
-PIPELINE = Path(os.environ.get("PIPELINE_ROOT", WORKSPACE / "elmm-pipeline")).resolve()
 COMPILER = Path(os.environ.get("COMPILER_ROOT", WORKSPACE)).resolve()
-sys.path.insert(0, str(PIPELINE))
 
 
 def source_identity(root):
@@ -80,12 +77,11 @@ def selected_gpu(requested=None):
 
 
 def doctor(args, *, require_gpu=False, fortran=None):
-    require_pipeline()
     from memory import memory_headroom
     fortran = fortran or os.environ.get("FC", "gfortran")
     result = {"python": sys.version, "cpu_affinity": sorted(os.sched_getaffinity(0)),
               "memory_headroom_bytes": memory_headroom(), "tools": {},
-              "source_roots": {"compiler": str(COMPILER), "pipeline": str(PIPELINE)}}
+              "source_roots": {"compiler": str(COMPILER)}}
     for name in (fortran, args.nvcc or "nvcc", args.cuda_host or "g++-14"):
         path = shutil.which(name)
         result["tools"][name] = {"path": path}
@@ -116,16 +112,6 @@ def doctor(args, *, require_gpu=False, fortran=None):
         result["toolchain"] = toolchain
         os.environ["CUDA_VISIBLE_DEVICES"] = gpu["uuid"]
     return result
-
-
-def require_pipeline():
-    if not (PIPELINE / "pipeline.py").is_file() or not (PIPELINE / "elmm_pipeline/__init__.py").is_file():
-        if PIPELINE != (WORKSPACE / "elmm-pipeline").resolve():
-            hint = "Set PIPELINE_ROOT to a complete pipeline checkout."
-        else:
-            hint = (f"Initialize it with 'git -C {shlex.quote(str(WORKSPACE))} "
-                    "submodule update --init -- elmm-pipeline', or set PIPELINE_ROOT to a complete checkout.")
-        raise RuntimeError(f"ELMM pipeline checkout is missing or incomplete: {PIPELINE}. {hint}")
 
 
 def plotting_python():

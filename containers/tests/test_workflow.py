@@ -1,7 +1,6 @@
 """Check source isolation and actual CUDA visibility without a device."""
 import importlib.util
 import json
-import os
 from pathlib import Path
 import subprocess
 import sys
@@ -16,41 +15,15 @@ workflow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(workflow)
 
 
-@pytest.mark.parametrize("command", [["doctor"]])
-def test_missing_pipeline_reports_checkout_and_submodule_fix(tmp_path, command):
-    missing = tmp_path / "elmm-pipeline"
-    env = {key: value for key, value in os.environ.items() if key != "PIPELINE_ROOT"}
-    result = subprocess.run([sys.executable, str(Path(workflow.__file__)), *command,
-                             "--output-dir", str(tmp_path / "output")],
-                            env={**env, "WORKSPACE_ROOT": str(tmp_path)},
-                            text=True, capture_output=True, check=False)
-    assert result.returncode == 1
-    assert str(missing) in result.stderr
-    assert "submodule update --init -- elmm-pipeline" in result.stderr
-    assert "PIPELINE_ROOT" in result.stderr
-    assert "Traceback" not in result.stderr
-    assert not (tmp_path / "output").exists()
-
-
-def test_missing_pipeline_override_reports_only_override_fix(tmp_path):
-    missing = tmp_path / "external pipeline"
-    result = subprocess.run([sys.executable, str(Path(workflow.__file__)), "doctor"],
-                            env={**os.environ, "PIPELINE_ROOT": str(missing)},
-                            text=True, capture_output=True, check=False)
-    assert result.returncode == 1
-    assert str(missing) in result.stderr and "PIPELINE_ROOT" in result.stderr
-    assert "submodule update" not in result.stderr and "Traceback" not in result.stderr
-
-
 def test_source_identity_does_not_visit_results_or_caches(tmp_path, monkeypatch):
-    (tmp_path / 'pipeline.py').write_text('source')
+    (tmp_path / 'source.py').write_text('source')
     for directory in ('results', '.cache'):
         (tmp_path / directory).mkdir()
         (tmp_path / directory / 'inaccessible').symlink_to('/does-not-exist')
     first = workflow.source_identity(tmp_path)
     (tmp_path / '.cache/another').write_text('generated')
     assert workflow.source_identity(tmp_path) == first
-    assert set(first['files']) == {'pipeline.py'}
+    assert set(first['files']) == {'source.py'}
 
 
 def test_cuda_ordinal_is_not_nvml_physical_index(monkeypatch):
@@ -149,5 +122,5 @@ def test_plotter_parses_as_python39_without_compiler_imports():
     plotter = Path(__file__).resolve().parents[1] / "plot_experiment.py"
     tree = ast.parse(plotter.read_text(), feature_version=(3, 9))
     imports = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
-    assert not any(name and (name.startswith("elmm_pipeline") or name.startswith("compiler"))
+    assert not any(name and name.startswith("compiler")
                    for name in imports)

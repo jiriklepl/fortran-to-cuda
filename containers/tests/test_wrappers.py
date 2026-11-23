@@ -25,7 +25,7 @@ def sandbox(tmp_path):
     (commands / "python3.12").symlink_to(sys.executable)
     capture = tmp_path / "capture.json"
     env = {key: value for key, value in os.environ.items()
-           if key not in {"WORKSPACE_ROOT", "PIPELINE_ROOT", "COMPILER_ROOT", "SOLVER_ROOT", "DEPS_ROOT", "OUTPUT_DIR", "WORK_DIR",
+           if key not in {"WORKSPACE_ROOT", "COMPILER_ROOT", "SOLVER_ROOT", "DEPS_ROOT", "OUTPUT_DIR", "WORK_DIR",
                           "SIF_FILE", "IMAGE_TAG", "GPU_DEVICES", "CUDA_VISIBLE_DEVICES"}
            and not key.startswith(("APPTAINER", "SINGULARITY", "SLURM_"))}
     env.update(PATH=str(commands), CAPTURE=str(capture), OUTPUT_DIR=str(tmp_path / "output"))
@@ -64,10 +64,6 @@ def fake_workspace(sandbox):
     workspace = tmp / "workspace & literal$"
     stub("entrypoint.sh", directory=workspace / "containers")
     stub("run-apptainer.sh", directory=workspace / "containers")
-    package = workspace / "elmm-pipeline/elmm_pipeline"
-    package.mkdir(parents=True)
-    (package / "__init__.py").write_text("")
-    (package.parent / "pipeline.py").write_text("")
     for relative in ("CMakeLists.txt", "dependencies.lock.json", "src/device_api.cpp",
                      "include/poisson-solver/device_api.h"):
         path = workspace / "poisson-solver" / relative
@@ -188,31 +184,6 @@ def test_node_forwards_opt_in_nsys_and_steps(sandbox):
     argv = json.loads(sandbox[2].read_text())["argv"]
     assert "--nsys" in argv
     assert values(argv, "--nsys-steps") == ["25"]
-
-
-def test_node_missing_pipeline_fails_before_submission(sandbox):
-    _, env, capture, stub, invoke = sandbox
-    workspace = fake_workspace(sandbox)
-    (workspace / "elmm-pipeline/elmm_pipeline/__init__.py").unlink()
-    stub("sbatch")
-    result = invoke("run_node.sh", "bw01")
-    assert result.returncode != 0
-    assert "ELMM pipeline checkout is missing or incomplete" in result.stderr
-    assert "submodule update --init -- elmm-pipeline" in result.stderr
-    assert not capture.exists()
-    assert not Path(env["OUTPUT_DIR"]).exists()
-
-
-def test_node_bad_pipeline_override_fails_without_suggesting_submodule_update(sandbox):
-    tmp, _, capture, stub, invoke = sandbox
-    fake_workspace(sandbox)
-    stub("sbatch")
-    missing = tmp / "external pipeline"
-    result = invoke("run_node.sh", "bw01", overrides={"PIPELINE_ROOT": str(missing)})
-    assert result.returncode != 0
-    assert str(missing) in result.stderr and "PIPELINE_ROOT" in result.stderr
-    assert "submodule update" not in result.stderr
-    assert not capture.exists()
 
 
 def test_node_resident_mode_forwards_sources_and_resources(sandbox):
@@ -524,7 +495,7 @@ def test_native_uses_newer_python_without_replacing_plot_python(sandbox):
     selected = json.loads(capture.read_text())["env"]
     assert selected["PYTHON"] == "python3.12"
     assert selected["PLOT_PYTHON"] == env["PLOT_PYTHON"]
-    assert "compiler/pipeline Python: python3.12" in result.stdout
+    assert "compiler Python: python3.12" in result.stdout
 
 
 def test_native_preserves_original_gfortran_preference(sandbox):
@@ -627,7 +598,7 @@ def test_docker_sources_are_explicit_read_only_overrides(sandbox):
     tmp, _, capture, stub, invoke = sandbox
     stub("docker")
     overrides = {}
-    for name in ("WORKSPACE_ROOT", "PIPELINE_ROOT", "COMPILER_ROOT"):
+    for name in ("WORKSPACE_ROOT", "COMPILER_ROOT"):
         path = tmp / f"{name} & spaces"
         path.mkdir()
         overrides[name] = str(path)
@@ -635,8 +606,7 @@ def test_docker_sources_are_explicit_read_only_overrides(sandbox):
     assert result.returncode == 0, result.stderr
     argv = json.loads(capture.read_text())["argv"]
     mounts = values(argv, "--volume")
-    for name, target in {"WORKSPACE_ROOT": "/workspace", "PIPELINE_ROOT": "/workspace/elmm-pipeline",
-                         "COMPILER_ROOT": "/compiler-source"}.items():
+    for name, target in {"WORKSPACE_ROOT": "/workspace", "COMPILER_ROOT": "/compiler-source"}.items():
         assert f"{overrides[name]}:{target}:ro" in mounts
     assert "--gpus" not in argv
     assert argv[-3:] == ["doctor", "--label", "literal & value"]

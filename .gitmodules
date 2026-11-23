@@ -1,6 +1,3 @@
-[submodule "elmm-pipeline"]
-	path = elmm-pipeline
-	url = https://github.com/jiriklepl/elmm-pipeline.git
 [submodule "poisson-solver"]
 	path = poisson-solver
 	url = https://github.com/jiriklepl/poisson-solver.git

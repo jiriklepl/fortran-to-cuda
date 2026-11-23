@@ -2,7 +2,6 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
-export PIPELINE_ROOT="${PIPELINE_ROOT:-${WORKSPACE_ROOT}/elmm-pipeline}"
 export COMPILER_ROOT="${COMPILER_ROOT:-${WORKSPACE_ROOT}}"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/fortran-plots-${UID}}"
 export PYTHONDONTWRITEBYTECODE=1
@@ -35,7 +34,7 @@ case "$1" in
         exec "${PYTHON}" "${SCRIPT_DIR}/workflow.py" "$@" ;;
     test)
         shift
-        export PYTHONPATH="${PIPELINE_ROOT}:${WORKSPACE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+        export PYTHONPATH="${WORKSPACE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
         exec "${PYTHON}" -m pytest "${WORKSPACE_ROOT}/containers/tests" "$@" ;;
     *) exec "$@" ;;
 esac

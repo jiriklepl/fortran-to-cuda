@@ -1,29 +1,28 @@
 # GPU node experiments
 
-After a fresh clone, initialize the pipeline and solver submodules before
-building an image or submitting jobs. Run source preparation on a worker with
-network access:
+After a fresh clone, initialize the solver submodule before building an image
+or submitting jobs. Run source preparation on a worker with network access:
 
 ```bash
-git submodule update --init -- elmm-pipeline poisson-solver
+git submodule update --init -- poisson-solver
 git submodule status
 ```
 
 For an existing checkout, inspect its submodule state first; initialization
-should not be used to replace local work. An explicit `PIPELINE_ROOT` must
-point to a complete pipeline checkout.
+should not be used to replace local work.
 
 ## Resident comparison
 
 `./run_on_node.sh` and `containers/entrypoint.sh resident` run the `resident`
-comparison. It runs the current pipeline and compiler, builds the local CUDA
-Poisson solver, and compares fresh ELMM executables:
+comparison. It builds ELMM with the current compiler from ELMM's description,
+`benchmarks/elmm/elmm.toml` (`python -m compiler.resident`), builds the local
+CUDA Poisson solver with it, and compares fresh ELMM executables:
 
 - `ELMM-native` uses native Fortran/OpenMP and CPU PoisFFT/FFTW.
 - `ELMM` uses the generated resident GPU path and the local CUDA Poisson solver.
 
 Both are built from the same pinned upstream ELMM and PoisFFT sources (see
-"Source basis" for the one loop the pipeline changes in its copy).
+"Source basis" for the one loop the description changes in its copy).
 The generated build records source snapshots, build commands, binaries and the
 solver source receipt. The comparison records the configuration, toolchain,
 GPU, runtime settings and complete-process timing samples. Work and output
@@ -34,8 +33,8 @@ directories must be new for every run and must be retained together.
 By default, the job creates fresh, pinned ELMM, PoisFFT and VkFFT checkouts in
 its work directory on the worker; this requires network access. The solver is
 the separate `poisson-solver` submodule in this repository, and its Git history
-must be available for the pipeline's ancestry check. No source checkout is
-modified. To reuse explicitly prepared dependencies instead, create independent,
+must be available: the build checks that it is based on the revision the
+description pins. No source checkout is modified. To reuse explicitly prepared dependencies instead, create independent,
 clean checkouts on a worker with network access:
 
 ```bash
@@ -52,8 +51,9 @@ git -C "$DEPS_ROOT/VkFFT" checkout --detach 066a17c17068c0f11c9298d848c2976c71fa
 
 The runner checks the pinned application sources out into its own work
 directory. It rejects unclean or mismatched application/VkFFT checkouts; local
-solver edits are snapshotted and hashed. The selected compiler and pipeline are
-the current workspace sources. Keep the same revisions and source receipts to
+solver edits are snapshotted and hashed. The pinned revisions are the `[inputs]`
+of `benchmarks/elmm/elmm.toml`. The compiler and the description are the
+current workspace sources. Keep the same revisions and source receipts to
 repeat a particular comparison.
 
 ### Run natively
@@ -103,8 +103,8 @@ remain pointwise.
 
 ### Run with Apptainer on Slurm
 
-Build the image on an allocated worker. It includes the compiler and pipeline,
-but the actual job binds the current workspace, the dependency checkouts and
+Build the image on an allocated worker. It includes the compiler and the
+benchmark descriptions, but the actual job binds the current workspace, the dependency checkouts and
 the independent solver checkout read-only. Fakeroot builds require the site
 administrator's subuid/subgid setup; alternatively use an existing image.
 
@@ -197,8 +197,8 @@ A capped smoke run is not evidence of full-workload performance.
 ### Source basis
 
 Both executables are built from upstream ELMM
-`ddb426fca5b020216083f02a218292fea70c1df2` and the pinned PoisFFT. The
-pipeline changes one loop in the copy it builds from: the sum of the pressure
+`ddb426fca5b020216083f02a218292fea70c1df2` and the pinned PoisFFT. ELMM's
+description changes one loop (its `[[patch]]`) in the copy it builds from: the sum of the pressure
 reference plane, which ELMM does with an OpenMP reduction whose result differs
 in rounding from run to run, is done by one thread, so that a native run
 repeats itself (the `native-repeat` diagnostic checks that). The resident
@@ -278,7 +278,7 @@ Native execution selects an available Python 3.12 or newer unless `PYTHON` is
 supplied explicitly, and prefers `gfortran-15` when available unless `FC` is
 supplied. Plotting may use a different interpreter with NumPy and Matplotlib;
 for native runs, set `PLOT_PYTHON` to select it. The plotter accepts Python
-3.9+ and reads the JSON report without importing compiler or pipeline source.
+3.9+ and reads the JSON report without importing compiler source.
 The selected interpreter is printed. An explicit `PLOT_PYTHON` is checked,
 never silently replaced. Container runs use their packaged plotting
 interpreter; host interpreter paths are not forwarded into the container. The
@@ -320,8 +320,8 @@ Image builds exclude result archives, host environments and caches. The
 Apptainer helper stages a small source-only context before `%files` runs;
 `CONTAINER_BUILD_TMPDIR` controls that staging location. Build images on a worker
 node. `--fakeroot` requires the cluster administrator's subuid/subgid setup.
-Images are prepared from current source files, including the independent
-`elmm-pipeline` checkout; keep compatible compiler and pipeline revisions.
+Images are prepared from the current sources of the compiler, the benchmark
+descriptions and the container runner.
 
 Docker commands that are Podman compatibility launchers are detected and use
 Podman CDI GPU flags. Podman GPU runs require a configured NVIDIA CDI runtime.
@@ -330,10 +330,10 @@ numeric ordinals are not safe physical Docker/CDI device selectors. Apptainer/na
 preserve the scheduler's CUDA visibility and resolve its CUDA ordinals to UUIDs.
 CPU-only `doctor`, plotting and tests do not require a GPU.
 
-Source overrides are explicit: `WORKSPACE_ROOT`, `PIPELINE_ROOT` and
-`COMPILER_ROOT` mount read-only source directories in the container. The
-Apptainer launcher also binds `SOLVER_ROOT` and `DEPS_ROOT` read-only. The
-compiler and pipeline remain independent checkouts.
+Source overrides are explicit: `WORKSPACE_ROOT` and `COMPILER_ROOT` (a
+checkout with `compiler/` and `benchmarks/`) mount read-only source directories
+in the container. The Apptainer launcher also binds `SOLVER_ROOT` and
+`DEPS_ROOT` read-only.
 
 ## Plot a saved report
 

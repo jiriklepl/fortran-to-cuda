@@ -1,18 +1,18 @@
 """Resident comparison preserves diagnostic and timing evidence boundaries."""
 import importlib.util
 import json
-import os
 from array import array
 from pathlib import Path
 import subprocess
 import sys
+import tomllib
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(HERE), str(HERE.parent / "elmm-pipeline")]
+sys.path[:0] = [str(HERE)]
 spec = importlib.util.spec_from_file_location("resident_comparison", HERE / "resident_comparison.py")
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
@@ -33,12 +33,10 @@ def test_prepare_dependencies_uses_exact_pins_without_replacing_existing_paths(
     subprocess.run(["git", "-C", str(source), "-c", "user.name=Test", "-c", "user.email=test@example.com",
                     "commit", "-qm", "pinned"], check=True)
     revision = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
-    pipeline = tmp_path / "pipeline"
-    pipeline.mkdir()
-    spec = {"url": str(source), "revision": revision}
-    (pipeline / "dependencies.json").write_text(json.dumps({"elmm": spec, "PoisFFT": spec}))
-    (pipeline / "pressure-dependencies.json").write_text(json.dumps({"VkFFT": spec}))
-    monkeypatch.setattr(runner, "PIPELINE", pipeline)
+    description = tmp_path / "application.toml"
+    description.write_text("".join(f'[inputs.{name}]\nurl = "{source}"\nrevision = "{revision}"\n'
+                                   for name in ("elmm", "PoisFFT", "VkFFT")))
+    monkeypatch.setattr(runner, "DESCRIPTION", description)
     destination = tmp_path / "dependencies"
     runner.prepare_dependencies(destination, application=application, vkfft=vkfft)
     assert {path.name for path in destination.iterdir()} == set(names)
@@ -48,16 +46,6 @@ def test_prepare_dependencies_uses_exact_pins_without_replacing_existing_paths(
                                        text=True).strip() == revision
     with pytest.raises(FileExistsError):
         runner.prepare_dependencies(destination, application=application, vkfft=vkfft)
-
-
-def test_missing_pipeline_is_reported_before_resident_imports(tmp_path):
-    missing = tmp_path / "pipeline"
-    result = subprocess.run([sys.executable, str(HERE / "resident_comparison.py"), "--help"],
-                            env={**os.environ, "PIPELINE_ROOT": str(missing)},
-                            text=True, capture_output=True, check=False)
-    assert result.returncode == 1
-    assert str(missing) in result.stderr and "PIPELINE_ROOT" in result.stderr
-    assert "Traceback" not in result.stderr
 
 
 def test_application_environment_strips_external_controls(monkeypatch, tmp_path):
@@ -430,10 +418,10 @@ def test_fresh_comparison_excludes_diagnostics_and_rotates_samples(tmp_path, mon
             path = directory / name
             path.write_text(name)
             binaries[name] = {"path": str(path), "sha256": runner.digest(path)}
-        provider = directory / "provider"
-        provider.write_text("provider")
+        library = directory / "libpoisson-solver.so"
+        library.write_text("library")
         (directory / "built.json").write_text(json.dumps({"status": "PASS", "binaries": binaries,
-            "provider": {"path": str(provider), "sha256": runner.digest(provider)}}))
+            "libraries": {library.name: {"path": str(library), "sha256": runner.digest(library)}}}))
         (directory / "packages.json").write_text("[]")
         return 12.0
 
@@ -544,7 +532,7 @@ def test_fast_fp_is_opt_in_across_cli_cmake_and_resident_build(tmp_path, monkeyp
     assert "--prec-div=false" in fast_cmake
     assert "--prec-sqrt=false" in fast_cmake
 
-    # resident_comparison.run forwards --fast-fp to resident-build only when opted in.
+    # resident_comparison.run forwards --fast-fp to the resident build only when opted in.
     for fast_fp in (False, True):
         out = tmp_path / f"out-{fast_fp}"
         args = SimpleNamespace(
@@ -576,11 +564,11 @@ def test_fast_fp_is_opt_in_across_cli_cmake_and_resident_build(tmp_path, monkeyp
                 path = directory / name
                 path.write_text(name)
                 binaries[name] = {"path": str(path), "sha256": runner.digest(path)}
-            provider = directory / "provider"
-            provider.write_text("provider")
+            library = directory / "libpoisson-solver.so"
+            library.write_text("library")
             (directory / "built.json").write_text(json.dumps({
                 "status": "PASS", "strict_fp": not fast_fp, "binaries": binaries,
-                "provider": {"path": str(provider), "sha256": runner.digest(provider)}}))
+                "libraries": {library.name: {"path": str(library), "sha256": runner.digest(library)}}}))
             (directory / "packages.json").write_text("[]")
             return 1.0
 
@@ -600,6 +588,9 @@ def test_fast_fp_is_opt_in_across_cli_cmake_and_resident_build(tmp_path, monkeyp
 
         runner.run(args)
         assert ("--fast-fp" in build_argvs[0]) is fast_fp
+        # The build is given every source tree ELMM's description names.
+        given = {value.split("=", 1)[0] for flag, value in zip(build_argvs[0], build_argvs[0][1:]) if flag == "--input"}
+        assert given == set(tomllib.loads(runner.DESCRIPTION.read_text())["inputs"])
         report = json.loads((out / "resident/report.json").read_text())
         assert report["strict_fp"] is (not fast_fp)
 
@@ -695,11 +686,11 @@ def test_nsys_options_and_isolated_profile_run(tmp_path, monkeypatch):
             path = directory / name
             path.write_text(name)
             binaries[name] = {"path": str(path), "sha256": runner.digest(path)}
-        provider = directory / "provider"
-        provider.write_text("provider")
+        library = directory / "libpoisson-solver.so"
+        library.write_text("library")
         (directory / "built.json").write_text(json.dumps({
             "status": "PASS", "binaries": binaries,
-            "provider": {"path": str(provider), "sha256": runner.digest(provider)}}))
+            "libraries": {library.name: {"path": str(library), "sha256": runner.digest(library)}}}))
         (directory / "packages.json").write_text("[]")
         return 1.0
 

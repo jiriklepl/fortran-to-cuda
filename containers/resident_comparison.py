@@ -15,22 +15,20 @@ import statistics
 import subprocess
 import sys
 import time
+import tomllib
 
 import numpy as np
 
 from application_basis import application_paths, digest, prepare_application_basis
 from elmm_cases import compare_outputs, read_outputs, select_configuration
-from workflow import COMPILER, PIPELINE, WORKSPACE, doctor, plot_experiment, require_pipeline, source_identity
-
-try:
-    require_pipeline()
-except RuntimeError as error:
-    raise SystemExit(f"error: {error}") from None
-
+from workflow import COMPILER, WORKSPACE, doctor, plot_experiment, source_identity
 from configuration import parse_domain_size_spec, parse_grid_spec, prepare_config
 from fields import compare_fields, fields
 from validation import compare_vtk, read_vtk, validate_log
 
+# ELMM's resident build: its description, read by python -m compiler.resident, pins the source trees too.
+APPLICATION = COMPILER / "benchmarks/elmm"
+DESCRIPTION = APPLICATION / "elmm.toml"
 REQUIRED_FIELDS = {"fields-" + name + ".bin" for name in
                    "U V W Pr Viscosity U2 V2 W2 Ustar Vstar Wstar".split()}
 FIELD_POLICY = {"dtype": "float64", "atol": 1e-6, "rtol": 1e-5,
@@ -176,12 +174,10 @@ def solver_identity(root):
 def prepare_dependencies(directory, *, application, vkfft):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
-    specifications = {}
-    if application:
-        specifications.update(json.loads((PIPELINE / "dependencies.json").read_text()))
-    if vkfft:
-        specifications["VkFFT"] = json.loads((PIPELINE / "pressure-dependencies.json").read_text())["VkFFT"]
-    for name, spec in specifications.items():
+    pins = tomllib.loads(DESCRIPTION.read_text())["inputs"]
+    names = (["elmm", "PoisFFT"] if application else []) + (["VkFFT"] if vkfft else [])
+    for name in names:
+        spec = pins[name]
         destination = directory / name
         print("Preparing pinned dependency:", name, spec["revision"], flush=True)
         subprocess.run(["git", "clone", "--no-checkout", "--", spec["url"], str(destination)], check=True)
@@ -538,7 +534,7 @@ def run(args):
                       strict_fp=not fast_fp,
                       dependencies={"application_root": str(app_root), "vkfft": str(vkfft)},
                       source_identities={"compiler": source_identity(COMPILER / "compiler"),
-                                         "pipeline": source_identity(PIPELINE),
+                                         "application": source_identity(APPLICATION),
                                          "config": source_identity(work / "config"),
                                          "solver": solver_identity(args.solver),
                                          "runner_sha256": digest(__file__)},
@@ -557,21 +553,22 @@ def run(args):
                                         "full-precision allocated fields and bounds; final and available averaged VTK"),
                       poisson_execution_verified=False)
         build = work / "build"
-        build_command = [sys.executable, PIPELINE / "pipeline.py", "resident-build",
-                         "--elmm", application["elmm"], "--poisfft", application["PoisFFT"],
-                         "--compiler", COMPILER, "--solver", args.solver, "--vkfft", vkfft,
+        build_command = [sys.executable, "-m", "compiler.resident", DESCRIPTION,
+                         "--input", f"elmm={application['elmm']}", "--input", f"PoisFFT={application['PoisFFT']}",
+                         "--input", f"solver={args.solver}", "--input", f"VkFFT={vkfft}",
                          "--output", build, "--fortran", fortran, "--cxx", cxx, "--nvcc", nvcc,
                          "--architecture", architecture, "--jobs", str(args.jobs),
-                         "--precision", precision]
+                         "--variant", precision]
         if fast_fp:
             build_command.append("--fast-fp")
         report["build_command"] = list(map(str, build_command))
         write(report_path, report)
         build_env = dict(os.environ)
         build_env.pop("LD_PRELOAD", None)
+        build_env["PYTHONPATH"] = os.pathsep.join(filter(None, (str(COMPILER), build_env.get("PYTHONPATH"))))
         report["build_seconds"] = command(
             build_command, cwd=work, env=build_env, log=output / "build.log", timeout=args.build_timeout)
-        sources = (("compiler", COMPILER / "compiler"), ("pipeline", PIPELINE),
+        sources = (("compiler", COMPILER / "compiler"), ("application", APPLICATION),
                    ("config", work / "config"))
         for name, root in sources:
             if source_identity(root) != report["source_identities"][name]:
@@ -590,11 +587,11 @@ def run(args):
             if key.startswith(("OMP_", "GOMP_", "KMP_", "OPENBLAS_", "MKL_")) or
             key in ("CUDA_VISIBLE_DEVICES", "LD_LIBRARY_PATH")}
         binaries = built["binaries"]
-        identities = [*binaries.values(), built["provider"]]
+        identities = [*binaries.values(), *built["libraries"].values()]
 
         def verify_binaries():
             if any(digest(row["path"]) != row["sha256"] for row in identities):
-                raise ValueError("Built executable or provider changed during comparison")
+                raise ValueError("Built executable or library changed during comparison")
 
         caches = {}
         for name in ("diagnostic", "timing"):
