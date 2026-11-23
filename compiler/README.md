@@ -11,9 +11,9 @@ Fortran.
 
 There are two ways in:
 
-- **A resident build of an application** (`compiler.resident`). A project
-  description names the application's sources and the procedures whose nests
-  become entries. The preparation rewrites those sources so that each compiled
+- **A resident build of an application** (`python -m compiler.resident
+  app.toml`, or `compiler.resident` from Python). A project description names
+  the application's sources and the procedures whose nests become entries. The preparation rewrites those sources so that each compiled
   nest is called while a residency domain is active and the original statements
   run otherwise, and builds a native and a resident executable. This is the
   production path; see "Resident build of an application".
@@ -70,7 +70,7 @@ compiler/
 ├── addressing/              Static integer ranges and proved subscript widths
 ├── offload/                 Footprints of a region and what a launch needs prepared
 ├── scopes/                  Extraction of loop nests into entries and their calls
-├── resident/                Resident build of an application: preparation, rewrites, directives, CMake
+├── resident/                Resident build of an application: TOML descriptions, preparation, rewrites, directives, CMake
 ├── runtime/                 Residency domain, coherence, budgeted device memory, CUDA graphs
 ├── emission/                CUDA entries, kernels and launches; the Fortran interface
 └── tests/                   Python, native and CUDA tests
@@ -85,6 +85,16 @@ which returns the optimized function and its checked plan with schedules and
 addressing decisions.
 
 ## Command line
+
+```bash
+python -m compiler.resident app.toml --input NAME=PATH --output out/app \
+    --fortran gfortran --cxx g++ --nvcc nvcc --architecture 86
+```
+
+prepares and builds an application from its description (see "Resident build of
+an application"); `--prepare-only` writes the resident sources and compiles
+nothing, `--variant` picks one of the description's variants, `--jobs` bounds
+the parallel work and `--fast-fp` relaxes the numerical options.
 
 ```bash
 python -m compiler --input input.f90 --kernel advance --json --output-dir out/advance
@@ -287,6 +297,30 @@ device solver, persistent work arrays) names its domain object with
 entries then take by handle; the default domain is the runtime's
 `fort_resident_application` module. `rewrites` applies the compiler's loop
 rewrites, or the application's own functions, to a source before export.
+
+The same project can be described in TOML, together with what surrounds it:
+
+- the source trees the application is built from, pinned to revisions;
+- its edits, as data;
+- its build: libraries, per-file options and executables.
+
+`python -m compiler.resident` reads such a description. The format is
+documented in `compiler/resident/application.py`, and
+[`benchmarks/`](../benchmarks/README.md) holds two. An edit names a source and,
+optionally, the procedure it is confined to. It names one place:
+
+- a piece of text found once, tolerant of layout and comments;
+- two such pieces and everything between them;
+- a CALL statement;
+- the end of a module;
+- the whole procedure.
+
+It puts text, or a template file, before, after or in place of that place.
+There are three kinds of edit:
+
+- `[[patch]]` edits change the snapshot that both executables are built from;
+- `[[rewrite]]` edits change the preprocessed sources before export;
+- `[[edit]]` edits are the `edit(texts)` hook above, and may add directives.
 
 Forms beyond plain array loops that are supported in selected procedures:
 

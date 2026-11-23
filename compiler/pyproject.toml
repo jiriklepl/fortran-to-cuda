@@ -1,7 +1,7 @@
 [project]
 name = "fort_to_cuda"
 version = "0.1.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = ["fparser>=0.2.0,<0.3", "islpy==2026.2.2"]
 
 [dependency-groups]

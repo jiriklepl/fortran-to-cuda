@@ -11,5 +11,4 @@
 .pytest_cache/
 .ruff_cache/
 /benchmarks/results/
-/benchmarks/reports/
 /commands.jsonl

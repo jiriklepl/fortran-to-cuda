@@ -38,7 +38,8 @@ program cdu_benchmark
     real(knd), allocatable :: U(:,:,:), V(:,:,:), W(:,:,:), U2(:,:,:)
     real(knd) :: dxmin, dymin, dzmin
 
-    integer :: iter
+    integer :: iter, seed_size
+    integer, allocatable :: seed(:)
     integer(kind=8) :: t_start, t_end, count_rate
     real(kind=8)    :: total_ms
 
@@ -53,6 +54,11 @@ program cdu_benchmark
     dymin = 1.0_knd / real(NY, knd)
     dzmin = 1.0_knd / real(NZ, knd)
 
+    ! a fixed seed: the native and the resident executable start from the same fields
+    call random_seed(size=seed_size)
+    allocate(seed(seed_size))
+    seed = 20261123
+    call random_seed(put=seed)
     call random_number(U)
     call random_number(V)
     call random_number(W)
@@ -83,6 +89,7 @@ program cdu_benchmark
     write(*,'(A,I0)')       "warmup_iters: ", NWARMUP
     write(*,'(A,F14.3,A)')  "total_ms:     ", total_ms, " ms"
     write(*,'(A,F14.3,A)')  "ms_per_iter:  ", total_ms / real(NITER, kind=8), " ms"
+    write(*,'(A,ES24.16)')  "checksum:     ", sum(real(U2(2:NX+1, 2:NY+1, 2:NZ+1), kind=8))
 
     deallocate(U, V, W, U2)
 end program cdu_benchmark

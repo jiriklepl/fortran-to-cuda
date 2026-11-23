@@ -1,2 +1,0 @@
-# Saved research evidence is content-addressed and must keep its original bytes.
-benchmarks/reports/** -text -whitespace

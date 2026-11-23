@@ -11,7 +11,7 @@
       "justMyCode": true,
       "args": [
         "--input",
-        "fortran-stencils/elmm_cdv.f90",
+        "compiler/tests/fixtures/stencils/cvd.f90",
 
         "--output-dir",
         "out",
