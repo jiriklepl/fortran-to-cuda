@@ -641,7 +641,7 @@ The caller names its domain with `ResidentDomain(module, object, check)`. It
 keeps everything the compiler cannot know: which procedures to export, when
 the domain is active, and the effects of native code. `compiler.runtime.
 RESIDENT_SOURCES` lists the runtime translation units such an application
-links, and `compiler.numerical_contract` the compile options they require.
+links, and `compiler.emission.numerical_contract` the compile options they require.
 
 ## Supported Fortran subset
 
@@ -980,12 +980,12 @@ suite runs from any directory without `PYTHONPATH`. It needs no submodule.
 The complete suite
 builds and runs CUDA programs; with
 `-n auto` (pytest-xdist) it takes several minutes on a workstation, and the
-parser/analysis subset below a few minutes. The pipeline, container and
-benchmark suites run the same way:
+parser/analysis subset below a few minutes. The pipeline and container suites
+run the same way:
 
 ```bash
 python -m pytest elmm-pipeline/tests -n auto
-python -m pytest containers/tests benchmarks/tests
+python -m pytest containers/tests
 ```
 
 Tests cover lowering, source ordering, inline aliases, scalar lifetimes, ISL

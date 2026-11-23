@@ -83,7 +83,7 @@ else
         --exclude=work --exclude=results --exclude=bin --exclude=__pycache__ \
         --exclude=.pytest_cache --exclude='*.pyc' --exclude='*.o' --exclude='*.mod' \
         --exclude=CODE_MAP.md --exclude=MEMORY_MODEL_PLAN.md \
-        -cf - requirements.txt compiler benchmarks elmm-pipeline containers | tar -C "$context" -xf -
+        -cf - requirements.txt compiler elmm-pipeline containers | tar -C "$context" -xf -
     (cd -- "$context" && "$APPTAINER_BIN" build "${EXTRA_ARGS[@]}" "$SIF_OUTPUT" containers/Apptainer.def)
 fi
 

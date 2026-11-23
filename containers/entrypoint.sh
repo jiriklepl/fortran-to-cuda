@@ -31,7 +31,7 @@ case "$1" in
             PYTHON="$environment/bin/python"
         fi
         exec "${PYTHON}" "${SCRIPT_DIR}/resident_comparison.py" "$@" ;;
-    doctor|reproduce-plots|reproduce|run-benchmarks|benchmark)
+    doctor|reproduce-plots|reproduce)
         exec "${PYTHON}" "${SCRIPT_DIR}/workflow.py" "$@" ;;
     test)
         shift

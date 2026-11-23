@@ -64,7 +64,7 @@ elif [[ ${CUDA_VISIBLE_DEVICES+x} ]]; then
     requested=true
 else
     case "${1:-doctor}" in
-        resident|run-benchmarks|benchmark) selection=all; requested=true ;;
+        resident) selection=all; requested=true ;;
     esac
 fi
 if [[ "$requested" == true ]]; then

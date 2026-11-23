@@ -877,22 +877,11 @@ def test_apptainer_resident_binds_dependencies_and_enables_gpu(sandbox, sif_env)
 def test_container_failure_status_is_preserved(sandbox, sif_env, script, engine):
     _, _, _, stub, invoke = sandbox
     stub(engine)
-    result = invoke(script, "run-benchmarks", overrides={"STUB_EXIT": "41"})
+    result = invoke(script, "doctor", overrides={"STUB_EXIT": "41"})
     assert result.returncode == 41
 
 
-@pytest.mark.parametrize("command", ["run-benchmarks", "benchmark"])
-def test_docker_gpu_commands_request_gpu_by_default(sandbox, command):
-    _, _, capture, stub, invoke = sandbox
-    stub("docker")
-    result = invoke("run-docker.sh", command, "--output-dir", "/output/fresh")
-    assert result.returncode == 0, result.stderr
-    argv = json.loads(capture.read_text())["argv"]
-    assert values(argv, "--gpus") == ["all"]
-    assert argv[-3:] == [command, "--output-dir", "/output/fresh"]
-
-
-@pytest.mark.parametrize("command", ["resident", "run-benchmarks", "benchmark"])
+@pytest.mark.parametrize("command", ["resident"])
 def test_apptainer_gpu_commands_request_gpu_by_default(sandbox, command):
     tmp, _, capture, stub, invoke = sandbox
     stub("apptainer")

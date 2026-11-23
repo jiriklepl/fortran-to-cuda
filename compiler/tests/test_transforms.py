@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.mark.parametrize(("case", "filename"), [("CDU", "cdu.f90"), ("CDV", "cvd.f90"), ("CDW", "cdw.f90")])
 def test_stencil_scalar_motion_and_fusion(case: str, filename: str) -> None:
-    function = lower_file(ROOT / "benchmarks" / "cases" / case / "Fortran" / filename, case)
+    function = lower_file(Path(__file__).parent / "fixtures" / "stencils" / filename, case)
     original, baseline = optimize_function(function, options=CompilerOptions(opt_level=0))
     optimized, plan = optimize_function(function)
     assert original is function

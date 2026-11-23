@@ -15,6 +15,7 @@ from compiler.emission.cuda.kernels import generate_group_kernel, generate_kerne
 from compiler.emission.cuda.offload import _cpu_worker
 from compiler.emission.cuda.structured import _query_expression
 from compiler.emission.fortran.formatting import _fortran_list
+from compiler.emission.numerical_contract import numerical_build_contract, numerical_source_prologue
 from compiler.ir import (
     ArrayAccess,
     CompilationError,
@@ -28,7 +29,6 @@ from compiler.ir import (
     referenced_symbols,
     walk_expr,
 )
-from compiler.numerical_contract import numerical_build_contract, numerical_source_prologue
 from compiler.offload.analysis import (
     Unit,
     _protected_scalar_inputs,

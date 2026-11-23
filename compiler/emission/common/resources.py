@@ -3,7 +3,7 @@
 from hashlib import sha256
 from importlib.resources import files
 
-from compiler.numerical_contract import numerical_build_contract, numerical_source_prologue
+from compiler.emission.numerical_contract import numerical_build_contract, numerical_source_prologue
 
 
 def read_common_header() -> str:

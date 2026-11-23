@@ -81,7 +81,7 @@ def selected_gpu(requested=None):
 
 def doctor(args, *, require_gpu=False, fortran=None):
     require_pipeline()
-    from guard import memory_headroom
+    from memory import memory_headroom
     fortran = fortran or os.environ.get("FC", "gfortran")
     result = {"python": sys.version, "cpu_affinity": sorted(os.sched_getaffinity(0)),
               "memory_headroom_bytes": memory_headroom(), "tools": {},
@@ -128,42 +128,6 @@ def require_pipeline():
         raise RuntimeError(f"ELMM pipeline checkout is missing or incomplete: {PIPELINE}. {hint}")
 
 
-def guarded(args):
-    """Return True only in the guarded worker, never silently run locally."""
-    require_pipeline()
-    if args.worker:
-        return True
-    from guard import available
-    if available() < 3 * 2**30:
-        raise RuntimeError("less than 3 GiB effective available memory; no job started")
-    print("Output directory:", args.output_dir, flush=True)
-    print("Progress log:", args.output_dir / "run.log", flush=True)
-    command = [sys.executable, str(HERE / "guard.py"),
-               "--record", str(args.output_dir / "guard.json"),
-               "--log", str(args.output_dir / "run.log"), "--",
-               sys.executable, str(HERE / "workflow.py"), *sys.argv[1:], "--worker"]
-    result = subprocess.run(command, env={**os.environ, "PYTHONPATH": str(PIPELINE)},
-                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-    if result.returncode:
-        log = args.output_dir / "run.log"
-        print(f"Guarded command failed (exit status {result.returncode}).", file=sys.stderr)
-        print("Progress log:", log, file=sys.stderr)
-        if log.is_file():
-            with log.open("rb") as stream:
-                stream.seek(0, os.SEEK_END)
-                stream.seek(max(0, stream.tell() - 8192))
-                tail = stream.read().decode(errors="replace")
-            print("Last progress log lines:\n" + "\n".join(tail.splitlines()[-20:]), file=sys.stderr)
-        else:
-            print("No progress log was created.", file=sys.stderr)
-        if result.stderr:
-            print("Guard startup/cleanup output:\n" + "\n".join(result.stderr[-8192:].splitlines()[-20:]),
-                  file=sys.stderr)
-        print("Guard receipt:", args.output_dir / "guard.json", file=sys.stderr)
-        raise SystemExit(result.returncode if result.returncode > 0 else 128 - result.returncode)
-    return False
-
-
 def plotting_python():
     """Choose plotting dependencies independently of the compiler interpreter."""
     explicit = os.environ.get("PLOT_PYTHON")
@@ -204,53 +168,13 @@ def plot_experiment(report, output):
 
 
 def reproduce(args):
-    if args.experiment:
-        plot_experiment(args.experiment, args.output_dir / "figures")
-    else:
-        if (args.output_dir / "ordinary-figures").exists():
-            raise ValueError("existing figures are immutable; choose a new --output-dir")
-        subprocess.run([sys.executable, str(WORKSPACE / "benchmarks/harness/plot_strategies.py"),
-                        str(args.policy_report), "--output", str(args.output_dir / "ordinary-figures"),
-                        "--label", "Historical measurements"], check=True)
-
-
-def benchmarks(args):
-    # Keep the older microbenchmark suite explicit and bounded; never swallow failures.
-    if not guarded(args):
-        print(f"Results: {args.output_dir / 'microbenchmarks.csv'}")
-        return
-    machine = doctor(args, require_gpu=True)
-    os.environ.update(CUDA_ARCH="sm_" + machine["toolchain"]["architecture"],
-                      OMP_NUM_THREADS=str(args.threads), OMP_DYNAMIC="FALSE",
-                      NVCC=shlex.quote(machine["toolchain"]["nvcc"]),
-                      NVCCFLAGS=shlex.join(["-O3", "-ccbin", machine["toolchain"]["cuda_host_cxx"]]))
-    if args.threads > len(machine["cpu_affinity"]):
-        raise ValueError("threads exceed the allocated CPU affinity")
-    work = args.work_dir / "microbenchmarks"
-    work.mkdir(parents=True, exist_ok=False)
-    for name in ("benchmarks", "compiler"):
-        shutil.copytree((COMPILER if name == "compiler" else WORKSPACE) / name, work / name,
-                        ignore=shutil.ignore_patterns("results", "bin", "__pycache__", "*.o", "*.mod"))
-    code = ("from benchmarks.harness import run,check\n"
-            "for c in run.FUNCTIONS:\n"
-            "    reference = check.values(run.run_once(run.build(c,'Fortran',16,16,16,1,0,main_src='test_main.f90')),16**3)\n"
-            "    for v in ['Fortran-OMP','CUDA']:\n"
-            "        check.compare_values(reference,check.values(run.run_once(run.build(c,v,16,16,16,1,0,main_src='test_main.f90')),16**3))\n"
-            "print(run.CSV_HEADER)\n"
-            "for c in run.FUNCTIONS:\n"
-            "    for v in ['Fortran-OMP','CUDA']:\n"
-            "        print(run.run_combination(c,v,128,64,64,10),flush=True)\n")
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    with (args.output_dir / "microbenchmarks.csv").open("x") as stream:
-        subprocess.run([sys.executable, "-c", code], cwd=work,
-                       env={**os.environ, "PYTHONPATH": str(work)}, stdout=stream, check=True)
+    plot_experiment(args.experiment, args.output_dir / "figures")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name, aliases in (("doctor", []), ("reproduce-plots", ["reproduce"]),
-                          ("run-benchmarks", ["benchmark"])):
+    for name, aliases in (("doctor", []), ("reproduce-plots", ["reproduce"])):
         child = sub.add_parser(name, aliases=aliases)
         child.add_argument("--output-dir", "--output", "-o", type=Path,
                            default=Path(os.environ.get("OUTPUT_DIR", "/output" if Path("/output").exists() else WORKSPACE / "out")))
@@ -260,24 +184,15 @@ def main():
             child.add_argument("--gpu", help="Visible CUDA ordinal or GPU UUID; defaults to first visible GPU")
             child.add_argument("--nvcc", default=os.environ.get("NVCC"))
             child.add_argument("--cuda-host", default=os.environ.get("CUDAHOSTCXX", os.environ.get("CUDA_HOST_CXX")))
-        if name == "run-benchmarks":
-            child.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
-            child.add_argument("--threads", type=int, default=4)
         if name == "reproduce-plots":
-            select = child.add_mutually_exclusive_group(required=True)
-            select.add_argument("--experiment", type=Path)
-            select.add_argument("--policy-report", type=Path)
+            child.add_argument("--experiment", type=Path, required=True)
     args = parser.parse_args()
     args.output_dir = args.output_dir.resolve()
     args.work_dir = (args.work_dir or args.output_dir / "work").resolve()
     if args.command == "doctor":
         print(json.dumps(doctor(args), indent=2))
-    elif args.command in {"reproduce-plots", "reproduce"}:
-        reproduce(args)
     else:
-        if args.threads <= 0:
-            parser.error("threads must be positive")
-        benchmarks(args)
+        reproduce(args)
 
 
 if __name__ == "__main__":

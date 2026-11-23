@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from compiler.emission.numerical_contract import numerical_build_contract
 from compiler.ir import CompilationError, FunctionIR
-from compiler.numerical_contract import numerical_build_contract
 
 if TYPE_CHECKING:
     from compiler.ir import ExecutionPlan

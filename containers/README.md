@@ -351,17 +351,12 @@ OUTPUT_DIR=/work/USER/RUN ./containers/run-docker.sh reproduce-plots \
 ```
 
 Figures are written to a new `figures` directory inside the output directory;
-an existing one is never replaced. `--policy-report FILE` instead redraws a
-saved six-policy microbenchmark report into `ordinary-figures`.
+an existing one is never replaced.
 
 ## Other commands
 
 `doctor` reports the tools, selected GPU, CPU affinity and effective memory
-headroom; it needs no GPU. `run-benchmarks` is a separate, bounded generic
-microbenchmark check and timing run; it does not measure the ELMM application.
-It runs under the memory guard (`guard.py`), which keeps a 3 GiB reserve using
-the tighter of host and applicable cgroup budgets and admits one guarded job at
-a time. If the guarded command fails, the launcher prints the end of `run.log`
-and the paths of the full log and `guard.json`; the failure status is returned.
+headroom (the host's available memory within the limits of the cgroups it runs
+in); it needs no GPU.
 `entrypoint.sh test` runs the tests in `containers/tests`. Arbitrary commands
 such as `bash` remain available through either container launcher.

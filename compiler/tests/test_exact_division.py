@@ -7,8 +7,8 @@ import pytest
 
 from compiler.emission import read_common_header
 from compiler.emission.common.c_family import render_expression
+from compiler.emission.numerical_contract import cuda_compile_options
 from compiler.ir import Binary, Literal, Reference, ScalarType, Symbol
-from compiler.numerical_contract import cuda_compile_options
 
 
 @pytest.mark.parametrize(("left", "right"), [

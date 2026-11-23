@@ -11,8 +11,7 @@ From: nvidia/cuda:12.8.1-devel-ubuntu24.04
 %post
     bash /workspace/containers/install.sh
     # Direct builds should use a clean source checkout, never a results archive.
-    rm -rf /workspace/benchmarks/results /workspace/benchmarks/bin \
-        /workspace/elmm-pipeline/.cache /workspace/elmm-pipeline/work \
+    rm -rf /workspace/elmm-pipeline/.cache /workspace/elmm-pipeline/work \
         /workspace/elmm-pipeline/results /workspace/elmm-pipeline/.git
     mkdir -p /output
 
@@ -29,5 +28,4 @@ From: nvidia/cuda:12.8.1-devel-ubuntu24.04
     resident --case channel-simple|channel: fresh native versus current
         resident CUDA/Poisson comparison.
     reproduce-plots --experiment FILE: redraw a saved comparison report.
-    run-benchmarks: bounded generic microbenchmark check and timing.
     Bind persistent output/work directories; see containers/README.md.

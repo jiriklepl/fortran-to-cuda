@@ -14,13 +14,13 @@ def test_apptainer_build_context_excludes_large_artifacts(tmp_path):
     shutil.copy2(source / 'build-apptainer.sh', workspace / 'containers/build-apptainer.sh')
     (workspace / 'containers/Apptainer.def').write_text('definition')
     (workspace / 'requirements.txt').write_text('requirements')
-    for name in ('compiler', 'benchmarks', 'elmm-pipeline'):
+    for name in ('compiler', 'elmm-pipeline'):
         (workspace / name).mkdir()
         (workspace / name / 'source.py').write_text('source')
     (workspace / 'elmm-pipeline/pipeline.py').write_text('pipeline')
     (workspace / 'elmm-pipeline/elmm_pipeline').mkdir()
     (workspace / 'elmm-pipeline/elmm_pipeline/__init__.py').write_text('')
-    for directory in ('benchmarks/results', 'elmm-pipeline/.cache', 'compiler/__pycache__'):
+    for directory in ('elmm-pipeline/.cache', 'compiler/__pycache__'):
         (workspace / directory).mkdir(parents=True)
         (workspace / directory / 'do-not-copy').write_text('cached result')
     (workspace / 'compiler/CODE_MAP.md').write_text('private plan')
@@ -41,7 +41,7 @@ def test_apptainer_build_context_excludes_large_artifacts(tmp_path):
     observed = json.loads(capture.read_text())
     assert observed['argv'] == ['build', str(output), 'containers/Apptainer.def']
     assert set(observed['files']) == {'requirements.txt', 'containers/Apptainer.def',
-        'containers/build-apptainer.sh', 'compiler/source.py', 'benchmarks/source.py', 'elmm-pipeline/source.py',
+        'containers/build-apptainer.sh', 'compiler/source.py', 'elmm-pipeline/source.py',
         'elmm-pipeline/pipeline.py', 'elmm-pipeline/elmm_pipeline/__init__.py'}
 
 

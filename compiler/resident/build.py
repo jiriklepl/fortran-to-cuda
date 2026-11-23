@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
-from compiler.numerical_contract import CUDA_OPTIONS, HOST_OPTIONS
+from compiler.emission.numerical_contract import CUDA_OPTIONS, HOST_OPTIONS
 from compiler.runtime import DEFAULT_DOMAIN_SOURCE, RESIDENT_SOURCES
 
 FAST_CUDA_OPTIONS = ("--fmad=true", "--ftz=false", "--prec-div=false", "--prec-sqrt=false")

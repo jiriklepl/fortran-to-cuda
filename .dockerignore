@@ -15,7 +15,6 @@ __pycache__/
 *.so
 *.out
 *.log
-benchmarks/bin/
 out/
 
 # Ignore large raw simulation output fields (VTK / HDF5 / raw binaries)
@@ -27,7 +26,6 @@ builds.json
 **/builds.json
 
 # Mount evidence explicitly; no historical timings or host binaries in images.
-benchmarks/results/
 elmm-pipeline/.cache/
 elmm-pipeline/work/
 elmm-pipeline/results/

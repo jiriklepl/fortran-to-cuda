@@ -138,9 +138,9 @@ CASES = [
         Case(
             name,
             name,
-            ROOT / "benchmarks" / "cases" / name / "Fortran" / filename,
+            FIXTURES / "stencils" / filename,
             "MomentumAdvection",
-            driver=ROOT / "benchmarks" / "cases" / name / "test_main.f90",
+            driver=FIXTURES / "stencils" / filename.replace(".f90", "_main.f90"),
         )
         for name, filename in (("CDU", "cdu.f90"), ("CDV", "cvd.f90"), ("CDW", "cdw.f90"))
     ],

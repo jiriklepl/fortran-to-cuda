@@ -60,10 +60,6 @@ if [[ ${GPU_DEVICES+x} ]]; then
 elif [[ ${CUDA_VISIBLE_DEVICES+x} ]]; then
     selection="$CUDA_VISIBLE_DEVICES"
     requested=true
-else
-    case "${1:-doctor}" in
-        run-benchmarks|benchmark) selection=all; requested=true ;;
-    esac
 fi
 if [[ -n "${SLURM_JOB_ID:-${SLURM_JOBID:-}}" &&
       "$selection" =~ (^|,)[0-9]+(,|$) ]]; then

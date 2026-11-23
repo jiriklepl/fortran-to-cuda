@@ -355,8 +355,8 @@ def test_marker_comments_remain_discovery_metadata_without_a_file_header(tmp_pat
 
 @pytest.mark.parametrize("component", ["u", "v", "w"])
 def test_repository_stencils_lower_to_four_ordered_loop_regions(component: str) -> None:
-    root = Path(__file__).resolve().parents[2]
-    function = lower_file(root / "fortran-stencils" / f"elmm_cd{component}.f90", f"CD{component.upper()}")
+    name = {"u": "cdu", "v": "cvd", "w": "cdw"}[component]
+    function = lower_file(Path(__file__).parent / "fixtures" / "stencils" / f"{name}.f90", f"CD{component.upper()}")
     assert sum(isinstance(statement, Loop) for statement in function.body.statements) == 4
     for statement in function.body.statements:
         if isinstance(statement, Loop):
