@@ -60,7 +60,7 @@ class _Callee:
     def __init__(self, scope):
         self.scope, self.reason = scope, None
         # What a procedure that cannot be taken in has: no dummies, declarations, changes or locals.
-        self.dummies, self.declared, self.assigned, self.locals = [], {}, set(), {}
+        self.dummies, self.declared, self.visible, self.assigned, self.passed, self.locals = [], {}, {}, set(), set(), {}
         node = scope.node
         statement = part_of(node, "Subroutine_Stmt")
         self.execution = part_of(node, "Execution_Part")
@@ -69,6 +69,10 @@ class _Callee:
             return
         self.dummies = [str(item).lower() for item in getattr(statement.items[2], "items", ())]
         self.declared = declarations_of(node)
+        # What its names stand for: its own declarations, then those of its hosts, the innermost first.
+        self.visible = {}
+        for host in (*reversed(scope.hosts), node):
+            self.visible.update(declarations_of(host))
         specification = part_of(node, "Specification_Part")
         kinds = {kind_of(item) for item in (specification.content if specification is not None else ())}
         if part_of(node, "Internal_Subprogram_Part") is not None or kinds - {
@@ -83,7 +87,7 @@ class _Callee:
                 self.reason = f"its local {name} is more than a plain scalar"
         if set(self.dummies) - set(self.declared):
             self.reason = "it does not declare all its arguments"
-        assigned = set()
+        assigned, passed = set(), set()
         for item in walk(self.execution):
             kind = kind_of(item)
             if kind in {"Return_Stmt", "Stop_Stmt", "Goto_Stmt", "Cycle_Stmt", "Exit_Stmt"}:
@@ -96,15 +100,45 @@ class _Callee:
                 assigned.add(str(item.items[1].items[1][0]).lower())
             if kind == "Call_Stmt":
                 # What a call changes is not visible here; the arguments could be the dummies.
-                assigned.update(names_in(item.items[1]))
-        self.assigned = assigned
+                passed.update(names_in(item.items[1]))
+        assigned |= passed
+        self.assigned, self.passed = assigned, passed
         scalar_dummies = {name for name in self.dummies if self.declared.get(name, (None, None, None))[2] is None}
         if self.reason is None and scalar_dummies & assigned:
             self.reason = "it changes a scalar argument"
         self.locals = {name: dtype for name, (dtype, _a, _b, _i) in self.declared.items() if name not in self.dummies}
 
 
-def _substituted(lines, callee, indent):
+def _converts_nothing(value, callee, dtype, integers, constants):
+    """Whether assigning ``value`` to an integer local of type ``dtype`` leaves it as it is.
+
+    It does when ``value`` is integer literals and scalars of the local's own
+    type under + - * / and parentheses: substituted for the local, it then has
+    the local's value. A name is the callee's or its hosts', else one of the
+    module variables ``integers`` (see ``integer_variables``), else a named
+    constant of ``constants`` for a default integer. A real, a call, an
+    element or another kind would lose the conversion of the assignment.
+    """
+    wanted = normalized(dtype)
+    if not wanted.startswith("integer"):
+        return False
+    for token in re.findall(r"[a-z_]\w*\s*\(?|\d\w*|\S", value.lower()):
+        if token[0].isdigit():
+            if not token.isdigit():
+                return False
+        elif token[0].isalpha() or token[0] == "_":
+            declared = callee.visible.get(token)
+            if declared is not None:
+                if declared[2] is not None or normalized(declared[0]) != wanted:
+                    return False
+            elif integers.get(token) != wanted and not (token in constants and wanted == "integer"):
+                return False
+        elif token not in "+-*/()":
+            return False
+    return True
+
+
+def _substituted(lines, callee, indent, integers, constants):
     """Replace locals that are assigned once, at the top, from values the statements leave alone."""
     code = [_strip_inline_comment(line.rstrip("\n"))[0] for line in lines]
     base = min((len(line) - len(line.lstrip()) for line in code if line.strip()), default=0)
@@ -118,8 +152,8 @@ def _substituted(lines, callee, indent):
         depth -= closes
         match = re.match(r"\s*([A-Za-z]\w*)\s*=(?!=)\s*(.+?)\s*$", line)
         name = match.group(1).lower() if match else None
-        if (match and depth == 0 and name in callee.locals
-                and callee.locals[name].strip().lower().startswith("integer")
+        if (match and depth == 0 and name in callee.locals and name not in callee.passed
+                and _converts_nothing(match.group(2), callee, callee.locals[name], integers, constants)
                 and sum(bool(re.search(rf"(?i)(?<![\w%]){re.escape(name)}\s*=(?!=)", other)) for other in code) == 1
                 and not any(re.search(rf"(?i)(?<![\w%]){re.escape(name)}(?!\w)", other) for other in code[:index])
                 and not {item.lower() for item in re.findall(r"[A-Za-z]\w*", match.group(2))} & callee.assigned):
@@ -132,12 +166,14 @@ def _substituted(lines, callee, indent):
     return [indent + line[base:] if line.strip() else line for line in kept], set(replaced)
 
 
-def inline_calls(text, callers, callees, constants=None):
+def inline_calls(text, callers, callees, constants=None, integers=None):
     """Replace calls to ``callees`` in the procedures matching ``callers`` by the callees' statements.
 
     Both are ``module::name`` values (``callers`` may be globs). ``constants``
     maps named integer constants to their values, for folding the branches a
-    constant argument decides. Returns the new text and one record per call:
+    constant argument decides; ``integers`` gives the types of the integer
+    variables of modules (see ``integer_variables``), for taking a local's
+    value in its place. Returns the new text and one record per call:
     ``caller``, ``callee``, ``line`` and either ``inlined`` or the ``reason``
     the call stays.
     """
@@ -199,10 +235,8 @@ def inline_calls(text, callers, callees, constants=None):
             number += 1
             body = list(callee.execution.content)
             if facts:
-                shadowed = {
-                    var for var, (_dtype, attrs, _bounds, _init) in callee.declared.items()
-                    if "parameter" not in attrs
-                }
+                shadowed = {var for var, (_dtype, attrs, _bounds, _init) in callee.visible.items()
+                            if "parameter" not in attrs}
                 scoped_constants = {k: v for k, v in (constants or {}).items() if k not in shadowed}
                 body_lines = _fold(body, lines, _Conditions(facts, scoped_constants), [0])
             else:
@@ -212,7 +246,7 @@ def inline_calls(text, callers, callees, constants=None):
             # The caller is a selected procedure: what it takes in runs serially like its own statements.
             body_lines = list(body_lines)
             serialize_openmp(body_lines, 0, len(body_lines))
-            body_lines, gone = _substituted(body_lines, callee, indent)
+            body_lines, gone = _substituted(body_lines, callee, indent, integers or {}, constants or {})
             fresh = {name: f"fort_inl{number}_{name}" for name in callee.locals if name not in gone}
             used = {name for name in fresh if any(re.search(rf"(?i)(?<![\w%]){re.escape(name)}(?!\w)", line)
                                                   for line in body_lines)}

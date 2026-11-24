@@ -121,8 +121,11 @@ def generate_scoped(function, plan, config, common_header):
                         else:
                             scoped.discard(assignment.target.symbol)
             elif isinstance(step, ParallelRegion):
-                written = set(step.private_symbols) | block_writes(step.body)
+                # The region's own loop variables change in it too, whatever the host gave them before.
+                written = (set(step.private_symbols) | block_writes(step.body)
+                           | {loop.iterator for loop in step.loops})
                 region_invariants[step.id] = frozenset(scoped - written)
+                scoped -= written
             elif isinstance(step, ConditionalRegion):
                 then_inv = collect(step.then_plan, scoped)
                 else_inv = collect(step.else_plan, scoped)

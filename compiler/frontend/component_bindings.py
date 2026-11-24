@@ -328,9 +328,12 @@ def register_associates(analysis, routine):
                     visit(item, scope if item is header else child, (*path, index))
                 return
             if header is not None:
+                # What an alias stands for is not followed here. Inside the construct it resolves to nothing,
+                # so a statement that names it is not taken to name what the enclosing scope calls so.
+                child.bindings = {str(association.items[0]).lower(): None
+                                  for association in children_of(header.items[1])}
                 for index, item in enumerate(children_of(node)):
-                    if item is header:
-                        visit(item, scope, (*path, index))
+                    visit(item, scope if item is header else child, (*path, index))
             return
         for index, child in enumerate(children_of(node)):
             if isinstance(child, (Base, tuple, list)) or hasattr(child, "content"):

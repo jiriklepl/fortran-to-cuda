@@ -38,6 +38,7 @@ Anything else stays as it is, with the reason in the record.
 import re
 from fnmatch import fnmatchcase
 
+from fparser.two import Fortran2003
 from fparser.two.utils import walk
 
 from compiler.frontend.syntax import kind_of, parse_fortran, part_of
@@ -328,7 +329,12 @@ def _nest(statement, names, number, indent):
     scalar_arrays = set()
     _operands(value, names, operands, scalar_arrays)
     whole = kind == "Name"
-    if name in scalar_arrays:
+    # An element of the target, read anywhere in the value, a subscript included, would be read after the nest
+    # has changed it.
+    if name in scalar_arrays or any(
+            str(reference.items[0]).lower() == name
+            and not any(kind_of(item) == "Subscript_Triplet" for item in _subscripts(reference))
+            for reference in walk(value, Fortran2003.Part_Ref)):
         raise _Unchanged(f"it reads scalar elements of {name} while assigning to it")
     for operand in operands:
         own = str(operand if kind_of(operand) == "Name" else operand.items[0]).lower()

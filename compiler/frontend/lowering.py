@@ -291,6 +291,9 @@ class _Lowerer:
         self.active_kinds = _KindScope()
         self.parents: dict[tuple[str, str], tuple[str, str] | None] = {}
         self.active_frames: list[tuple] = []
+        # Elements of private arrays that are read-only while an inlined call runs: passed to a dummy without
+        # INTENT from a variable the caller may not change.
+        self.read_only: set[Symbol] = set()
         self.pending: list = []
         # The assignment target being lowered: an element chosen at run time cannot be one.
         self.target_node = None
@@ -731,7 +734,7 @@ class _Lowerer:
                     raise CompilationError("assignment targets must be scalar variables or array elements", location)
                 name = str(target_node if type(target_node).__name__ == "Name" else target_node.items[0]).lower()
                 if declarations[name].intent == "in" or declarations[name].constant or any(
-                        item.symbol.intent == "in" for item in targets):
+                        item.symbol.intent == "in" or item.symbol in self.read_only for item in targets):
                     raise CompilationError(f"cannot write INTENT(IN) variable {name}", location)
                 if any(item.symbol in active_iterators for item in targets):
                     raise CompilationError(f"cannot modify active loop iterator {name}", location)
@@ -954,7 +957,7 @@ class _Lowerer:
         if self.active_frames and self.active_frames[-1][0].pure and not callee.pure:
             raise CompilationError(f"PURE procedure cannot call non-pure helper {callee.name}", location)
         formal_declarations = {declaration.name: declaration for declaration in callee.declarations}
-        actuals, prelude, storage, writable, copied = {}, [], [], set(), []
+        actuals, prelude, storage, writable, copied, read_only = {}, [], [], set(), [], set()
         for formal, actual_node in zip(callee.arguments, actual_nodes, strict=True):
             expected = formal_declarations[formal]
             if not expected.rank and expected.intent in {"out", "inout"} and not callee.pure:
@@ -1044,7 +1047,7 @@ class _Lowerer:
                     raise CompilationError("writable scalar helper arguments require pure calls and private storage", location)
                 writable.update(symbols)
             elif expected.inferred_intent and actual_readonly and isinstance(actual, _PrivateArray):
-                actual = replace(actual, elements=tuple(replace(s, intent="in") for s in actual.elements))
+                read_only.update(actual.elements)
             storage.append(symbols)
             actuals[formal] = actual
         if callee.pure:
@@ -1061,16 +1064,31 @@ class _Lowerer:
                 raise CompilationError("numerical helper function results must be scalars or fixed arrays", location)
             actuals[callee.result] = self.private_array(replace(declaration, intent=None)) if declaration.rank \
                 else self.new_symbol(replace(declaration, intent=None))
-        for element, _copy in copied:
-            # The element is the same one after the call: nothing the call may change selects it, and no
-            # other argument passes its array.
-            indices = {value.symbol for index in element.indices for value in walk_expr(index)
-                       if isinstance(value, (Reference, ArrayAccess))}
-            if indices & writable or any(element.symbol in symbols for symbols in storage):
+        changing = writable | {element.symbol for element, _copy in copied}
+        for position, (element, copy) in enumerate(copied):
+            # No other argument passes the element's array.
+            if any(element.symbol in symbols for symbols in storage):
                 raise CompilationError(f"an element passed to {callee.name} may not be the same one after the call",
                                        location)
+            # What the call, or a copy going back before this one, changes may select another element after the
+            # call: the copy goes back to the element the call was given, whose subscripts are taken before it.
+            if {value.symbol for index in element.indices for value in walk_expr(index)
+                    if isinstance(value, (Reference, ArrayAccess))} & changing:
+                indices = []
+                for index in element.indices:
+                    if not isinstance(index, Literal):
+                        snapshot = self.temporary(ScalarType.INTEGER, location, "fort_idx")
+                        prelude.append(Assignment(Reference(snapshot), index, location))
+                        index = Reference(snapshot)
+                    indices.append(index)
+                copied[position] = (replace(element, indices=tuple(indices)), copy)
         call_provenance = (*provenance, f"{self.active_frames[-1][0].name} at {self.path}:{location.line} -> {callee.name}")
-        body = self.inline(callee, actuals, ancestors, call_provenance, active_iterators)
+        read_only -= self.read_only
+        self.read_only |= read_only
+        try:
+            body = self.inline(callee, actuals, ancestors, call_provenance, active_iterators)
+        finally:
+            self.read_only -= read_only
         # INTENT(OUT) kills prior definitions, including values from a previous
         # invocation/iteration. Require complete private outputs so scalarized
         # storage cannot accidentally keep an old element alive.

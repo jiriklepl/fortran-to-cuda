@@ -6,6 +6,7 @@ for proving independence; no value-based dependence removal or scheduling is don
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 
 import islpy as isl
@@ -585,14 +586,23 @@ def _region_model(
                     and environment[symbol] == Affine(terms=((f"p{symbol.id}", 1),))}
     unknown: dict[Expr, str] = {}
 
+    def may_trap(node):
+        """A division or remainder whose divisor may be 0, or -1 under the most negative dividend."""
+        if isinstance(node, Binary) and node.operator == "/":
+            divisor = node.right
+        elif isinstance(node, IntrinsicCall) and node.name.lower() in {"mod", "modulo"}:
+            divisor = node.arguments[-1]
+        else:
+            return False
+        return not (isinstance(divisor, Literal) and divisor.dtype is ScalarType.INTEGER
+                    and re.fullmatch(r"\d+", divisor.value) and int(divisor.value) > 1)
+
     def fixed(expression):
         """Built from nothing but total integer operations on values the region starts with."""
         nodes = tuple(walk_expr(expression))
         if any(isinstance(node, (ArrayAccess, Size)) for node in nodes):
             return False
-        if any((isinstance(node, Binary) and node.operator == "/")
-               or (isinstance(node, IntrinsicCall) and node.name.lower() in {"mod", "modulo"})
-               for node in nodes):
+        if any(may_trap(node) for node in nodes):
             return False
         return bool(referenced_symbols(expression)) and referenced_symbols(expression) <= start_values
 

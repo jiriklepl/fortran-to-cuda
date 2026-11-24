@@ -21,7 +21,7 @@ from compiler.resident.configure import configure_sources, distinct_name
 from compiler.resident.directives import expand_directives
 from compiler.resident.helpers import prepare_helpers
 from compiler.resident.inlining import inline_calls
-from compiler.resident.procedures import holds_selected
+from compiler.resident.procedures import holds_selected, integer_variables
 from compiler.resident.reductions import LOWERED_NESTS, lower_reductions, switch
 from compiler.resident.rewrites import inline_tile_scratch_nests, promote_line_snapshots
 from compiler.resident.specialize import integer_parameters, specialize
@@ -447,11 +447,14 @@ def prepare(project, directory, *, fortran, host_threads=4, jobs=1):
 
     constants = integer_parameters(sources.texts.values()) if any(
         selection.assume or selection.inline for selection in project.selections) else {}
+    integers = integer_variables(sources.texts.values()) if any(
+        selection.inline for selection in project.selections) else {}
     # Calls are replaced first, so that assumed conditions also fold what the calls brought in.
     inlined = []
     for selection in project.selections:
         for original in originals if selection.inline else ():
-            text, records = inline_calls(sources.texts[original], selection.procedures, selection.inline, constants)
+            text, records = inline_calls(sources.texts[original], selection.procedures, selection.inline, constants,
+                                         integers)
             sources.update(original, text)
             inlined += records
     for selection in project.selections:

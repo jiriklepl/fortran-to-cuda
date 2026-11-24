@@ -20,10 +20,10 @@ from fparser.two import Fortran2003
 from fparser.two.utils import walk
 
 from compiler.frontend.syntax import parse_fortran, parser
-from compiler.resident.procedures import normalized, procedures_of
+from compiler.resident.procedures import _CHARACTER_LITERAL, normalized, procedures_of
 from compiler.scopes.segments import statement_span
 
-from .anchors import _logical_lines, _split_top_level_args
+from .anchors import _logical_lines, _split_top_level_args, _strip_inline_comment
 
 _PARAMETERS = re.compile(r"(?i)^\s*integer\b[^!:]*\bparameter\b[^!:]*::(.*)$")
 _LITERAL = re.compile(r"[+-]?\d+\Z")
@@ -175,19 +175,46 @@ def _leading(comments, lines):
     return found
 
 
-def _fold(nodes, lines, conditions, counter, one_line=False):
-    """The source lines of ``nodes`` with every decided IF construct folded, and with ``one_line`` every IF statement."""
+def _shares_a_line(first, last, lines):
+    """Whether one of lines ``first`` to ``last`` holds another statement, after a semicolon."""
+    for line in lines[first - 1:last]:
+        code, _comment = _strip_inline_comment(line.rstrip("\n"))
+        if ";" in _CHARACTER_LITERAL.sub("", code):
+            return True
+    return False
+
+
+def _fold(nodes, lines, conditions, counter, one_line=False, covered=None):
+    """The source lines of ``nodes`` with every decided IF construct folded, and with ``one_line`` every IF statement.
+
+    Lines are written whole and once: a statement on a line already written,
+    the second of two on a line or the comment after a statement, is written
+    with it. ``covered`` holds the last line written or folded away. A decided
+    IF must have its first and last lines to itself: ValueError otherwise.
+    """
+    covered = [0] if covered is None else covered
     output = []
-    emitted_spans = set()
+
+    def emit(first, last):
+        if last > covered[0]:
+            output.extend(lines[max(first, covered[0] + 1) - 1:last])
+            covered[0] = last
+
+    def alone(first, last):
+        if _shares_a_line(first, first, lines) or _shares_a_line(last, last, lines):
+            raise ValueError("A decided IF shares a line with another statement: " + lines[first - 1].strip())
+
     for node in nodes:
         first, last = statement_span(node)
         if one_line and type(node).__name__ == "If_Stmt":
             value = conditions.decide(node.items[0])
             if value is not None:
+                alone(first, last)
                 counter[0] += 1
                 if value:
                     indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
                     output.append(indent + str(node.items[1]) + "\n")
+                covered[0] = max(covered[0], last)
                 continue
         if type(node).__name__ == "Block_Nonlabel_Do_Construct" and _decides(node, conditions, one_line):
             # The branches in a loop's body are decided like any others; what lies between its
@@ -196,21 +223,18 @@ def _fold(nodes, lines, conditions, counter, one_line=False):
                             if type(item).__name__ == "Nonlabel_Do_Stmt")
             opening, ending = node.content[position], node.content[-1]
             output += _leading(node.content[:position], lines)
-            output += lines[opening.item.span[0] - 1:opening.item.span[1]]
-            cursor = opening.item.span[1] + 1
+            emit(*opening.item.span)
             for item in node.content[position + 1:-1]:
                 if type(item).__name__ == "Comment":
                     continue
-                start, stop = statement_span(item)
-                output += lines[cursor - 1:start - 1] + _fold([item], lines, conditions, counter, one_line)
-                cursor = max(cursor, stop + 1)
-            output += lines[cursor - 1:ending.item.span[1]]
+                emit(covered[0] + 1, statement_span(item)[0] - 1)
+                output += _fold([item], lines, conditions, counter, one_line, covered)
+            emit(covered[0] + 1, ending.item.span[1])
             continue
         if type(node).__name__ != "If_Construct":
-            if (first, last) not in emitted_spans:
-                output += lines[first - 1:last]
-                emitted_spans.add((first, last))
+            emit(first, last)
             continue
+        alone(first, last)
         branches = []
         for item in node.content:
             if type(item).__name__ in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt"}:
@@ -218,11 +242,6 @@ def _fold(nodes, lines, conditions, counter, one_line=False):
             elif type(item).__name__ == "End_If_Stmt":
                 break
             elif branches:
-                # Skip trailing inline comments attached to the branch header's own line.
-                if (type(item).__name__ == "Comment"
-                        and getattr(item, "item", None) is not None
-                        and item.item.span[0] == branches[-1][0].item.span[0]):
-                    continue
                 branches[-1][1].append(item)
             else:
                 # A comment the parser attached in front of the construct's first statement.
@@ -237,24 +256,26 @@ def _fold(nodes, lines, conditions, counter, one_line=False):
             if value:
                 counter[0] += type(header).__name__ != "Else_Stmt"
                 break
-        if not kept:
-            continue
-        if kept[0][2]:
-            output += _fold(kept[0][1], lines, conditions, counter, one_line)
-            continue
-        for position, (header, body, value) in enumerate(kept):
-            start, stop = header.item.span
-            text = lines[start - 1:stop]
-            indent = text[0][:len(text[0]) - len(text[0].lstrip())]
-            if value:
-                text = [indent + "else\n"]
-            elif position == 0 and type(header).__name__ == "Else_If_Stmt":
-                text = [re.sub(r"(?i)^(\s*)else\s*if\b", r"\1if", text[0], count=1), *text[1:]]
-            output += text + _fold(body, lines, conditions, counter, one_line)
-        end = node.content[-1].item.span
-        output += lines[end[0] - 1:end[1]]
+        if kept and kept[0][2]:
+            covered[0] = max(covered[0], kept[0][0].item.span[1])
+            output += _fold(kept[0][1], lines, conditions, counter, one_line, covered)
+        elif kept:
+            for position, (header, body, value) in enumerate(kept):
+                start, stop = header.item.span
+                text = lines[start - 1:stop]
+                indent = text[0][:len(text[0]) - len(text[0].lstrip())]
+                if value:
+                    text = [indent + "else\n"]
+                elif position == 0 and type(header).__name__ == "Else_If_Stmt":
+                    text = [re.sub(r"(?i)^(\s*)else\s*if\b", r"\1if", text[0], count=1), *text[1:]]
+                output += text
+                covered[0] = max(covered[0], stop)
+                output += _fold(body, lines, conditions, counter, one_line, covered)
+            end = node.content[-1].item.span
+            output += lines[end[0] - 1:end[1]]
+        # The construct's lines are written or folded away, the comment after its END IF with them.
+        covered[0] = max(covered[0], last)
     return output
-
 
 def specialize(text, procedures, conditions, constants):
     """Give each of ``procedures`` a version of its body for the case that ``conditions`` hold.
@@ -280,10 +301,11 @@ def specialize(text, procedures, conditions, constants):
         scope = scopes.get(name.lower())
         if scope is None:
             raise ValueError(f"Expected the procedure {name} to specialize")
-        shadowed = {
-            var for var, (_dtype, attrs, _bounds, _init) in declarations_of(scope.node).items()
-            if "parameter" not in attrs
-        }
+        # A variable of the procedure or of a host, the innermost declaration first, is not a constant.
+        declared = {}
+        for host in (*reversed(scope.hosts), scope.node):
+            declared.update(declarations_of(host))
+        shadowed = {var for var, (_dtype, attrs, _bounds, _init) in declared.items() if "parameter" not in attrs}
         scoped_constants = {k: v for k, v in constants.items() if k not in shadowed}
         known = _Conditions(conditions, scoped_constants)
         edits.append(_specialized(scope.node, name, lines, conditions, known))

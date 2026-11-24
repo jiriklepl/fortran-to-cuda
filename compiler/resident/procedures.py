@@ -67,6 +67,19 @@ def dummy_names(node):
     return tuple(str(item).lower() for item in getattr(heading.items[2], "items", ()))
 
 
+def escaping_names(node):
+    """Lower-case names through which a procedure's values leave it: its dummies and, for a function, its result."""
+    names = set(dummy_names(node))
+    heading = heading_of(node)
+    if heading is not None and kind_of(heading) == "Function_Stmt":
+        result = str(heading.items[1]).lower()
+        for item in getattr(heading.items[3], "items", None) or ():
+            if item is not None and kind_of(item) == "Name":
+                result = str(item).lower()
+        names.add(result)
+    return names
+
+
 def unit_names(text):
     """The first parts of the names procedures of ``text`` can be selected by.
 
@@ -113,16 +126,26 @@ def procedures_of(tree):
 
 # A character literal, to the end of the line where it is continued on the next.
 _CHARACTER_LITERAL = re.compile(r"'(?:[^']|'')*(?:'|$)|\"(?:[^\"]|\"\")*(?:\"|$)")
+# What code is read as when names are replaced: a dotted operator or logical constant (.and., .eq., .true.), a
+# number (1, 1.5, 1.e3, .5d0, 2_8; the dot of 1.eq.n is the operator's), or a name.
+_TOKENS = re.compile(r"\.[a-z]+\.|(?:\d+(?:\.(?![a-z]+\.)\d*)?|\.\d+)(?:[edq][+-]?\d+)?(?:_\w+)?|[a-z_]\w*",
+                     re.IGNORECASE)
 
 
 def renamed_lines(lines, mapping):
     """Replace whole names outside comments and character literals; a name after ``%`` is a field and stays."""
     if not mapping:
         return list(lines)
-    pattern = re.compile(r"(?<![\w%.])(?<!%\s)(" + "|".join(map(re.escape, mapping)) + r")(?![\w.])", re.IGNORECASE)
+
+    def rename(match, code):
+        token = match.group(0)
+        replacement = mapping.get(token.lower()) if token[0].isalpha() or token[0] == "_" else None
+        if replacement is None or code[:match.start()].rstrip().endswith("%"):
+            return token
+        return replacement
 
     def names(code):
-        return pattern.sub(lambda match: mapping[match.group(1).lower()], code)
+        return _TOKENS.sub(lambda match: rename(match, code), code)
 
     renamed = []
     for line in lines:
@@ -154,6 +177,26 @@ def _extract_dimension(attrs):
     bounds = attrs[start:index - 1]
     stripped = attrs[:match.start()] + attrs[index:]
     return bounds, stripped
+
+
+def integer_variables(texts):
+    """Integer scalar variables of the modules in ``texts``: lower-case name -> type text without spaces.
+
+    A name that modules declare with different types is left out: without
+    scoping, which one a use means is not known.
+    """
+    from compiler.frontend.syntax import parse_fortran
+
+    types, conflicting = {}, set()
+    for text in texts:
+        if not re.search(r"(?im)^\s*module\s+(?!procedure\b)\w", text):
+            continue
+        for module in (node for node in parse_fortran(text).content if kind_of(node) == "Module"):
+            for name, (dtype, attributes, bounds, _initialized) in declarations_of(module).items():
+                dtype = normalized(dtype)
+                if bounds is None and "parameter" not in attributes and types.setdefault(name, dtype) != dtype:
+                    conflicting.add(name)
+    return {name: dtype for name, dtype in types.items() if dtype.startswith("integer") and name not in conflicting}
 
 
 def declarations_of(node):

@@ -492,6 +492,16 @@ def _array_uses(analysis, routine, nodes):
         found = (analysis._binding(routine.scope, name) for name in walk(node, Name) if id(name) not in others)
         return {binding.root for binding in found if binding is not None and binding.rank}
 
+    def component(reference):
+        """The component array that a reference such as ``flow%u(i)`` names, as a set of at most one root."""
+        if kind_of(reference) != "Data_Ref":
+            return set()
+        try:
+            access = component_access(analysis, routine.scope, reference)
+        except CompilationError:
+            return set()
+        return {access.binding.root} if access is not None and access.binding.rank else set()
+
     def may_write(procedure, arguments, first=0):
         """The arrays among the actual arguments that the called procedure may change.
 
@@ -508,7 +518,7 @@ def _array_uses(analysis, routine, nodes):
                     callee.arguments[position] if position < len(callee.arguments) else None)
             binding = callee.scope.bindings.get(formal) if formal is not None else None
             if binding is None or binding.intent != "in":
-                written.update(named(value))
+                written.update(named(value) | component(value))
 
     def whole_arguments(arguments):
         for argument in (children_of(arguments) if arguments is not None else ()):
@@ -555,18 +565,14 @@ def _array_uses(analysis, routine, nodes):
                 may_write(candidates[0], reference.items[1])
         for statement in walk(node, Assignment_Stmt):
             target = statement.items[0]
-            if kind_of(target) == "Data_Ref":
-                try:
-                    access = component_access(analysis, routine.scope, target)
-                except CompilationError:
-                    access = None
-                if access is not None and access.binding.rank:
-                    written.add(access.binding.root)
+            written.update(component(target))
             while kind_of(target) in {"Part_Ref", "Data_Ref"}:
                 target = target.items[0]
             written.update(named(target))
         for statement in walk(node, Read_Stmt):
             written.update(named(statement))
+            for reference in walk(statement, Data_Ref):
+                written.update(component(reference))
         for statement in walk(node, Deallocate_Stmt):
             released.update(named(statement))
         inquired = {id(reference.items[1].items[0]) for reference in walk(node, Intrinsic_Function_Reference)

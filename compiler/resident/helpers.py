@@ -42,6 +42,7 @@ it is, with the reason in its record.
 import re
 from fnmatch import fnmatchcase
 
+from fparser.two import Fortran2003
 from fparser.two.utils import walk
 
 from compiler.frontend.syntax import children_of, kind_of, parse_fortran, part_of
@@ -511,11 +512,13 @@ def _element_pointer(scope, lines):
     top level, pointing at the element the loop variable selects. One loop is
     rewritten per call. Returns (first, last, lines) or None.
     """
-    from .procedures import _CHARACTER_LITERAL, _strip_inline_comment, dummy_names
+    from .procedures import _CHARACTER_LITERAL, _strip_inline_comment, escaping_names
 
     execution = part_of(scope.node, "Execution_Part")
     specification = part_of(scope.node, "Specification_Part")
-    dummies = set(dummy_names(scope.node))
+    # A pointer that leaves the procedure, or that a procedure inside it names, points at what it is set to.
+    dummies = escaping_names(scope.node) | {str(name).lower() for name in walk(
+        part_of(scope.node, "Internal_Subprogram_Part") or (), Fortran2003.Name)}
     pointers = set()
     for statement in (specification.content if specification is not None else ()):
         if kind_of(statement) == "Type_Declaration_Stmt" and statement.items[1] is not None:
@@ -601,6 +604,10 @@ def _select_case(scope, lines):
                 current[1].append(item)
         if any("logical" in kind_of(value).lower() for case, _body in cases for value in walk(case)):
             continue
+        # A statement on its CASE's line, after a semicolon, cannot be written without the CASE.
+        if any(kind_of(item) != "Comment" and line_span(item)[0] == line_span(case)[0]
+               for case, body in (*cases, *((default,) if default is not None else ())) for item in body):
+            continue
 
         def condition(case, selector=selector):
             terms = []
@@ -615,13 +622,14 @@ def _select_case(scope, lines):
             return " .or. ".join(terms)
 
         def emit_body(items):
-            emitted = []
-            seen = set()
+            # Lines are written whole and once: the second statement of a line, or the comment after a
+            # statement, is written with it.
+            emitted, written = [], 0
             for item in items:
-                span = line_span(item)
-                if span not in seen:
-                    seen.add(span)
-                    emitted += lines[span[0] - 1:span[1]]
+                start, stop = line_span(item)
+                if stop > written:
+                    emitted += lines[max(start, written + 1) - 1:stop]
+                    written = stop
             return emitted
 
         first, last = line_span(construct)
