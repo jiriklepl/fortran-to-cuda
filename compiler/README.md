@@ -243,7 +243,8 @@ build(prepared, out / "built", name="box", programs={"box": src / "main.f90"},
 A selection names procedures as `module::name` or by a glob over such names.
 An internal procedure is `module::host::name`, an external procedure (one
 that stands in no module) is `$external::name`, and a main program is
-`$program::name`, given exactly. The arrays of a main program live as long as
+`$program::name`, given exactly; a procedure inside it is
+`$program::name::inner`. The arrays of a main program live as long as
 the run, like a module's. The array dummies of an external procedure are bound
 as they are passed: they get no `TARGET` attribute, which its callers could
 not learn without an interface.
@@ -300,13 +301,14 @@ rewrites, or the application's own functions, to a source before export.
 
 The same project can be described in TOML, together with what surrounds it:
 
-- the source trees the application is built from, pinned to revisions;
+- the source trees the application is built from, pinned to git revisions,
+  or archives pinned to their sha256;
 - its edits, as data;
 - its build: libraries, per-file options and executables.
 
 `python -m compiler.resident` reads such a description. The format is
 documented in `compiler/resident/application.py`, and
-[`benchmarks/`](../benchmarks/README.md) holds two. An edit names a source and,
+[`benchmarks/`](../benchmarks/README.md) holds examples. An edit names a source and,
 optionally, the procedure it is confined to. It names one place:
 
 - a piece of text found once, tolerant of layout and comments;

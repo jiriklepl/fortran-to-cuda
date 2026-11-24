@@ -10,6 +10,7 @@ import json
 import sys
 from pathlib import Path
 
+from compiler.ir import CompilationError
 from compiler.resident.application import build, load, prepare
 
 
@@ -52,7 +53,7 @@ def main(argv=None):
         if not args.prepare_only:
             build(application, prepared, given, args.output, fortran=args.fortran, cxx=args.cxx, nvcc=args.nvcc,
                   architecture=args.architecture, jobs=args.jobs, strict_fp=not args.fast_fp)
-    except (ValueError, RuntimeError, OSError) as error:
+    except (CompilationError, ValueError, RuntimeError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
         raise SystemExit(1) from error
 

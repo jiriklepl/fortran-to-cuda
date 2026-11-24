@@ -1141,9 +1141,9 @@ def export_resident_entries(paths, procedures, directory):
     """
     # A selected procedure can be long, the more so with calls replaced by their statements; the
     # default bound on statements per procedure is sized for proofs this export does not ask for.
-    # A main program is analysed as a procedure only when it is asked for by name.
-    programs = tuple(sorted({name.lower() for name in procedures or ()
-                             if re.fullmatch(r"\$program::[a-z][a-z0-9_]*", name.lower())}))
+    # A main program is analysed as a procedure only when it, or a procedure inside it, is asked for by name.
+    programs = tuple(sorted({match.group(1) for name in procedures or ()
+                             if (match := re.match(r"(\$program::[a-z][a-z0-9_]*)(?:::|$)", name.lower()))}))
     analysis = SourceEffects(paths, program_roots=programs)
     analysis.element_fields = True
     # The body of a module function holds loop nests like any subroutine's.

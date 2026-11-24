@@ -1,10 +1,14 @@
 """An application described in TOML: its edits, the checks of a description, and the examples under benchmarks/."""
+import hashlib
 import json
+import shutil
 import subprocess
+import tarfile
 from pathlib import Path
 
 import pytest
 
+from compiler.resident.__main__ import main
 from compiler.resident.application import Edit, apply_edit, load, prepare, snapshot_inputs
 from compiler.tests.resident_application_support import fortran_compiler
 
@@ -65,6 +69,87 @@ def test_a_description_is_checked_where_it_is_read(tmp_path):
         load(write('[[edit]]\nfile = "a.f90"\naction = "after"\ntext = ""\n'))
     with pytest.raises(ValueError, match="not described"):
         load(write('[build]\ninclude = ["solver:include"]\n'))
+    with pytest.raises(ValueError, match="a digest, not a revision"):
+        load(write('[inputs.suite]\nsha256 = "0"\nrevision = "0"\n'))
+
+
+def test_an_archive_input_is_checked_against_its_digest_and_unpacked_without_its_top_directory(tmp_path):
+    tree = tmp_path / "tree"
+    for name, text in (("suite-1.0/src/a.f90", "! kept\n"), ("suite-1.0/src/notes.txt", "suffix not copied\n"),
+                       ("suite-1.0/doc/b.f90", "not in the copy list\n")):
+        (tree / name).parent.mkdir(parents=True, exist_ok=True)
+        (tree / name).write_text(text)
+    archive = tmp_path / "suite.tar.gz"
+    with tarfile.open(archive, "w:gz") as members:
+        members.add(tree / "suite-1.0", arcname="suite-1.0")
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+
+    def snapshot(given, sha256=digest):
+        path = tmp_path / "app.toml"
+        path.write_text('name = "app"\nsources = ["suite:src/a.f90"]\nprogram = "suite:src/a.f90"\n'
+                        f'[inputs.suite]\nsha256 = "{sha256}"\ncopy = ["src"]\nsuffixes = [".f90"]\n')
+        output = tmp_path / "snapshot"
+        shutil.rmtree(output, ignore_errors=True)
+        return snapshot_inputs(load(path), {"suite": given}, output, ["suite"])
+
+    paths, records = snapshot(archive)
+    assert sorted(path.relative_to(paths["suite"]).as_posix() for path in paths["suite"].rglob("*") if path.is_file()) \
+        == ["src/a.f90"]
+    assert records["suite"][0]["original"]["path"] == f"{archive}:src/a.f90"
+    with pytest.raises(ValueError, match="must be the archive with sha256"):
+        snapshot(archive, sha256="0" * 64)
+    with pytest.raises(ValueError, match="must be the archive"):
+        snapshot(tree)
+    # A member that would land outside the directory it is unpacked into is refused.
+    unsafe = tmp_path / "unsafe.tar"
+    with tarfile.open(unsafe, "w") as members:
+        members.add(tree / "suite-1.0/src/a.f90", arcname="../a.f90")
+    with pytest.raises(ValueError, match="unpacks safely"):
+        snapshot(unsafe, sha256=hashlib.sha256(unsafe.read_bytes()).hexdigest())
+
+
+@pytest.mark.skipif(fortran_compiler() is None, reason="GNU Fortran is required for preprocessing")
+def test_a_procedure_inside_a_main_program_is_selected_by_itself_with_its_header_from_an_include_directory(
+        tmp_path, capsys):
+    (tmp_path / "include").mkdir()
+    (tmp_path / "include/sizes.h").write_text("#define N 64\n")
+    (tmp_path / "main.F90").write_text("""#include <sizes.h>
+program scale
+  implicit none
+  real(8), allocatable :: a(:)
+  allocate(a(N))
+  a = 1
+  call twice(N, a)
+  print *, sum(a)
+contains
+  subroutine twice(n, a)
+    integer :: n
+    real(8) :: a(n)
+    integer :: i
+    do i = 1, n
+      a(i) = 2 * a(i)
+    end do
+  end subroutine twice
+end program scale
+""")
+
+    def describe(procedure, include='include = ["include"]\n'):
+        path = tmp_path / "scale.toml"
+        path.write_text(f'name = "scale"\nsources = ["main.F90"]\nprogram = "main.F90"\n[variants.default]\n'
+                        f'[[selection]]\nlabel = "all"\nprocedures = ["{procedure}"]\nminimum_nests = 1\n'
+                        f'[build]\n{include}')
+        return path
+
+    prepare(load(describe("$program::scale::twice")), {}, tmp_path / "prepared", variant="default",
+            fortran=fortran_compiler())
+    with pytest.raises(RuntimeError, match="Preprocessing failed"):
+        prepare(load(describe("$program::scale::twice", include="")), {}, tmp_path / "unfound", variant="default",
+                fortran=fortran_compiler())
+    # The driver reports a compiler error in one line.
+    with pytest.raises(SystemExit):
+        main([str(describe("$program::scale::thrice")), "--output", str(tmp_path / "missing"),
+              "--fortran", fortran_compiler(), "--prepare-only"])
+    assert capsys.readouterr().err == "error: Resident procedure is unavailable: $program::scale::thrice\n"
 
 
 def test_an_input_is_a_checkout_of_its_revision_or_of_a_descendant(tmp_path):

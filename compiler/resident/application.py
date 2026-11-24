@@ -18,6 +18,10 @@ of an input tree)::
     suffixes = [".f90", ".c"]              # only files with these suffixes are copied
     clean = true                           # a git checkout of exactly ``revision``, without changes
 
+    [inputs.suite]                         # an archive, given as --input suite=FILE
+    url = "https://.../suite.tar.gz"
+    sha256 = "..."                         # its digest; it is unpacked, and ``copy`` copies out of it
+
     [variants.dp]                          # --variant dp; the first is the default
     defines = ["DPREC"]
 
@@ -56,7 +60,7 @@ The build::
 
     [build]
     fortran_options = ["-O3", "-fopenmp"]
-    include = ["elmm:src"]                 # include directories, besides the runtime's
+    include = ["elmm:src"]                 # where included files are found, in preparation and in the build
     extra = ["elmm:src/lapack.f"]          # sources the compiler does not read, in both libraries
     resident = ["sources/adapter.f90"]     # the application's own residency sources, in the resident library
     libraries = ["fftw3", "blas"]          # system libraries both libraries link
@@ -78,6 +82,8 @@ import json
 import re
 import shutil
 import subprocess
+import tarfile
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -118,6 +124,7 @@ class Input:
     suffixes: tuple[str, ...] = ()
     names: tuple[str, ...] = ()
     clean: bool = False
+    sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -200,10 +207,12 @@ def load(path):
                   "rewrites", "patch", "rewrite", "edit", "build", "executable", "program_edit"}, path.name)
     inputs = {}
     for name, table in value.get("inputs", {}).items():
-        _keys(table, {"url", "revision", "copy", "suffixes", "names", "clean"}, f"inputs.{name}")
+        _keys(table, {"url", "revision", "copy", "suffixes", "names", "clean", "sha256"}, f"inputs.{name}")
+        if "sha256" in table and ("revision" in table or "clean" in table):
+            raise ValueError(f"inputs.{name}: an archive has a digest, not a revision")
         inputs[name] = Input(name, table.get("url"), table.get("revision"),
                              tuple(table["copy"]) if "copy" in table else None, tuple(table.get("suffixes", ())),
-                             tuple(table.get("names", ())), table.get("clean", False))
+                             tuple(table.get("names", ())), table.get("clean", False), table.get("sha256"))
     variants = {name: tuple(table.get("defines", ())) for name, table in value.get("variants", {}).items()}
     selections = []
     for table in value.get("selection", ()):
@@ -316,10 +325,56 @@ def _check_revision(name, source, spec):
         raise ValueError(f"Input {name} must be based on {spec.revision}: {source}")
 
 
+def _copy_tree(source, spec, target, origin=None):
+    """Copy what ``spec.copy`` names of ``source`` (all of it, without a list) to ``target``; return the records.
+
+    ``origin`` stands for ``source`` in the records, where ``source`` does not outlive the copy.
+    """
+    files = []
+    for part in spec.copy if spec.copy is not None else (".",):
+        root = source / part
+        for path in sorted(root.rglob("*")) if root.is_dir() else [root]:
+            if path.is_file() and (not spec.suffixes or path.suffix.lower() in spec.suffixes
+                                   or path.name in spec.names):
+                files.append(path)
+    records = []
+    for path in files:
+        output = target / path.relative_to(source)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        before = _identity(path)
+        shutil.copyfile(path, output)
+        if _identity(path) != before or _identity(output)["sha256"] != before["sha256"]:
+            raise ValueError("Source changed during snapshot: " + str(path))
+        if origin is not None:
+            before = {"path": f"{origin}:{path.relative_to(source)}", "sha256": before["sha256"]}
+        records.append({"original": before, "snapshot": _identity(output)})
+    return records
+
+
+def _unpack(name, archive, spec, target):
+    """Check an archive input against its digest and copy what its ``copy`` list names out of it; return the records.
+
+    An archive whose members all lie in one directory is unpacked without that directory.
+    """
+    if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest() != spec.sha256:
+        raise ValueError(f"Input {name} must be the archive with sha256 {spec.sha256}: {archive}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=target.parent) as unpacked:
+        try:
+            with tarfile.open(archive) as members:
+                members.extractall(unpacked, filter="data")
+        except tarfile.TarError as error:
+            raise ValueError(f"Input {name} is not a tar archive that unpacks safely: {archive}: {error}") from None
+        entries = list(Path(unpacked).iterdir())
+        root = entries[0] if len(entries) == 1 and entries[0].is_dir() else Path(unpacked)
+        return _copy_tree(root, spec, target, origin=archive)
+
+
 def snapshot_inputs(application, given, directory, names):
     """Copy the named inputs that have a ``copy`` list into ``directory``; return the path of each input.
 
-    An input without one is used in place. An input with a ``revision`` is checked against it first.
+    An input without one is used in place. An input with a ``revision`` is checked against it first. An input with
+    a ``sha256`` is an archive of that digest, unpacked into ``directory``.
     """
     paths, records = {}, {}
     for name in sorted(names):
@@ -329,27 +384,14 @@ def snapshot_inputs(application, given, directory, names):
         source = Path(given[name]).resolve(strict=True)
         if spec.revision is not None:
             _check_revision(name, source, spec)
-        if spec.copy is None:
+        if spec.sha256 is not None:
+            records[name] = _unpack(name, source, spec, directory / name)
+        elif spec.copy is None:
             paths[name] = source
             continue
-        target = directory / name
-        files = []
-        for part in spec.copy:
-            root = source / part
-            for path in sorted(root.rglob("*")) if root.is_dir() else [root]:
-                if path.is_file() and (not spec.suffixes or path.suffix.lower() in spec.suffixes
-                                       or path.name in spec.names):
-                    files.append(path)
-        records[name] = []
-        for path in files:
-            output = target / path.relative_to(source)
-            output.parent.mkdir(parents=True, exist_ok=True)
-            before = _identity(path)
-            shutil.copyfile(path, output)
-            if _identity(path) != before or _identity(output)["sha256"] != before["sha256"]:
-                raise ValueError("Source changed during snapshot: " + str(path))
-            records[name].append({"original": before, "snapshot": _identity(output)})
-        paths[name] = target
+        else:
+            records[name] = _copy_tree(source, spec, directory / name)
+        paths[name] = directory / name
     return paths, records
 
 
@@ -367,7 +409,7 @@ def prepare(application, given, directory, *, variant, fortran, jobs=1):
         raise ValueError(f"Unknown variant {variant!r}: expected one of " + ", ".join(application.variants))
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=False)
-    needed = application.inputs_of((*application.sources, *application.addressable))
+    needed = application.inputs_of((*application.sources, *application.addressable, *application.build.include))
     paths, records = snapshot_inputs(application, given, directory / "application", needed)
     sources = [_resolve(name, paths, application.root) for name in application.sources]
     program = _resolve(application.program, paths, application.root)
@@ -412,6 +454,7 @@ def prepare(application, given, directory, *, variant, fortran, jobs=1):
 
     project = ResidentProject(
         sources=tuple(sources), selections=application.selections, defines=application.variants[variant],
+        include=tuple(_resolve(name, paths, application.root) for name in application.build.include),
         domain=application.domain or DEFAULT_DOMAIN, rewrites=rewrites, edit=edit if application.edits else None, held=application.held,
         addressable=tuple(_resolve(name, paths, application.root) for name in application.addressable))
     prepared = prepare_project(project, directory / "resident", fortran=fortran, jobs=jobs)

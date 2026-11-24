@@ -21,11 +21,13 @@ def distinct_name(path):
     return hashlib.sha256(str(path).encode()).hexdigest()[:12] + "_" + path.name
 
 
-def configure_sources(paths, procedures, directory, *, fortran, defines=()):
+def configure_sources(paths, procedures, directory, *, fortran, defines=(), include=()):
     """Preprocess each source and serialize the selected procedures.
 
     Writes one preprocessed copy of every file into ``directory``; the originals
-    are untouched. OpenMP directives are blanked only inside the procedures
+    are untouched. Included files are searched for in each source's own
+    directory, then in the ``include`` directories. OpenMP directives are
+    blanked only inside the procedures
     named in ``procedures`` (``module::name``, ``module::host::name`` for an
     internal procedure, ``$external::name`` for an external procedure,
     ``$program::name`` for a main program, or globs): their loop nests become entries that one
@@ -42,7 +44,8 @@ def configure_sources(paths, procedures, directory, *, fortran, defines=()):
         source = Path(filename).resolve(strict=True)
         before = _identity(source)
         command = [str(fortran), "-cpp", "-E", "-P", "-O3", "-ffree-line-length-none", "-fopenmp",
-                   *("-D" + value for value in defines), "-I" + str(source.parent), str(source)]
+                   *("-D" + value for value in defines), "-I" + str(source.parent),
+                   *("-I" + str(Path(item).resolve()) for item in include), str(source)]
         result = subprocess.run(command, text=True, capture_output=True, timeout=120)
         if result.returncode:
             raise RuntimeError("Preprocessing failed: " + str(source) + "\n" + result.stderr)

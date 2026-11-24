@@ -89,11 +89,14 @@ class ResidentProject:
     handle expression for arrays the domain binds itself. ``addressable`` lists
     the sources whose arrays get the TARGET attribute a binding needs, as
     paths or, where a file name is unique, as names; None means every source.
+    ``include`` lists the directories that preprocessing searches for included
+    files after each source's own.
     """
 
     sources: tuple[Path, ...]
     selections: tuple[Selection, ...]
     defines: tuple[str, ...] = ()
+    include: tuple[Path, ...] = ()
     domain: ResidentDomain = DEFAULT_DOMAIN
     rewrites: Mapping[str, tuple[str | Callable[[str], str], ...]] = field(default_factory=dict)
     edit: Callable[[dict], dict] | None = None
@@ -429,7 +432,7 @@ def prepare(project, directory, *, fortran, host_threads=4, jobs=1):
         raise ValueError("Selections need distinct labels")
     patterns = [name.lower() for selection in project.selections for name in selection.procedures]
     configured = configure_sources(project.sources, patterns, directory / "configured", fortran=fortran,
-                                   defines=project.defines)
+                                   defines=project.defines, include=project.include)
     originals = [Path(item["original"]["path"]) for item in configured["sources"]]
     unknown = set(project.rewrites) - {path.name for path in originals}
     if unknown:
