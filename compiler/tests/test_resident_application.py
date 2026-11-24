@@ -703,6 +703,45 @@ def test_a_condition_that_only_says_a_loop_is_too_short_is_no_condition(tmp_path
     assert "Cannot parallelize" in "".join(item["reason"] + "".join(item.get("inside", ())) for item in summary["rejected"])
 
 
+PRODUCTS = """module products
+integer :: n
+contains
+subroutine product(a, x, y)
+real(8), intent(in) :: a(n, n), y(n)
+real(8), intent(inout) :: x(n)
+integer :: i, j
+do i = 1, n
+do j = 1, n
+x(i) = x(i) + a(j, i) * y(j)
+enddo
+enddo
+end subroutine
+end module
+"""
+
+
+def test_a_nest_whose_inner_loop_sums_into_an_element_runs_its_outer_loop_in_parallel(tmp_path):
+    def prepared(name, text):
+        source = tmp_path / name / "products.f90"
+        source.parent.mkdir()
+        source.write_text(text)
+        result = prepare(ResidentProject((source,), (Selection("all", ("products::product",)),)),
+                         tmp_path / name / "prepared", fortran=fortran_compiler())
+        summary, = result["selections"]
+        return summary, [json.loads((Path(entry) / "compiler-report.json").read_text())["execution_plan"]
+                         for entry in result["entries"]]
+
+    # Each element of x sums over j: the loop over i is parallel, the one over j runs in each of its iterations.
+    summary, (plan,) = prepared("rows", PRODUCTS)
+    assert (summary["entries"], summary["nests"], summary["rejected"]) == (1, 1, [])
+    assert "region 0: 1 mapped dimensions, parallel legality PROVEN\n  retained sequential loops: 1" in plan
+    # With the loops the other way round, every iteration of the outer loop adds to every element: only the
+    # inner loop is parallel, an entry the host calls once per iteration of the outer one.
+    summary, (plan,) = prepared("columns", PRODUCTS.replace("do i = 1, n\ndo j = 1, n", "do j = 1, n\ndo i = 1, n"))
+    assert (summary["entries"], summary["nests"], len(summary["descended"])) == (1, 1, 1)
+    assert "region 0: 1 mapped dimensions, parallel legality PROVEN\n  retained sequential loops: 0" in plan
+
+
 def test_an_entry_takes_an_assumed_shape_array_only_when_it_is_contiguous(tmp_path):
     source = tmp_path / "strides.f90"
     source.write_text("""module strides

@@ -231,6 +231,10 @@ def optimize_function(
             if id(fused) not in candidate_regions or not preserved <= set(candidate_regions):
                 reports.append(f"{label}: skipped (combined parallel independence not proved)")
                 continue
+            # Combined, the passes must not run fewer of their loops in parallel than each did.
+            if len(candidate_regions[id(fused)].loops) != len(left.loops):
+                reports.append(f"{label}: skipped (combined parallel independence holds for fewer loops)")
+                continue
             # Passes that are independent whatever their scalars are stay so: combined, they must not come
             # to depend on a condition that the entry would then have to check, and could fail.
             if set(candidate_regions[id(fused)].assumptions) - {*left.assumptions, *right.assumptions}:

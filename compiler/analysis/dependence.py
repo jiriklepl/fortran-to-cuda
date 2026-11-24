@@ -270,9 +270,13 @@ def _region_model(
     *,
     injective=frozenset(),
     assume=(),
+    depth=None,
 ) -> _AffineRegionModel:
     context = isl.DEFAULT_CONTEXT
     loops, body = _mapped_prefix(loop)
+    if depth is not None and depth < len(loops):
+        # The prefix's inner loops run inside each parallel iteration, in their order.
+        loops, body = loops[:depth], loops[depth - 1].body
     assignments = tuple(_assignments(body))
     sequential = tuple(_all_loops(body))
     mapped = {item.iterator for item in loops}
@@ -755,22 +759,44 @@ def _region_model(
     return _AffineRegionModel(region, tuple(events), parallel, tuple(conflicts.items()), known)
 
 
-def _region(region_id, loop, environment, defined, later, injective=frozenset()):
-    """The region when its iterations are independent, if need be under a condition on its starting values."""
-    model = _region_model(region_id, loop, environment, defined, later, injective=injective)
+def _mapping(region_id, loop, environment, defined, later, injective, depth, conditional):
+    """The region whose parallel iterations are those of ``depth`` loops of the prefix, if ``conditional`` also
+    under a condition on its starting values."""
+    model = _region_model(region_id, loop, environment, defined, later, injective=injective, depth=depth)
     try:
         return model.require_unconditional()
     except ParallelizationError as error:
-        condition = model.independence_condition()
+        condition = model.independence_condition() if conditional else None
         if condition is None:
             raise
         text, expression = condition
         try:
             region = _region_model(region_id, loop, environment, defined, later, injective=injective,
-                                   assume=(text,)).require_unconditional()
+                                   assume=(text,), depth=depth).require_unconditional()
         except ParallelizationError:
             raise error from None
         return replace(region, assumptions=(expression,))
+
+
+def _region(region_id, loop, environment, defined, later, injective=frozenset()):
+    """The region when its iterations are independent, if need be under a condition on its starting values.
+
+    Its parallel iterations are those of the loops of the nest's perfect
+    prefix. Where they are not independent, those of fewer of them, the outer
+    ones, may be: the others then run inside each iteration, in their order,
+    as a loop that sums into an element does. Fewer loops are taken only where
+    they are independent whatever the scalars are: a condition would mostly
+    say that the inner loops are too short to conflict, which a condition on
+    the whole prefix already leaves out. What fails is reported for the whole
+    prefix.
+    """
+    failure, full = None, len(_mapped_prefix(loop)[0])
+    for depth in range(full, 0, -1):
+        try:
+            return _mapping(region_id, loop, environment, defined, later, injective, depth, depth == full)
+        except ParallelizationError as error:
+            failure = failure or error
+    raise failure
 
 
 def prove_region(region_id, loop, environment, defined, later, *, injective=frozenset()):

@@ -9,10 +9,10 @@ contains
     integer, intent(in) :: nx, ny, nz
     integer :: i, j, k
 
-    do k = 1, nz
+    do k = 2, nz
       do j = 1, ny
-        do i = 2, nx
-          arr(i,j,k) = arr(i-1,j,k) + 1.0_knd
+        do i = 1, nx
+          arr(i,j,k) = arr(i,j,k-1) + 1.0_knd
         end do
       end do
     end do

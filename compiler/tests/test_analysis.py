@@ -112,20 +112,25 @@ def test_redefinition_after_region_kills_previous_private_value():
     assert len(plan.regions) == 1
 
 
-def test_inner_dimension_dependence_is_rejected():
+def test_an_inner_dimension_dependence_runs_its_loop_inside_each_parallel_iteration():
     arr = Symbol(0, "arr", ScalarType.REAL, 2, "inout", True)
     n = Symbol(1, "n", ScalarType.INTEGER, intent="in", parameter=True)
     j = Symbol(2, "j", ScalarType.INTEGER)
     i = Symbol(3, "i", ScalarType.INTEGER)
-    assignment = Assignment(
-        ArrayAccess(arr, (Reference(i), Reference(j))),
-        ArrayAccess(arr, (Binary("-", Reference(i), integer(1)), Reference(j))),
-        LOCATION,
-    )
-    inner = Loop(i, integer(2), Reference(n), Block((assignment,)), LOCATION)
-    outer = Loop(j, integer(1), Reference(n), Block((inner,)), LOCATION)
+
+    def plan(read):
+        assignment = Assignment(ArrayAccess(arr, (Reference(i), Reference(j))), ArrayAccess(arr, read), LOCATION)
+        inner = Loop(i, integer(2), Reference(n), Block((assignment,)), LOCATION)
+        outer = Loop(j, integer(2), Reference(n), Block((inner,)), LOCATION)
+        return outer, build_execution_plan(function_with_body((outer,), (arr, n, j, i), (arr, n)))
+
+    # Each column depends on itself only: the columns are parallel, the loop down a column is not.
+    outer, along = plan((Binary("-", Reference(i), integer(1)), Reference(j)))
+    region, = along.regions
+    assert region.loops == (outer,)
+    # A column that depends on the one before can run in parallel neither way.
     with pytest.raises(CompilationError, match="RAW"):
-        build_execution_plan(function_with_body((outer,), (arr, n, j, i), (arr, n)))
+        plan((Reference(i), Binary("-", Reference(j), integer(1))))
 
 
 def test_unknown_indirect_write_and_undefined_bound_are_rejected():

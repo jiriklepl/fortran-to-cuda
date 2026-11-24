@@ -36,28 +36,28 @@ COVERAGE = {
     "durbin": (2, 2, 1),
     "dynprog": (0, 0, 1),
     "fdtd-2d": (1, 4, 0),
-    "fdtd-apml": (0, 0, 1),
+    "fdtd-apml": (1, 1, 0),
     "floyd-warshall": (1, 1, 0),
     "gemm": (1, 1, 0),
-    "gemver": (2, 2, 2),
+    "gemver": (1, 4, 0),
     "gesummv": (1, 1, 0),
     "gramschmidt": (1, 1, 0),
     "jacobi-1d-imper": (1, 2, 0),
     "jacobi-2d-imper": (1, 2, 0),
     "lu": (1, 2, 0),
     "ludcmp": (1, 2, 2),
-    "mvt": (0, 0, 1),
+    "mvt": (1, 2, 0),
     "reg_detect": (0, 0, 1),
     "seidel-2d": (0, 0, 1),
     "symm": (1, 1, 0),
-    "syr2k": (1, 1, 1),
-    "syrk": (1, 1, 1),
+    "syr2k": (1, 2, 0),
+    "syrk": (1, 2, 0),
     "trisolv": (0, 0, 1),
     "trmm": (0, 0, 1),
 }
 # The benchmarks whose GPU build launches kernels at the size the tests run.
-ON_DEVICE = {"2mm", "3mm", "cholesky", "correlation", "covariance", "doitgen", "durbin", "fdtd-2d", "gemm", "gemver",
-             "gesummv", "jacobi-1d-imper", "jacobi-2d-imper", "lu", "ludcmp", "syr2k", "syrk"}
+ON_DEVICE = {"2mm", "3mm", "cholesky", "correlation", "covariance", "doitgen", "durbin", "fdtd-2d", "fdtd-apml", "gemm",
+             "gemver", "gesummv", "jacobi-1d-imper", "jacobi-2d-imper", "lu", "ludcmp", "mvt", "syr2k", "syrk"}
 SIZE = "mini"
 
 
