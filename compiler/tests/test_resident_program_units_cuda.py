@@ -1,28 +1,21 @@
 """A solver in one main program and one external procedure runs resident and writes what its native build writes."""
 import os
-import shutil
 import subprocess
 
 import pytest
 
 from compiler.resident.build import build
 from compiler.resident.project import prepare
-from compiler.tests.resident_application_support import RELAX, fortran_compiler, relax_project
+from compiler.tests.resident_application_support import RELAX, cuda_toolchain, relax_project
 
 pytestmark = pytest.mark.cuda
 
 
 def test_the_time_loop_of_a_main_program_runs_its_nests_on_the_device(tmp_path):
-    nvcc, host, fortran = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++"), fortran_compiler()
-    if not all((nvcc, host, fortran, shutil.which("cmake"), shutil.which("ninja"))):
-        pytest.skip("CUDA, Fortran, CMake and Ninja are required")
-    probe = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
-                           capture_output=True, text=True, check=False)
-    if probe.returncode or not probe.stdout.strip():
-        pytest.skip("CUDA device unavailable")
+    nvcc, host, fortran, architecture = cuda_toolchain()
     prepared = prepare(relax_project(), tmp_path / "prepared", fortran=fortran)
     binaries = build(prepared, tmp_path / "built", name="relax", programs={"relax": RELAX}, fortran=fortran,
-                     cxx=host, nvcc=nvcc, architecture=probe.stdout.splitlines()[0].strip().replace(".", ""),
+                     cxx=host, nvcc=nvcc, architecture=architecture,
                      jobs=min(8, os.cpu_count() or 2))
 
     def run(name, **variables):

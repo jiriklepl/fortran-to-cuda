@@ -531,6 +531,10 @@ def build(application, prepared, given, directory, *, fortran, cxx, nvcc, archit
                  "target_link_libraries(native_libraries INTERFACE "
                  + " ".join([*application.build.link, *("${LIB_" + lib + "}" for lib in libraries)]) + ")"]
     include = [_resolve(name, paths, own) for name in application.build.include]
+    # The main programs are compiled from copies in the build: what the program includes beside itself is in its
+    # directory.
+    if program.parent not in include:
+        include.append(program.parent)
     resident_by_original = {
         Path(row["original"]).resolve(): Path(row["resident"]).resolve()
         for row in prepared["sources"]

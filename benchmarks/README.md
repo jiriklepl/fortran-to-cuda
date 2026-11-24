@@ -1,7 +1,7 @@
 # Benchmarks: applications described for the resident build
 
-Each directory holds one application, adapted to the GPU by a description that
-`python -m compiler.resident` reads. The description is TOML. It names:
+Each directory holds an application, or a suite of them, adapted to the GPU by
+a description that `python -m compiler.resident` reads. The description is TOML. It names:
 
 - the source trees;
 - the sources the compiler reads;
@@ -18,6 +18,7 @@ does.
 |---|---|---|
 | `cdu/` | The zonal momentum advection kernel of ELMM (four OpenMP loop nests), with a driver that times it | none: its sources are here |
 | `elmm/` | ELMM, a large-eddy simulation of the atmospheric boundary layer: 69 sources, about 270 entries | pinned ELMM, PoisFFT and VkFFT checkouts, and the `poisson-solver` submodule |
+| `polybench/` | PolyBench/Fortran 1.0: 30 programs, one kernel each, described by a generator | the suite's archive, pinned by its sha256 |
 
 Every build writes two executables, both compiled with the compiler's numerical
 options:
@@ -26,7 +27,8 @@ options:
 - the native one, from the original sources, as its control.
 
 The compiler's tests load every description here and prepare `cdu/`
-(`compiler/tests/test_resident_application_description.py`).
+(`compiler/tests/test_resident_application_description.py`), and prepare and
+build every PolyBench program (`compiler/tests/test_polybench.py`).
 
 ## The small example
 
@@ -108,3 +110,45 @@ What the description contains:
 - **The build.** A CMake prologue adds the solver, with VkFFT, to the
   build. Besides it come the system libraries both executables link and the
   one per-file option of ELMM's own build.
+
+## PolyBench/Fortran
+
+`polybench/` adapts PolyBench/Fortran 1.0, the Fortran port of the
+polyhedral benchmark suite PolyBench/C 3.2: 30 programs of linear algebra,
+data mining and stencils. Each program has its kernel as a procedure of its
+own, so each gets a description of its own. `describe.py` writes all 30 from
+the suite's archive. The archive is not part of this repository: it carries
+a copyright notice of The Ohio State University and no license.
+
+```bash
+curl -LO https://www.cs.colostate.edu/~pouchet/software/polybench/download/polybench-fortran-1.0.tar.gz
+python benchmarks/polybench/describe.py polybench-fortran-1.0.tar.gz out/polybench
+python -m compiler.resident out/polybench/gemm.toml \
+    --input polybench=polybench-fortran-1.0.tar.gz --output out/polybench/gemm --variant large \
+    --fortran gfortran --cxx g++ --nvcc nvcc --architecture 86
+out/polybench/gemm/build/gemm-native
+out/polybench/gemm/build/gemm
+```
+
+Every description is `polybench/benchmark.toml.in` with the benchmark's
+names filled in:
+
+- **Input.** The archive, checked against its sha256 and unpacked; the
+  build copies the benchmark's directory and `utilities/`, whose header every
+  program includes and whose C file times the kernel.
+- **Selection.** The kernel alone, `$program::<program>::<kernel>`.
+- **Edits.** `!$fort enter` before the kernel's call and `!$fort leave` after
+  it keep its arrays on the device for the call; `!$fort close` comes before
+  the first deallocation. A `[[patch]]` makes both executables print a
+  checksum of each array the program would print.
+- **Variants.** The suite's sizes: `standard` (its default), `mini`, `small`,
+  `large` and `extralarge`. Each also defines `POLYBENCH_TIME`, so both
+  executables print the time of the kernel's call. For the resident one, that
+  time includes starting the device and the copies to and from it.
+
+The kernels are serial, so the native executable runs on one thread.
+`compiler/tests/test_polybench.py` prepares every benchmark and pins what the
+compiler takes of its kernel. With CUDA, it also builds every benchmark, runs
+both executables at the `mini` size, and requires the same checksums and
+kernel launches exactly where the table there says. It downloads the archive,
+or takes it from `POLYBENCH_ARCHIVE`.

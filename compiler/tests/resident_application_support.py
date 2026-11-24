@@ -1,6 +1,9 @@
-"""The small application the resident build is tested on: a periodic diffusion box."""
+"""The small applications the resident build is tested on, and the tools a test that builds one needs."""
 import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from compiler.resident.project import ResidentProject, Selection
 
@@ -25,6 +28,18 @@ def box_project(sources=BOX, *, defines=("DOUBLE",)):
 
 def fortran_compiler():
     return shutil.which("gfortran-15") or shutil.which("gfortran")
+
+
+def cuda_toolchain():
+    """The CUDA, C++ and Fortran compilers and the device's architecture; skips the test that lacks one."""
+    nvcc, host, fortran = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++"), fortran_compiler()
+    if not all((nvcc, host, fortran, shutil.which("cmake"), shutil.which("ninja"), shutil.which("nvidia-smi"))):
+        pytest.skip("CUDA, Fortran, CMake and Ninja are required")
+    probe = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
+                           capture_output=True, text=True, check=False)
+    if probe.returncode or not probe.stdout.strip():
+        pytest.skip("CUDA device unavailable")
+    return nvcc, host, fortran, probe.stdout.splitlines()[0].strip().replace(".", "")
 
 
 RELAX = Path(__file__).resolve().parent / "apps/relax/relax.f90"

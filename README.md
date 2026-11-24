@@ -19,7 +19,8 @@ with.
 compiler/          the compiler (Python): kernel entries, resident builds of applications, the runtime
 benchmarks/        applications described for the resident build
 ├── cdu/           the advection kernel of ELMM with a driver that times it
-└── elmm/          ELMM, a large-eddy simulation of the atmospheric boundary layer
+├── elmm/          ELMM, a large-eddy simulation of the atmospheric boundary layer
+└── polybench/     PolyBench/Fortran: 30 programs of linear algebra, data mining and stencils
 containers/        the ELMM comparison (native and resident) on GPU nodes: Docker, Apptainer, Slurm
 poisson-solver/    submodule: the device Poisson solver of ELMM's resident build
 run_on_node.sh     submits an ELMM comparison to a Slurm node (see containers/README.md)
@@ -66,7 +67,7 @@ A description is TOML and has these parts:
   directives like `!$fort enter`, anchored on the application's own text;
 - the CMake build of the native and the resident executables.
 
-[`benchmarks/README.md`](benchmarks/README.md) walks through the two examples.
+[`benchmarks/README.md`](benchmarks/README.md) walks through the examples.
 The format is documented in `compiler/resident/application.py`, and
 [`compiler/README.md`](compiler/README.md) documents what the preparation does,
 the directives, the supported Fortran and the compiler's other entry point

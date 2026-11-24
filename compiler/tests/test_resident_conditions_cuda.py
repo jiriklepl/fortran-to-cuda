@@ -1,13 +1,12 @@
 """An entry runs on the device where what it was compiled for holds when it is called, and the host runs the rest."""
 import os
-import shutil
 import subprocess
 
 import pytest
 
 from compiler.resident.build import build
 from compiler.resident.project import ResidentProject, Selection, prepare
-from compiler.tests.resident_application_support import fortran_compiler
+from compiler.tests.resident_application_support import cuda_toolchain
 
 pytestmark = pytest.mark.cuda
 
@@ -75,20 +74,14 @@ end program
 
 
 def test_the_entry_runs_for_the_values_it_was_compiled_for_and_the_host_for_the_others(tmp_path):
-    nvcc, host, fortran = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++"), fortran_compiler()
-    if not all((nvcc, host, fortran, shutil.which("cmake"), shutil.which("ninja"))):
-        pytest.skip("CUDA, Fortran, CMake and Ninja are required")
-    probe = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
-                           capture_output=True, text=True, check=False)
-    if probe.returncode or not probe.stdout.strip():
-        pytest.skip("CUDA device unavailable")
+    nvcc, host, fortran, architecture = cuda_toolchain()
     module, source = tmp_path / "levels.f90", tmp_path / "march.f90"
     module.write_text(MODULE)
     source.write_text(MAIN)
     project = ResidentProject((module, source), (Selection("all", ("levels::*",), minimum_nests=2),))
     prepared = prepare(project, tmp_path / "prepared", fortran=fortran)
     binaries = build(prepared, tmp_path / "built", name="march", programs={"march": source}, fortran=fortran,
-                     cxx=host, nvcc=nvcc, architecture=probe.stdout.splitlines()[0].strip().replace(".", ""),
+                     cxx=host, nvcc=nvcc, architecture=architecture,
                      jobs=min(8, os.cpu_count() or 2))
 
     def run(name, **variables):

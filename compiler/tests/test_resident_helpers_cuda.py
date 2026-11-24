@@ -1,13 +1,12 @@
 """A point loop that calls rewritten procedures runs on the device and writes what its native build writes."""
 import os
-import shutil
 import subprocess
 
 import pytest
 
 from compiler.resident.build import build
 from compiler.resident.project import ResidentProject, Selection, prepare
-from compiler.tests.resident_application_support import fortran_compiler
+from compiler.tests.resident_application_support import cuda_toolchain
 from compiler.tests.test_resident_helpers import WALLS
 
 pytestmark = pytest.mark.cuda
@@ -45,20 +44,14 @@ end program
 
 
 def test_the_wall_law_runs_on_the_device_with_the_host_results(tmp_path):
-    nvcc, host, fortran = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++"), fortran_compiler()
-    if not all((nvcc, host, fortran, shutil.which("cmake"), shutil.which("ninja"))):
-        pytest.skip("CUDA, Fortran, CMake and Ninja are required")
-    probe = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
-                           capture_output=True, text=True, check=False)
-    if probe.returncode or not probe.stdout.strip():
-        pytest.skip("CUDA device unavailable")
+    nvcc, host, fortran, architecture = cuda_toolchain()
     module, source = tmp_path / "walls.f90", tmp_path / "law.f90"
     module.write_text(WALLS)
     source.write_text(MAIN)
     project = ResidentProject((module, source), (Selection("all", ("walls::viscs",), minimum_nests=1),))
     prepared = prepare(project, tmp_path / "prepared", fortran=fortran)
     binaries = build(prepared, tmp_path / "built", name="law", programs={"law": source}, fortran=fortran,
-                     cxx=host, nvcc=nvcc, architecture=probe.stdout.splitlines()[0].strip().replace(".", ""),
+                     cxx=host, nvcc=nvcc, architecture=architecture,
                      jobs=min(8, os.cpu_count() or 2))
 
     def run(name, **variables):

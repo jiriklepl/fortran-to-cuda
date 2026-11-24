@@ -1,13 +1,12 @@
 """Lent storage at run time: the same results as the native build, and no device allocation per call."""
 import os
-import shutil
 import subprocess
 
 import pytest
 
 from compiler.resident.build import build
 from compiler.resident.project import ResidentProject, Selection, prepare
-from compiler.tests.resident_application_support import fortran_compiler
+from compiler.tests.resident_application_support import cuda_toolchain
 from compiler.tests.test_resident_temporaries import SOURCE
 
 pytestmark = pytest.mark.cuda
@@ -42,13 +41,7 @@ end program
 
 
 def test_a_temporary_keeps_its_device_storage_from_call_to_call(tmp_path):
-    nvcc, host, fortran = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++"), fortran_compiler()
-    if not all((nvcc, host, fortran, shutil.which("cmake"), shutil.which("ninja"))):
-        pytest.skip("CUDA, Fortran, CMake and Ninja are required")
-    probe = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
-                           capture_output=True, text=True, check=False)
-    if probe.returncode or not probe.stdout.strip():
-        pytest.skip("CUDA device unavailable")
+    nvcc, host, fortran, architecture = cuda_toolchain()
     module, source = tmp_path / "smooth.f90", tmp_path / "smoother.f90"
     module.write_text(SOURCE.format(use="", more=""))
     source.write_text(MAIN)
@@ -56,7 +49,7 @@ def test_a_temporary_keeps_its_device_storage_from_call_to_call(tmp_path):
     prepared = prepare(project, tmp_path / "prepared", fortran=fortran)
     assert prepared["temporaries"] == [{"procedure": "smooth::twice", "name": "old"}]
     binaries = build(prepared, tmp_path / "built", name="smoother", programs={"smoother": source}, fortran=fortran,
-                     cxx=host, nvcc=nvcc, architecture=probe.stdout.splitlines()[0].strip().replace(".", ""),
+                     cxx=host, nvcc=nvcc, architecture=architecture,
                      jobs=min(8, os.cpu_count() or 2))
 
     def run(name, calls, **variables):

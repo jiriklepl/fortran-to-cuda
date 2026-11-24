@@ -1,0 +1,76 @@
+# PolyBench/Fortran 1.0: {name}. Written by benchmarks/polybench/describe.py from benchmarks/polybench/benchmark.toml.in.
+#
+# The kernel, a procedure of the main program, is selected; its arrays are on the device for the call. Both
+# executables print a checksum of each array the program would print, and with POLYBENCH_TIME the time of the call.
+name = "{name}"
+sources = ["polybench:{path}"]
+program = "polybench:{path}"
+addressable = ["polybench:{path}"]
+
+[inputs.polybench]
+url = "{url}"
+sha256 = "{sha256}"
+copy = ["{directory}", "utilities"]
+suffixes = [".f90", ".h", ".c"]
+
+# The suite's sizes; the first is its default.
+[variants.standard]
+defines = ["STANDARD_DATASET", "POLYBENCH_TIME"]
+
+[variants.mini]
+defines = ["MINI_DATASET", "POLYBENCH_TIME"]
+
+[variants.small]
+defines = ["SMALL_DATASET", "POLYBENCH_TIME"]
+
+[variants.large]
+defines = ["LARGE_DATASET", "POLYBENCH_TIME"]
+
+[variants.extralarge]
+defines = ["EXTRALARGE_DATASET", "POLYBENCH_TIME"]
+
+[[selection]]
+label = "kernel"
+procedures = ["$program::{program}::{kernel}"]
+
+# What the program would print, as checksums.
+[[patch]]
+file = "{name}.F90"
+at = '''
+{printed}'''
+action = "after"
+text = '''
+{checksums}'''
+
+# The kernel's arrays are on the device from its call to its return.
+[[edit]]
+file = "{name}.F90"
+call = "{kernel}"
+action = "before"
+text = "      !$fort enter\n"
+
+[[edit]]
+file = "{name}.F90"
+call = "{kernel}"
+action = "after"
+text = "\n      !$fort leave"
+
+[[edit]]
+file = "{name}.F90"
+at = "deallocate({first})"
+action = "before"
+text = "      !$fort close\n"
+
+[build]
+fortran_options = ["-O3", "-ffree-line-length-none"]
+include = ["polybench:utilities"]
+extra = ["polybench:utilities/fpolybench.c"]
+resident_link = ["CUDA::cudart"]
+
+[[executable]]
+name = "{name}"
+library = "resident"
+
+[[executable]]
+name = "{name}-native"
+library = "native"

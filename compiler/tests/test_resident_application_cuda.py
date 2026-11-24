@@ -1,28 +1,20 @@
 """The box application runs resident on the device and writes what its native build writes."""
 import os
 import re
-import shutil
 import subprocess
 
 import pytest
 
 from compiler.resident.build import build
 from compiler.resident.project import prepare
-from compiler.tests.resident_application_support import BOX, box_project, fortran_compiler
+from compiler.tests.resident_application_support import BOX, box_project, cuda_toolchain
 
 pytestmark = pytest.mark.cuda
 
 
 @pytest.fixture(scope="module")
 def binaries(tmp_path_factory):
-    nvcc, host, fortran = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++"), fortran_compiler()
-    if not all((nvcc, host, fortran, shutil.which("cmake"), shutil.which("ninja"))):
-        pytest.skip("CUDA, Fortran, CMake and Ninja are required")
-    probe = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
-                           capture_output=True, text=True, check=False)
-    if probe.returncode or not probe.stdout.strip():
-        pytest.skip("CUDA device unavailable")
-    architecture = probe.stdout.splitlines()[0].strip().replace(".", "")
+    nvcc, host, fortran, architecture = cuda_toolchain()
     root = tmp_path_factory.mktemp("box")
     prepared = prepare(box_project(), root / "prepared", fortran=fortran)
     return build(prepared, root / "built", name="box", programs={"box": BOX / "main.f90"}, fortran=fortran,
