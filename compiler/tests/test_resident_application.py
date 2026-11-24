@@ -703,6 +703,38 @@ def test_a_condition_that_only_says_a_loop_is_too_short_is_no_condition(tmp_path
     assert "Cannot parallelize" in "".join(item["reason"] + "".join(item.get("inside", ())) for item in summary["rejected"])
 
 
+def test_a_condition_under_which_the_work_that_conflicts_never_runs_is_no_condition(tmp_path):
+    source = tmp_path / "transposed.f90"
+    source.write_text("""module transposed
+integer :: n, m
+contains
+subroutine product(a, x, y, t)
+real(8), intent(in) :: a(m, n), x(m)
+real(8), intent(inout) :: y(m), t(n)
+integer :: i, j
+do i = 1, n
+t(i) = 0
+do j = 1, m
+t(i) = t(i) + a(j, i) * x(j)
+enddo
+do j = 1, m
+y(j) = y(j) + a(j, i) * t(i)
+enddo
+enddo
+end subroutine
+end module
+""")
+    prepared = prepare(ResidentProject((source,), (Selection("all", ("transposed::product",)),)), tmp_path / "prepared",
+                       fortran=fortran_compiler())
+    summary, = prepared["selections"]
+    # Every iteration over i adds to all of y: they are independent only where the loops over j have no
+    # iteration, that is where none of what conflicts runs. That is no entry that checks a condition, but a
+    # rejection: the nest is the host's.
+    assert (summary["entries"], summary["nests"]) == (0, 0)
+    rejection, = summary["rejected"]
+    assert "Cannot parallelize" in rejection["reason"]
+
+
 PRODUCTS = """module products
 integer :: n
 contains

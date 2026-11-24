@@ -131,6 +131,8 @@ class _Event:
     origin: Assignment | Loop | If
     coordinates: tuple[str, ...]
     conditions: tuple[str, ...]
+    # The constraints of the loops around the event, without those of the branches it is in.
+    extent: tuple[str, ...]
     order: tuple[str, ...]
     order_conditions: tuple[str, ...]
     reads: tuple[ArrayAccess, ...]
@@ -150,6 +152,8 @@ class _AffineRegionModel:
     conflicts: tuple[tuple[str, isl.UnionMap], ...]
     # What a parameter of the relations stands for, where that is a value known when the region starts.
     known: tuple[tuple[str, Expr], ...] = ()
+    # Per event, the instances that the loops around it run, whatever the branches it is in decide.
+    runs: tuple[isl.Set, ...] = ()
 
     def independence_condition(self):
         """A condition on the values the region starts with under which no iteration conflicts with another.
@@ -158,17 +162,23 @@ class _AffineRegionModel:
         touch the same element. Outside those values the region is independent.
         A case in which one of the region's loops has a single iteration is
         left out: such a condition would only say that a loop is too short to
-        conflict with itself.
+        conflict with itself. So is a case in which a statement that takes part
+        in a conflict does not run, because a loop around it has no iteration:
+        such a condition would only say that the region does not do the work
+        that conflicts.
         Returns the condition in ISL syntax and as an expression, or None when
         nothing is left, or when the condition needs a value that is not known
         when the region starts.
         """
         same_iteration = self.parallel.apply_range(self.parallel.reverse())
-        conflicting = None
+        conflicting, parties = None, set()
         for _kind, relation in self.conflicts:
             bad = relation.subtract(same_iteration)
             if not bad.is_empty():
                 conflicting = bad.params() if conflicting is None else conflicting.union(bad.params())
+                maps = bad.get_map_list()
+                parties.update(int(maps.get_at(index).get_tuple_name(side)[1:])
+                               for index in range(maps.n_map()) for side in (isl.dim_type.in_, isl.dim_type.out))
         if conflicting is None:
             return None
         free = isl.Set.universe(conflicting.get_space()).subtract(conflicting).coalesce()
@@ -184,7 +194,10 @@ class _AffineRegionModel:
         apart = [item for item in apart if not item.is_empty()]
         texts, expressions = [], []
         for basic in free.get_basic_sets():
-            if any(item.intersect_params(isl.Set.from_basic_set(basic)).is_empty() for item in apart):
+            case = isl.Set.from_basic_set(basic)
+            if any(item.intersect_params(case).is_empty() for item in apart):
+                continue
+            if any(self.runs[index].intersect_params(case).is_empty() for index in parties):
                 continue
             names = [basic.get_dim_name(isl.dim_type.param, index) for index in range(basic.dim(isl.dim_type.param))]
             parts, terms = [], []
@@ -417,7 +430,7 @@ def _region_model(
         iterators[item.iterator] = Affine(terms=((axis, 1),))
         available.add(item.iterator)
 
-    def visit(block, values, definitions, available, active, coords, domain, position, timing):
+    def visit(block, values, definitions, available, active, coords, domain, extent, position, timing):
         nonlocal conservative
         values = dict(values)
         definitions = dict(definitions)
@@ -439,6 +452,7 @@ def _region_model(
                         statement,
                         coords,
                         domain,
+                        extent,
                         path,
                         timing,
                         reads,
@@ -481,6 +495,7 @@ def _region_model(
                             statement,
                             coords,
                             domain,
+                            extent,
                             (*path, "0"),
                             timing,
                             predicate_reads,
@@ -492,11 +507,12 @@ def _region_model(
                     )
                 then_available = visit(
                     statement.then_body, values, definitions, available, active, coords,
-                    domain if predicate is None else (*domain, "(" + predicate + ")"), (*path, "1"), timing
+                    domain if predicate is None else (*domain, "(" + predicate + ")"), extent, (*path, "1"), timing
                 )
                 else_available = visit(
                     statement.else_body, values, definitions, available, active, coords,
-                    domain if predicate is None else (*domain, "not (" + predicate + ")"), (*path, "2"), timing
+                    domain if predicate is None else (*domain, "not (" + predicate + ")"), extent, (*path, "2"),
+                    timing
                 )
                 available.update(then_available & else_available)
                 # Branch-local values cannot be substituted after the join.
@@ -516,6 +532,7 @@ def _region_model(
                             statement,
                             coords,
                             domain,
+                            extent,
                             (*path, "0"),
                             timing,
                             reads,
@@ -548,6 +565,7 @@ def _region_model(
                     nested,
                     (*coords, axis),
                     (*domain, *extra),
+                    (*extent, *extra),
                     (*path, "1", time),
                     (*timing, *time_constraints),
                 )
@@ -562,7 +580,7 @@ def _region_model(
                     definitions.pop(key, None)
         return available
 
-    visit(body, environment, {}, available, iterators, coordinates, conditions, order, order_conditions)
+    visit(body, environment, {}, available, iterators, coordinates, conditions, conditions, order, order_conditions)
     start_values = {symbol for symbol in environment if symbol.parameter and symbol.dtype is ScalarType.INTEGER
                     and environment[symbol] == Affine(terms=((f"p{symbol.id}", 1),))}
     unknown: dict[Expr, str] = {}
@@ -756,7 +774,11 @@ def _region_model(
     )
     known = (*((f"p{symbol.id}", Reference(symbol)) for symbol in sorted(start_values, key=lambda s: s.id)),
              *((name, expression) for expression, name in unknown.items()))
-    return _AffineRegionModel(region, tuple(events), parallel, tuple(conflicts.items()), known)
+    # The instances of each event that the loops around it run, whatever the branches it is in decide.
+    runs = tuple(isl.Set.read_from_str(context, parameter_text + "{ " + instance(index) + " : "
+                                       + (" and ".join((*event.extent, *extent_constraints)) or "true") + " }")
+                 for index, event in enumerate(events))
+    return _AffineRegionModel(region, tuple(events), parallel, tuple(conflicts.items()), known, runs)
 
 
 def _mapping(region_id, loop, environment, defined, later, injective, depth, conditional):
