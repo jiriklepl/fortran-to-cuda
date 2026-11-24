@@ -1287,7 +1287,7 @@ void drain_effects(Context &c,const std::vector<BoundEffects> &accesses) {
     // Include dependency ancestors while preserving original relative order.
     // Unrelated earlier tasks remain queued across this host boundary.
     for (size_t j=c.commands.size(); j-->0;) if (selected[j])
-        for (size_t i=0; i<j; ++i) if (conflicts(*c.commands[i],*c.commands[j])) selected[i]=true;
+        for (size_t i=0; i<j; ++i) if (!selected[i] && conflicts(*c.commands[i],*c.commands[j])) selected[i]=true;
     flush_commands(c,&selected,true);
 }
 void drain_accesses(Context &c,const fort_scope_plan_binding *bindings,size_t count) {
@@ -1302,13 +1302,18 @@ void drain_accesses(Context &c,const fort_scope_plan_binding *bindings,size_t co
 void drain_resources(Context &c,const fort_buffer_t *handles,size_t count) {
     if (c.commands.empty()) return;
     require(!count || handles,FORT_SCOPE_ARGUMENT,"missing queue boundary resources");
-    std::vector<BoundEffects> accesses;
+    std::vector<bool> selected(c.commands.size(),false);
+    uint64_t wanted=0;
     for (size_t i=0; i<count; ++i) {
-        auto &b=buffer(c,handles[i]);
-        const Region full=empty(b.full())?Region{}:Region{b.full()};
-        accesses.push_back({handles[i],{full,full,full}});
+        (void)buffer(c,handles[i]);
+        wanted|=buffer_bit(handles[i]);
     }
-    drain_effects(c,accesses);
+    for (size_t i=0; i<c.commands.size(); ++i) if (c.commands[i]->buffers&wanted)
+        for (const auto &queued : c.commands[i]->bindings)
+            for (size_t k=0; k<count; ++k) if (queued.buffer==handles[k]) selected[i]=true;
+    for (size_t j=c.commands.size(); j-->0;) if (selected[j])
+        for (size_t i=0; i<j; ++i) if (!selected[i] && conflicts(*c.commands[i],*c.commands[j])) selected[i]=true;
+    flush_commands(c,&selected,true);
 }
 // A queued launch runs its members concurrently: each member is a part of the
 // kernel with its own effects. The launch is accepted only when no member
@@ -1373,10 +1378,20 @@ void enqueue_graph(Context &c,uint64_t key,const fort_scope_kernel_v1 &kernel,co
     if (!c.queue_stats.queue_enabled || (c.queue_work_limit && c.queued_work>=c.queue_work_limit)) {
         try { flush_commands(c); }
         catch (const Error &error) {
-            if (error.status==FORT_SCOPE_RESOURCE) {
+            if (error.status==FORT_SCOPE_RESOURCE || error.status==FORT_SCOPE_BOUNDARY) {
                 c.commands.pop_back(); forget_virtual(c); c.queue_stats.pending_tasks=c.commands.size();
                 c.queued_work=held;
             }
+            throw;
+        }
+        catch (const Fragmented &) {
+            c.commands.pop_back(); forget_virtual(c); c.queue_stats.pending_tasks=c.commands.size();
+            c.queued_work=held;
+            throw;
+        }
+        catch (const std::bad_alloc &) {
+            c.commands.pop_back(); forget_virtual(c); c.queue_stats.pending_tasks=c.commands.size();
+            c.queued_work=held;
             throw;
         }
     }
@@ -1455,8 +1470,14 @@ void reserve_devices(Context &c,const fort_buffer_t *handles,size_t count,void *
                 // Include physically current bytes even when their logical
                 // definition was killed: retirement must preserve storage,
                 // and a partial host probe does not make a dirty buffer clean.
-                Budget region_budget;
-                candidates.push_back({&b,!difference(b.device_current,b.host_current,region_budget).empty()});
+                bool dirty = true;
+                try {
+                    Budget region_budget;
+                    dirty = !difference(b.device_current,b.host_current,region_budget).empty();
+                } catch (const Fragmented &) {
+                    dirty = true;
+                }
+                candidates.push_back({&b,dirty});
             }
         }
         std::sort(candidates.begin(),candidates.end(),[](const Candidate &a,const Candidate &b) {
@@ -1475,11 +1496,20 @@ void reserve_devices(Context &c,const fort_buffer_t *handles,size_t count,void *
     }
     if (missing || !victims.empty()) invalidate(c,Change::State);
     const auto downloads=c.stats.download_bytes;
-    for (auto *b : victims) {
-        const auto before=c.stats.download_bytes;
-        queue_publication(c,*b);
-        const auto bytes=c.stats.download_bytes-before;
-        if (bytes) { ++c.residency_stats.dirty_evictions; c.residency_stats.dirty_download_bytes+=bytes; }
+    try {
+        for (auto *b : victims) {
+            const auto before=c.stats.download_bytes;
+            queue_publication(c,*b);
+            const auto bytes=c.stats.download_bytes-before;
+            if (bytes) { ++c.residency_stats.dirty_evictions; c.residency_stats.dirty_download_bytes+=bytes; }
+        }
+    } catch (...) {
+        // Never leave already-queued async D2H downloads in flight while host_current
+        // has been marked valid for earlier victims.
+        if (c.stats.download_bytes!=downloads) {
+            try { wait(c); } catch (...) {}
+        }
+        throw;
     }
     // Publications borrow caller host memory. Complete the whole batch before
     // returning a host mirror as current or retiring its source allocation.
@@ -1714,7 +1744,8 @@ extern "C" int fort_scope_device_budget_default_v1(int device, size_t *out) {
             if(end && (*end=='K' || *end=='k')) { shift=10; ++end; }
             else if(end && (*end=='M' || *end=='m')) { shift=20; ++end; }
             else if(end && (*end=='G' || *end=='g')) { shift=30; ++end; }
-            require(end!=stated && !*end && !errno && count && stated[0]!='-' &&
+            require(end!=stated && !*end && !errno && count &&
+                    stated[0]>='0' && stated[0]<='9' &&
                     count<=(std::numeric_limits<size_t>::max()>>shift),FORT_SCOPE_ARGUMENT,
                     "FORT_RESIDENT_DEVICE_BUDGET must be a positive count of bytes, optionally with K, M or G");
             *out=size_t(count)<<shift;
@@ -2278,9 +2309,17 @@ void close_storage(Context &c) {
         // Close has no intervening host consumer. Queue every publication and
         // retirement on the same stream before its one completion wait. Keep
         // immediate publication for the synchronous allocator/reference path.
-        for (auto &entry : c.buffers) {
-            if (ordered_release) queue_publication(c, *entry.second);
-            else publish(c, *entry.second);
+        const auto downloads = c.stats.download_bytes;
+        try {
+            for (auto &entry : c.buffers) {
+                if (ordered_release) queue_publication(c, *entry.second);
+                else publish(c, *entry.second);
+            }
+        } catch (...) {
+            if (ordered_release && c.stats.download_bytes != downloads) {
+                try { wait(c); } catch (...) {}
+            }
+            throw;
         }
         for (auto &entry : c.buffers) release(c, *entry.second);
         // Complete scratch uses before retiring the idle arena. Scratch is

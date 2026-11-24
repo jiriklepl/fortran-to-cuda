@@ -227,6 +227,18 @@ def _analyse(nest, scope, operators, private, lines, last_line):
 
     inner_variables = {str(statement.items[1].items[1][0]).lower() for statement in walk(innermost)
                        if kind_of(statement) == "Nonlabel_Do_Stmt"} - {loops[-1][0]}
+    from .procedures import dummy_names, heading_of
+
+    heading = heading_of(scope.node)
+    escaping = set(dummy_names(scope.node))
+    if kind_of(heading) == "Function_Stmt":
+        result_name = str(heading.items[1]).lower()
+        suffix = heading.items[3]
+        if suffix is not None and getattr(suffix, "items", None):
+            for item in suffix.items:
+                if item is not None and kind_of(item) == "Name":
+                    result_name = str(item).lower()
+        escaping.add(result_name)
     temporaries = {}
     after = "".join(_strip_inline_comment(line.rstrip("\n"))[0] + "\n" for line in lines[line_span(nest)[1]:last_line])
     for name in sorted((set(assigned) | inner_variables) - set(described)):
@@ -235,7 +247,7 @@ def _analyse(nest, scope, operators, private, lines, last_line):
             return f"no scalar declaration of {name} in the procedure, its host or its module"
         if name not in private:
             # The rewritten nest computes it in a copy, so the variable itself must not be needed afterwards.
-            if depth != 0 or "save" in declaration[1]:
+            if depth != 0 or "save" in declaration[1] or name in escaping:
                 return f"{name} is not local to the procedure and no private clause names it"
             if re.search(rf"(?i)(?<![\w%]){re.escape(name)}(?!\w)", after):
                 return f"{name} is named again after the nest and no private clause names it"

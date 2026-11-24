@@ -575,7 +575,7 @@ class SourceEffects:
                     # Standard intrinsic modules do not export mutable user
                     # storage which could shadow a host capture. Their calls
                     # still require explicit numerical/effect support below.
-                    unrestricted = symbols is None or str(only).upper().replace(" ", "") != ",ONLY:"
+                    unrestricted = str(only).upper().replace(" ", "") != ",ONLY:"
                     if symbols is not None:
                         for item in symbols.items:
                             local, remote = ((str(item.items[1]).lower(), str(item.items[2]).lower())
@@ -591,7 +591,7 @@ class SourceEffects:
                     continue
                 if module in _KindScope.intrinsic_kinds and str(nature).lower() != "non_intrinsic":
                     continue
-                unrestricted = symbols is None or str(only).upper().replace(" ", "") != ",ONLY:"
+                unrestricted = str(only).upper().replace(" ", "") != ",ONLY:"
                 renamed = set()
                 if symbols is not None:
                     for item in symbols.items:

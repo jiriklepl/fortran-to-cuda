@@ -555,6 +555,13 @@ def _array_uses(analysis, routine, nodes):
                 may_write(candidates[0], reference.items[1])
         for statement in walk(node, Assignment_Stmt):
             target = statement.items[0]
+            if kind_of(target) == "Data_Ref":
+                try:
+                    access = component_access(analysis, routine.scope, target)
+                except CompilationError:
+                    access = None
+                if access is not None and access.binding.rank:
+                    written.add(access.binding.root)
             while kind_of(target) in {"Part_Ref", "Data_Ref"}:
                 target = target.items[0]
             written.update(named(target))
@@ -566,6 +573,16 @@ def _array_uses(analysis, routine, nodes):
                     if str(reference.items[0]).lower() in _INQUIRIES and reference.items[1] is not None
                     and reference.items[1].items}
         inquired |= {id(allocation.items[0]) for allocation in walk(node, Allocation)}
+        for ref in walk(node, Data_Ref):
+            if id(ref) in inquired:
+                continue
+            try:
+                access = component_access(analysis, routine.scope, ref)
+            except CompilationError:
+                access = None
+            if access is not None and access.binding.rank and getattr(access.root_binding, "rank", 0) == 0:
+                arrays[access.binding.root] = access.binding
+                elsewhere.add(access.binding.root)
         for name in walk(node, Name):
             binding = analysis._binding(routine.scope, name)
             if binding is not None and binding.rank and id(name) not in inquired and id(name) not in others:

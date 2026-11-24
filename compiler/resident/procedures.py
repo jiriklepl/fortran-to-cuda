@@ -59,6 +59,14 @@ def heading_of(node):
     return part_of(node, "Subroutine_Stmt") or part_of(node, "Function_Stmt") or part_of(node, "Program_Stmt")
 
 
+def dummy_names(node):
+    """Lower-case dummy argument names of a subroutine or function node."""
+    heading = heading_of(node)
+    if heading is None or kind_of(heading) not in {"Subroutine_Stmt", "Function_Stmt"} or heading.items[2] is None:
+        return ()
+    return tuple(str(item).lower() for item in getattr(heading.items[2], "items", ()))
+
+
 def unit_names(text):
     """The first parts of the names procedures of ``text`` can be selected by.
 
@@ -111,7 +119,7 @@ def renamed_lines(lines, mapping):
     """Replace whole names outside comments and character literals; a name after ``%`` is a field and stays."""
     if not mapping:
         return list(lines)
-    pattern = re.compile(r"(?<![\w%])(?<!%\s)(" + "|".join(map(re.escape, mapping)) + r")(?!\w)", re.IGNORECASE)
+    pattern = re.compile(r"(?<![\w%.])(?<!%\s)(" + "|".join(map(re.escape, mapping)) + r")(?![\w.])", re.IGNORECASE)
 
     def names(code):
         return pattern.sub(lambda match: mapping[match.group(1).lower()], code)
@@ -127,6 +135,27 @@ def renamed_lines(lines, mapping):
     return renamed
 
 
+def _extract_dimension(attrs):
+    """Return ``(bounds_text_or_None, attrs_without_dimension)`` using balanced parentheses."""
+    match = re.search(r"dimension\s*\(", attrs)
+    if match is None:
+        return None, attrs
+    start = match.end()
+    depth = 1
+    index = start
+    while index < len(attrs) and depth > 0:
+        if attrs[index] == "(":
+            depth += 1
+        elif attrs[index] == ")":
+            depth -= 1
+        index += 1
+    if depth != 0:
+        return None, attrs
+    bounds = attrs[start:index - 1]
+    stripped = attrs[:match.start()] + attrs[index:]
+    return bounds, stripped
+
+
 def declarations_of(node):
     """name -> (type text, attribute text, array bounds text or None) for the entities a procedure declares."""
     found = {}
@@ -136,11 +165,11 @@ def declarations_of(node):
             continue
         dtype, attributes, entities = statement.items
         attrs = str(attributes).lower() if attributes is not None else ""
-        shared = re.search(r"dimension\s*\((.*)\)", attrs)
+        shared, stripped = _extract_dimension(attrs)
         for entity in entities.items:
-            bounds = entity.items[1] if entity.items[1] is not None else (shared.group(1) if shared else None)
+            bounds = entity.items[1] if entity.items[1] is not None else shared
             found[str(entity.items[0]).lower()] = (
-                str(dtype), re.sub(r"dimension\s*\(.*\)", "", attrs), None if bounds is None else normalized(bounds),
+                str(dtype), stripped, None if bounds is None else normalized(bounds),
                 entity.items[3] is not None)
     return found
 

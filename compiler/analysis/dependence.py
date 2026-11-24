@@ -34,6 +34,7 @@ from compiler.ir import (
     statement_reads,
     walk_expr,
 )
+from compiler.ir.integers import fits_integer
 
 from .effects import (
     all_loops as _all_loops,
@@ -196,6 +197,8 @@ class _AffineRegionModel:
                 if any(name not in known for name, _value in coefficients):
                     return None
                 constant = constraint.get_constant_val().to_python()
+                if not fits_integer(constant) or any(not fits_integer(value) for _name, value in coefficients):
+                    return None
                 relation = "=" if constraint.is_equality() else ">="
                 parts.append("(" + " + ".join([str(constant), *(f"{value}*{name}" for name, value in coefficients)])
                              + f" {relation} 0)")
@@ -445,6 +448,8 @@ def _region_model(
                     symbol = statement.target.symbol
                     available.add(symbol)
                     resolved = _resolve(statement.value, definitions)
+                    for key in [k for k, expr in definitions.items() if symbol in referenced_symbols(expr)]:
+                        definitions.pop(key, None)
                     definitions[symbol] = resolved
                     if symbol.dtype is ScalarType.INTEGER:
                         value = affine_or_unknown(statement.value, values, active, statement.location)
@@ -452,6 +457,10 @@ def _region_model(
                             values.pop(symbol, None)
                         else:
                             values[symbol] = value
+                else:
+                    written = statement.target.symbol
+                    for key in [k for k, expr in definitions.items() if written in referenced_symbols(expr)]:
+                        definitions.pop(key, None)
             elif isinstance(statement, If):
                 try:
                     predicate = affine_predicate(statement.condition, values, active, statement.location)
@@ -487,9 +496,12 @@ def _region_model(
                 )
                 available.update(then_available & else_available)
                 # Branch-local values cannot be substituted after the join.
-                for symbol in block_writes(statement.then_body) | block_writes(statement.else_body):
+                mutated = block_writes(statement.then_body) | block_writes(statement.else_body)
+                for symbol in mutated:
                     values.pop(symbol, None)
                     definitions.pop(symbol, None)
+                for key in [k for k, expr in definitions.items() if referenced_symbols(expr) & mutated]:
+                    definitions.pop(key, None)
             else:
                 check_reads(_header_reads(statement), available, statement.location)
                 expressions = (statement.lower, statement.upper, statement.step_expression())
@@ -520,7 +532,9 @@ def _region_model(
                 body_definitions = {
                     symbol: value
                     for symbol, value in definitions.items()
-                    if symbol not in carried and symbol != statement.iterator
+                    if symbol not in carried
+                    and symbol != statement.iterator
+                    and not (referenced_symbols(value) & (carried | {statement.iterator}))
                 }
                 visit(
                     statement.body,
@@ -536,9 +550,12 @@ def _region_model(
                 # A zero-trip body cannot define a scalar. Its iterator is still
                 # assigned the initial value, but its final affine value is unknown.
                 available.add(statement.iterator)
-                for symbol in block_writes(statement.body) | {statement.iterator}:
+                mutated = block_writes(statement.body) | {statement.iterator}
+                for symbol in mutated:
                     values.pop(symbol, None)
                     definitions.pop(symbol, None)
+                for key in [k for k, expr in definitions.items() if referenced_symbols(expr) & mutated]:
+                    definitions.pop(key, None)
         return available
 
     visit(body, environment, {}, available, iterators, coordinates, conditions, order, order_conditions)
@@ -547,9 +564,15 @@ def _region_model(
     unknown: dict[Expr, str] = {}
 
     def fixed(expression):
-        """Built from nothing but integer values the region starts with."""
-        return (not any(isinstance(node, (ArrayAccess, Size)) for node in walk_expr(expression))
-                and bool(referenced_symbols(expression)) and referenced_symbols(expression) <= start_values)
+        """Built from nothing but total integer operations on values the region starts with."""
+        nodes = tuple(walk_expr(expression))
+        if any(isinstance(node, (ArrayAccess, Size)) for node in nodes):
+            return False
+        if any((isinstance(node, Binary) and node.operator == "/")
+               or (isinstance(node, IntrinsicCall) and node.name.lower() in {"mod", "modulo"})
+               for node in nodes):
+            return False
+        return bool(referenced_symbols(expression)) and referenced_symbols(expression) <= start_values
 
     def unknown_value(expression):
         name = unknown.setdefault(expression, f"v{region_id}_{len(unknown)}")

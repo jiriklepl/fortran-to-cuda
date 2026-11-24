@@ -92,6 +92,13 @@ def _domain_bindings(left: ParallelRegion, right: ParallelRegion) -> dict[Symbol
             return None
         if widths[0] != widths[1] or widths[0].terms or not 0 <= widths[0].constant <= INTEGER_MAX:
             return None
+        # Shifted-origin reconstruction references a.lower and b.lower inside
+        # the fused body; if either body writes a bound symbol, substituting it
+        # would read the overwritten value instead of the loop-entry value.
+        if (referenced_symbols(a.lower) | referenced_symbols(b.lower)) & (
+            block_writes(left.body) | block_writes(right.body)
+        ):
+            return None
         bindings[b.iterator] = Binary("+", b.lower, Binary("-", Reference(a.iterator), a.lower))
     return bindings
 

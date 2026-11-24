@@ -119,7 +119,8 @@ def _substituted(lines, callee, indent):
         match = re.match(r"\s*([A-Za-z]\w*)\s*=(?!=)\s*(.+?)\s*$", line)
         name = match.group(1).lower() if match else None
         if (match and depth == 0 and name in callee.locals
-                and sum(bool(re.match(rf"(?i)\s*(?:do\s+)?{re.escape(name)}\s*=(?!=)", other)) for other in code) == 1
+                and callee.locals[name].strip().lower().startswith("integer")
+                and sum(bool(re.search(rf"(?i)(?<![\w%]){re.escape(name)}\s*=(?!=)", other)) for other in code) == 1
                 and not any(re.search(rf"(?i)(?<![\w%]){re.escape(name)}(?!\w)", other) for other in code[:index])
                 and not {item.lower() for item in re.findall(r"[A-Za-z]\w*", match.group(2))} & callee.assigned):
             value = match.group(2)
@@ -157,7 +158,8 @@ def inline_calls(text, callers, callees, constants=None):
             continue
         module = scope.qualified.split("::", 1)[0]
         # A module's own arrays are whole arrays too; the caller's declarations come first.
-        declared, added = {**declarations_of(scope.hosts[-1]), **declarations_of(scope.node)}, []
+        declared = {**(declarations_of(scope.hosts[-1]) if scope.hosts else {}), **declarations_of(scope.node)}
+        added = []
         for call in walk(execution):
             if kind_of(call) != "Call_Stmt":
                 continue
@@ -197,7 +199,12 @@ def inline_calls(text, callers, callees, constants=None):
             number += 1
             body = list(callee.execution.content)
             if facts:
-                body_lines = _fold(body, lines, _Conditions(facts, constants or {}), [0])
+                shadowed = {
+                    var for var, (_dtype, attrs, _bounds, _init) in callee.declared.items()
+                    if "parameter" not in attrs
+                }
+                scoped_constants = {k: v for k, v in (constants or {}).items() if k not in shadowed}
+                body_lines = _fold(body, lines, _Conditions(facts, scoped_constants), [0])
             else:
                 start, stop = line_span(callee.execution)
                 body_lines = lines[start - 1:stop]

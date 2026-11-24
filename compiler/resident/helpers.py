@@ -511,13 +511,18 @@ def _element_pointer(scope, lines):
     top level, pointing at the element the loop variable selects. One loop is
     rewritten per call. Returns (first, last, lines) or None.
     """
+    from .procedures import _CHARACTER_LITERAL, _strip_inline_comment, dummy_names
+
     execution = part_of(scope.node, "Execution_Part")
     specification = part_of(scope.node, "Specification_Part")
+    dummies = set(dummy_names(scope.node))
     pointers = set()
     for statement in (specification.content if specification is not None else ()):
-        if kind_of(statement) == "Type_Declaration_Stmt" and statement.items[1] is not None \
-                and any(str(item).upper() == "POINTER" for item in statement.items[1].items):
-            pointers |= {str(entity.items[0]).lower() for entity in statement.items[2].items if entity.items[1] is None}
+        if kind_of(statement) == "Type_Declaration_Stmt" and statement.items[1] is not None:
+            attr_names = {str(item).upper() for item in statement.items[1].items}
+            if "POINTER" in attr_names and "SAVE" not in attr_names:
+                pointers |= {str(entity.items[0]).lower() for entity in statement.items[2].items
+                             if entity.items[1] is None and str(entity.items[0]).lower() not in dummies}
     if execution is None or not pointers:
         return None
     opened = {}
@@ -548,10 +553,21 @@ def _element_pointer(scope, lines):
         loop, statement, variable = places[0]
         first, last = line_span(statement)
         stop = line_span(loop)[1]
+        if any(other is not statement and first <= line_span(other)[0] <= stop for other in assignments):
+            continue
         element = f"{statement.items[2].items[0]}({variable})"
         pattern = re.compile(r"(?i)(?<![\w%])" + re.escape(name) + r"(\s*%)")
-        rewritten = [pattern.sub(lambda found, element=element: element + found.group(1), line)
-                     for line in lines[last:stop]]
+
+        def replace_outside_literals(line, pattern=pattern, element=element):
+            code, comment = _strip_inline_comment(line.rstrip("\n"))
+            parts, cursor = [], 0
+            for literal in _CHARACTER_LITERAL.finditer(code):
+                parts += [pattern.sub(lambda found: element + found.group(1), code[cursor:literal.start()]),
+                          literal.group(0)]
+                cursor = literal.end()
+            return "".join(parts) + pattern.sub(lambda found: element + found.group(1), code[cursor:]) + comment + "\n"
+
+        rewritten = [replace_outside_literals(line) for line in lines[last:stop]]
         return first, stop, rewritten
     return None
 
@@ -598,15 +614,24 @@ def _select_case(scope, lines):
                     terms.append(f"{selector} == ({value})")
             return " .or. ".join(terms)
 
+        def emit_body(items):
+            emitted = []
+            seen = set()
+            for item in items:
+                span = line_span(item)
+                if span not in seen:
+                    seen.add(span)
+                    emitted += lines[span[0] - 1:span[1]]
+            return emitted
+
         first, last = line_span(construct)
         indent = lines[first - 1][:len(lines[first - 1]) - len(lines[first - 1].lstrip())]
         output = []
         for position, (case, body) in enumerate(cases):
             output.append(f"{indent}{'if' if position == 0 else 'else if'} ({condition(case)}) then\n")
-            output += [line for item in body for line in lines[line_span(item)[0] - 1:line_span(item)[1]]] \
-                if body else []
+            output += emit_body(body) if body else []
         if default is not None:
-            body = [line for item in default[1] for line in lines[line_span(item)[0] - 1:line_span(item)[1]]]
+            body = emit_body(default[1])
             output += ([f"{indent}else\n"] if cases else []) + body
         if cases:
             output.append(f"{indent}end if\n")

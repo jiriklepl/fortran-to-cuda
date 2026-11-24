@@ -427,7 +427,7 @@ def test_a_write_through_indices_is_checked_once_per_publication_and_falls_back(
     directory, _prepared = box
     text = (directory / "sources/sources.f90").read_text()
     inject = text[text.index("subroutine inject(a)"):text.index("end subroutine inject")]
-    check = inject.index("if (any(fort_checked /= [resident%generation, resident%stamp])) then")
+    check = inject.index("if (any(fort_checked /= [resident%generation, resident%stamp")
     # The index fields are made current on the host, then every source must name a cell of its own.
     observe = inject.index("call resident%observe([", check)
     loop = inject.index("DO q = 1, SIZE(points)", observe)
@@ -680,7 +680,10 @@ def test_a_nest_that_is_independent_for_some_values_of_its_scalars_checks_them_w
     assert (summary["entries"], summary["nests"], summary["rejected"]) == (1, 1, [])
     entry, = prepared["entries"]
     condition = (Path(entry) / "shared_entry.cu").read_text().split("return FORT_SCOPE_DECLINED;")[0].rsplit("if (!", 1)[1]
-    assert re.search(r"\(1 \* fort_v\d+_new\)\) \+ \(-1 \* fort_v\d+_old\)\) >= 0\)", condition)
+    assert re.search(
+        r"\(1LL \* static_cast<long long>\(fort_v\d+_new\)\)\) \+ \(\(-1LL\) \* static_cast<long long>\(fort_v\d+_old\)\)\) >= 0LL\)",
+        condition,
+    )
     text = (tmp_path / "prepared/sources/levels.f90").read_text()
     call = text[text.index("fort_status = fort_device_run("):text.index("old = new")]
     # Called with equal levels the entry does nothing and says so; the original statements run instead.

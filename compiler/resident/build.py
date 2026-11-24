@@ -45,7 +45,7 @@ class Executable:
 
 def cmake_path(path):
     value = str(Path(path).resolve())
-    if any(character in value for character in ('"', ";", "\n", "$")):
+    if any(character in value for character in ('"', ";", "\n", "\r", "$", "\\")):
         raise ValueError("Unsupported CMake path: " + value)
     return '"' + value + '"'
 
@@ -92,13 +92,20 @@ def cmake_lists(name, libraries, executables, *, include_directories=(), definit
                   f'-Xcompiler=-fPIC,-fopenmp{host_xcompiler}>" )',
                   f"target_link_libraries({target} PUBLIC OpenMP::OpenMP_Fortran {' '.join(library.link)})"]
     for source, options in (source_options or {}).items():
-        lines.append(f"set_source_files_properties({cmake_path(source)} PROPERTIES COMPILE_OPTIONS "
-                     + ";".join(options) + ")")
+        lines.append(f'set_source_files_properties({cmake_path(source)} PROPERTIES COMPILE_OPTIONS "'
+                     + ";".join(options) + '")')
+    by_name = {library.name: library for library in libraries}
     for executable in executables:
-        lines += [f"add_executable({executable.name} {cmake_path(executable.source)})",
-                  f"target_link_libraries({executable.name} PRIVATE "
-                  + ("OpenMP::OpenMP_Fortran)" if executable.library in empty else f"{executable.library}_objects)"),
-                  f"target_compile_options({executable.name} PRIVATE -cpp {' '.join(fortran_options)}{host_space})"]
+        lines += [f"add_executable({executable.name} {cmake_path(executable.source)})"]
+        if executable.library in empty:
+            extra_link = " ".join(by_name[executable.library].link)
+            lines += [f"target_link_libraries({executable.name} PRIVATE OpenMP::OpenMP_Fortran"
+                      + (f" {extra_link}" if extra_link else "") + ")"]
+            if includes:
+                lines.append(f"target_include_directories({executable.name} PRIVATE {includes})")
+        else:
+            lines += [f"target_link_libraries({executable.name} PRIVATE {executable.library}_objects)"]
+        lines += [f"target_compile_options({executable.name} PRIVATE -cpp {' '.join(fortran_options)}{host_space})"]
         if definitions:
             lines.append(f"target_compile_definitions({executable.name} PRIVATE {' '.join(definitions)})")
         lines.append(f"set_target_properties({executable.name} PROPERTIES LINKER_LANGUAGE Fortran)")

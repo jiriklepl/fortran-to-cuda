@@ -327,6 +327,11 @@ def register_associates(analysis, routine):
                     # Selector expressions execute in the enclosing scope.
                     visit(item, scope if item is header else child, (*path, index))
                 return
+            if header is not None:
+                for index, item in enumerate(children_of(node)):
+                    if item is header:
+                        visit(item, scope, (*path, index))
+            return
         for index, child in enumerate(children_of(node)):
             if isinstance(child, (Base, tuple, list)) or hasattr(child, "content"):
                 visit(child, scope, (*path, index))

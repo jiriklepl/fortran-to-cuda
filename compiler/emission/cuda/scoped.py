@@ -6,7 +6,13 @@ from hashlib import sha256
 from compiler.analysis.sections import must_overlap
 from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import abi_arguments, dimension_name
-from compiler.emission.common.c_family import cpp_type, indent, render_assignment, render_expression
+from compiler.emission.common.c_family import (
+    cpp_type,
+    indent,
+    render_assignment,
+    render_expression,
+    render_wide_condition,
+)
 from compiler.emission.common.loops import _loop_snapshot
 from compiler.emission.common.schedules import checked_product, region_schedule
 from compiler.emission.common.symbols import host_symbols, region_symbols
@@ -26,6 +32,7 @@ from compiler.ir import (
     ParallelRegion,
     Reference,
     ScalarType,
+    block_writes,
     referenced_symbols,
     walk_expr,
 )
@@ -96,24 +103,34 @@ def generate_scoped(function, plan, config, common_header):
     abi = abi_arguments(function.parameters)
     worker_arguments = ", ".join(a.name for a in abi)
     capacity = max(len(arrays), 1)
-    lines = ['#include <cuda_runtime.h>', '#include <omp.h>', '#define FORT_OFFLOAD_ENABLED 1',
+    lines = ['#include <cuda_runtime.h>', '#ifdef _OPENMP', '#include <omp.h>', '#endif', '#define FORT_OFFLOAD_ENABLED 1',
              f'#include "{common_header}"', '#include "scoped_entry.hpp"',
              '#define FORT_SHARED_CHECK(expr) do { int fort_check_result = (expr); if (fort_check_result) return fort_check_result; } while (false)',
              f"namespace generated_kernels::{name} {{", "using namespace indexing;"]
     lines.insert(0, "#include <type_traits>")
-    invariants = set(function.parameters)
+    region_invariants = {}
 
-    def collect(current):
+    def collect(current, available):
+        scoped = set(available)
         for step in current.steps:
             if isinstance(step, HostBlock):
-                invariants.update(a.target.symbol for a in step.assignments
-                                  if isinstance(a.target, Reference) and a.target.symbol.dtype is ScalarType.INTEGER)
+                for assignment in step.assignments:
+                    if isinstance(assignment.target, Reference):
+                        if assignment.target.symbol.dtype is ScalarType.INTEGER:
+                            scoped.add(assignment.target.symbol)
+                        else:
+                            scoped.discard(assignment.target.symbol)
+            elif isinstance(step, ParallelRegion):
+                written = set(step.private_symbols) | block_writes(step.body)
+                region_invariants[step.id] = frozenset(scoped - written)
             elif isinstance(step, ConditionalRegion):
-                collect(step.then_plan)
-                collect(step.else_plan)
+                then_inv = collect(step.then_plan, scoped)
+                else_inv = collect(step.else_plan, scoped)
+                scoped = then_inv & else_inv
+        return scoped
 
-    collect(plan)
-    units = {r.id: _unit_footprints(Unit(i, r, ()), frozenset(invariants))
+    collect(plan, function.parameters)
+    units = {r.id: _unit_footprints(Unit(i, r, ()), region_invariants[r.id])
              for i, r in enumerate(plan.regions)}
     protected = {r.id: _protected_scalar_inputs(r, frozenset(function.parameters))[0]
                  for r in plan.regions}
@@ -263,7 +280,7 @@ def generate_scoped(function, plan, config, common_header):
     # A region may be independent only for some values of the entry's scalars. For others the entry does
     # nothing and says so; its caller still has the original statements.
     assumptions = [expression for region in plan.regions for expression in region.assumptions]
-    lines += [f"    if (!{render_expression(expression)}) return FORT_SCOPE_DECLINED;" for expression in assumptions]
+    lines += [f"    if (!{render_wide_condition(expression)}) return FORT_SCOPE_DECLINED;" for expression in assumptions]
     lines += [f"    {cpp_type(s)} {s.cpp_name};" for s in host_symbols(function, plan)]
     for s in arrays:
         if s.intent == "out":
@@ -325,22 +342,43 @@ def generate_scoped(function, plan, config, common_header):
                     continue
                 if not boxes:
                     continue
+                if not fp.exact:
+                    fallback_var = f"{prefix}_{label}_fallback"
+                    result += [f"bool {fallback_var} = false;"]
                 for i, box in enumerate(boxes):
                     base = f"{prefix}_{label}_{i}"
                     result += [f"std::size_t {base}_lower[{s.rank}]{{}}, {base}_upper[{s.rank}]{{}};"]
                     for axis, (lo, hi) in enumerate(zip(box.lower, box.upper, strict=True)):
-                        result += ["{",
-                                   f"    const auto lo = offload::index({value(lo)}, fort_valid);",
-                                   f"    const auto hi = offload::index({value(hi)}, fort_valid);",
-                                   f"    if ({'!d.valid || ' if checked else ''}!fort_valid || lo < 1 || hi < lo || static_cast<unsigned long long>(hi) > {dimension_name(s,axis+1)})",
-                                   "        " + invalid,
-                                   f"    {base}_lower[{axis}] = static_cast<std::size_t>(lo-1);",
-                                   f"    {base}_upper[{axis}] = static_cast<std::size_t>(hi);", "}"]
+                        if fp.exact:
+                            result += ["{",
+                                       f"    const auto lo = offload::index({value(lo)}, fort_valid);",
+                                       f"    const auto hi = offload::index({value(hi)}, fort_valid);",
+                                       f"    if ({'!d.valid || ' if checked else ''}!fort_valid || lo < 1 || hi < lo || static_cast<unsigned long long>(hi) > {dimension_name(s,axis+1)})",
+                                       "        " + invalid,
+                                       f"    {base}_lower[{axis}] = static_cast<std::size_t>(lo-1);",
+                                       f"    {base}_upper[{axis}] = static_cast<std::size_t>(hi);", "}"]
+                        else:
+                            result += ["{",
+                                       f"    const auto lo = offload::index({value(lo)}, fort_valid);",
+                                       f"    const auto hi = offload::index({value(hi)}, fort_valid);",
+                                       f"    const auto dim = {dimension_name(s,axis+1)};",
+                                       f"    if ({'!d.valid || ' if checked else ''}!fort_valid || dim == 0 || hi < 1 || static_cast<unsigned long long>(lo > 0 ? lo : 1) > dim || hi < lo) {{",
+                                       f"        {fallback_var} = true;",
+                                       "    } else {",
+                                       "        const auto lo_c = lo < 1 ? 1LL : static_cast<long long>(lo);",
+                                       "        const auto hi_c = static_cast<unsigned long long>(hi) > dim ? static_cast<long long>(dim) : static_cast<long long>(hi);",
+                                       f"        {base}_lower[{axis}] = static_cast<std::size_t>(lo_c - 1);",
+                                       f"        {base}_upper[{axis}] = static_cast<std::size_t>(hi_c);",
+                                       "    }", "}"]
                 items = ", ".join(f"{{{prefix}_{label}_{i}_lower, {prefix}_{label}_{i}_upper}}" for i in range(len(boxes)))
-                result += [f"fort_scope_section {prefix}_{label}s[] = {{{items}}};",
-                           f"{prefix}.{label}_count = {len(boxes)}; {prefix}.{label}s = {prefix}_{label}s;"]
-                if label == "write" and fp.exact:
-                    result += [f"{prefix}.overwrite_count = {len(boxes)}; {prefix}.overwrites = {prefix}_writes;"]
+                result += [f"fort_scope_section {prefix}_{label}s[] = {{{items}}};"]
+                if fp.exact:
+                    result += [f"{prefix}.{label}_count = {len(boxes)}; {prefix}.{label}s = {prefix}_{label}s;"]
+                    if label == "write":
+                        result += [f"{prefix}.overwrite_count = {len(boxes)}; {prefix}.overwrites = {prefix}_writes;"]
+                else:
+                    result += [f"if ({fallback_var}) {{ {prefix}.flags |= {flag}; }} else {{ "
+                               f"{prefix}.{label}_count = {len(boxes)}; {prefix}.{label}s = {prefix}_{label}s; }}"]
             result += [f"FORT_SHARED_CHECK(fort_access.add({array_argument(s)}, {prefix}));"]
         return result
 
@@ -444,7 +482,11 @@ def generate_scoped(function, plan, config, common_header):
                     step, stream="static_cast<cudaStream_t>(fort_gpu_call.stream)", prepared_bounds=True,
                     error_check='if (const auto error = cudaGetLastError(); error != cudaSuccess) return fort_scope_execution_error(fort_context, cudaGetErrorString(error));',
                     launch_record="FORT_SHARED_CHECK(fort_scope_note_launch(fort_context));")), "} else {"]
-                arguments = worker_arguments + "".join(f", {s.cpp_name}" for s in captures[step.id])
+                bound_args = "".join(
+                    f", fort_internal_lower{a}, fort_internal_stride{a}, fort_internal_extent{a}"
+                    for a in range(len(step.loops))
+                ) + ", fort_internal_total"
+                arguments = worker_arguments + "".join(f", {s.cpp_name}" for s in captures[step.id]) + bound_args
                 cpu = ["#ifdef _OPENMP", "if (omp_in_parallel()) {",
                        f"    cpu_{step.id}({arguments}, 0, 1);", "} else {",
                        f"    #pragma omp parallel num_threads({config.host_threads})", "    {",
@@ -488,7 +530,7 @@ def generate_scoped(function, plan, config, common_header):
         "argument_order": ["context", "mode", *[s.name for s in arrays], *[s.name for s in scalars]],
         "modes": {"native": 0, "gpu": 1},
         # With conditions, the entry returns FORT_SCOPE_DECLINED where one does not hold.
-        "conditions": [render_expression(expression) for expression in assumptions],
+        "conditions": [render_wide_condition(expression) for expression in assumptions],
         "numerical_environment": {
             "required": function.requires_numerical_environment,
             "check": "fort_runtime::numerical_environment_supported",

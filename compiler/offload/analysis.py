@@ -242,9 +242,13 @@ def _access_box(access, unit, parameters):
             if stride not in {-1, 1}:
                 return None
             first, last = (loop.lower, loop.upper) if stride == 1 else (loop.upper, loop.lower)
+            if not (_safe_query(first, parameters) and _safe_query(last, parameters)):
+                return None
             lo, hi = (first, last) if coefficient == 1 else (last, first)
             lo = _canonical(_add(_scale(lo, coefficient), offset), parameters)
             hi = _canonical(_add(_scale(hi, coefficient), offset), parameters)
+            if not (_safe_query(lo, parameters) and _safe_query(hi, parameters)):
+                return None
             mapping = AxisMapping(axis, coefficient, offset)
         mappings.append(mapping)
         lower.append(lo)

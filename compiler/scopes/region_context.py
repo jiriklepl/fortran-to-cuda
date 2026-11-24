@@ -110,14 +110,30 @@ def original_region_context(routine, sources, known=None):
             before.append(node)
         elif low > last:
             after.append(node)
-        elif kind_of(node) in {"If_Construct", "Block_Nonlabel_Do_Construct"}:
+        elif kind_of(node) in {"If_Construct", "Block_Nonlabel_Do_Construct", "Block_Construct", "Associate_Construct"}:
             for child in node.content:
                 visit(child)
             if kind_of(node) == "Block_Nonlabel_Do_Construct":
+                def collect_cyclic(item):
+                    span = prepared_span(item, optional=True)
+                    if span is None:
+                        return
+                    item_low, item_high = span
+                    item_kind = kind_of(item)
+                    if item_kind == "Comment":
+                        return
+                    if item_kind == "Nonlabel_Do_Stmt":
+                        if "while" in str(item).lower():
+                            cyclic.append(item)
+                        return
+                    if item_high < first:
+                        cyclic.append(item)
+                    elif item_low <= last and hasattr(item, "content"):
+                        for sub in item.content:
+                            collect_cyclic(sub)
+
                 for child in node.content:
-                    low, high = prepared_span(child)
-                    if high < first and kind_of(child) not in {"Nonlabel_Do_Stmt", "Comment"}:
-                        cyclic.append(child)
+                    collect_cyclic(child)
 
     for node in children_of(routine.execution):
         visit(node)

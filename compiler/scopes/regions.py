@@ -188,7 +188,10 @@ _IMPURE = frozenset({"Write_Stmt", "Print_Stmt", "Read_Stmt", "Open_Stmt", "Clos
 
 def _declared_pure(helper):
     statement = part_of(helper.scope.node, "Subroutine_Stmt") or part_of(helper.scope.node, "Function_Stmt")
-    return any(str(prefix).lower() in {"pure", "elemental"} for prefix in children_of(statement.items[0]))
+    prefixes = [str(prefix).lower() for prefix in children_of(statement.items[0])]
+    if "impure" in prefixes:
+        return False
+    return any(prefix in {"pure", "elemental"} for prefix in prefixes)
 
 
 def _pure(analysis, helper, visiting=()):
@@ -1269,7 +1272,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     for (loop, _, _), original in zip(normalized, loops, strict=True):
         text = str(transformed(loop))
         given = [f"{element.name} = {capture_names[element.root]}" for _root, (array, values) in sorted(valued.items())
-                 for element in values if re.search(rf"(?i)(?<![\w%]){re.escape(array.name)}\s*\(", text)]
+                 for element in values if re.search(rf"(?i)(?<![\w%]){re.escape(array.name)}(?!\w)", text)]
         if id(original) in undefined or given:
             lines = text.split("\n")
             opening = next(index for index, line in enumerate(lines) if re.match(r"(?i)\s*do\b", line))

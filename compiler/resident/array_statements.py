@@ -213,7 +213,7 @@ class _Names:
                 and not re.search(r"\b(allocatable|pointer|target|save)\b", found[1]) and not found[3])
 
 
-def _operands(node, names, found):
+def _operands(node, names, found, scalar_arrays=None):
     """Collect the array-valued references of an expression into ``found``; raise when it has other parts."""
     kind = kind_of(node)
     if isinstance(node, str) or kind.endswith("_Literal_Constant") or kind.startswith("Signed_"):
@@ -227,6 +227,8 @@ def _operands(node, names, found):
             raise _Unchanged(f"{base} is not an array; a function result has no known shape")
         if any(kind_of(item) == "Subscript_Triplet" for item in _subscripts(node)):
             found.append(node)
+        elif scalar_arrays is not None:
+            scalar_arrays.add(base.lower())
         for item in _subscripts(node):
             if kind_of(item) != "Subscript_Triplet":
                 _scalar(item, names)
@@ -237,11 +239,11 @@ def _operands(node, names, found):
         for item in getattr(node.items[1], "items", ()) if node.items[1] is not None else ():
             if kind_of(item) == "Actual_Arg_Spec":
                 raise _Unchanged(f"the intrinsic {function} is called with a keyword")
-            _operands(item, names, found)
+            _operands(item, names, found, scalar_arrays)
     elif kind in _OPERATIONS:
         for item in node.items:
             if item is not None:
-                _operands(item, names, found)
+                _operands(item, names, found, scalar_arrays)
     else:
         raise _Unchanged("a part of the statement is neither a scalar nor an array of this file: "
                          + " ".join(str(node).split()))
@@ -323,8 +325,11 @@ def _nest(statement, names, number, indent):
         return None
     _operands(target, names, [])
     operands = []
-    _operands(value, names, operands)
+    scalar_arrays = set()
+    _operands(value, names, operands, scalar_arrays)
     whole = kind == "Name"
+    if name in scalar_arrays:
+        raise _Unchanged(f"it reads scalar elements of {name} while assigning to it")
     for operand in operands:
         own = str(operand if kind_of(operand) == "Name" else operand.items[0]).lower()
         if own == name and normalized(operand) != normalized(target):

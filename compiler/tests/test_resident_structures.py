@@ -237,7 +237,7 @@ def test_the_call_block_binds_fields_and_checks_before_it_runs(exported, tmp_pat
     assert block.count("lbound(points,1), &") + block.count("lbound(points,1)))") == 3
     order = [block.index(text) for text in (
         "      fort_resident = flow%active .and. ((SIZE(points)) >= (1)) .and. size(points) > 0\n",
-        "flow%bind_field(", "if (any(fort_checked /= [flow%generation, flow%stamp])) then",
+        "flow%bind_field(", "if (any(fort_checked /= [flow%generation, flow%stamp",
         "DO i = 1, SIZE(points)", "fort_resident = fort_distinct", "call require(fort_device_run(",
         "if (flow%active .and. ((SIZE(points)) >= (1))) call flow%publish()", "@ORIGINAL@")]
     assert order == sorted(order)

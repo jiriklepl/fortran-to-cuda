@@ -165,9 +165,12 @@ def entry_call_block(region, entry, domain, held=None):
     code.append(f"      logical :: {resident}")
     if conditional:
         code.append(f"      integer(c_int) :: {status}")
+    indices = sorted({by_resource[root] for check in checks for root in check["index_resources"]
+                      if root in by_resource}) if checks else []
+    check_key_len = 2 + len(indices)
     if checks:
         code += [f"      logical, save :: {domain.prefix}_distinct = .false.",
-                 f"      integer(c_int64_t), save :: {domain.prefix}_checked(2) = -1_c_int64_t"]
+                 f"      integer(c_int64_t), save :: {domain.prefix}_checked({check_key_len}) = -1_c_int64_t"]
         code += [f"      logical, allocatable :: {domain.prefix}_seen_{number}({','.join(':' * len(group[0]['indices']))})"
                  for number, group in enumerate(checked_arrays.values(), 1)]
     # An empty array of derived type has no element whose fields could be bound.
@@ -179,16 +182,15 @@ def entry_call_block(region, entry, domain, held=None):
         code.append(f"        {resident} = all([" + ", ".join(plain) + "] /= 0_c_int64_t)")
     code.append("      endif")
     if checks:
-        indices = sorted({by_resource[root] for check in checks for root in check["index_resources"]
-                          if root in by_resource})
+        check_key = ", ".join([f"{domain.object}%generation", f"{domain.object}%stamp", *indices])
         code += [f"      if ({resident}) then",
-                 f"        if (any({domain.prefix}_checked /= [{domain.object}%generation, {domain.object}%stamp])) then"]
+                 f"        if (any({domain.prefix}_checked /= [{check_key}])) then"]
         if indices:
             code.append(f"          call {domain.object}%observe([" + ", ".join(indices) + "])")
         code.append(f"          {domain.prefix}_distinct = .true.")
         for number, group in enumerate(checked_arrays.values(), 1):
             code += _distinct_check(group, number, domain, "          ")
-        code += [f"          {domain.prefix}_checked = [{domain.object}%generation, {domain.object}%stamp]",
+        code += [f"          {domain.prefix}_checked = [{check_key}]",
                  "        endif", f"        {resident} = {domain.prefix}_distinct", "      endif"]
     code += [f"      if ({resident}) then", *call,
              # An entry that declines leaves everything as it was, for the original statements.

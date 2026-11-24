@@ -178,6 +178,7 @@ def _leading(comments, lines):
 def _fold(nodes, lines, conditions, counter, one_line=False):
     """The source lines of ``nodes`` with every decided IF construct folded, and with ``one_line`` every IF statement."""
     output = []
+    emitted_spans = set()
     for node in nodes:
         first, last = statement_span(node)
         if one_line and type(node).__name__ == "If_Stmt":
@@ -206,7 +207,9 @@ def _fold(nodes, lines, conditions, counter, one_line=False):
             output += lines[cursor - 1:ending.item.span[1]]
             continue
         if type(node).__name__ != "If_Construct":
-            output += lines[first - 1:last]
+            if (first, last) not in emitted_spans:
+                output += lines[first - 1:last]
+                emitted_spans.add((first, last))
             continue
         branches = []
         for item in node.content:
@@ -215,6 +218,11 @@ def _fold(nodes, lines, conditions, counter, one_line=False):
             elif type(item).__name__ == "End_If_Stmt":
                 break
             elif branches:
+                # Skip trailing inline comments attached to the branch header's own line.
+                if (type(item).__name__ == "Comment"
+                        and getattr(item, "item", None) is not None
+                        and item.item.span[0] == branches[-1][0].item.span[0]):
+                    continue
                 branches[-1][1].append(item)
             else:
                 # A comment the parser attached in front of the construct's first statement.
@@ -263,7 +271,8 @@ def specialize(text, procedures, conditions, constants):
     variable they name or passes one to a call, or when its body cannot be
     written twice.
     """
-    known = _Conditions(conditions, constants)
+    from .procedures import declarations_of
+
     scopes = {scope.qualified: scope for scope in procedures_of(parse_fortran(text))}
     lines = text.splitlines(keepends=True)
     edits = []
@@ -271,6 +280,12 @@ def specialize(text, procedures, conditions, constants):
         scope = scopes.get(name.lower())
         if scope is None:
             raise ValueError(f"Expected the procedure {name} to specialize")
+        shadowed = {
+            var for var, (_dtype, attrs, _bounds, _init) in declarations_of(scope.node).items()
+            if "parameter" not in attrs
+        }
+        scoped_constants = {k: v for k, v in constants.items() if k not in shadowed}
+        known = _Conditions(conditions, scoped_constants)
         edits.append(_specialized(scope.node, name, lines, conditions, known))
     for first, last, replacement in sorted(edits, reverse=True):
         lines[first - 1:last] = replacement

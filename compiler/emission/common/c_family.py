@@ -45,6 +45,25 @@ C_OPERATORS = {".and.": "&&", ".or.": "||", ".eqv.": "==", ".neqv.": "!=", "/=":
                ".lt.": "<", ".le.": "<=", ".gt.": ">", ".ge.": ">="}
 
 
+def render_wide_condition(expression: Expr) -> str:
+    """Render an integer/boolean assumption expression with 64-bit signed arithmetic to avoid 32-bit overflow."""
+    if isinstance(expression, Literal):
+        if expression.dtype is ScalarType.INTEGER:
+            value = integer_literal(expression.value)
+            return f"({value}LL)" if value < 0 else f"{value}LL"
+        return render_expression(expression)
+    if isinstance(expression, (Reference, Size, ArrayAccess)):
+        return f"static_cast<long long>({render_expression(expression)})"
+    if isinstance(expression, Unary):
+        operator = "!" if expression.operator == ".not." else expression.operator
+        return f"({operator}({render_wide_condition(expression.operand)}))"
+    if isinstance(expression, Binary):
+        operator = C_OPERATORS.get(expression.operator, expression.operator)
+        if operator in {"&&", "||", "==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/"}:
+            return f"({render_wide_condition(expression.left)} {operator} {render_wide_condition(expression.right)})"
+    return f"static_cast<long long>({render_expression(expression)})"
+
+
 def _wide_expression(expression: Expr, addressing: RegionAddressing) -> str:
     """Render a proved subscript in one signed wide type, preserving its tree."""
     if isinstance(expression, Literal) and expression.dtype is ScalarType.INTEGER:
@@ -132,7 +151,7 @@ def render_expression(expression: Expr, *, addressing: RegionAddressing | None =
         return f"::{name}({', '.join(arguments)})"
     if isinstance(expression, Unary):
         operator = "!" if expression.operator == ".not." else expression.operator
-        return f"({operator}{render_expression(expression.operand, addressing=addressing)})"
+        return f"({operator}({render_expression(expression.operand, addressing=addressing)}))"
     if isinstance(expression, Binary):
         operator = C_OPERATORS.get(expression.operator, expression.operator)
         if operator not in {"+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "&&", "||"}:

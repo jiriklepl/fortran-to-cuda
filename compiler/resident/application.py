@@ -384,6 +384,8 @@ def prepare(application, given, directory, *, variant, fortran, jobs=1):
     patched = _edited({path: path.read_text() for path in sources}, application.patches, locate)
     patches = []
     for path, text in patched.items():
+        if not path.resolve().is_relative_to(directory.resolve()):
+            raise ValueError(f"Refusing to patch uncopied input file in place: {path}")
         before = _identity(path)
         path.write_text(text)
         patches.append({"before": before, "after": _identity(path)})
@@ -486,6 +488,17 @@ def build(application, prepared, given, directory, *, fortran, cxx, nvcc, archit
                  "target_link_libraries(native_libraries INTERFACE "
                  + " ".join([*application.build.link, *("${LIB_" + lib + "}" for lib in libraries)]) + ")"]
     include = [_resolve(name, paths, own) for name in application.build.include]
+    resident_by_original = {
+        Path(row["original"]).resolve(): Path(row["resident"]).resolve()
+        for row in prepared["sources"]
+        if row["original"] is not None
+    }
+    resolved_source_options = {}
+    for name, options in application.build.source_options.items():
+        resolved = _resolve(name, paths, own).resolve()
+        resolved_source_options[resolved] = tuple(options)
+        if resolved in resident_by_original:
+            resolved_source_options[resident_by_original[resolved]] = tuple(options)
     text = cmake_lists(
         application.name,
         [ObjectLibrary("native", tuple(native), link=("native_libraries",)),
@@ -495,8 +508,7 @@ def build(application, prepared, given, directory, *, fortran, cxx, nvcc, archit
         include_directories=(*include, runtime),
         definitions=application.variants[prepared["variant"]],
         fortran_options=application.build.fortran_options, prologue=prologue,
-        source_options={_resolve(name, paths, own): tuple(options)
-                        for name, options in application.build.source_options.items()},
+        source_options=resolved_source_options,
         strict_fp=strict_fp)
     (directory / "CMakeLists.txt").write_text(text)
     inputs = {str(path): _identity(path)["sha256"] for path in {*native, *resident, *mains.values()}}

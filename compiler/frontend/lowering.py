@@ -930,8 +930,16 @@ class _Lowerer:
         actual_nodes = getattr(argument_list, "items", ())
         if any(type(node).__name__ == "Actual_Arg_Spec" for node in actual_nodes):
             # Keyword arguments, after the positional ones, name the dummies they are for.
-            ordered = dict(zip(callee.arguments, (node for node in actual_nodes
-                                                  if type(node).__name__ != "Actual_Arg_Spec"), strict=False))
+            seen_keyword = False
+            positional = []
+            for node in actual_nodes:
+                if type(node).__name__ == "Actual_Arg_Spec":
+                    seen_keyword = True
+                elif seen_keyword:
+                    raise CompilationError(f"positional argument cannot follow keyword argument in call to {callee.name}", location)
+                else:
+                    positional.append(node)
+            ordered = dict(zip(callee.arguments, positional, strict=False))
             for node in actual_nodes:
                 if type(node).__name__ == "Actual_Arg_Spec":
                     keyword = str(node.items[0]).lower()
@@ -943,6 +951,8 @@ class _Lowerer:
             actual_nodes = tuple(ordered[name] for name in callee.arguments)
         if len(actual_nodes) != len(callee.arguments):
             raise CompilationError(f"call to {callee.name} has the wrong number of arguments", location)
+        if self.active_frames and self.active_frames[-1][0].pure and not callee.pure:
+            raise CompilationError(f"PURE procedure cannot call non-pure helper {callee.name}", location)
         formal_declarations = {declaration.name: declaration for declaration in callee.declarations}
         actuals, prelude, storage, writable, copied = {}, [], [], set(), []
         for formal, actual_node in zip(callee.arguments, actual_nodes, strict=True):
@@ -1020,16 +1030,21 @@ class _Lowerer:
             symbols = (set(actual.elements) if isinstance(actual, _PrivateArray) else
                        {value.symbol for expression in actual.elements for value in walk_expr(expression)
                         if isinstance(value, Reference)} if isinstance(actual, _ConstantArray) else {actual})
+            actual_declaration = declarations.get(name)
+            actual_readonly = (
+                isinstance(actual, _ConstantArray)
+                or (actual_declaration is not None and (actual_declaration.intent == "in" or actual_declaration.constant))
+                or any(symbol.intent == "in" or symbol in active_iterators for symbol in symbols)
+            )
             modifies = expected.intent in {"out", "inout"} and not expected.inferred_intent
             if modifies:
-                actual_declaration = declarations.get(name)
-                if (isinstance(actual, _ConstantArray) or
-                    (actual_declaration is not None and (actual_declaration.intent == "in" or actual_declaration.constant))
-                    or any(symbol.intent == "in" or symbol in active_iterators for symbol in symbols)):
+                if actual_readonly:
                     raise CompilationError(f"writable argument {formal} of {callee.name} aliases a read-only variable", location)
                 if not expected.rank and (not callee.pure or any(symbol.parameter for symbol in symbols)):
                     raise CompilationError("writable scalar helper arguments require pure calls and private storage", location)
                 writable.update(symbols)
+            elif expected.inferred_intent and actual_readonly and isinstance(actual, _PrivateArray):
+                actual = replace(actual, elements=tuple(replace(s, intent="in") for s in actual.elements))
             storage.append(symbols)
             actuals[formal] = actual
         if callee.pure:
@@ -1049,7 +1064,8 @@ class _Lowerer:
         for element, _copy in copied:
             # The element is the same one after the call: nothing the call may change selects it, and no
             # other argument passes its array.
-            indices = {value.symbol for index in element.indices for value in walk_expr(index) if isinstance(value, Reference)}
+            indices = {value.symbol for index in element.indices for value in walk_expr(index)
+                       if isinstance(value, (Reference, ArrayAccess))}
             if indices & writable or any(element.symbol in symbols for symbols in storage):
                 raise CompilationError(f"an element passed to {callee.name} may not be the same one after the call",
                                        location)
@@ -1191,6 +1207,10 @@ class _Lowerer:
                 index = self._expression(subscript, bindings, location)
                 if isinstance(index, _FixedVector) or self.dtype(index) is not ScalarType.INTEGER:
                     raise CompilationError("array subscripts require scalar INTEGER expressions", location)
+                if not bounded and self.target_node is not None and not isinstance(index, Literal):
+                    snap = self.temporary(ScalarType.INTEGER, location, "fort_idx")
+                    self.pending.append(Assignment(Reference(snap), index, location))
+                    index = Reference(snap)
                 axes.append(index)
                 continue
             if vector_axis is not None:
@@ -1216,6 +1236,10 @@ class _Lowerer:
             if extent > SCALARIZED_ELEMENTS:
                 raise CompilationError(f"fixed vector section exceeds the {SCALARIZED_ELEMENTS}-element scalarization "
                                        "budget", location)
+            if extent > 1 and not bounded and self.target_node is not None and not isinstance(start, Literal):
+                snap = self.temporary(ScalarType.INTEGER, location, "fort_idx")
+                self.pending.append(Assignment(Reference(snap), start, location))
+                start = Reference(snap)
             coordinates = tuple(start if index == 0 else Binary("+", start, Literal(str(index * stride), ScalarType.INTEGER))
                                 for index in range(extent))
             axes.append(coordinates)
@@ -1332,7 +1356,7 @@ class _Lowerer:
                 total = Binary("*", total, Size(symbol, dimension))
             return total
         dim = self._expression(args[1], bindings, location)
-        if self.dtype(dim) is not ScalarType.INTEGER:
+        if isinstance(dim, _FixedVector) or self.dtype(dim) is not ScalarType.INTEGER:
             raise CompilationError(f"{name.upper()} dimension must be INTEGER", location)
         dimension = constant_integer(dim, location)
         one = Literal("1", ScalarType.INTEGER)
