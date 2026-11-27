@@ -1,6 +1,7 @@
 """An application described in TOML: its edits, the checks of a description, and the examples under benchmarks/."""
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import tarfile
@@ -8,8 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from compiler.resident import build as resident_build
 from compiler.resident.__main__ import main
 from compiler.resident.application import Edit, apply_edit, load, prepare, snapshot_inputs
+from compiler.resident.build import compiler_path, configure_and_compile
 from compiler.tests.resident_application_support import fortran_compiler
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -150,6 +153,42 @@ end program scale
         main([str(describe("$program::scale::thrice")), "--output", str(tmp_path / "missing"),
               "--fortran", fortran_compiler(), "--prepare-only"])
     assert capsys.readouterr().err == "error: Resident procedure is unavailable: $program::scale::thrice\n"
+
+
+def test_a_compiler_is_a_path_or_a_name_looked_up_on_path_as_a_shell_would(tmp_path, monkeypatch):
+    tools, work = tmp_path / "tools", tmp_path / "work"
+    for directory in (tools, work / "bin"):
+        directory.mkdir(parents=True)
+    for tool in (tools / "fc", tools / "cxx", tools / "nvcc", work / "bin" / "cxx", work / "cxx"):
+        tool.write_text("#!/bin/sh\n")
+        tool.chmod(0o755)
+    (tools / "wrapper").symlink_to(tools / "cxx")
+    monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.chdir(work)
+    # A bare name is found on PATH, even where the working directory has a file of that name.
+    assert compiler_path("cxx") == tools / "cxx"
+    # A name with a directory is a path, relative to the working directory.
+    assert compiler_path("bin/cxx") == Path.cwd() / "bin/cxx"
+    assert compiler_path("./cxx") == Path.cwd() / "cxx"
+    # A symbolic link stays the name it is called by, as a wrapper such as ccache needs.
+    assert compiler_path("wrapper") == tools / "wrapper"
+    with pytest.raises(FileNotFoundError, match="No such compiler: missing"):
+        compiler_path("missing")
+    # CMake, which runs in the build directory, is given each compiler's path.
+    commands = []
+    monkeypatch.setattr(resident_build, "run_logged", lambda argv, *rest, **options: commands.append(argv))
+    configure_and_compile(tmp_path / "project", fortran="fc", cxx="wrapper", nvcc="nvcc", architecture="86")
+    assert {f"-DCMAKE_Fortran_COMPILER={tools / 'fc'}", f"-DCMAKE_CXX_COMPILER={tools / 'wrapper'}",
+            f"-DCMAKE_CUDA_COMPILER={tools / 'nvcc'}", f"-DCMAKE_CUDA_HOST_COMPILER={tools / 'wrapper'}"} <= set(commands[0])
+
+
+@pytest.mark.skipif(fortran_compiler() is None, reason="GNU Fortran is required for preprocessing")
+def test_the_driver_refuses_a_compiler_it_cannot_find_before_it_prepares(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        main([str(ROOT / "benchmarks/cdu/cdu.toml"), "--output", str(tmp_path / "cdu"), "--fortran", fortran_compiler(),
+              "--cxx", "no-such-cxx", "--nvcc", "no-such-nvcc", "--architecture", "86"])
+    assert capsys.readouterr().err == "error: No such compiler: no-such-cxx\n"
+    assert not (tmp_path / "cdu").exists()
 
 
 def test_an_input_is_a_checkout_of_its_revision_or_of_a_descendant(tmp_path):

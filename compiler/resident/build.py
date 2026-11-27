@@ -155,7 +155,18 @@ def run_logged(argv, directory, label, *, timeout):
         receipt.write_text(json.dumps(record, indent=2) + "\n")
 
 
-def configure_and_compile(directory, *, fortran, cxx, nvcc, architecture, jobs=2, configure_timeout=240,
+def compiler_path(tool: str) -> Path:
+    """The absolute path of the compiler ``tool``, a path or a name a shell would look up on ``PATH``.
+
+    Symbolic links are kept, so that a wrapper such as ccache is still called by the name it dispatches on.
+    """
+    found = shutil.which(str(tool))
+    if found is None:
+        raise FileNotFoundError(f"No such compiler: {tool}")
+    return Path(found).absolute()
+
+
+def configure_and_compile(directory: Path, *, fortran, cxx, nvcc, architecture, jobs=2, configure_timeout=240,
                           compile_timeout=2400):
     """Run CMake on ``directory/CMakeLists.txt`` and build into ``directory/build``."""
     if jobs < 1:
@@ -165,7 +176,7 @@ def configure_and_compile(directory, *, fortran, cxx, nvcc, architecture, jobs=2
             raise ValueError("Hidden compiler options are not supported: " + key)
     directory = Path(directory).resolve()
     output = directory / "build"
-    fortran, cxx, nvcc = (Path(tool).resolve() for tool in (fortran, cxx, nvcc))
+    fortran, cxx, nvcc = (compiler_path(tool) for tool in (fortran, cxx, nvcc))
     run_logged(["cmake", "-S", directory, "-B", output, "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release",
                 f"-DCMAKE_Fortran_COMPILER={fortran}", f"-DCMAKE_CXX_COMPILER={cxx}",
                 f"-DCMAKE_CUDA_COMPILER={nvcc}", f"-DCMAKE_CUDA_HOST_COMPILER={cxx}",

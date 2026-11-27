@@ -12,6 +12,7 @@ from pathlib import Path
 
 from compiler.ir import CompilationError
 from compiler.resident.application import build, load, prepare
+from compiler.resident.build import compiler_path
 
 
 def main(argv=None):
@@ -21,11 +22,13 @@ def main(argv=None):
                         help="A source tree the description names; repeat for each")
     parser.add_argument("--output", type=Path, required=True, help="A new directory for the build")
     parser.add_argument("--variant", help="A variant of the description; its first by default")
-    parser.add_argument("--fortran", type=Path, required=True)
+    # A string keeps "./g++" apart from "g++", which Path would make one name.
+    path_help = "A path, or a name to look up on PATH"
+    parser.add_argument("--fortran", required=True, help=path_help)
     parser.add_argument("--prepare-only", action="store_true", help="Write the resident sources, compile nothing")
     parser.add_argument("--build-prepared", action="store_true", help="Compile what an earlier run prepared")
-    parser.add_argument("--cxx", type=Path)
-    parser.add_argument("--nvcc", type=Path)
+    parser.add_argument("--cxx", help=path_help)
+    parser.add_argument("--nvcc", help=path_help)
     parser.add_argument("--architecture", help="The CUDA architecture, such as 86")
     parser.add_argument("--jobs", type=int, default=2, help="Entries compiled and build steps run at a time")
     parser.add_argument("--fast-fp", action="store_true",
@@ -36,8 +39,12 @@ def main(argv=None):
             raise ValueError("Jobs must be positive")
         if args.prepare_only and args.build_prepared:
             raise ValueError("Choose preparation or building prepared sources")
-        if not args.prepare_only and None in (args.cxx, args.nvcc, args.architecture):
-            raise ValueError("Building requires --cxx, --nvcc and --architecture")
+        if not args.prepare_only:
+            if None in (args.cxx, args.nvcc, args.architecture):
+                raise ValueError("Building requires --cxx, --nvcc and --architecture")
+            # Found before preparing, which can take minutes, rather than when CMake is given them.
+            for tool in (args.fortran, args.cxx, args.nvcc):
+                compiler_path(tool)
         given = {}
         for item in args.input:
             name, separator, path = item.partition("=")
